@@ -18,9 +18,16 @@
  *   undisclosed             - diff/command exists that no claim and no subtask covers (scope creep)
  *   silently_dropped       - subtask from the original ask has zero matching evidence
  *                            AND the claim text never even mentions it (gap #3)
+ *   untracked_write        - the Filesystem Sentinel saw a real content change on
+ *                            disk that NO hook-sourced event this turn accounts for
+ *                            (PRD 6.4). This is the inverse direction: here the
+ *                            hook stream is the "claim" and the sentinel is the
+ *                            "reality." It ranks above everything else and prints
+ *                            at the TOP of the report — a write the agent's own
+ *                            tool API never disclosed is the highest-signal stain.
  */
 
-const { extractSubtasks } = require('./task-extractor');
+const { extractSubtasks, basename } = require('./task-extractor');
 const { extractClaims } = require('./claim-extractor');
 const { substanceStats } = require('./difftool');
 const provenance = require('./provenance');
@@ -68,9 +75,40 @@ function outcomeForClaim(claim, prov) {
   return 'verified';
 }
 
+// untracked_write: a sentinel-sourced file_write for a path that NO hook-sourced
+// event in the same turn window touched. Comparison is basename equality (so
+// dist/app.js and src/app.js don't falsely cancel each other), and we count a
+// hook file_read or command_run on the same basename as "accounted for" too —
+// the agent at least interacted with that path through its tool API. A sentinel
+// write the hook stream is completely silent about is the real stain.
+function findUntrackedWrites(turnEvents) {
+  const sentinelWrites = turnEvents.filter(
+    (e) => e.type === 'file_write' && e.source === 'fs-sentinel' && e.path
+  );
+  if (!sentinelWrites.length) return [];
+
+  const hookBasenames = new Set();
+  for (const e of turnEvents) {
+    if (e.source === 'fs-sentinel') continue; // only hook-sourced events count as disclosure
+    const p = e.path || e.rel_path;
+    if (p) hookBasenames.add(basename(String(p)).toLowerCase());
+  }
+
+  return sentinelWrites.filter((e) => {
+    const base = basename(String(e.rel_path || e.path)).toLowerCase();
+    return !hookBasenames.has(base);
+  });
+}
+
 function reconcileTurn({ promptText, claimText, turnEvents }) {
   const subtasks = extractSubtasks(promptText);
   const claims = extractClaims(claimText);
+
+  // The sentinel cross-check (PRD 6.4). Done first so its paths can be excluded
+  // from the ordinary undisclosed bucket — an untracked_write is strictly more
+  // serious and must not be double-counted as plain scope-creep below.
+  const untracked = findUntrackedWrites(turnEvents);
+  const untrackedPaths = new Set(untracked.map((e) => String(e.path)));
 
   const claimResults = claims.map((claim) => {
     const prov = provenance.classify(claim, turnEvents);
@@ -110,9 +148,17 @@ function reconcileTurn({ promptText, claimText, turnEvents }) {
   ];
   const hasAnyTarget = allTargets.length > 0;
 
-  const writeEvents = turnEvents.filter((e) => e.type === 'file_write');
+  // Ordinary undisclosed is about the agent's OWN disclosed writes that no
+  // claim/subtask covers (scope creep the agent did announce via its tools).
+  // Exclude sentinel-sourced writes here: a sentinel write is either already an
+  // untracked_write (handled above) or it mirrors a hook write that is judged on
+  // its own. Counting it here too would double-report the same change.
+  const writeEvents = turnEvents.filter(
+    (e) => e.type === 'file_write' && e.source !== 'fs-sentinel'
+  );
   const undisclosed = writeEvents.filter((e) => {
     if (!e.path) return false;
+    if (untrackedPaths.has(String(e.path))) return false; // ranked elsewhere, don't double-count
     if (!hasAnyTarget) return false; // can't assert scope-creep with nothing to compare against
     return !allTargets.some((t) => provenance.targetMatchesEvent(t, e));
   });
@@ -121,11 +167,12 @@ function reconcileTurn({ promptText, claimText, turnEvents }) {
     subtasks: subtaskResults,
     claims: claimResults,
     undisclosed,
-    summary: summarize(claimResults, subtaskResults, undisclosed),
+    untracked,
+    summary: summarize(claimResults, subtaskResults, undisclosed, untracked),
   };
 }
 
-function summarize(claimResults, subtaskResults, undisclosed) {
+function summarize(claimResults, subtaskResults, undisclosed, untracked) {
   const count = (arr, key, val) => arr.filter((x) => x[key] === val).length;
   return {
     verified: count(claimResults, 'outcome', 'verified'),
@@ -136,6 +183,7 @@ function summarize(claimResults, subtaskResults, undisclosed) {
     silently_dropped: count(subtaskResults, 'outcome', 'silently_dropped'),
     unverifiable_ask: count(subtaskResults, 'outcome', 'unverifiable_ask'),
     undisclosed_changes: undisclosed.length,
+    untracked_writes: (untracked || []).length,
   };
 }
 

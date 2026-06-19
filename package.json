@@ -11,9 +11,10 @@
   },
   "dependencies": {},
   "scripts": {
-    "test": "node test/run.js",
+    "test": "node test/run.js && node test/sentinel.js",
     "install-hooks": "node bin/stainmap.js install",
     "status": "node bin/stainmap.js status",
-    "watch": "node bin/stainmap.js watch"
+    "watch": "node bin/stainmap.js watch",
+    "watch-fs": "node bin/stainmap.js watch-fs"
   }
 }

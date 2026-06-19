@@ -43,6 +43,19 @@ function renderTurn(report) {
   const lines = [];
   lines.push(paint(`\n=== stainmap: session ${report.session_id} / turn ${report.turn_id} ===`, C.bold));
 
+  // Untracked writes are the highest-signal stain: the filesystem sentinel saw a
+  // real change on disk that the agent's own tool stream never disclosed. Per
+  // PRD 6.4 they print FIRST, in their own block, never buried with undisclosed.
+  if (report.untracked && report.untracked.length) {
+    lines.push(paint('\n\uD83D\uDEA8 UNTRACKED WRITES - disk changed, no tool call disclosed it:', C.red + C.bold));
+    for (const u of report.untracked) {
+      const where = u.rel_path || u.path;
+      const kind = u.change_kind ? ` (${u.change_kind})` : '';
+      lines.push(`  ${paint(where, C.red)}${paint(kind, C.gray)}`);
+    }
+    lines.push(paint('     seen by the filesystem sentinel; correlated into this turn by time window.', C.gray));
+  }
+
   lines.push(paint('\nClaims:', C.bold));
   if (!report.claims.length) {
     lines.push(paint('  (no checkable claims found in the response text)', C.dim));
@@ -76,7 +89,8 @@ function renderTurn(report) {
     paint(
       `\nSummary: ${s.verified} verified, ${s.partial} partial, ${s.phantom} phantom, ` +
         `${s.phantom_verification} phantom-verification, ${s.unverifiable} unverifiable, ` +
-        `${s.silently_dropped} silently dropped, ${s.undisclosed_changes} undisclosed changes`,
+        `${s.silently_dropped} silently dropped, ${s.undisclosed_changes} undisclosed changes, ` +
+        `${s.untracked_writes || 0} untracked writes`,
       C.bold
     )
   );

@@ -9,6 +9,8 @@ const { loadReport, listSessionReports } = require('../src/reconcile');
 const { renderTurn } = require('../src/render/terminal');
 const { renderSessionHtml } = require('../src/render/html');
 const transcript = require('../src/capture/claude-code/transcript');
+const { startSentinel } = require('../src/capture/fs-sentinel');
+const { effectiveIgnore } = require('../src/capture/fs-sentinel/ignore');
 
 const args = process.argv.slice(2);
 const cmd = args[0];
@@ -67,6 +69,14 @@ function cmdStatus() {
   console.log(`Events captured: ${all.length}`);
   console.log(`Sessions seen: ${sessions.size}`);
   if (sessions.size) console.log(`Most recent session: ${eventlog.latestSessionId()}`);
+
+  // The sentinel's one deliberate blind spot, printed so it's never a mystery
+  // what the "skin" cannot feel (PRD 6.4: ignore list must be visible).
+  const root = process.cwd();
+  const ignore = effectiveIgnore(root);
+  console.log(`\nFilesystem Sentinel ignore list (root: ${root}):`);
+  for (const entry of ignore) console.log(`  - ${entry}`);
+  console.log('Override in .stainmap/ignore (one path per line; "!entry" un-ignores a default).');
 }
 
 function cmdReport() {
@@ -94,8 +104,30 @@ function cmdHtml() {
   console.log(`Wrote ${outPath}`);
 }
 
+function cmdWatchFs() {
+  const root = path.resolve(flag('root', process.cwd()));
+  console.log(`Starting Filesystem Sentinel on ${root} - leave running, Ctrl-C to stop.\n`);
+  const sentinel = startSentinel({ root, verbose: true });
+  const shutdown = () => {
+    sentinel.stop();
+    console.log('\nFilesystem Sentinel stopped.');
+    process.exit(0);
+  };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+}
+
 function cmdWatch() {
-  console.log('Watching for new turn reports - leave this running, work normally in Claude Code...\n');
+  // Run the sentinel alongside report-tailing so one command gives the full
+  // picture: live reports AND independent disk observation (PRD 6.4 / design §2).
+  const root = path.resolve(flag('root', process.cwd()));
+  const sentinel = startSentinel({ root });
+  process.on('SIGINT', () => {
+    sentinel.stop();
+    process.exit(0);
+  });
+
+  console.log('Watching for new turn reports + filesystem - leave this running, work normally in Claude Code...\n');
   const seen = new Set();
   setInterval(() => {
     const all = eventlog.readAll();
@@ -131,6 +163,7 @@ const COMMANDS = {
   report: cmdReport,
   html: cmdHtml,
   watch: cmdWatch,
+  'watch-fs': cmdWatchFs,
   'debug-transcript': cmdDebugTranscript,
 };
 
@@ -142,7 +175,8 @@ Usage:
   stainmap status                    show event log location and counts
   stainmap report [--session ID] [--turn ID]   print a terminal stain report
   stainmap html [--session ID] [--out path]    generate the full HTML session report
-  stainmap watch                     live-tail new turn reports as they land
+  stainmap watch [--root dir]        live-tail new turn reports + run the filesystem sentinel
+  stainmap watch-fs [--root dir]     run ONLY the filesystem sentinel (independent disk observer)
   stainmap debug-transcript <path>   inspect why transcript parsing isn't matching your install
 `);
   process.exit(cmd ? 1 : 0);

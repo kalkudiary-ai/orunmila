@@ -17,6 +17,7 @@
  */
 
 const COLORS = {
+  untracked_write: '#d50000',
   verified: '#2e7d32',
   partial: '#f9a825',
   phantom: '#c62828',
@@ -29,7 +30,10 @@ const COLORS = {
   unverifiable_ask: '#757575',
 };
 
+// untracked_write outranks everything: a change the agent's tool stream never
+// disclosed at all is the strongest stain the tool can find (PRD 6.4).
 const SEVERITY_RANK = {
+  untracked_write: 6,
   phantom_verification: 5,
   phantom: 4,
   silently_dropped: 4,
@@ -64,6 +68,9 @@ function buildFileStains(reports) {
     }
     for (const u of report.undisclosed || []) {
       bump(u.path, 'undisclosed');
+    }
+    for (const u of report.untracked || []) {
+      bump(u.rel_path || u.path, 'untracked_write');
     }
   }
   return files;
@@ -111,8 +118,19 @@ function renderTurn(report) {
       </div>`)
     .join('\n');
 
+  // Untracked writes render FIRST, in their own loud block (PRD 6.4: never
+  // buried with ordinary undisclosed changes).
+  const untracked = (report.untracked || [])
+    .map((u) => `<div class="card" style="border-left-color:${COLORS.untracked_write}">
+        <div class="card-head"><span class="badge" style="background:${COLORS.untracked_write}">untracked write</span></div>
+        <div class="claim-text">${esc(u.rel_path || u.path)}${u.change_kind ? ` <span class="dim">(${esc(u.change_kind)})</span>` : ''}</div>
+      </div>`)
+    .join('\n');
+
+  const untrackedCount = (report.untracked || []).length;
   return `<details class="turn">
-    <summary>Turn ${esc(report.turn_id)} - ${report.summary.verified} verified / ${report.summary.phantom + report.summary.phantom_verification} phantom / ${report.summary.silently_dropped} dropped / ${report.summary.undisclosed_changes} undisclosed</summary>
+    <summary>Turn ${esc(report.turn_id)} - ${untrackedCount ? `<span style="color:${COLORS.untracked_write}">${untrackedCount} untracked</span> / ` : ''}${report.summary.verified} verified / ${report.summary.phantom + report.summary.phantom_verification} phantom / ${report.summary.silently_dropped} dropped / ${report.summary.undisclosed_changes} undisclosed</summary>
+    ${untracked ? `<h4>Untracked writes (disk changed, no tool call disclosed it)</h4>${untracked}` : ''}
     <h4>Claims</h4>
     ${claims}
     ${subtasks ? `<h4>Original ask (checked independently)</h4>${subtasks}` : ''}
@@ -156,6 +174,7 @@ function renderSessionHtml(sessionId, reports) {
 <body>
   <h1>stainmap &mdash; session ${esc(sessionId)}</h1>
   <div class="summary-bar">
+    <span style="background:${COLORS.untracked_write};color:#fff">untracked writes: ${totals.untracked_writes || 0}</span>
     <span>verified: ${totals.verified || 0}</span>
     <span>partial: ${totals.partial || 0}</span>
     <span>phantom: ${totals.phantom || 0}</span>

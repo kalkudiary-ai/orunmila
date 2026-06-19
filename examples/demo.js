@@ -36,6 +36,19 @@ const turnEvents = [
     failed: false,
   },
   // README.js was asked for but never touched at all - silently_dropped case
+
+  // The filesystem sentinel independently saw a write the agent's tool stream
+  // never disclosed (no hook event for this path). This is the untracked_write
+  // case - the headline of PRD 6.4 - and renders at the TOP of the report.
+  {
+    type: 'file_write',
+    source: 'fs-sentinel',
+    path: 'src/.env.local',
+    rel_path: 'src/.env.local',
+    diff: `--- a/src/.env.local\n+++ b/src/.env.local\n@@\n+SECRET_TOKEN=leaked\n`,
+    change_kind: 'create',
+    failed: false,
+  },
 ];
 
 const report = {

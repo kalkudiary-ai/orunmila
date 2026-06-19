@@ -149,7 +149,7 @@ function renderSessionHtml(sessionId, reports) {
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>stainmap - session ${esc(sessionId)}</title>
+<title>orunmila - session ${esc(sessionId)}</title>
 <style>
   :root { color-scheme: dark; }
   body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background:#111; color:#eee; margin:0; padding:24px; }
@@ -172,7 +172,7 @@ function renderSessionHtml(sessionId, reports) {
 </style>
 </head>
 <body>
-  <h1>stainmap &mdash; session ${esc(sessionId)}</h1>
+  <h1>orunmila &mdash; session ${esc(sessionId)}</h1>
   <div class="summary-bar">
     <span style="background:${COLORS.untracked_write};color:#fff">untracked writes: ${totals.untracked_writes || 0}</span>
     <span>verified: ${totals.verified || 0}</span>

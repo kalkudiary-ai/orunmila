@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * index.js  (stainmap watch-fs)
+ * index.js  (orunmila watch-fs)
  *
  * The Filesystem Sentinel entry point — PRD 6.4, "the most important addition."
  * This is the independent observer: it watches the project tree itself and logs

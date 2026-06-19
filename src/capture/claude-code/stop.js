@@ -9,7 +9,7 @@
  * happens: pull the turn's events (writes/commands/tool calls already
  * captured by pre/post-tool-use.js), pull the agent's own response text from
  * the transcript, run the matcher, persist the report, and drop a rendered
- * copy where `stainmap watch` can pick it up.
+ * copy where `orunmila watch` can pick it up.
  */
 
 const fs = require('fs');

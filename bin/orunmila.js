@@ -76,7 +76,7 @@ function cmdStatus() {
   const ignore = effectiveIgnore(root);
   console.log(`\nFilesystem Sentinel ignore list (root: ${root}):`);
   for (const entry of ignore) console.log(`  - ${entry}`);
-  console.log('Override in .stainmap/ignore (one path per line; "!entry" un-ignores a default).');
+  console.log('Override in .orunmila/ignore (one path per line; "!entry" un-ignores a default).');
 }
 
 function cmdReport() {
@@ -99,7 +99,7 @@ function cmdHtml() {
   if (!sessionId) return console.log('No sessions captured yet.');
   const reports = listSessionReports(sessionId);
   const html = renderSessionHtml(sessionId, reports);
-  const outPath = flag('out', path.join(process.cwd(), `stainmap-${sessionId}.html`));
+  const outPath = flag('out', path.join(process.cwd(), `orunmila-${sessionId}.html`));
   fs.writeFileSync(outPath, html);
   console.log(`Wrote ${outPath}`);
 }
@@ -146,7 +146,7 @@ function cmdWatch() {
 
 function cmdDebugTranscript() {
   const p = args[1];
-  if (!p) return console.log('Usage: stainmap debug-transcript <transcript-path>');
+  if (!p) return console.log('Usage: orunmila debug-transcript <transcript-path>');
   const lines = transcript.readLines(p);
   console.log(`${lines.length} raw lines parsed as JSON.`);
   lines.slice(-6).forEach((l, i) => {
@@ -168,16 +168,16 @@ const COMMANDS = {
 };
 
 if (!cmd || !COMMANDS[cmd]) {
-  console.log(`stainmap - claim-vs-reality verification for AI coding agents
+  console.log(`orunmila - claim-vs-reality verification for AI coding agents
 
 Usage:
-  stainmap install [--global]        merge capture hooks into .claude/settings.json
-  stainmap status                    show event log location and counts
-  stainmap report [--session ID] [--turn ID]   print a terminal stain report
-  stainmap html [--session ID] [--out path]    generate the full HTML session report
-  stainmap watch [--root dir]        live-tail new turn reports + run the filesystem sentinel
-  stainmap watch-fs [--root dir]     run ONLY the filesystem sentinel (independent disk observer)
-  stainmap debug-transcript <path>   inspect why transcript parsing isn't matching your install
+  orunmila install [--global]        merge capture hooks into .claude/settings.json
+  orunmila status                    show event log location and counts
+  orunmila report [--session ID] [--turn ID]   print a terminal stain report
+  orunmila html [--session ID] [--out path]    generate the full HTML session report
+  orunmila watch [--root dir]        live-tail new turn reports + run the filesystem sentinel
+  orunmila watch-fs [--root dir]     run ONLY the filesystem sentinel (independent disk observer)
+  orunmila debug-transcript <path>   inspect why transcript parsing isn't matching your install
 `);
   process.exit(cmd ? 1 : 0);
 }

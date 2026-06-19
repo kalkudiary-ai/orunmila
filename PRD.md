@@ -1,4 +1,4 @@
-# PRD: Stainmap — Claim-vs-Reality Verification for AI Coding Agents
+# PRD: Orunmila — Claim-vs-Reality Verification for AI Coding Agents
 
 Status: draft, ready to build from
 Author: collaborative spec (user + Claude), v0 logic prototyped and unit-tested in a throwaway sandbox — this document is the actual spec, the sandbox code is not the deliverable
@@ -8,7 +8,7 @@ License target: MIT, fully free, no paid tier
 
 ## 1. Summary
 
-Stainmap is a local, free, open-source tool that verifies what an AI coding
+Orunmila is a local, free, open-source tool that verifies what an AI coding
 agent *claims* it did against what it *actually* did, across every
 mechanism the agent could have used to make a change — not just the ones
 that go through its tool-call API. It presents the result as a colored
@@ -182,8 +182,8 @@ applied one level lower, to the capture system itself.
   touching reconciliation or rendering.
 
 ### 7.2 Capture — filesystem sentinel
-See §6.4. Runs as its own long-lived process (`stainmap watch-fs` or
-folded into `stainmap watch`), independent of which agent (if any) is
+See §6.4. Runs as its own long-lived process (`orunmila watch-fs` or
+folded into `orunmila watch`), independent of which agent (if any) is
 running.
 
 ### 7.3 Reconciliation engine
@@ -465,7 +465,7 @@ ones are working," not "optional."
 [Gryph](https://github.com/safedep/gryph) is the closest existing project —
 local-first audit trail (file reads/writes/diffs/commands) for Claude Code,
 Cursor, Gemini CLI, and others. It solves capture and activity logging well
-already. Stainmap is not a replacement for it; it's the reconciliation and
+already. Orunmila is not a replacement for it; it's the reconciliation and
 comprehensiveness layer neither Gryph nor the broader Claude Code hooks
 ecosystem currently does: checking the agent's account of its own work
 against independently-observed ground truth, including writes that never

@@ -1,14 +1,14 @@
 ---
-name: stainmap
+name: orunmila
 description: Use this skill when the user wants to audit, verify, or visualize what an AI coding agent actually did versus what it claimed to do during a vibe-coding session - for example "audit this session", "did you actually do that", "show me what changed vs what you said", "set up a trust/verification layer for this agent", "stain map", "dye trace my agent's changes", or any request to catch phantom completions, undisclosed scope creep, or silently-dropped requirements in agent-driven coding work.
 license: MIT
 ---
 
-# Stainmap - claim-vs-reality verification for AI coding agents
+# Orunmila - claim-vs-reality verification for AI coding agents
 
 ## Overview
 
-Stainmap hooks into an agent's tool-call lifecycle, captures every file write
+Orunmila hooks into an agent's tool-call lifecycle, captures every file write
 (with a real before/after diff), every command run (with exit code), and
 every other tool call - then, at the end of each turn, reconciles the
 agent's own claim about what it did against that ground truth. It does NOT
@@ -42,7 +42,7 @@ like a shortcut or a confabulation, without the tool claiming to know which.
 1. Check Node is available: `node --version` (needs >=18).
 2. Install the capture hooks into the current project:
    ```bash
-   node bin/stainmap.js install
+   node bin/orunmila.js install
    ```
    This merges hook entries into `.claude/settings.json` (use `--global` to
    install into `~/.claude/settings.json` instead, covering every project).
@@ -53,17 +53,17 @@ like a shortcut or a confabulation, without the tool claiming to know which.
 
 - After each turn, a terminal stain report is printed automatically (the
   Stop hook does this). If the user's terminal doesn't surface hook stdout,
-  run `node bin/stainmap.js watch` in a second terminal to live-tail reports.
+  run `node bin/orunmila.js watch` in a second terminal to live-tail reports.
 - For a full visual report of the whole session so far:
   ```bash
-  node bin/stainmap.js html
+  node bin/orunmila.js html
   ```
   This writes a self-contained `.html` file - open it in a browser. It shows
   a colored grid of every file touched (the actual "dye stain" - color =
   worst outcome that touched the file, size = how much it was touched) plus
   a turn-by-turn breakdown.
-- `node bin/stainmap.js status` shows how many events/sessions are captured.
-- `node bin/stainmap.js report` prints the latest turn(s) as text.
+- `node bin/orunmila.js status` shows how many events/sessions are captured.
+- `node bin/orunmila.js report` prints the latest turn(s) as text.
 
 ## If something looks wrong
 
@@ -71,7 +71,7 @@ Claude Code's hook payload shapes and transcript format aren't a guaranteed
 stable contract and may shift between versions. If reports come back empty
 or claims aren't extracting:
 ```bash
-node bin/stainmap.js debug-transcript /path/to/transcript.jsonl
+node bin/orunmila.js debug-transcript /path/to/transcript.jsonl
 ```
 This dumps the raw vs. normalized shape of the last few transcript lines so
 the parser in `src/capture/claude-code/transcript.js` can be adjusted.

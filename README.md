@@ -1,10 +1,10 @@
-# stainmap
+# orunmila
 
 Dye-stains an AI coding agent's session. Not "what did it touch" (several
 tools already log that well) - **did what it claimed match what it actually
 did**, and is there a receipt for it at all.
 
-Most agent activity logging answers "what happened." Stainmap answers "was
+Most agent activity logging answers "what happened." Orunmila answers "was
 the agent telling the truth about it," and shows the answer as a literal
 colored map of the codebase: green where claims check out, red where they
 don't, purple where the agent quietly did something nobody asked about or
@@ -25,7 +25,7 @@ whether the agent's own description of the change was accurate, whether a
 claimed test run actually happened and passed, or whether something got
 changed that was never mentioned at all.
 
-That gap is what stainmap fills. It's the layer on top of activity logging,
+That gap is what orunmila fills. It's the layer on top of activity logging,
 not a replacement for it.
 
 ## The stain model
@@ -58,8 +58,8 @@ Reconciliation runs against **two** sources, not one:
 
 ```bash
 git clone <this repo>
-cd stainmap
-node bin/stainmap.js install        # merges hooks into .claude/settings.json
+cd orunmila
+node bin/orunmila.js install        # merges hooks into .claude/settings.json
 ```
 
 Start a **new** Claude Code session in your project (hooks load at session
@@ -68,13 +68,13 @@ If your terminal setup doesn't surface hook output, run this in a second
 terminal:
 
 ```bash
-node bin/stainmap.js watch
+node bin/orunmila.js watch
 ```
 
 For the full visual report - the actual dye-stain map:
 
 ```bash
-node bin/stainmap.js html
+node bin/orunmila.js html
 ```
 
 Opens as a self-contained `.html` file: a colored grid of every file
@@ -119,7 +119,7 @@ against the *evidence*, not just recording the evidence.
 - The transcript parser (`src/capture/claude-code/transcript.js`) is
   defensive but unverified against a live install at time of writing -
   Claude Code's transcript JSONL shape isn't a stable public contract. If
-  claim extraction comes back empty, run `stainmap debug-transcript` and
+  claim extraction comes back empty, run `orunmila debug-transcript` and
   adjust the extractors.
 - Claim/subtask extraction is regex/keyword heuristics, not NLP. It's tuned
   to catch obvious phantom/dropped/undisclosed patterns, not to perfectly

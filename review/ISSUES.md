@@ -1,4 +1,4 @@
-# Stainmap — Prioritized Issue List & Acceptance Tests
+# Orunmila — Prioritized Issue List & Acceptance Tests
 
 Every issue below was confirmed by running the actual code, not inferred from
 the spec. Each carries a reproduction, the root cause with a `file:line`
@@ -186,7 +186,7 @@ Prefer max-by-timestamp of distinct sessions.
 ## P3-3 · Docs over-claim relative to code
 
 README/SKILL/PRD assert "catches ALL writes," "M1 not a v2 feature," and a
-90% accuracy framing the engine does not currently support. Stainmap run on
+90% accuracy framing the engine does not currently support. Orunmila run on
 its own repo would flag these as `phantom`/`phantom_verification`. Align docs
 with shipped reality, or build to the docs.
 

@@ -39,7 +39,7 @@ const TYPES = Object.freeze({
 });
 
 function dataDir() {
-  const dir = process.env.STAINMAP_HOME || path.join(os.homedir(), '.stainmap');
+  const dir = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }

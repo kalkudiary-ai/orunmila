@@ -21,7 +21,7 @@
  *
  * Field names here (tool_response.exit_code, .success, etc.) are best-effort
  * against documented Claude Code hook payloads. If your installed version
- * names things differently, run `stainmap debug-hook` (see bin/stainmap.js)
+ * names things differently, run `orunmila debug-hook` (see bin/orunmila.js)
  * to dump a raw payload and adjust the field lookups below - this is the
  * single most likely spot to need a tweak after a Claude Code update.
  */

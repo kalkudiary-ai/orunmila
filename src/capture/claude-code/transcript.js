@@ -10,7 +10,7 @@
  * back to a generic text scan rather than throwing.
  *
  * If extraction comes back empty on your install, run:
- *   node bin/stainmap.js debug-transcript <path>
+ *   node bin/orunmila.js debug-transcript <path>
  * to see exactly what's in the file, then adjust EXTRACTORS below - this is
  * the single spot most likely to need a tweak after a Claude Code update.
  */

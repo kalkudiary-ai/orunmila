@@ -16,7 +16,7 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 
 function unifiedDiff(before, after, label) {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'stainmap-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orunmila-'));
   const a = path.join(tmp, 'a');
   const b = path.join(tmp, 'b');
   fs.writeFileSync(a, before || '');

@@ -13,7 +13,7 @@
  *   B. Live sentinel tests (T1-T5 from review/SENTINEL_DESIGN.md) - actually
  *      start the watcher on a temp dir, write/touch/ignore real files, and read
  *      back the event log to prove the skin felt (or correctly didn't feel) the
- *      change. These use a private STAINMAP_HOME so they never touch your real
+ *      change. These use a private ORUNMILA_HOME so they never touch your real
  *      log.
  *
  * Run: node test/sentinel.js
@@ -117,11 +117,11 @@ function sleep(ms) {
 
 async function withSentinel(run) {
   // Isolated home so we never touch the developer's real event log.
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'stainmap-home-'));
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stainmap-root-'));
-  const prevHome = process.env.STAINMAP_HOME;
-  process.env.STAINMAP_HOME = home;
-  // Re-require eventlog fresh so logPath() picks up the new STAINMAP_HOME.
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'orunmila-home-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'orunmila-root-'));
+  const prevHome = process.env.ORUNMILA_HOME;
+  process.env.ORUNMILA_HOME = home;
+  // Re-require eventlog fresh so logPath() picks up the new ORUNMILA_HOME.
   delete require.cache[require.resolve('../src/store/eventlog')];
   const eventlog = require('../src/store/eventlog');
 
@@ -130,8 +130,8 @@ async function withSentinel(run) {
     return await run({ root, eventlog });
   } finally {
     sentinel.stop();
-    if (prevHome === undefined) delete process.env.STAINMAP_HOME;
-    else process.env.STAINMAP_HOME = prevHome;
+    if (prevHome === undefined) delete process.env.ORUNMILA_HOME;
+    else process.env.ORUNMILA_HOME = prevHome;
     delete require.cache[require.resolve('../src/store/eventlog')];
   }
 }

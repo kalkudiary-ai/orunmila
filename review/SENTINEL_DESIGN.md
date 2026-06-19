@@ -17,13 +17,13 @@ code, but portable and predictable — which a trust tool must be.
 
 ```
 src/capture/fs-sentinel/
-  index.js        # process entry: stainmap watch-fs
+  index.js        # process entry: orunmila watch-fs
   walker.js       # recursive dir discovery + per-dir watcher attach
   hasher.js       # content hash + last-known-content store
   ignore.js       # the visible, user-overridable ignore list (§6.4 requirement)
 ```
 
-`bin/stainmap.js` gains `watch-fs` (standalone) and folds the same start into
+`bin/orunmila.js` gains `watch-fs` (standalone) and folds the same start into
 `watch` so one command runs both report-tailing and the sentinel.
 
 ## 3. Event shape (reuses the existing log — this is the whole point)
@@ -99,18 +99,18 @@ not the least.
 ## 6. The ignore list — the most transparent part of the config (§6.4)
 
 `ignore.js` exports a default list AND loads user overrides from
-`.stainmap/ignore` (or a `sentinel.ignore` key in a project config). PRD is
+`.orunmila/ignore` (or a `sentinel.ignore` key in a project config). PRD is
 emphatic: this one deliberate blind spot must be **visible and
 user-overridable**, never silently hardcoded.
 
-Defaults: `.git/`, `node_modules/`, `.stainmap/` (don't watch yourself —
+Defaults: `.git/`, `node_modules/`, `.orunmila/` (don't watch yourself —
 critical, or you loop on your own event log), and common build dirs
 (`dist/`, `build/`, `.next/`, `coverage/`, `target/`). BUT: build output is
 exactly where an "I built it" claim should be checkable, so make build-dir
 ignoring a separate, clearly-labeled toggle (`ignoreBuildOutput: true`) the
 user can flip off, rather than lumping it with `.git`.
 
-`stainmap status` should print the effective ignore list so it's never a
+`orunmila status` should print the effective ignore list so it's never a
 mystery what the skin can't feel.
 
 ## 7. Failure & lifecycle
@@ -140,7 +140,7 @@ T4  new subdir created at runtime, then a file written inside it
     => sentinel attached a watcher to the new dir and captured the write.
 
 T5  a write inside node_modules/ (default-ignored)
-    => no event; and `stainmap status` lists node_modules as ignored.
+    => no event; and `orunmila status` lists node_modules as ignored.
 ```
 
 ## 9. What this does NOT solve (state it plainly)

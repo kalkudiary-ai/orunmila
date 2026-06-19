@@ -41,7 +41,7 @@ function paint(text, color) {
 
 function renderTurn(report) {
   const lines = [];
-  lines.push(paint(`\n=== stainmap: session ${report.session_id} / turn ${report.turn_id} ===`, C.bold));
+  lines.push(paint(`\n=== orunmila: session ${report.session_id} / turn ${report.turn_id} ===`, C.bold));
 
   // Untracked writes are the highest-signal stain: the filesystem sentinel saw a
   // real change on disk that the agent's own tool stream never disclosed. Per

@@ -1,5 +1,5 @@
 node_modules/
 *.log
-stainmap-*.html
+orunmila-*.html
 examples/demo-report.html
 .DS_Store

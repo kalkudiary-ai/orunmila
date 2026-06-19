@@ -6,12 +6,12 @@
  * The sentinel's one deliberate blind spot, made VISIBLE (PRD 6.4). The whole
  * selling point of the watcher is "no hidden gaps," so the set of things it
  * intentionally does NOT watch must be the most transparent part of the config,
- * not a buried hardcoded list. `stainmap status` prints exactly what
+ * not a buried hardcoded list. `orunmila status` prints exactly what
  * effectiveIgnore() returns.
  *
  * Two tiers, on purpose:
  *   ALWAYS_IGNORE  - structural, you basically never want these. Critically
- *                    includes `.stainmap/` so the sentinel doesn't watch its own
+ *                    includes `.orunmila/` so the sentinel doesn't watch its own
  *                    event log and loop forever, and `.git/` whose churn is not
  *                    agent work.
  *   BUILD_DIRS     - build output. This is a SEPARATE toggle (ignoreBuildOutput)
@@ -19,7 +19,7 @@
  *                    want checked against real files in dist/. Default on for
  *                    signal-to-noise, but one flip away from off, and labeled.
  *
- * User overrides come from `.stainmap/ignore` in the watched root (one glob-ish
+ * User overrides come from `.orunmila/ignore` in the watched root (one glob-ish
  * path fragment per line, `#` comments allowed). Overrides ADD to the defaults;
  * a leading `!` un-ignores a default (e.g. `!dist/` to watch build output).
  */
@@ -27,17 +27,17 @@
 const fs = require('fs');
 const path = require('path');
 
-const ALWAYS_IGNORE = ['.git/', 'node_modules/', '.stainmap/', '.hg/', '.svn/'];
+const ALWAYS_IGNORE = ['.git/', 'node_modules/', '.orunmila/', '.hg/', '.svn/'];
 
 const BUILD_DIRS = ['dist/', 'build/', '.next/', 'out/', 'coverage/', 'target/', '.turbo/', '.cache/'];
 
 /**
- * Read user overrides from <root>/.stainmap/ignore. Returns { add, unignore }.
+ * Read user overrides from <root>/.orunmila/ignore. Returns { add, unignore }.
  * Lines starting with '!' un-ignore a default; everything else is an extra
  * ignore. Missing file is fine (returns empty sets) — overrides are optional.
  */
 function readUserOverrides(root) {
-  const file = path.join(root, '.stainmap', 'ignore');
+  const file = path.join(root, '.orunmila', 'ignore');
   const add = [];
   const unignore = [];
   let text = '';

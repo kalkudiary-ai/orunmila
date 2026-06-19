@@ -1,0 +1,19 @@
+{
+  "name": "stainmap",
+  "version": "0.1.0",
+  "description": "Dye-stains an AI coding agent's session: verifies what it claimed against what it actually did, and shows you the result as a colored map of the codebase.",
+  "license": "MIT",
+  "bin": {
+    "stainmap": "bin/stainmap.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {},
+  "scripts": {
+    "test": "node test/run.js",
+    "install-hooks": "node bin/stainmap.js install",
+    "status": "node bin/stainmap.js status",
+    "watch": "node bin/stainmap.js watch"
+  }
+}

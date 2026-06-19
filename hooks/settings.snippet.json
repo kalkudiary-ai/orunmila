@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      { "matcher": "*", "hooks": [{ "type": "command", "command": "node /absolute/path/to/stainmap/src/capture/claude-code/user-prompt-submit.js" }] }
+    ],
+    "PreToolUse": [
+      { "matcher": "Write|Edit|MultiEdit", "hooks": [{ "type": "command", "command": "node /absolute/path/to/stainmap/src/capture/claude-code/pre-tool-use.js" }] }
+    ],
+    "PostToolUse": [
+      { "matcher": "*", "hooks": [{ "type": "command", "command": "node /absolute/path/to/stainmap/src/capture/claude-code/post-tool-use.js" }] }
+    ],
+    "PostToolUseFailure": [
+      { "matcher": "*", "hooks": [{ "type": "command", "command": "node /absolute/path/to/stainmap/src/capture/claude-code/post-tool-use.js" }] }
+    ],
+    "Stop": [
+      { "matcher": "*", "hooks": [{ "type": "command", "command": "node /absolute/path/to/stainmap/src/capture/claude-code/stop.js" }] }
+    ]
+  }
+}

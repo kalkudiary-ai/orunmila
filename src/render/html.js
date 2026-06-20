@@ -16,6 +16,8 @@
  * open it in a browser.
  */
 
+const { buildVizData, renderGloveVisual } = require('./glove-visual');
+
 const COLORS = {
   untracked_write: '#d50000',
   verified: '#2e7d32',
@@ -229,9 +231,23 @@ function renderTurn(report) {
   </details>`;
 }
 
+// Flatten buildFileStains' Map<path,{worstOutcome,touches}> into the
+// Map<path, outcome-string> shape the visual layer's buildVizData expects, so
+// every node/line/bar can be colored by the orunmila stain (stain-first).
+function stainByKeyFrom(files) {
+  const m = new Map();
+  for (const [p, info] of files.entries()) m.set(p, info.worstOutcome);
+  return m;
+}
+
 function renderSessionHtml(sessionId, reports, glove) {
   const files = buildFileStains(reports);
   const gloveByPath = indexGloveByPath(glove);
+  // The rich, tabbed, stain-first visual (Graph/Tree/Timeline/Dashboard). Only
+  // built when a glove model is present; `orunmila html` (no glove) is untouched.
+  const visualBlock = glove && glove.turns && glove.turns.length
+    ? renderGloveVisual(buildVizData(glove, stainByKeyFrom(files)))
+    : '';
   const totals = reports.reduce((acc, r) => {
     for (const k of Object.keys(r.summary)) acc[k] = (acc[k] || 0) + r.summary[k];
     return acc;
@@ -291,6 +307,8 @@ function renderSessionHtml(sessionId, reports, glove) {
 
   <h4>Where the agent actually went (color = worst outcome; badge = glove touch count + channels)</h4>
   ${renderFileGrid(files, gloveByPath)}
+
+  ${visualBlock}
 
   ${renderGloveSection(glove)}
 

@@ -30,6 +30,13 @@ const { basename } = require('../reconcile/task-extractor');
 const SINK_TYPES = new Set(['file_write', 'command_run', 'network_call']);
 // Event types we treat as a provenance SOURCE (the dye originates here).
 const SOURCE_TYPES = new Set(['file_read', 'command_run']);
+// Bookkeeping events that bracket a turn but aren't a TOUCH of anything — they
+// must never show up as artifacts/nodes in the trail or they drown the real map.
+const BOOKKEEPING_TYPES = new Set(['user_prompt', 'turn_claim', 'turn_end', 'session_end']);
+
+function isTouch(e) {
+  return !BOOKKEEPING_TYPES.has(e.type);
+}
 
 function diffVolume(diff) {
   if (!diff) return 0;
@@ -68,8 +75,10 @@ function channelOf(e) {
 function lineageForTurn(turnEvents) {
   // Order matters: the dye only spreads forward (a write can only inherit from a
   // read that already happened). Stable sort by timestamp, falling back to input
-  // order for events sharing a ts.
+  // order for events sharing a ts. Bookkeeping events are dropped first so they
+  // never become spurious nodes on the map.
   const ordered = turnEvents
+    .filter(isTouch)
     .map((e, i) => ({ e, i }))
     .sort((a, b) => {
       const ta = a.e.ts || '';
@@ -170,4 +179,4 @@ function lineageForTurn(turnEvents) {
   return { artifacts: artifactList, edges, trail };
 }
 
-module.exports = { lineageForTurn, artifactKey, channelOf, SINK_TYPES, SOURCE_TYPES };
+module.exports = { lineageForTurn, artifactKey, channelOf, isTouch, SINK_TYPES, SOURCE_TYPES, BOOKKEEPING_TYPES };

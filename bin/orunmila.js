@@ -8,6 +8,7 @@ const eventlog = require('../src/store/eventlog');
 const { loadReport, listSessionReports } = require('../src/reconcile');
 const { renderTurn } = require('../src/render/terminal');
 const { renderSessionHtml } = require('../src/render/html');
+const { gloveForSession } = require('../src/glove');
 const transcript = require('../src/capture/claude-code/transcript');
 const { startSentinel } = require('../src/capture/fs-sentinel');
 const { effectiveIgnore } = require('../src/capture/fs-sentinel/ignore');
@@ -104,6 +105,21 @@ function cmdHtml() {
   console.log(`Wrote ${outPath}`);
 }
 
+function cmdGlove() {
+  // The unified report: orunmila's skeptical stain PLUS the glove's complete
+  // trail + lineage, both built from the one events.jsonl — one global truth.
+  const sessionId = flag('session', eventlog.latestSessionId());
+  if (!sessionId) return console.log('No sessions captured yet.');
+  const reports = listSessionReports(sessionId);
+  const glove = gloveForSession(sessionId);
+  const html = renderSessionHtml(sessionId, reports, glove);
+  const outPath = flag('out', path.join(process.cwd(), `orunmila-glove-${sessionId}.html`));
+  fs.writeFileSync(outPath, html);
+  const t = glove.totals;
+  console.log(`Wrote ${outPath}`);
+  console.log(`Glove: ${t.touches} touches across ${t.artifacts} artifacts in ${t.turns} turns.`);
+}
+
 function cmdWatchFs() {
   const root = path.resolve(flag('root', process.cwd()));
   console.log(`Starting Filesystem Sentinel on ${root} - leave running, Ctrl-C to stop.\n`);
@@ -162,6 +178,7 @@ const COMMANDS = {
   status: cmdStatus,
   report: cmdReport,
   html: cmdHtml,
+  glove: cmdGlove,
   watch: cmdWatch,
   'watch-fs': cmdWatchFs,
   'debug-transcript': cmdDebugTranscript,
@@ -174,7 +191,8 @@ Usage:
   orunmila install [--global]        merge capture hooks into .claude/settings.json
   orunmila status                    show event log location and counts
   orunmila report [--session ID] [--turn ID]   print a terminal stain report
-  orunmila html [--session ID] [--out path]    generate the full HTML session report
+  orunmila html [--session ID] [--out path]    generate the mismatch-only HTML report
+  orunmila glove [--session ID] [--out path]   unified report: complete trail + lineage + orunmila stains
   orunmila watch [--root dir]        live-tail new turn reports + run the filesystem sentinel
   orunmila watch-fs [--root dir]     run ONLY the filesystem sentinel (independent disk observer)
   orunmila debug-transcript <path>   inspect why transcript parsing isn't matching your install

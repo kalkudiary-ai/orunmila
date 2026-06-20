@@ -30,6 +30,7 @@ const fs = require('fs');
 const path = require('path');
 const { append, TYPES, dataDir } = require('../../store/eventlog');
 const { unifiedDiff } = require('../../reconcile/difftool');
+const { sha256 } = require('../fs-sentinel/hasher');
 const { turnId } = require('./turnstate');
 
 function readStdin() {
@@ -42,6 +43,60 @@ function readStdin() {
 
 function cacheSlot(sessionId, filePath) {
   return path.join(dataDir(), 'cache', sessionId || 'unknown', encodeURIComponent(filePath) + '.before');
+}
+
+// --- glove capture helpers -------------------------------------------------
+
+// Tools that reach outside the machine. WebFetch/WebSearch are core; navigate is
+// the browser MCP; mcp__* fetch/web/navigate tools are external contact too. We
+// match loosely on purpose — over-tagging a benign MCP call as network is a
+// visible, harmless conservatism; missing real external contact is not.
+const NETWORK_TOOL = /^(WebFetch|WebSearch)$/i;
+const NETWORK_MCP = /(fetch|navigate|web|http|browser|url)/i;
+
+function isNetworkTool(toolName, input) {
+  if (NETWORK_TOOL.test(toolName)) return true;
+  if (/^mcp__/i.test(toolName) && NETWORK_MCP.test(toolName)) return true;
+  // Any tool carrying an explicit url/query input that looks outbound.
+  if (input && (input.url || input.uri) && /^https?:/i.test(String(input.url || input.uri))) return true;
+  return false;
+}
+
+function hostOf(input) {
+  const raw = input && (input.url || input.uri || input.query);
+  if (!raw) return null;
+  try {
+    return new URL(String(raw)).host;
+  } catch {
+    return null; // a search query rather than a URL — keep the raw target instead
+  }
+}
+
+// Real file reads become provenance SOURCES: tag them with a content hash + size
+// so lineage can say "B was written in a turn that read A (sha …)". Glob/Grep are
+// pattern reads, not a single file, so they carry no hash.
+function readProvenance(filePath) {
+  try {
+    const buf = fs.readFileSync(filePath);
+    return { hash: sha256(buf), bytes: buf.length };
+  } catch {
+    return { hash: null, bytes: null };
+  }
+}
+
+// Full command output is kept verbatim in a local sidecar (never leaves the
+// machine), with only an excerpt + pointer in the JSONL so the log stays small.
+function writeOutputSidecar(sessionId, callId, full) {
+  if (!full) return null;
+  try {
+    const dir = path.join(dataDir(), 'output', sessionId || 'unknown');
+    fs.mkdirSync(dir, { recursive: true });
+    const slot = path.join(dir, (callId || `cmd-${Date.now()}`) + '.txt');
+    fs.writeFileSync(slot, full);
+    return slot;
+  } catch {
+    return null; // sidecar is best-effort; excerpt in the event is the fallback
+  }
 }
 
 function exitCodeOf(payload) {
@@ -110,17 +165,28 @@ function main() {
       }
     }
   } else if (/^(Read|Glob|Grep)$/i.test(toolName)) {
+    const filePath = input.file_path || input.path || input.pattern || null;
+    // Only a single concrete file (Read) can be hashed as a provenance source;
+    // Glob/Grep are pattern reads over many files.
+    const prov = /^Read$/i.test(toolName) && (input.file_path || input.path)
+      ? readProvenance(input.file_path || input.path)
+      : { hash: null, bytes: null };
     append({
       session_id: sessionId,
       turn_id: turn,
       agent: 'claude-code',
       source: 'hook',
       type: TYPES.FILE_READ,
-      path: input.file_path || input.path || input.pattern || null,
+      path: filePath,
+      hash: prov.hash,
+      bytes: prov.bytes,
+      failed,
       call_id: callId,
     });
   } else if (/^Bash$/i.test(toolName)) {
     const r = payload.tool_response || payload.tool_result || {};
+    const full = String(r.stdout || r.output || '') + (r.stderr ? '\n' + String(r.stderr) : '');
+    const outputPath = full.length > 2000 ? writeOutputSidecar(sessionId, callId, full) : null;
     append({
       session_id: sessionId,
       turn_id: turn,
@@ -129,7 +195,24 @@ function main() {
       type: TYPES.COMMAND_RUN,
       command: input.command || '',
       exit_code: exitCodeOf(payload),
-      stdout_excerpt: String(r.stdout || r.output || '').slice(0, 2000),
+      stdout_excerpt: full.slice(0, 2000),
+      output_path: outputPath, // null when output already fit in the excerpt
+      failed,
+      call_id: callId,
+    });
+  } else if (isNetworkTool(toolName, input)) {
+    // External contact is first-class in the glove trail, not folded into the
+    // generic tool_call bucket — so "what did it reach out to" is answerable.
+    append({
+      session_id: sessionId,
+      turn_id: turn,
+      agent: 'claude-code',
+      source: 'hook',
+      type: TYPES.NETWORK_CALL,
+      channel: 'network',
+      tool_name: toolName,
+      host: hostOf(input),
+      target: String(input.url || input.uri || input.query || ''),
       failed,
       call_id: callId,
     });

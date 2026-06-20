@@ -46,6 +46,22 @@ const SEVERITY_RANK = {
   acknowledged_incomplete: 0,
 };
 
+// The glove's own visual axis: not "is this a mismatch" (that's COLORS above)
+// but "what KIND of contact was this". A separate vocabulary on purpose so the
+// trail can be read even on files orunmila found nothing wrong with.
+const CHANNEL_COLORS = {
+  read: '#4fc3f7',     // light blue — observed, no change
+  write: '#66bb6a',    // green — agent-announced change
+  disk: '#26a69a',     // teal — independently observed on disk (sentinel)
+  command: '#ffb74d',  // amber — a command ran
+  network: '#ba68c8',  // purple — external contact
+  tool: '#90a4ae',     // grey — other tool call
+};
+
+const CHANNEL_GLYPH = {
+  read: '👁', write: '✎', disk: '💾', command: '$', network: '🌐', tool: '⚙',
+};
+
 function esc(s) {
   return String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -76,16 +92,91 @@ function buildFileStains(reports) {
   return files;
 }
 
-function renderFileGrid(files) {
+// Index a glove model's session-level artifacts by path so the file grid can
+// overlay the trail (touch count + lineage) on each cell orunmila already colored.
+function indexGloveByPath(glove) {
+  const byPath = new Map();
+  if (!glove) return byPath;
+  for (const a of glove.artifacts || []) {
+    if (a.path) byPath.set(a.path, a);
+  }
+  return byPath;
+}
+
+function renderFileGrid(files, gloveByPath) {
   if (!files.size) return '<p class="dim">No file writes captured yet.</p>';
   const items = Array.from(files.entries()).map(([p, info]) => {
     const color = COLORS[info.worstOutcome] || '#999';
-    const size = Math.min(220, 90 + info.touches * 18);
-    return `<div class="stain" style="background:${color};flex-basis:${size}px;" title="${esc(p)} - worst outcome: ${esc(info.worstOutcome)}, touched ${info.touches}x">
+    const g = gloveByPath && gloveByPath.get(p);
+    const size = Math.min(260, 90 + info.touches * 18 + (g ? g.touch_count * 6 : 0));
+    // Glove overlay: a small badge of touch count + channel glyphs, and the
+    // lineage (what this file inherited the stain from) in the tooltip.
+    const channels = g ? (g.channels || []).map((c) => CHANNEL_GLYPH[c] || '•').join('') : '';
+    const lineage = g && g.touched_by && g.touched_by.length
+      ? ` | stained by: ${g.touched_by.map((t) => t.split('/').pop()).join(', ')}`
+      : '';
+    const badge = g
+      ? `<span class="trail-badge" title="${esc(g.touch_count)} touches${esc(lineage)}">${esc(channels)} ${esc(g.touch_count)}</span>`
+      : '';
+    return `<div class="stain" style="background:${color};flex-basis:${size}px;" title="${esc(p)} - worst outcome: ${esc(info.worstOutcome)}, touched ${info.touches}x${esc(lineage)}">
       <span class="stain-label">${esc(p.split('/').pop())}</span>
+      ${badge}
     </div>`;
   });
   return `<div class="file-grid">${items.join('\n')}</div>`;
+}
+
+// One row of the complete-trail stream: every action, in order, fully shown.
+function renderTrailEntry(t) {
+  const color = CHANNEL_COLORS[t.channel] || '#90a4ae';
+  const glyph = CHANNEL_GLYPH[t.channel] || '•';
+  const label =
+    t.path ? esc(t.path) :
+    t.host ? esc(t.host) :
+    t.command ? esc(t.command.length > 90 ? t.command.slice(0, 90) + '…' : t.command) :
+    t.target ? esc(t.target) :
+    esc(t.key);
+  const meta = [];
+  if (typeof t.exit_code === 'number') meta.push(`exit ${t.exit_code}`);
+  if (typeof t.diff_volume === 'number') meta.push(`${t.diff_volume} lines`);
+  if (typeof t.bytes === 'number') meta.push(`${t.bytes} B`);
+  if (t.source === 'fs-sentinel') meta.push('disk-observed');
+  if (t.output_path) meta.push('full output saved');
+  if (t.hash) meta.push(`sha ${t.hash.slice(0, 8)}`);
+  const metaStr = meta.length ? ` <span class="dim">(${esc(meta.join(', '))})</span>` : '';
+  const fail = t.failed ? ` <span class="trail-fail">FAILED</span>` : '';
+  return `<div class="trail-row" style="border-left-color:${color}">
+    <span class="trail-glyph" style="color:${color}">${esc(glyph)}</span>
+    <span class="trail-channel" style="color:${color}">${esc(t.channel)}</span>
+    <span class="trail-label">${label}${fail}</span>${metaStr}
+  </div>`;
+}
+
+// The glove's per-turn complete trail + lineage edges. This is the "everything
+// is documented" half of the one global truth.
+function renderGloveTurn(turn) {
+  const rows = (turn.trail || []).map(renderTrailEntry).join('\n') || '<p class="dim">No touches in this turn.</p>';
+  const edges = (turn.edges || []).slice(0, 200).map((e) =>
+    `<div class="edge"><code>${esc(e.from.split('/').pop())}</code> &rarr; <code>${esc(e.to.split('/').pop())}</code> <span class="dim">${esc(e.kind)} (inferred)</span></div>`
+  ).join('\n');
+  const touches = (turn.trail || []).length;
+  return `<details class="turn glove-turn">
+    <summary>Turn ${esc(turn.turn_id)} &mdash; ${touches} touches across ${(turn.artifacts || []).length} artifacts</summary>
+    ${turn.prompt ? `<div class="prompt">&ldquo;${esc(turn.prompt.slice(0, 240))}${turn.prompt.length > 240 ? '…' : ''}&rdquo;</div>` : ''}
+    <h4>Complete trail (every action, in order)</h4>
+    ${rows}
+    ${edges ? `<h4>Lineage (turn-scoped, inferred &mdash; not proven data-flow)</h4>${edges}` : ''}
+  </details>`;
+}
+
+function renderGloveSection(glove) {
+  if (!glove || !glove.turns || !glove.turns.length) return '';
+  const t = glove.totals || {};
+  return `
+  <h2 class="glove-h">The glove &mdash; complete trail</h2>
+  <p class="dim">Everything the agent touched, stained on contact: ${esc(t.touches || 0)} touches across ${esc(t.artifacts || 0)} artifacts in ${esc(t.turns || 0)} turns. Lineage edges below are a <strong>turn-scoped heuristic</strong> (a read + a write in the same turn is shown as an inferred touch, not proven data-flow).</p>
+  ${glove.turns.map(renderGloveTurn).join('\n')}
+  `;
 }
 
 function renderClaim(c) {
@@ -138,8 +229,9 @@ function renderTurn(report) {
   </details>`;
 }
 
-function renderSessionHtml(sessionId, reports) {
+function renderSessionHtml(sessionId, reports, glove) {
   const files = buildFileStains(reports);
+  const gloveByPath = indexGloveByPath(glove);
   const totals = reports.reduce((acc, r) => {
     for (const k of Object.keys(r.summary)) acc[k] = (acc[k] || 0) + r.summary[k];
     return acc;
@@ -169,6 +261,19 @@ function renderSessionHtml(sessionId, reports) {
   .badge { color:#111; font-size:0.7rem; font-weight:700; padding:2px 8px; border-radius:10px; text-transform:uppercase; letter-spacing:0.03em; }
   .claim-text { font-size:0.92rem; }
   .hints { font-size:0.78rem; color:#aaa; margin-top:4px; }
+  /* glove */
+  .stain { position:relative; }
+  .trail-badge { position:absolute; top:5px; right:6px; font-size:0.66rem; background:rgba(0,0,0,0.55); padding:1px 5px; border-radius:8px; }
+  h2.glove-h { margin-top:36px; font-size:1.15rem; border-top:1px solid #333; padding-top:24px; }
+  details.glove-turn { background:#161616; }
+  .glove-turn .prompt { color:#9ad; font-size:0.85rem; margin:6px 0 4px; }
+  .trail-row { display:flex; align-items:baseline; gap:8px; border-left:3px solid #555; padding:3px 10px; margin:2px 0; background:#161616; border-radius:4px; font-size:0.85rem; }
+  .trail-glyph { width:1.2em; text-align:center; }
+  .trail-channel { width:5.5em; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.03em; }
+  .trail-label { font-family: ui-monospace, Menlo, monospace; word-break:break-all; }
+  .trail-fail { color:#ff5252; font-weight:700; font-size:0.72rem; }
+  .edge { font-size:0.82rem; margin:2px 0; color:#ccc; }
+  .edge code { background:#222; padding:1px 5px; border-radius:4px; }
 </style>
 </head>
 <body>
@@ -184,9 +289,13 @@ function renderSessionHtml(sessionId, reports) {
     <span>undisclosed changes: ${totals.undisclosed_changes || 0}</span>
   </div>
 
-  <h4>Where the agent actually went (colored by worst outcome touching that file)</h4>
-  ${renderFileGrid(files)}
+  <h4>Where the agent actually went (color = worst outcome; badge = glove touch count + channels)</h4>
+  ${renderFileGrid(files, gloveByPath)}
 
+  ${renderGloveSection(glove)}
+
+  <h2 class="glove-h">orunmila &mdash; claim vs. reality</h2>
+  <p class="dim">The skeptical lens: only mismatches between what was claimed and what the evidence shows.</p>
   <h4>Turn by turn</h4>
   ${reports.map(renderTurn).join('\n')}
 </body>

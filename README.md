@@ -54,6 +54,48 @@ Reconciliation runs against **two** sources, not one:
 - the *original user prompt*, independently (catches things the agent just
   never mentioned again - the more common and harder-to-spot failure mode)
 
+## The glove: complete trail (the other lens)
+
+The stain model above is *skeptical* - it surfaces only the mismatches. The
+**glove** is the inverse lens on the same event log: instead of staining only
+what looks wrong, it stains **everything the agent touches** and trails it, so
+you can answer "what, exactly and completely, did it do" - not just "did it
+lie."
+
+Picture a dye-stained glove: every file read, every write, every command, every
+network call gets marked on contact. And the dye spreads - within a turn, a file
+written (or a command run, or a URL fetched) is marked as **touched_by** the
+files that were read earlier in that same turn. Reads become provenance sources
+(tagged with a content hash); commands keep their full output in a local
+sidecar; external contact (WebFetch/WebSearch/navigate) is recorded as a
+first-class `network_call` with its host.
+
+| Channel | Meaning |
+|---|---|
+| `read` | a file was observed (no change) - a provenance source |
+| `write` | the agent announced a change to a file |
+| `disk` | the Filesystem Sentinel independently saw a change land on disk |
+| `command` | a shell command ran (full output saved locally) |
+| `network` | external contact - the host it reached is recorded |
+
+**Honesty about lineage:** the read->write edge is a **turn-scoped heuristic**,
+not proven data-flow. If the agent read A and wrote B in the same turn for
+unrelated reasons, B will still show `touched_by A`. That one false-edge mode is
+labelled "inferred" in the report, never hidden - the same transparency contract
+as the sentinel's time-window correlation. v0 is deliberately coarse, free, and
+local: no content-level taint, no NLP, no API calls.
+
+The glove and orunmila are **two lenses on one events.jsonl**, rendered into one
+page: `orunmila glove` shows the complete trail + lineage *and* the skeptical
+claim-vs-reality stains together - one global truth.
+
+```bash
+node bin/orunmila.js glove        # unified report: trail + lineage + stains
+```
+
+`orunmila html` still produces the original mismatch-only report if that's all
+you want.
+
 ## Quickstart (Claude Code)
 
 ```bash

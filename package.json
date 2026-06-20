@@ -11,9 +11,10 @@
   },
   "dependencies": {},
   "scripts": {
-    "test": "node test/run.js && node test/sentinel.js",
+    "test": "node test/run.js && node test/sentinel.js && node test/glove.js",
     "install-hooks": "node bin/orunmila.js install",
     "status": "node bin/orunmila.js status",
+    "glove": "node bin/orunmila.js glove",
     "watch": "node bin/orunmila.js watch",
     "watch-fs": "node bin/orunmila.js watch-fs"
   }

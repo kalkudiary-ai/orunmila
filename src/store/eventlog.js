@@ -31,12 +31,23 @@ const TYPES = Object.freeze({
   FILE_READ: 'file_read',
   FILE_WRITE: 'file_write',       // includes diff
   COMMAND_RUN: 'command_run',     // shell command + exit code
+  NETWORK_CALL: 'network_call',   // external contact (WebFetch/WebSearch/navigate/fetching MCP) — glove makes this first-class
   TOOL_CALL: 'tool_call',         // generic — covers MCP tools, search, etc.
   TOOL_RESULT: 'tool_result',     // paired with tool_call via call_id
   TURN_CLAIM: 'turn_claim',       // the agent's own text response for the turn
   TURN_END: 'turn_end',
   SESSION_END: 'session_end',
 });
+
+/**
+ * Optional fields the glove capture upgrade may attach (all backwards-compatible —
+ * events are an open shape, so older events simply lack them):
+ *   hash         sha256 of a file's content at read/write time (provenance source id)
+ *   bytes        byte size of that content
+ *   channel      'network' tags an event as external contact (see NETWORK_CALL)
+ *   host         the host an event reached out to (for network_call)
+ *   output_path  sidecar file holding full (untruncated) command output
+ */
 
 function dataDir() {
   const dir = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');

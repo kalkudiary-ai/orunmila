@@ -1,17 +1,17 @@
 'use strict';
 
 /**
- * test/glove.js
+ * test/trail.js
  *
- * Dependency-free regression harness for the glove lineage engine — same style
- * as test/run.js. Each case feeds a synthetic turn straight into
+ * Dependency-free regression harness for the trail (the glove) lineage engine —
+ * same style as test/run.js. Each case feeds a synthetic turn straight into
  * lineageForTurn() and asserts on the artifacts / edges / trail it produces.
  *
- * Run: node test/glove.js
+ * Run: node test/trail.js
  */
 
 const assert = require('assert');
-const { lineageForTurn } = require('../src/glove/lineage');
+const { lineageForTurn } = require('../src/trail/lineage');
 
 function findArtifact(model, labelOrKey) {
   return model.artifacts.find((a) => a.label === labelOrKey || a.key === labelOrKey || a.path === labelOrKey);
@@ -70,6 +70,20 @@ const cases = [
       assert.ok(net, 'a network artifact should exist');
       assert.strictEqual(net.key, 'example.com', 'network artifact keyed by host');
       assert.ok(model.trail.some((t) => t.channel === 'network' && t.host === 'example.com'), 'trail records the network host');
+    },
+  },
+  {
+    name: 'a sub-agent touch carries its attribution onto the trail row and artifact',
+    run() {
+      const model = lineageForTurn([
+        { type: 'file_read', path: 'src/probe.js', hash: 'f00d', sub_agent_id: 'agent-7', sub_agent_type: 'Explore', ts: '2026-01-01T00:00:01Z' },
+      ]);
+      const row = model.trail.find((t) => t.path === 'src/probe.js');
+      assert.ok(row, 'sub-agent read is in the trail');
+      assert.strictEqual(row.sub_agent_id, 'agent-7', 'trail row tags the sub-agent id');
+      assert.strictEqual(row.sub_agent_type, 'Explore', 'trail row tags the sub-agent type');
+      const art = findArtifact(model, 'src/probe.js');
+      assert.ok(art.sub_agents.includes('Explore'), 'artifact rolls up the sub-agent that touched it');
     },
   },
   {

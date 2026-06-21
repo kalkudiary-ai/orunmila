@@ -1,13 +1,14 @@
 'use strict';
 
 /**
- * lineage.js — "the dye"
+ * lineage.js — "the dye" (the engine behind the glove)
  *
  * orunmila's reconciler is SKEPTICAL: it stains only the mismatches between what
- * the agent claimed and what the evidence shows. The glove is the inverse lens
- * on the same event log: it stains EVERYTHING the agent touched and trails it.
- * Where orunmila answers "was the narrative honest", the glove answers "what,
- * exactly and completely, did it do" — one global truth from one events.jsonl.
+ * the agent claimed and what the evidence shows. The trail (the glove) is the
+ * inverse lens on the same event log: it stains EVERYTHING the agent touched and
+ * trails it. Where the reconciler answers "was the narrative honest", the trail
+ * answers "what, exactly and completely, did it do" — one global truth from one
+ * events.jsonl. "The glove" is the user-facing name; `trail` is the code name.
  *
  * This module is the lineage (taint) engine. Given one turn's events it builds:
  *   - an artifact-centric trail: per file/command/network target, the full
@@ -115,6 +116,12 @@ function lineageForTurn(turnEvents) {
     if (e.output_path) trailEntry.output_path = e.output_path;
     if (e.diff) trailEntry.diff_volume = diffVolume(e.diff);
     if (typeof e.exit_code === 'number') trailEntry.exit_code = e.exit_code;
+    // Who actually made the touch: a sub-agent (Task/sidechain) when present,
+    // else the main thread. Absent on main-thread events, so they read clean.
+    if (e.sub_agent_id) {
+      trailEntry.sub_agent_id = e.sub_agent_id;
+      trailEntry.sub_agent_type = e.sub_agent_type || null;
+    }
     trail.push(trailEntry);
 
     // Sinks inherit taint from every source seen earlier in this turn.
@@ -151,12 +158,14 @@ function lineageForTurn(turnEvents) {
         touches: [],
         touched_by: new Set(),
         touched: new Set(),
+        sub_agents: new Set(),
         any_failed: false,
       });
     }
     const a = artifacts.get(t.key);
     a.channels.add(t.channel);
     a.touches.push(t);
+    if (t.sub_agent_id) a.sub_agents.add(t.sub_agent_type || t.sub_agent_id);
     if (t.failed) a.any_failed = true;
   }
   for (const edge of edges) {
@@ -173,6 +182,7 @@ function lineageForTurn(turnEvents) {
     touches: a.touches,
     touched_by: [...a.touched_by], // what this artifact inherited the stain from
     touched: [...a.touched],       // what inherited the stain from this artifact
+    sub_agents: [...a.sub_agents], // sub-agents (Task/sidechain) that touched it, if any
     any_failed: a.any_failed,
   }));
 

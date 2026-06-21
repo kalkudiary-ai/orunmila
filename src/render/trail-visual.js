@@ -1,9 +1,9 @@
 'use strict';
 
 /**
- * glove-visual.js
+ * trail-visual.js
  *
- * The rich, stain-first visual layer for the glove report. Produces a single
+ * The rich, stain-first visual layer for the trail report (the glove). Produces a single
  * self-contained block (style + markup + inline vanilla-JS) that renders FOUR
  * tabbed views over the same data:
  *
@@ -18,13 +18,13 @@
  *     tooltips) vs "Power user" (dense, terse). One file serves both.
  *   - Stain-first: every node/line/bar is colored by the orunmila OUTCOME
  *     (verified/phantom/undisclosed/untracked/...) when one exists for that
- *     artifact, falling back to the glove CHANNEL color otherwise. The thing no
+ *     artifact, falling back to the trail CHANNEL color otherwise. The thing no
  *     generic trace tool can show is always the hero.
  *
  * Zero dependencies: hand-rolled SVG + DOM, no CDN, no build. Opens offline.
  *
- * It is given a pre-built `vizData` object (see buildVizData in glove/index
- * consumer) so this file is pure rendering — no event-log access here.
+ * It is given a pre-built `vizData` object (see buildVizData below, fed by
+ * trail/index's model) so this file is pure rendering — no event-log access here.
  */
 
 // Stain (orunmila outcome) palette — mirrors render/html.js COLORS so the two
@@ -41,7 +41,7 @@ const STAIN_COLORS = {
   clean: '#00e676',
 };
 
-// Glove channel palette (fallback when an artifact has no orunmila outcome).
+// Trail channel palette (fallback when an artifact has no orunmila outcome).
 const CHANNEL_COLORS = {
   read: '#40c4ff',
   write: '#69f0ae',
@@ -72,16 +72,12 @@ const EXPLAIN = {
   tool: 'Another tool the agent used.',
 };
 
-function esc(s) {
-  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
-
 /**
  * Build the compact data object the client script renders from.
- * @param {object} glove   output of gloveForSession
+ * @param {object} model   output of trailForSession (the trail/glove model)
  * @param {Map<string,string>} stainByKey  artifactKey/path -> worst orunmila outcome
  */
-function buildVizData(glove, stainByKey) {
+function buildVizData(model, stainByKey) {
   const nodes = [];
   const seen = new Map();
   const nodeIndex = (key) => {
@@ -92,7 +88,7 @@ function buildVizData(glove, stainByKey) {
     return i;
   };
 
-  for (const a of glove.artifacts || []) {
+  for (const a of model.artifacts || []) {
     const i = nodeIndex(a.key);
     const stain = (stainByKey && (stainByKey.get(a.path) || stainByKey.get(a.key))) || null;
     const primaryChannel = (a.channels && a.channels[0]) || 'tool';
@@ -112,7 +108,7 @@ function buildVizData(glove, stainByKey) {
   // Edges: aggregate lineage across all turns, dedup by from->to.
   const edgeSet = new Map();
   const trail = [];
-  for (const t of glove.turns || []) {
+  for (const t of model.turns || []) {
     for (const e of t.edges || []) {
       const fi = nodeIndex(e.from);
       const ti = nodeIndex(e.to);
@@ -140,7 +136,7 @@ function buildVizData(glove, stainByKey) {
   }
 
   // Per-turn touch counts for the timeline + bar chart.
-  const turns = (glove.turns || []).map((t) => ({
+  const turns = (model.turns || []).map((t) => ({
     turn_id: t.turn_id,
     prompt: t.prompt || '',
     touches: (t.trail || []).length,
@@ -156,8 +152,8 @@ function buildVizData(glove, stainByKey) {
   }
 
   return {
-    session: glove.session_id,
-    totals: glove.totals || { turns: turns.length, artifacts: nodes.length, touches: trail.length },
+    session: model.session_id,
+    totals: model.totals || { turns: turns.length, artifacts: nodes.length, touches: trail.length },
     nodes,
     edges: [...edgeSet.values()],
     trail,
@@ -169,7 +165,7 @@ function buildVizData(glove, stainByKey) {
 }
 
 // The whole interactive block: CSS + tab markup + the data blob + the engine.
-function renderGloveVisual(vizData) {
+function renderTrailVisual(vizData) {
   // Inline the data as a JS object literal (JSON is a subset of JS), NOT inside
   // a quoted string passed to JSON.parse — that double-encoding turned the \n
   // escapes JSON.stringify emits for newline-bearing command labels back into
@@ -333,7 +329,7 @@ function renderGloveVisual(vizData) {
     } else {
       // group by directory
       var byDir={};
-      withPath.forEach(function(n){ var parts=n.path.split('/'); var f=parts.pop(); var d=parts.join('/')||'.'; (byDir[d]=byDir[d]||[]).push({f:f,n:n}); });
+      withPath.forEach(function(n){ var parts=n.path.split(/[\\/]/); var f=parts.pop(); var d=parts.join('/')||'.'; (byDir[d]=byDir[d]||[]).push({f:f,n:n}); });
       Object.keys(byDir).sort().forEach(function(d){
         rows += '<div class="row"><span class="dir">'+escjs(d)+'/</span></div>';
         byDir[d].forEach(function(it){
@@ -429,4 +425,4 @@ function renderGloveVisual(vizData) {
 `;
 }
 
-module.exports = { buildVizData, renderGloveVisual, STAIN_COLORS, CHANNEL_COLORS };
+module.exports = { buildVizData, renderTrailVisual, STAIN_COLORS, CHANNEL_COLORS };

@@ -297,7 +297,9 @@ it('html: renderSessionHtml (no trail) produces a self-contained document', () =
   const html = renderSessionHtml('S', reports);
   assert.ok(html.startsWith('<!doctype html>'));
   assert.ok(html.includes('session S'));
-  assert.ok(html.includes('file-grid'), 'file grid rendered from stains');
+  assert.ok(html.includes('class="verdict"'), 'verdict header rendered');
+  assert.ok(html.includes('rank-row'), 'findings ranked from stains');
+  assert.ok(html.includes('untracked write'), 'the untracked sneaky.js surfaces as a finding');
 });
 
 it('html: renderSessionHtml with no reports shows the empty-grid message', () => {
@@ -407,14 +409,14 @@ it('html: a hand-built rich trail exercises every trail-row, badge, meta and edg
       },
     ],
   };
-  // One real report so the file grid has a stained cell for src/b.js to overlay.
-  tmpHome();
-  seedEvents([
-    { session_id: 'RICH', turn_id: 't1', type: 'user_prompt', text: 'edit b.js' },
-    { session_id: 'RICH', turn_id: 't1', source: 'hook', type: 'file_write', path: 'src/b.js', diff: '+const x = realLogic();\n', failed: false },
-    { session_id: 'RICH', turn_id: 't1', type: 'turn_claim', text: 'I edited b.js.' },
-  ]);
-  const reports = [reconcile.reconcileAndPersist('RICH', 't1')];
+  // A report with src/b.js as an explicit undisclosed change, so it is
+  // deterministically stained and surfaces in the ranked findings list with its
+  // trail overlay (channels + "stained by" lineage), exercising renderFindingRow.
+  const reports = [{
+    session_id: 'RICH', turn_id: 't1',
+    claims: [], subtasks: [], undisclosed: [{ path: 'src/b.js' }], untracked: [],
+    summary: { verified: 0, partial: 0, phantom: 0, phantom_verification: 0, unverifiable: 0, silently_dropped: 0, undisclosed_changes: 1, untracked_writes: 0 },
+  }];
   const html = renderSessionHtml('RICH', reports, trail);
   assert.ok(html.includes('trail-row'), 'trail rows rendered');
   assert.ok(html.includes('FAILED'), 'failed command surfaced');
@@ -423,7 +425,7 @@ it('html: a hand-built rich trail exercises every trail-row, badge, meta and edg
   assert.ok(html.includes('sha abcd1234'), 'hash meta truncated to 8 chars');
   assert.ok(html.includes('example.com'), 'network host labelled');
   assert.ok(html.includes('&rarr;'), 'a lineage edge rendered');
-  assert.ok(html.includes('trail-badge'), 'file-grid trail badge rendered');
+  assert.ok(html.includes('stained by: a.js'), 'finding row shows the trail lineage overlay');
 });
 
 it('html: a Windows backslash path renders just the basename in the grid + lineage', () => {

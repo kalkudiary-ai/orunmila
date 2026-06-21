@@ -3,3 +3,7 @@ node_modules/
 orunmila-*.html
 examples/demo-report.html
 .DS_Store
+coverage/
+
+# Local Claude Code editor state (machine-specific)
+.claude/settings.local.json

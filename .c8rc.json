@@ -1,0 +1,13 @@
+{
+  "all": true,
+  "include": ["src/**/*.js", "bin/**/*.js"],
+  "exclude": ["test/**", "coverage/**", "**/node_modules/**"],
+  "reporter": ["text", "html", "json-summary"],
+  "report-dir": "coverage",
+  "temp-dir": "coverage/tmp",
+  "check-coverage": true,
+  "lines": 97,
+  "statements": 97,
+  "functions": 97,
+  "branches": 86
+}

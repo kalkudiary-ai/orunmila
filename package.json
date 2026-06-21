@@ -3,19 +3,65 @@
   "version": "0.1.0",
   "description": "Dye-stains an AI coding agent's session: verifies what it claimed against what it actually did, and shows you the result as a colored map of the codebase.",
   "license": "MIT",
+  "author": "KJ (kalkudiary-ai) <kalkudiary@gmail.com>",
+  "homepage": "https://github.com/kalkudiary-ai/orunmila#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kalkudiary-ai/orunmila.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kalkudiary-ai/orunmila/issues"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "claude-code",
+    "cursor",
+    "aider",
+    "codex",
+    "llm",
+    "verification",
+    "audit",
+    "provenance",
+    "lineage",
+    "hooks",
+    "observability",
+    "code-review",
+    "claim-checking"
+  ],
   "bin": {
     "orunmila": "bin/orunmila.js"
   },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=18"
   },
   "dependencies": {},
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "c8": "^10.1.3",
+    "eslint": "^9.0.0",
+    "prettier": "^3.0.0"
+  },
   "scripts": {
-    "test": "node test/run.js && node test/sentinel.js && node test/glove.js",
+    "test": "node test/all.js",
+    "coverage": "c8 node test/all.js",
+    "accuracy": "node test/accuracy.js",
+    "accuracy:gate": "node test/accuracy.js --gate 95",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "install-hooks": "node bin/orunmila.js install",
     "status": "node bin/orunmila.js status",
-    "glove": "node bin/orunmila.js glove",
+    "report": "node bin/orunmila.js trail",
+    "demo": "node bin/orunmila.js demo",
     "watch": "node bin/orunmila.js watch",
-    "watch-fs": "node bin/orunmila.js watch-fs"
+    "watch-fs": "node bin/orunmila.js watch-fs",
+    "prepublishOnly": "npm run lint && npm run accuracy:gate && npm run coverage"
   }
 }

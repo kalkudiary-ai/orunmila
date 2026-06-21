@@ -92,7 +92,14 @@ function createWalker({ root, isIgnored, onPath, onError, onWatcherCount }) {
     if (stat.isDirectory()) {
       if (!ignored(abs)) {
         attach(abs);
-        walk(abs); // catch files created inside before our watcher existed
+        // Files that landed in this newly-appeared dir before our watcher
+        // attached are genuinely new writes — report them, don't silently
+        // seed them. Without this, a file created in a brand-new subdir
+        // during the attach window is lost (the race is wider on Windows,
+        // where parent-dir change delivery lags behind the write). onPath is
+        // idempotent via the store's hash compare, so re-reporting a file the
+        // freshly-attached watcher also caught emits nothing the second time.
+        for (const f of walk(abs)) onPath(f);
       }
       return;
     }

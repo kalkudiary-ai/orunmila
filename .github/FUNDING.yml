@@ -1,0 +1,13 @@
+# Funding sources for Orunmila.
+# GitHub renders a "Sponsor" button from this file once at least one entry
+# below is uncommented and has a real handle. Until then nothing is shown.
+#
+# TODO(funding): after the Liberapay and thanks.dev accounts exist, replace
+# the placeholders below with the real handle/URL and uncomment them.
+
+# Liberapay account name (the slug in https://liberapay.com/<name>):
+# liberapay: YOUR_LIBERAPAY_NAME
+
+# thanks.dev and any other links go under `custom` as full URLs:
+# custom:
+#   - "https://thanks.dev/u/gh/kalkudiary-ai"

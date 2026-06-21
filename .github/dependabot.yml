@@ -1,0 +1,23 @@
+version: 2
+updates:
+  # npm dependencies (orunmila has only devDeps like c8/eslint at the moment).
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+      prefix-development: "deps-dev"
+    groups:
+      # Batch routine devDep bumps into a single PR to cut review noise.
+      dev-dependencies:
+        dependency-type: "development"
+
+  # Keep the GitHub Actions used in .github/workflows pinned and current.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"

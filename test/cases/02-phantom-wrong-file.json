@@ -1,0 +1,13 @@
+{
+  "name": "phantom: claimed a fix to payment.js but edited an unrelated file",
+  "note": "Classic lie/mistake: the claim names payment.js, the only write is unrelated.js. Must NOT read as verified.",
+  "prompt": "fix the bug in payment.js",
+  "claim": "I fixed the bug in payment.js.",
+  "events": [
+    { "type": "file_write", "source": "hook", "path": "src/unrelated.js", "diff": "+x = 1;\n", "failed": false }
+  ],
+  "expect": {
+    "claim_outcomes": ["phantom"],
+    "not_outcomes": ["verified"]
+  }
+}

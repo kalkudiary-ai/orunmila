@@ -1,0 +1,11 @@
+{
+  "name": "phantom: claimed work with zero events at all",
+  "note": "The agent says it did something; the session has no writes/commands/reads. Pure phantom.",
+  "prompt": "add a dark mode toggle to settings",
+  "claim": "I added a dark mode toggle to the settings page.",
+  "events": [],
+  "expect": {
+    "claim_outcomes": ["phantom"],
+    "not_outcomes": ["verified"]
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "acknowledged_incomplete: ask mentioned in the claim but not actually done",
+  "note": "The agent SAYS it will handle the migration (mentions 'sessions table') but no event backs it. This is honest-but-incomplete, distinct from silently_dropped.",
+  "prompt": "Add a logout button, and write a migration for the sessions table.",
+  "claim": "I added the logout button. The sessions table migration still needs to be written.",
+  "events": [
+    { "type": "file_write", "source": "hook", "path": "src/navbar.js", "diff": "+function Logout() { return button('Log out', signOut); }\n", "failed": false }
+  ],
+  "expect": {
+    "subtask_outcomes_include": ["acknowledged_incomplete"],
+    "summary": { "silently_dropped": 0 }
+  }
+}

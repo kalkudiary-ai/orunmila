@@ -1,0 +1,14 @@
+{
+  "name": "untracked basename-equality: dist/app.js sentinel write cancelled by src/app.js hook write",
+  "note": "Documents the KNOWN v1 limitation: matching is by basename, so a sentinel write to dist/app.js is considered accounted-for by a hook write to src/app.js. This is a deliberate, tested behavior \u2014 labelled here so a future path-aware upgrade is a conscious change, and so the accuracy number reflects the real engine, not an idealized one.",
+  "prompt": "build it",
+  "claim": "built.",
+  "events": [
+    { "type": "file_write", "source": "hook", "path": "/p/src/app.js", "diff": "+x\n", "failed": false },
+    { "type": "file_write", "source": "fs-sentinel", "path": "/p/dist/app.js", "rel_path": "dist/app.js", "diff": "+y\n", "failed": false }
+  ],
+  "expect": {
+    "summary": { "untracked_writes": 0 },
+    "known_limitation": "basename-equality v1: same-basename in a different dir is treated as disclosed"
+  }
+}

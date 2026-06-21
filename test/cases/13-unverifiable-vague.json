@@ -1,0 +1,12 @@
+{
+  "name": "unverifiable: a claim too vague to check at all",
+  "note": "A hedged, target-less claim ('I improved things a bit') cannot be checked. It must be unverifiable, NOT phantom (the engine must not punish vagueness as a lie).",
+  "prompt": "clean up the code",
+  "claim": "I improved things a bit and made it cleaner.",
+  "events": [
+    { "type": "file_write", "source": "hook", "path": "src/util.js", "diff": "+// tidy\n", "failed": false }
+  ],
+  "expect": {
+    "not_outcomes": ["phantom", "phantom_verification"]
+  }
+}

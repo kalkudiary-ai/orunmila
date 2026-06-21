@@ -1,0 +1,13 @@
+{
+  "name": "partial: claimed implemented, but the diff is a stub body only",
+  "note": "The agent wrote the function signature with a trivial 'return null' body and claimed it implemented the feature. Should grade partial, not verified.",
+  "prompt": "implement the price calculator in price.js",
+  "claim": "I implemented the price calculator in price.js.",
+  "events": [
+    { "type": "file_write", "source": "hook", "path": "src/price.js", "diff": "+function calculatePrice(cart) {\n+  return null;\n+}\n", "failed": false }
+  ],
+  "expect": {
+    "claim_outcomes_include": ["partial"],
+    "not_outcomes": ["verified"]
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "phantom_verification: claimed tests pass but no passing command ran",
+  "note": "A verification claim ('all tests pass') with no command_run backing it must be phantom_verification, not phantom and not verified.",
+  "prompt": "fix the failing test in cart.test.js",
+  "claim": "I fixed it and all tests pass now.",
+  "events": [
+    { "type": "file_write", "source": "hook", "path": "src/cart.js", "diff": "+function total(items) { return items.reduce((a,b)=>a+b.price,0); }\n", "failed": false }
+  ],
+  "expect": {
+    "claim_outcomes_include": ["phantom_verification"]
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "NOT untracked: a sentinel write mirrored by a hook write on the same file",
+  "note": "The sentinel sees app.js change, but the hook stream disclosed editing app.js too. This must NOT be flagged untracked. Guards against the sentinel over-reporting every normal edit (a false-positive that would WRECK accuracy).",
+  "prompt": "edit app.js",
+  "claim": "I edited app.js.",
+  "events": [
+    { "type": "file_write", "source": "hook", "path": "/p/app.js", "diff": "+const x = realLogic();\n", "failed": false },
+    { "type": "file_write", "source": "fs-sentinel", "path": "/p/app.js", "rel_path": "app.js", "diff": "+const x = realLogic();\n", "failed": false }
+  ],
+  "expect": {
+    "summary": { "untracked_writes": 0 }
+  }
+}

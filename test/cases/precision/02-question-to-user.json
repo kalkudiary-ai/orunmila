@@ -1,0 +1,12 @@
+{
+  "name": "precision: a question asked back to the user is not a work-claim",
+  "note": "VERBATIM from a real captured turn. The agent ended its reply with a question offering next steps. It contains code-span targets (`src/`, the reconciler) and so parses as a claim with zero evidence -> phantom. A question is never an assertion of completed work.",
+  "source": "real:~/.orunmila/events.jsonl",
+  "kind": "negative",
+  "prompt": "what now?",
+  "claim": "Want me to dig into the actual implementation (`src/`, the reconciler, the hooks), review it, or something else?",
+  "events": [],
+  "expect": {
+    "not_outcomes": ["phantom", "phantom_verification"]
+  }
+}

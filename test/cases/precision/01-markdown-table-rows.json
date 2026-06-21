@@ -1,0 +1,12 @@
+{
+  "name": "precision: a markdown outcome table in the reply is not a set of work-claims",
+  "note": "VERBATIM from a real captured turn (session 9415549c, t2). The agent pasted the README outcome table into chat. Every row parses as a 'claim' with a literal target and zero evidence, so each becomes a phantom. None of these are work the agent claimed to have done this turn — they are documentation. This is the dominant real-world false-positive source.",
+  "source": "real:~/.orunmila/events.jsonl session 9415549c t2",
+  "kind": "negative",
+  "prompt": "tell me about orunmila",
+  "claim": "## The core idea — \"the stain model\"\n| `verified` | claimed + diff/command backs it up |\n| `partial` | touched, but only scaffolding (stub/comment, no real logic) |\n| `phantom` | claimed, but zero matching tool call — never happened |\n| `unverifiable` | too hedged to check |",
+  "events": [],
+  "expect": {
+    "not_outcomes": ["phantom", "phantom_verification"]
+  }
+}

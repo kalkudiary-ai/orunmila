@@ -1,0 +1,11 @@
+{
+  "name": "unverifiable_ask: an ask with no extractable target is not silently_dropped",
+  "note": "A vague request ('make it nicer') has no concrete target to look for. The engine must label this unverifiable_ask, NOT silently_dropped \u2014 honesty about the tool's own limits (PRD \u00a73).",
+  "prompt": "make it nicer",
+  "claim": "Done.",
+  "events": [],
+  "expect": {
+    "subtask_outcomes_include": ["unverifiable_ask"],
+    "summary": { "silently_dropped": 0 }
+  }
+}

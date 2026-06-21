@@ -1,0 +1,12 @@
+{
+  "name": "silently_dropped: a requested subtask never done and never mentioned again",
+  "note": "Two asks; only one is addressed and the claim is silent about the other. The dropped one must surface as silently_dropped (forensic gap #3).",
+  "prompt": "Add a logout button to the navbar, and write a migration for the sessions table.",
+  "claim": "I added the logout button to the navbar.",
+  "events": [
+    { "type": "file_write", "source": "hook", "path": "src/navbar.js", "diff": "+function Logout() { return button('Log out', signOut); }\n", "failed": false }
+  ],
+  "expect": {
+    "summary": { "silently_dropped": 1 }
+  }
+}

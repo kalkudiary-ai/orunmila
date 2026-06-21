@@ -52,7 +52,10 @@ function startSentinel(opts = {}) {
     const change = store.diffAndUpdate(absPath);
     if (!change) return; // unchanged content — the touch-without-modify drop.
 
-    const relPath = path.relative(root, absPath);
+    // Canonicalise to forward slashes so the event log is platform-independent
+    // (Windows path.relative yields back-slashes): the reconciler's basename
+    // match, the diff headers, and the HTML report all assume POSIX separators.
+    const relPath = path.relative(root, absPath).split(/[\\/]/).join('/');
     const diff = change.binary
       ? `Binary file ${relPath} changed (${change.kind}).`
       : unifiedDiff(change.before, change.after, relPath);

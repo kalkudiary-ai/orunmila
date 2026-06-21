@@ -140,7 +140,7 @@ function sentinelWrites(eventlog, relName) {
   return eventlog
     .readAll()
     .filter((e) => e.source === 'fs-sentinel' && e.type === 'file_write')
-    .filter((e) => !relName || (e.rel_path || '').split('/').pop() === relName);
+    .filter((e) => !relName || (e.rel_path || '').split(/[\\/]/).pop() === relName);
 }
 
 async function runLive() {

@@ -190,6 +190,49 @@ README/SKILL/PRD assert "catches ALL writes," "M1 not a v2 feature," and a
 its own repo would flag these as `phantom`/`phantom_verification`. Align docs
 with shipped reality, or build to the docs.
 
+## P1-4 · Claim-extractor has low precision on conversational/markdown turns
+
+**Measured, not inferred.** The detection-accuracy corpus (`test/cases/*.json`,
+scored by `test/accuracy.js`) reaches **100% accuracy** (sentinel ON, 32/32) and
+**100% glove trail completeness**. But running the engine over a *real* captured
+log (`~/.orunmila/events.jsonl`, 27 turns, 510 events) surfaces a precision gap
+the curated corpus did not stress: **122 `phantom`/`phantom_verification`
+findings, the large majority FALSE POSITIVES.**
+
+**Root cause:** `claim-extractor.js` (`extractClaims`) treats almost any sentence
+containing an action verb, a verification word, or a typed target as a checkable
+*work*-claim. On ordinary replies it therefore extracts claims from:
+- markdown table rows (`| verified | ... |`) and headings (`## The core idea`)
+- questions back to the user ("Want me to dig into the implementation?")
+- instructional shell snippets shown to the human (`node bin/orunmila.js glove`)
+- git/status narration over work already disclosed elsewhere
+
+None of these are assertions of completed work, but each parses to a claim with
+no matching event → `phantom`. There is no "is this even a work-claim?" filter
+in the extractor today (confirmed: `claim-extractor.js` has only hedge/verb/
+verification tagging, no markdown/question/code-fence guard).
+
+**Measured number (real-log-derived negative corpus, `test/cases/precision/`):**
+```
+Phantom precision  25.0%  (1/4 non-work cases stay clean)
+```
+The one passing case is git narration that *does* have a backing commit event —
+so narration-over-evidence is fine; pure prose/markdown/questions/instructions
+are the false-positive source.
+
+**Acceptance test** (FAILS today, should PASS once fixed):
+```
+node test/accuracy.js  =>  Phantom precision == 100% (4/4 non-work cases clean)
+WITHOUT regressing: sentinel-ON accuracy stays 100% and glove stays 100%.
+```
+
+**Fix sketch (not yet applied — measured baseline established first, per review):**
+a pre-filter in `extractClaims` that drops a sentence before claim-tagging when
+it is a markdown table row / heading / bullet of pasted docs, a fenced or
+inline-only code/command line, or a question (`?`-terminated with no action
+verb outside code spans). Keep it conservative: only drop text that is clearly
+not a self-assertion of work, so real claims are never silently swallowed.
+
 ---
 
 ## Suggested fix order (by leverage)
@@ -202,9 +245,21 @@ with shipped reality, or build to the docs.
 4. **P2-2** — turn-id concurrency.
 5. **P2-4 / P3-x** — visual + polish.
 
-## Regression corpus
+## Regression & accuracy corpus  (DONE — now measured)
 
-Turn every reproduction above into a fixture under `test/cases/*.json`
-(`{prompt, claim, events, expect:{summary,...}}`) plus the PRD §9 anaphora and
-turn-wide-command cases. A 12-15 case table run by a dependency-free
-`test/run.js` is enough to lock these.
+The reproductions above are locked two ways:
+
+1. **Regression** — `test/run.js` (folded into `npm test` via `test/all.js`)
+   runs the dependency-free PASS/FAIL table, including the anaphora and
+   turn-wide-command cases.
+2. **Detection accuracy** — `test/cases/*.json` (15 labelled turns,
+   `{prompt, claim, events, expect}`) scored by `test/accuracy.js`, which reports
+   THREE measured numbers instead of an asserted one:
+   - **accuracy** sentinel OFF vs ON (the sentinel's value is the delta, +6.3 pts)
+   - **glove trail completeness** (everything-touched-is-documented, 100%)
+   - **precision** against a real-log-derived negative corpus
+     (`test/cases/precision/*.json`) — see **P1-4**; currently 25%, the open gap.
+
+   Run: `node test/accuracy.js` (report) or `node test/accuracy.js --gate 95`
+   (CI gate on sentinel-ON accuracy). Scripts: `npm run accuracy`,
+   `npm run accuracy:gate`.

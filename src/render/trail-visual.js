@@ -205,7 +205,19 @@ function renderTrailVisual(vizData) {
   .gv-node { cursor:pointer; }
   .gv-node circle { transition:r .12s, filter .12s; }
   .gv-node:hover circle { filter:brightness(1.4); }
-  .gv-edge { stroke-opacity:.34; }
+  /* edges rest near-invisible so the map is not a hairball; a node's own edges
+     light up only while it is hovered ("show me what THIS touched"). */
+  .gv-edge { stroke-opacity:.06; transition:stroke-opacity .1s, stroke-width .1s; }
+  .gv-edge.hot { stroke-opacity:.85; stroke-width:2.1; }
+  .gv-gctl { display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+  .gv-gbtn { background:#11151c; color:#9aa6b2; border:1px solid #28313d; border-radius:8px; padding:5px 11px; font-size:.78rem; cursor:pointer; font-weight:600; }
+  .gv-gbtn.on { background:#1c2530; color:#fff; }
+  .gv-gcount { color:#6f7b88; font-size:.76rem; }
+  .gv-legbox { margin:2px 0 12px; }
+  .gv-legbox summary { color:#7d8694; font-size:.78rem; cursor:pointer; font-weight:600; list-style:none; }
+  .gv-legbox summary::before { content:'\\25B8 '; }
+  .gv-legbox[open] summary::before { content:'\\25BE '; }
+  .gv-legbox .gv-legend { margin-top:8px; }
   .gv-tip { position:absolute; pointer-events:none; background:#0b0e13; border:1px solid #2a3340; border-radius:8px; padding:8px 11px; font-size:.8rem; color:#e7edf3; max-width:300px; box-shadow:0 8px 26px rgba(0,0,0,.6); opacity:0; transition:opacity .1s; z-index:5; }
   .gv-tip b { color:#fff; } .gv-tip .ex { color:#9ad; display:block; margin-top:4px; }
   .gv-tree { font-family:ui-monospace,Menlo,monospace; font-size:.86rem; line-height:1.7; }
@@ -240,16 +252,16 @@ function renderTrailVisual(vizData) {
     </div>
   </div>
   <div class="gv-tabs" id="gv-tabs">
-    <button class="gv-tab on" data-view="graph">Graph</button>
+    <button class="gv-tab on" data-view="timeline">Timeline</button>
     <button class="gv-tab" data-view="tree">Tree</button>
-    <button class="gv-tab" data-view="timeline">Timeline</button>
+    <button class="gv-tab" data-view="graph">Graph</button>
     <button class="gv-tab" data-view="dashboard">Dashboard</button>
   </div>
   <div class="gv-stage">
     <p class="gv-hint" id="gv-hint"></p>
-    <div class="gv-view on" data-view="graph" id="gv-graph"></div>
+    <div class="gv-view on" data-view="timeline" id="gv-timeline"></div>
     <div class="gv-view" data-view="tree" id="gv-tree"></div>
-    <div class="gv-view" data-view="timeline" id="gv-timeline"></div>
+    <div class="gv-view" data-view="graph" id="gv-graph"></div>
     <div class="gv-view" data-view="dashboard" id="gv-dashboard"></div>
     <div class="gv-tip" id="gv-tip"></div>
   </div>
@@ -266,7 +278,7 @@ function renderTrailVisual(vizData) {
   document.getElementById('gv-sub').textContent = DATA.totals.touches + ' touches / ' + DATA.totals.artifacts + ' things / ' + DATA.totals.turns + ' turns';
 
   var HINTS = {
-    graph: 'Each glowing dot is something the agent touched. Lines mean the dye spread: the agent read one thing, then changed another in the same turn (an inferred link, not proof). Color = what orunmila found; bright red/purple = something worth a look.',
+    graph: 'Each glowing dot is something the agent touched. Starts on the flagged things only — hover a dot to light up what it connected to (an inferred link, not proof). Switch to "Everything" for the full map. Bright red/purple = worth a look.',
     tree: 'Your project laid out as folders. Each bar glows by how the agent touched that file and whether orunmila flagged it.',
     timeline: 'The session left to right, one column per turn. Each pip is one action, in the order it happened.',
     dashboard: 'The numbers at a glance: what kinds of contact happened, how busy each turn was, and which things got touched most.'
@@ -279,43 +291,76 @@ function renderTrailVisual(vizData) {
   function stageXY(e){ var r = root.querySelector('.gv-stage').getBoundingClientRect(); return [e.clientX-r.left, e.clientY-r.top]; }
 
   // ---- GRAPH (radial sensor map + lineage lines) ----
+  // 'flagged' (default) shows only stained nodes + their direct neighbours, so a
+  // session with hundreds of clean touches stops being a hairball; 'all' is the
+  // opt-in full view. Edges rest near-invisible and light up per hovered node.
+  var graphMode = 'flagged';
   function renderGraph(){
     var el = document.getElementById('gv-graph');
     var W=900, H=520, cx=W/2, cy=H/2;
-    var n = DATA.nodes.length || 1;
+
+    var stainedCount = DATA.nodes.filter(function(n){return n.stain;}).length;
+    var keep = {};
+    if (graphMode==='flagged' && stainedCount){
+      DATA.nodes.forEach(function(n){ if(n.stain) keep[n.id]=true; });
+      DATA.edges.forEach(function(e){ if(keep[e.from]||keep[e.to]){ keep[e.from]=true; keep[e.to]=true; } });
+    } else {
+      DATA.nodes.forEach(function(n){ keep[n.id]=true; });
+    }
+    var visible = DATA.nodes.filter(function(n){ return keep[n.id]; });
+    var m = visible.length || 1;
+
     // Deterministic radial layout: ring radius scales with touch count so busy
     // nodes sit toward the centre. Stable (no physics needed, zero-dep).
-    var positions = DATA.nodes.map(function(nd, i){
-      var ang = (i / n) * Math.PI * 2 - Math.PI/2;
-      var maxT = Math.max.apply(null, DATA.nodes.map(function(x){return x.touches;}).concat([1]));
+    var maxT = Math.max.apply(null, visible.map(function(x){return x.touches;}).concat([1]));
+    var positions = {};
+    visible.forEach(function(nd, k){
+      var ang = (k / m) * Math.PI * 2 - Math.PI/2;
       var rad = 70 + (1 - nd.touches/maxT) * 150;
-      return { x: cx + Math.cos(ang)*rad, y: cy + Math.sin(ang)*rad };
+      positions[nd.id] = { x: cx + Math.cos(ang)*rad, y: cy + Math.sin(ang)*rad };
     });
+
+    var controls = '<div class="gv-gctl">'
+      + '<button class="gv-gbtn'+(graphMode==='flagged'?' on':'')+'" data-gmode="flagged">Flagged only</button>'
+      + '<button class="gv-gbtn'+(graphMode==='all'?' on':'')+'" data-gmode="all">Everything</button>'
+      + '<span class="gv-gcount">'+visible.length+' of '+DATA.nodes.length+' things'
+      + (graphMode==='flagged'&&!stainedCount ? ' &middot; nothing flagged, showing all' : '')+'</span></div>';
+
     var svg = '<svg class="gv-svg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet">';
     DATA.edges.forEach(function(e){
+      if(!keep[e.from]||!keep[e.to]) return;
       var a=positions[e.from], b=positions[e.to]; if(!a||!b) return;
       var c = colorOf(DATA.nodes[e.to].stain, DATA.nodes[e.to].channels[0]);
-      svg += '<path class="gv-edge" d="M'+a.x.toFixed(1)+' '+a.y.toFixed(1)+' Q '+cx+' '+cy+' '+b.x.toFixed(1)+' '+b.y.toFixed(1)+'" fill="none" stroke="'+c+'" stroke-width="1.3"/>';
+      svg += '<path class="gv-edge" data-from="'+e.from+'" data-to="'+e.to+'" d="M'+a.x.toFixed(1)+' '+a.y.toFixed(1)+' Q '+cx+' '+cy+' '+b.x.toFixed(1)+' '+b.y.toFixed(1)+'" fill="none" stroke="'+c+'" stroke-width="1.3"/>';
     });
-    DATA.nodes.forEach(function(nd,i){
-      var p=positions[i]; var c=colorOf(nd.stain, nd.primaryChannel);
+    visible.forEach(function(nd){
+      var p=positions[nd.id]; var c=colorOf(nd.stain, nd.primaryChannel);
       var r = 6 + Math.min(18, nd.touches*1.4);
       var g = P.glyph[nd.primaryChannel] || '';
-      svg += '<g class="gv-node" data-i="'+i+'" transform="translate('+p.x.toFixed(1)+','+p.y.toFixed(1)+')">';
+      svg += '<g class="gv-node" data-i="'+nd.id+'" transform="translate('+p.x.toFixed(1)+','+p.y.toFixed(1)+')">';
       svg += '<circle r="'+r+'" fill="'+c+'" fill-opacity="0.28" stroke="'+c+'" stroke-width="1.8" style="filter:drop-shadow(0 0 6px '+c+')"/>';
       svg += '<text text-anchor="middle" dy="3" font-size="11" fill="#dfe7ef">'+g+'</text>';
       svg += '<text text-anchor="middle" y="'+(r+12)+'" font-size="9.5" fill="#8d99a6">'+escjs(trunc(nd.label,16))+'</text>';
       svg += '</g>';
     });
     svg += '</svg>';
-    el.innerHTML = legend() + svg;
+    el.innerHTML = legend() + controls + svg;
+
+    var paths = el.querySelectorAll('.gv-edge');
     el.querySelectorAll('.gv-node').forEach(function(g){
+      g.addEventListener('mouseenter', function(){
+        var i = +g.dataset.i;
+        paths.forEach(function(p){ p.classList.toggle('hot', +p.dataset.from===i || +p.dataset.to===i); });
+      });
       g.addEventListener('mousemove', function(ev){
         var nd = DATA.nodes[+g.dataset.i]; var xy=stageXY(ev);
         var label = (nd.stain ? nd.stain.replace(/_/g,' ') : nd.primaryChannel);
         tipShow('<b>'+escjs(nd.label)+'</b> &mdash; '+escjs(label)+'<br>'+nd.touches+' touches'+(nd.tainted_by?(' &middot; stained by '+nd.tainted_by):'')+'<span class="ex">'+escjs(explainOf(nd.stain,nd.primaryChannel))+'</span>', xy[0], xy[1]);
       });
-      g.addEventListener('mouseleave', tipHide);
+      g.addEventListener('mouseleave', function(){ paths.forEach(function(p){ p.classList.remove('hot'); }); tipHide(); });
+    });
+    el.querySelectorAll('.gv-gbtn').forEach(function(b){
+      b.addEventListener('click', function(){ graphMode=b.dataset.gmode; renderGraph(); });
     });
   }
 
@@ -397,7 +442,7 @@ function renderTrailVisual(vizData) {
     var chans=['read','write','command','network'];
     var s = stains.map(function(k){return '<span class="it" style="color:'+P.stain[k]+'"><span class="gv-dot" style="background:'+P.stain[k]+'"></span><span class="lbl-long">'+P.explain[k]+'</span><span class="lbl-short">'+k.replace(/_/g,' ')+'</span></span>';}).join('');
     var c = chans.map(function(k){return '<span class="it" style="color:'+P.channel[k]+'"><span class="gv-dot" style="background:'+P.channel[k]+'"></span><span class="lbl-long">'+P.explain[k]+'</span><span class="lbl-short">'+k+'</span></span>';}).join('');
-    return '<div class="gv-legend">'+s+c+'</div>';
+    return '<details class="gv-legbox"><summary>Colour legend</summary><div class="gv-legend">'+s+c+'</div></details>';
   }
 
   function trunc(s,n){ s=String(s||''); return s.length>n ? s.slice(0,n-1)+'\\u2026' : s; }
@@ -419,7 +464,7 @@ function renderTrailVisual(vizData) {
     root.classList.toggle('gv-power', e.target.dataset.aud==='power');
   });
 
-  show('graph');
+  show('timeline');
 })();
 </script>
 `;

@@ -45,7 +45,14 @@ function isTrivialStub(diff) {
     .map((l) => l.slice(1));
   const substantive = added.filter((b) => b.trim() !== '' && !/^\s*(\/\/|#|\*|\/\*|"""|'''|<!--)/.test(b));
   if (!substantive.length) return false;
-  return substantive.every((l) => TRIVIAL_BODY.test(l) || /[){]\s*$/.test(l) || /^\s*(function|const|let|var|def|class)\b/.test(l));
+  // Structural lines (signatures, opening/closing braces) carry no logic. A diff
+  // whose only non-structural line is a trivial body (return null / pass / {}) is
+  // a stub, even when wrapped in `function f() { ... }` with a closing `}`.
+  const isStructural = (l) =>
+    /[){[]\s*$/.test(l) || // opens a block / arg list / array
+    /^\s*[)}\]]+;?\s*$/.test(l) || // closes one: }  )  ];  })
+    /^\s*(function|const|let|var|def|class|export|public|private|async)\b/.test(l);
+  return substantive.every((l) => TRIVIAL_BODY.test(l) || isStructural(l));
 }
 
 function outcomeForClaim(claim, prov) {

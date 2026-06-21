@@ -31,6 +31,7 @@ const VERIFICATION_WORDS = [
   'tested', 'test passes', 'tests pass', 'verified', 'confirmed', 'validated',
   'works', 'working', 'ran the tests', 'all tests pass', 'no errors', 'builds successfully',
   'compiles', 'fixed and verified', 'double-checked', 'i confirmed', 'this resolves',
+  'build passes', 'build is green', 'build succeeds', 'passing', 'lint passes',
 ];
 
 const ACTION_VERBS = [

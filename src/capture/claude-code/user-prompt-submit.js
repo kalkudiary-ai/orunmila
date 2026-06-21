@@ -2,51 +2,15 @@
 'use strict';
 
 /**
- * user-prompt-submit.js
+ * user-prompt-submit.js — Claude Code UserPromptSubmit entry point.
  *
- * Fires before Claude sees the user's message. Two jobs:
- *   1. Bump the turn counter (everything that happens until the next Stop
- *      belongs to this turn).
- *   2. Log the raw prompt text as a USER_PROMPT event - this is what the
- *      task-extractor later splits into subtasks, so we can check the diff
- *      against what was actually asked, not just against what the agent
- *      claims it did (forensic gap #3: agents rarely lie about a dropped
- *      requirement, they just stop mentioning it).
+ * Thin wrapper: all capture logic lives in src/capture/core.js, all
+ * Claude-Code-specific field/tool knowledge lives in the 'claude-code' adapter
+ * in src/capture/agents.js. This script just binds the 'prompt' lifecycle phase
+ * to that adapter and runs the shared stdin runner (read JSON, dispatch, exit 0).
  */
 
-const fs = require('fs');
-const { append, TYPES } = require('../../store/eventlog');
-const { bumpTurn, turnId } = require('./turnstate');
+const { runHook } = require('../core');
+const { getAdapter } = require('../agents');
 
-function readStdin() {
-  try {
-    return fs.readFileSync(0, 'utf8');
-  } catch {
-    return '';
-  }
-}
-
-function main() {
-  const raw = readStdin();
-  let payload;
-  try {
-    payload = JSON.parse(raw);
-  } catch {
-    process.exit(0);
-  }
-
-  const sessionId = payload.session_id || 'unknown';
-  bumpTurn(sessionId);
-
-  append({
-    session_id: sessionId,
-    turn_id: turnId(sessionId),
-    agent: 'claude-code',
-    type: TYPES.USER_PROMPT,
-    text: payload.prompt || payload.user_prompt || '',
-  });
-
-  process.exit(0);
-}
-
-main();
+runHook('prompt', getAdapter('claude-code'));

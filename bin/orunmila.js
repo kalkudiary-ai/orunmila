@@ -8,10 +8,12 @@ const eventlog = require('../src/store/eventlog');
 const { loadReport, listSessionReports } = require('../src/reconcile');
 const { renderTurn } = require('../src/render/terminal');
 const { renderSessionHtml } = require('../src/render/html');
-const { gloveForSession } = require('../src/glove');
-const transcript = require('../src/capture/claude-code/transcript');
+const { redactForRender } = require('../src/render/redact');
+const { trailForSession } = require('../src/trail');
+const transcript = require('../src/capture/transcript');
 const { startSentinel } = require('../src/capture/fs-sentinel');
 const { effectiveIgnore } = require('../src/capture/fs-sentinel/ignore');
+const { getAdapter, listAgents, configPath } = require('../src/capture/agents');
 
 const args = process.argv.slice(2);
 const cmd = args[0];
@@ -19,13 +21,6 @@ const cmd = args[0];
 function flag(name, fallback) {
   const i = args.indexOf(`--${name}`);
   return i !== -1 && args[i + 1] ? args[i + 1] : fallback;
-}
-
-function settingsPath() {
-  const global = args.includes('--global');
-  return global
-    ? path.join(os.homedir(), '.claude', 'settings.json')
-    : path.join(process.cwd(), '.claude', 'settings.json');
 }
 
 function readJson(p, fallback) {
@@ -36,7 +31,8 @@ function readJson(p, fallback) {
   }
 }
 
-function mergeHook(settings, eventName, matcher, command) {
+// Claude Code's settings.json hook shape: { hooks: { EventName: [{matcher, hooks:[{type,command}]}] } }
+function mergeClaudeHook(settings, eventName, matcher, command) {
   settings.hooks = settings.hooks || {};
   settings.hooks[eventName] = settings.hooks[eventName] || [];
   const already = settings.hooks[eventName].some(
@@ -46,21 +42,68 @@ function mergeHook(settings, eventName, matcher, command) {
   settings.hooks[eventName].push({ matcher, hooks: [{ type: 'command', command }] });
 }
 
+// Claude Code keeps its four purpose-named scripts (its hook system wants one
+// command per event and they're the test entry points). Every other agent maps
+// each of its own event names to `connector.js <agent> <phase>`.
+function installClaudeCode(root, p) {
+  const settings = readJson(p, {});
+  // Quote the script path: it can contain spaces (e.g. C:\Users\Jane Doe\...)
+  // and, on Windows, backslash separators. Both are safe inside double quotes
+  // for the shell that runs the hook command on every platform.
+  const s = (name) => `node "${path.join(root, 'src/capture/claude-code', name)}"`;
+  mergeClaudeHook(settings, 'UserPromptSubmit', '*', s('user-prompt-submit.js'));
+  mergeClaudeHook(settings, 'PreToolUse', 'Write|Edit|MultiEdit', s('pre-tool-use.js'));
+  mergeClaudeHook(settings, 'PostToolUse', '*', s('post-tool-use.js'));
+  mergeClaudeHook(settings, 'PostToolUseFailure', '*', s('post-tool-use.js'));
+  mergeClaudeHook(settings, 'Stop', '*', s('stop.js'));
+  fs.writeFileSync(p, JSON.stringify(settings, null, 2));
+}
+
+// Generic agents: a flat { hooks: { <theirEventName>: "node connector.js <agent> <phase>" } }
+// JSON. Each adapter's `events` map declares which of its hook names maps to
+// which lifecycle phase; we expand array values (e.g. two postTool variants).
+function installGeneric(adapter, root, p) {
+  const settings = readJson(p, {});
+  settings.hooks = settings.hooks || {};
+  const connector = path.join(root, 'src/capture/connector.js');
+  for (const [phase, eventNames] of Object.entries(adapter.events)) {
+    for (const eventName of [].concat(eventNames)) {
+      settings.hooks[eventName] = `node "${connector}" ${adapter.id} ${phase}`;
+    }
+  }
+  fs.writeFileSync(p, JSON.stringify(settings, null, 2));
+}
+
 function cmdInstall() {
   const root = path.resolve(__dirname, '..');
-  const p = settingsPath();
+  const agentId = flag('agent', 'claude-code');
+  const adapter = getAdapter(agentId);
+  if (!adapter) {
+    console.error(`Unknown agent "${agentId}". Known agents:`);
+    for (const a of listAgents()) console.error(`  ${a.id}\t${a.label}`);
+    process.exit(1);
+  }
+
+  const global = args.includes('--global');
+  const p = configPath(adapter, { global, home: os.homedir(), cwd: process.cwd() });
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  const settings = readJson(p, {});
 
-  mergeHook(settings, 'UserPromptSubmit', '*', `node ${path.join(root, 'src/capture/claude-code/user-prompt-submit.js')}`);
-  mergeHook(settings, 'PreToolUse', 'Write|Edit|MultiEdit', `node ${path.join(root, 'src/capture/claude-code/pre-tool-use.js')}`);
-  mergeHook(settings, 'PostToolUse', '*', `node ${path.join(root, 'src/capture/claude-code/post-tool-use.js')}`);
-  mergeHook(settings, 'PostToolUseFailure', '*', `node ${path.join(root, 'src/capture/claude-code/post-tool-use.js')}`);
-  mergeHook(settings, 'Stop', '*', `node ${path.join(root, 'src/capture/claude-code/stop.js')}`);
+  if (adapter.id === 'claude-code') {
+    installClaudeCode(root, p);
+  } else {
+    installGeneric(adapter, root, p);
+  }
 
-  fs.writeFileSync(p, JSON.stringify(settings, null, 2));
-  console.log(`Hooks installed into ${p}`);
-  console.log('Restart Claude Code (or start a new session) for them to take effect.');
+  console.log(`Capture hooks for ${adapter.label} installed into ${p}`);
+  console.log(`Restart ${adapter.label} (or start a new session) for them to take effect.`);
+}
+
+function logSizeKB() {
+  try {
+    return Math.round(fs.statSync(eventlog.logPath()).size / 1024);
+  } catch {
+    return 0;
+  }
 }
 
 function cmdStatus() {
@@ -68,8 +111,12 @@ function cmdStatus() {
   const sessions = new Set(all.map((e) => e.session_id));
   console.log(`Event log: ${eventlog.logPath()}`);
   console.log(`Events captured: ${all.length}`);
+  console.log(`Log size: ${logSizeKB()} KB`);
   console.log(`Sessions seen: ${sessions.size}`);
   if (sessions.size) console.log(`Most recent session: ${eventlog.latestSessionId()}`);
+  if (sessions.size > 50) {
+    console.log(`\nThe log holds ${sessions.size} sessions. To cap it: orunmila prune [--keep N] (default 20).`);
+  }
 
   // The sentinel's one deliberate blind spot, printed so it's never a mystery
   // what the "skin" cannot feel (PRD 6.4: ignore list must be visible).
@@ -95,29 +142,72 @@ function cmdReport() {
   for (const r of reports) console.log(renderTurn(r));
 }
 
+// Privacy pass shared by html/trail: collapse the home-dir prefix to ~ (on by
+// default; --no-redact-home opts out) and apply any `.orunmila/redact` list, on
+// COPIES of the models. The event log stays complete; only the SHARED report is
+// sanitised. Reports the effective redact list so what's hidden is never a mystery.
+function applyRedaction(reports, trail) {
+  const home = !args.includes('--no-redact-home');
+  const { reports: r, trail: t, redactList } = redactForRender(reports, trail, { home, root: process.cwd() });
+  if (redactList.length) {
+    console.log(`Redacting ${redactList.length} path pattern(s) from the report (.orunmila/redact): ${redactList.join(', ')}`);
+  }
+  if (home) console.log('Home-directory prefix collapsed to ~ in the report (disable with --no-redact-home).');
+  return { reports: r, trail: t };
+}
+
 function cmdHtml() {
   const sessionId = flag('session', eventlog.latestSessionId());
   if (!sessionId) return console.log('No sessions captured yet.');
-  const reports = listSessionReports(sessionId);
+  const { reports } = applyRedaction(listSessionReports(sessionId), null);
   const html = renderSessionHtml(sessionId, reports);
   const outPath = flag('out', path.join(process.cwd(), `orunmila-${sessionId}.html`));
   fs.writeFileSync(outPath, html);
   console.log(`Wrote ${outPath}`);
 }
 
-function cmdGlove() {
+function cmdTrail() {
   // The unified report: orunmila's skeptical stain PLUS the glove's complete
   // trail + lineage, both built from the one events.jsonl — one global truth.
   const sessionId = flag('session', eventlog.latestSessionId());
   if (!sessionId) return console.log('No sessions captured yet.');
-  const reports = listSessionReports(sessionId);
-  const glove = gloveForSession(sessionId);
-  const html = renderSessionHtml(sessionId, reports, glove);
-  const outPath = flag('out', path.join(process.cwd(), `orunmila-glove-${sessionId}.html`));
+  const rawTrail = trailForSession(sessionId);
+  const { reports, trail } = applyRedaction(listSessionReports(sessionId), rawTrail);
+  const html = renderSessionHtml(sessionId, reports, trail);
+  const outPath = flag('out', path.join(process.cwd(), `orunmila-trail-${sessionId}.html`));
   fs.writeFileSync(outPath, html);
-  const t = glove.totals;
+  const t = rawTrail.totals;
   console.log(`Wrote ${outPath}`);
-  console.log(`Glove: ${t.touches} touches across ${t.artifacts} artifacts in ${t.turns} turns.`);
+  console.log(`Trail (the glove): ${t.touches} touches across ${t.artifacts} artifacts in ${t.turns} turns.`);
+}
+
+function cmdDemo() {
+  // The visual demo: seed a realistic sample session into an ISOLATED event log
+  // (never the user's real ~/.orunmila) and render the genuine unified report
+  // from it. The page is the real renderer output — every stain category and
+  // every trail channel — so it's a faithful, regenerable preview, not a mock.
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'orunmila-demo-'));
+  const prevHome = process.env.ORUNMILA_HOME;
+  process.env.ORUNMILA_HOME = tmpHome;
+  try {
+    const { seedDemoSession } = require('../src/demo/seed');
+    const sessionId = seedDemoSession();
+    const rawTrail = trailForSession(sessionId);
+    // Demo paths are already relative (src/…) and carry no real home dir, so the
+    // redaction pass is a no-op here, but run it so the demo matches live output.
+    const { reports, trail } = redactForRender(listSessionReports(sessionId), rawTrail, { home: true, root: process.cwd() });
+    const html = renderSessionHtml(sessionId, reports, trail);
+    const outPath = flag('out', path.join(process.cwd(), 'orunmila-demo.html'));
+    fs.writeFileSync(outPath, html);
+    const t = rawTrail.totals;
+    console.log(`Wrote ${outPath}`);
+    console.log(`Demo: ${t.touches} touches across ${t.artifacts} artifacts in ${t.turns} turns — open it in a browser.`);
+  } finally {
+    // Restore the real home and clean up the throwaway log.
+    if (prevHome === undefined) delete process.env.ORUNMILA_HOME;
+    else process.env.ORUNMILA_HOME = prevHome;
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+  }
 }
 
 function cmdWatchFs() {
@@ -173,12 +263,41 @@ function cmdDebugTranscript() {
   });
 }
 
+function cmdPrune() {
+  // Explicit, opt-in log rotation. The flat JSONL log is the forensic trail, so
+  // we NEVER trim it automatically — only when the user runs this, and only by
+  // whole sessions (keeping a partial session would corrupt its turn lineage).
+  const keep = Math.max(1, parseInt(flag('keep', '20'), 10) || 20);
+  const before = logSizeKB();
+  const res = eventlog.pruneToRecentSessions(keep);
+  if (!res.removedSessions.length) {
+    console.log(`Nothing to prune: ${res.keptSessions.length} session(s) <= keep=${keep}.`);
+    return;
+  }
+  console.log(`Pruned ${res.removedSessions.length} old session(s), kept the ${keep} most recent.`);
+  console.log(`Events: ${res.before} -> ${res.after}.  Log: ${before} KB -> ${logSizeKB()} KB.`);
+  console.log('Per-session reports/cache/output sidecars for removed sessions can be deleted from');
+  console.log(`  ${eventlog.dataDir()}  (reports/, cache/, output/) if you no longer need them.`);
+}
+
+function cmdAgents() {
+  console.log('Supported agents (use with: orunmila install --agent <id>):\n');
+  for (const a of listAgents()) {
+    const adapter = getAdapter(a.id);
+    console.log(`  ${a.id.padEnd(12)} ${a.label}  (config: ${adapter.config.dir}/${adapter.config.file})`);
+  }
+}
+
 const COMMANDS = {
   install: cmdInstall,
+  agents: cmdAgents,
   status: cmdStatus,
+  prune: cmdPrune,
   report: cmdReport,
   html: cmdHtml,
-  glove: cmdGlove,
+  trail: cmdTrail,
+  glove: cmdTrail, // alias: "the glove" is the user-facing name for the trail lens
+  demo: cmdDemo,
   watch: cmdWatch,
   'watch-fs': cmdWatchFs,
   'debug-transcript': cmdDebugTranscript,
@@ -188,11 +307,14 @@ if (!cmd || !COMMANDS[cmd]) {
   console.log(`orunmila - claim-vs-reality verification for AI coding agents
 
 Usage:
-  orunmila install [--global]        merge capture hooks into .claude/settings.json
-  orunmila status                    show event log location and counts
+  orunmila install [--agent ID] [--global]     install capture hooks for an agent (default: claude-code)
+  orunmila agents                    list supported agents and their config locations
+  orunmila status                    show event log location, size, and counts
+  orunmila prune [--keep N]          cap the log to the N most-recent sessions (default 20; explicit, never automatic)
   orunmila report [--session ID] [--turn ID]   print a terminal stain report
-  orunmila html [--session ID] [--out path]    generate the mismatch-only HTML report
-  orunmila glove [--session ID] [--out path]   unified report: complete trail + lineage + orunmila stains
+  orunmila html [--session ID] [--out path] [--no-redact-home]   generate the mismatch-only HTML report
+  orunmila trail [--session ID] [--out path] [--no-redact-home]  unified report: complete trail (the glove) + lineage + orunmila stains
+  orunmila demo [--out path]         render a sample unified report from a scripted session (no setup, for a first look)
   orunmila watch [--root dir]        live-tail new turn reports + run the filesystem sentinel
   orunmila watch-fs [--root dir]     run ONLY the filesystem sentinel (independent disk observer)
   orunmila debug-transcript <path>   inspect why transcript parsing isn't matching your install

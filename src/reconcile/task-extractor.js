@@ -82,7 +82,8 @@ const PASCAL_RE = /\b[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]*)+\b/g;
 const SNAKE_RE = /\b[a-z0-9]+(?:_[a-z0-9]+)+\b/g;
 
 function basename(p) {
-  return String(p).split('/').pop();
+  // Split on both separators so a Windows path (src\foo.js) yields foo.js too.
+  return String(p).split(/[\\/]/).pop();
 }
 
 function pushUnique(arr, target) {

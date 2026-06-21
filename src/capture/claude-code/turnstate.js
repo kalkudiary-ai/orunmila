@@ -1,41 +1,11 @@
 'use strict';
 
 /**
- * turnstate.js
+ * turnstate.js — re-export of the shared, agent-agnostic turn counter.
  *
- * Claude Code's hooks don't hand you a ready-made "turn id" - a turn is really
- * "one UserPromptSubmit followed by however many tool calls followed by one
- * Stop". We track it ourselves: UserPromptSubmit bumps the counter, every
- * other hook just reads whatever the current value is.
+ * Turn tracking ("one prompt → many tool calls → one stop") is identical across
+ * agents, so the implementation moved up to src/capture/turnstate.js. This shim
+ * keeps the historical import path (and existing tests) working unchanged.
  */
 
-const fs = require('fs');
-const path = require('path');
-const { dataDir } = require('../../store/eventlog');
-
-function statePath(sessionId) {
-  const dir = path.join(dataDir(), 'cache', sessionId || 'unknown');
-  fs.mkdirSync(dir, { recursive: true });
-  return path.join(dir, 'turn.json');
-}
-
-function currentTurn(sessionId) {
-  try {
-    const raw = fs.readFileSync(statePath(sessionId), 'utf8');
-    return JSON.parse(raw).turn || 1;
-  } catch {
-    return 1;
-  }
-}
-
-function bumpTurn(sessionId) {
-  const next = currentTurn(sessionId) + 1;
-  fs.writeFileSync(statePath(sessionId), JSON.stringify({ turn: next }));
-  return next;
-}
-
-function turnId(sessionId) {
-  return `t${currentTurn(sessionId)}`;
-}
-
-module.exports = { currentTurn, bumpTurn, turnId };
+module.exports = require('../turnstate');

@@ -106,6 +106,17 @@ function readBetween(fromTs, toTs) {
   });
 }
 
+/**
+ * All sentinel-observed file writes across the whole log, read ONCE. Callers
+ * that correlate sentinel writes into many turns (the trail / reconcile
+ * renderers) should load this once and filter in-memory by time window rather
+ * than calling readBetween() per turn — that turns an O(turns) render into
+ * O(turns²) full-file parses on a long session.
+ */
+function readSentinelWrites() {
+  return readAll().filter((e) => e.source === 'fs-sentinel' && e.type === TYPES.FILE_WRITE);
+}
+
 /** Group a session's flat event list into per-turn buckets, in order. */
 function groupByTurn(events) {
   const turns = new Map();
@@ -123,4 +134,41 @@ function latestSessionId() {
   return all[all.length - 1].session_id;
 }
 
-module.exports = { TYPES, append, readAll, readSession, readTurn, readBetween, groupByTurn, latestSessionId, logPath, dataDir };
+/** Sessions ordered by when each was last active (oldest first, newest last). */
+function sessionsByRecency() {
+  const lastSeen = new Map(); // session_id -> index of its last event
+  readAll().forEach((e, i) => {
+    if (e.session_id) lastSeen.set(e.session_id, i);
+  });
+  return [...lastSeen.entries()].sort((a, b) => a[1] - b[1]).map(([id]) => id);
+}
+
+/**
+ * Cap the log by keeping only the `keep` most-recently-active sessions and
+ * rewriting events.jsonl in place. A flat JSONL log grows forever otherwise;
+ * this is the deliberate, EXPLICIT rotation — never automatic (the tool must
+ * never silently discard a user's forensic trail), only on `orunmila prune`.
+ * Writes to a temp file then renames so a crash mid-write can't truncate the
+ * log. Returns { before, after, removedSessions, keptSessions }.
+ */
+function pruneToRecentSessions(keep) {
+  const all = readAll();
+  const order = sessionsByRecency();
+  if (order.length <= keep) {
+    return { before: all.length, after: all.length, removedSessions: [], keptSessions: order };
+  }
+  const kept = new Set(order.slice(-keep));
+  const survivors = all.filter((e) => kept.has(e.session_id));
+  const p = logPath();
+  const tmp = p + '.tmp';
+  fs.writeFileSync(tmp, survivors.map((e) => JSON.stringify(e)).join('\n') + (survivors.length ? '\n' : ''));
+  fs.renameSync(tmp, p);
+  return {
+    before: all.length,
+    after: survivors.length,
+    removedSessions: order.slice(0, order.length - keep),
+    keptSessions: [...kept],
+  };
+}
+
+module.exports = { TYPES, append, readAll, readSession, readTurn, readBetween, readSentinelWrites, groupByTurn, latestSessionId, sessionsByRecency, pruneToRecentSessions, logPath, dataDir };

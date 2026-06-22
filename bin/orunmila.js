@@ -59,6 +59,20 @@ function installClaudeCode(root, p) {
   fs.writeFileSync(p, JSON.stringify(settings, null, 2));
 }
 
+// Antigravity: { "orunmila": { "EventName": [{ "matcher": "...", "hooks": [{ "type": "command", "command": "..." }] }] } }
+function installAntigravity(adapter, root, p) {
+  const settings = readJson(p, {});
+  settings.orunmila = settings.orunmila || {};
+  const connector = path.join(root, 'src/capture/connector.js');
+  for (const [phase, eventName] of Object.entries(adapter.events)) {
+    const matcher = phase === 'preTool' ? (adapter.preToolMatcher || '*') : '*';
+    settings.orunmila[eventName] = [
+      { matcher, hooks: [{ type: 'command', command: `node "${connector}" ${adapter.id} ${phase}` }] },
+    ];
+  }
+  fs.writeFileSync(p, JSON.stringify(settings, null, 2));
+}
+
 // Generic agents: a flat { hooks: { <theirEventName>: "node connector.js <agent> <phase>" } }
 // JSON. Each adapter's `events` map declares which of its hook names maps to
 // which lifecycle phase; we expand array values (e.g. two postTool variants).
@@ -90,6 +104,8 @@ function cmdInstall() {
 
   if (adapter.id === 'claude-code') {
     installClaudeCode(root, p);
+  } else if (adapter.id === 'antigravity') {
+    installAntigravity(adapter, root, p);
   } else {
     installGeneric(adapter, root, p);
   }

@@ -47,8 +47,8 @@ const path = require('path');
 // agent never emits it), while a missing name silently drops a touch.
 
 const WRITE_TOOLS = /^(write|edit|multiedit|create_file|edit_file|apply_patch|str_replace_editor|str_replace_based_edit_tool|write_file|insert_edit_into_file|replace_in_file|fsWrite|fsAppend)$/i;
-const READ_TOOLS = /^(read|read_file|view_file|cat_file|open_file|fsRead|readFile)$/i;
-const PATTERN_READ_TOOLS = /^(glob|grep|search|codebase_search|file_search|grep_search|ripgrep|find)$/i;
+const READ_TOOLS = /^(read|read_file|view_file|cat_file|open_file|fsRead|readFile|list_dir)$/i;
+const PATTERN_READ_TOOLS = /^(glob|grep|search|codebase_search|file_search|grep_search|ripgrep|find|find_by_name)$/i;
 const COMMAND_TOOLS = /^(bash|shell|run_command|run_terminal_cmd|execute_command|terminal|exec|executePwsh|run_in_terminal)$/i;
 const NETWORK_TOOLS = /^(webfetch|websearch|web_search|web_fetch|fetch|browser|navigate|http_request|read_url|open_url)$/i;
 const NETWORK_MCP = /(fetch|navigate|web|http|browser|url)/i;
@@ -186,6 +186,29 @@ const REGISTRY = {
     preToolMatcher: '*',
   }),
 
+  // Antigravity — Google's agent-first IDE. Hook payload nests tool info under
+  // `toolCall` and uses `PreInvocation` for the prompt phase. Config lands in
+  // `.agents/hooks.json` (workspace) or `~/.gemini/config/hooks.json` (global).
+  antigravity: withDefaults({
+    id: 'antigravity',
+    label: 'Antigravity',
+    config: { dir: '.agents', file: 'hooks.json' },
+    globalConfig: { dir: '.gemini/config', file: 'hooks.json' },
+    events: {
+      prompt: 'PreInvocation',
+      preTool: 'PreToolUse',
+      postTool: 'PostToolUse',
+      stop: 'Stop',
+    },
+    preToolMatcher: 'edit_file|write_file',
+    fields: {
+      toolName: (p) => (p.toolCall && p.toolCall.name) || p.tool_name || p.toolName || p.tool || '',
+      toolInput: (p) => (p.toolCall && p.toolCall.args) || p.tool_input || p.toolInput || p.input || p.arguments || {},
+      toolResponse: (p) => (p.toolCall && p.toolCall.result) || p.tool_response || p.tool_result || p.toolResponse || p.result || {},
+      transcriptPath: (p) => p.transcriptPath || p.transcript_path || p.transcript || null,
+    },
+  }),
+
   // Generic — a fallback for any agent that can be configured to run a command
   // per lifecycle event with a JSON payload on stdin. Uses the most permissive
   // field defaults. This is the "no extra work" path the project promises: an
@@ -215,6 +238,9 @@ function listAgents() {
 
 /** Resolve where `install` should write this agent's hook config. */
 function configPath(adapter, { global, home, cwd }) {
+  if (global && adapter.globalConfig) {
+    return path.join(home, adapter.globalConfig.dir, adapter.globalConfig.file);
+  }
   const base = global ? home : cwd;
   return path.join(base, adapter.config.dir, adapter.config.file);
 }

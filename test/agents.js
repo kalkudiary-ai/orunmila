@@ -42,10 +42,15 @@ it('agents: classifyTool maps reads, pattern-reads, commands distinctly', () => 
   const c = agents.defaultClassifyTool;
   assert.strictEqual(c('Read', {}), 'read');
   assert.strictEqual(c('read_file', {}), 'read');
+  assert.strictEqual(c('view_file', {}), 'read');
+  assert.strictEqual(c('list_dir', {}), 'read');
   assert.strictEqual(c('Grep', {}), 'pattern_read');
   assert.strictEqual(c('codebase_search', {}), 'pattern_read');
+  assert.strictEqual(c('find_by_name', {}), 'pattern_read');
+  assert.strictEqual(c('grep_search', {}), 'pattern_read');
   assert.strictEqual(c('Bash', {}), 'command');
   assert.strictEqual(c('run_terminal_cmd', {}), 'command');
+  assert.strictEqual(c('run_command', {}), 'command');
 });
 
 it('agents: classifyTool detects network by tool name, mcp, and outbound url input', () => {
@@ -189,6 +194,79 @@ it('cli: install --agent claude-code quotes the hook script path (space/backslas
   const cmd = cfg.hooks.PostToolUse[0].hooks[0].command;
   assert.ok(/^node "/.test(cmd), 'command opens with: node "');
   assert.ok(cmd.includes('post-tool-use.js"'), 'script path is closed-quoted');
+  rmrf(home);
+  rmrf(work);
+});
+
+// --- Antigravity adapter -----------------------------------------------------
+
+it('agents: antigravity field accessors read nested toolCall payloads', () => {
+  const a = agents.getAdapter('antigravity');
+  const payload = {
+    session_id: 'AG1',
+    toolCall: { name: 'edit_file', args: { file_path: '/x.js' }, result: { success: true } },
+    transcriptPath: '/tmp/log.jsonl',
+  };
+  assert.strictEqual(a.fields.toolName(payload), 'edit_file');
+  assert.strictEqual(a.fields.toolInput(payload).file_path, '/x.js');
+  assert.strictEqual(a.fields.toolResponse(payload).success, true);
+  assert.strictEqual(a.fields.transcriptPath(payload), '/tmp/log.jsonl');
+});
+
+it('agents: antigravity configPath uses globalConfig for --global', () => {
+  const a = agents.getAdapter('antigravity');
+  assert.strictEqual(
+    agents.configPath(a, { global: false, home: '/H', cwd: '/W' }),
+    path.join('/W', '.agents', 'hooks.json')
+  );
+  assert.strictEqual(
+    agents.configPath(a, { global: true, home: '/H', cwd: '/W' }),
+    path.join('/H', '.gemini/config', 'hooks.json')
+  );
+});
+
+it('connector: an Antigravity session produces canonical events stamped agent:antigravity', () => {
+  const home = tmpHome();
+  const work = tmpDir();
+  const file = path.join(work, 'app.js');
+  fs.writeFileSync(file, 'const x = 1;\n');
+
+  const env = { ORUNMILA_HOME: home };
+  const C = (phase, payload) =>
+    run(CONNECTOR, { args: ['antigravity', phase], input: JSON.stringify(payload), env });
+
+  C('prompt', { session_id: 'AG1', prompt: 'refactor app.js' });
+  C('preTool', { session_id: 'AG1', toolCall: { name: 'edit_file', args: { file_path: file } } });
+  C('postTool', { session_id: 'AG1', toolCall: { name: 'edit_file', args: { file_path: file }, result: { success: true } } });
+  C('postTool', { session_id: 'AG1', toolCall: { name: 'run_command', args: { command: 'npm test' }, result: { exit_code: 0, stdout: 'pass' } } });
+  C('postTool', { session_id: 'AG1', toolCall: { name: 'grep_search', args: { pattern: 'TODO' }, result: {} } });
+
+  const events = readEvents(home);
+  assert.ok(events.length >= 4, `expected several events, got ${events.length}`);
+  assert.ok(events.every((e) => e.agent === 'antigravity'), 'every event stamped agent:antigravity');
+
+  const byType = (t) => events.find((e) => e.type === t);
+  assert.strictEqual(byType('user_prompt').text, 'refactor app.js');
+  assert.strictEqual(byType('file_write').path, file);
+  assert.strictEqual(byType('command_run').command, 'npm test');
+  assert.strictEqual(byType('file_read').path, 'TODO');
+
+  rmrf(home);
+  rmrf(work);
+});
+
+it('cli: install --agent antigravity writes .agents/hooks.json in Antigravity format', () => {
+  const home = tmpHome();
+  const work = tmpDir();
+  const r = run('bin/orunmila.js', { args: ['install', '--agent', 'antigravity'], env: { ORUNMILA_HOME: home }, cwd: work });
+  assert.strictEqual(r.status, 0);
+  const cfg = JSON.parse(fs.readFileSync(path.join(work, '.agents', 'hooks.json'), 'utf8'));
+  assert.ok(cfg.orunmila, 'hooks live under the "orunmila" group');
+  assert.ok(cfg.orunmila.PreInvocation, 'has PreInvocation event');
+  assert.ok(cfg.orunmila.PostToolUse, 'has PostToolUse event');
+  assert.ok(cfg.orunmila.Stop, 'has Stop event');
+  const postCmd = cfg.orunmila.PostToolUse[0].hooks[0].command;
+  assert.ok(postCmd.includes('connector.js" antigravity postTool'), 'PostToolUse → postTool via connector');
   rmrf(home);
   rmrf(work);
 });

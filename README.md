@@ -22,8 +22,8 @@ account, no API key required for the default mode (see "Deep verify" below
 for the one optional exception, which is opt-in and uses *your* key, not a
 paid tier of this project).
 
-Works with any AI coding agent — Claude Code, Cursor, Aider, Codex CLI,
-Continue, or anything that can run a command per hook event. One adapter
+Works with any AI coding agent — Claude Code, Antigravity, Cursor, Aider,
+Codex CLI, Continue, or anything that can run a command per hook event. One adapter
 maps an agent's hooks into a shared event schema; everything downstream is
 agent-agnostic. See "Supported agents" below.
 
@@ -135,6 +135,7 @@ git clone <this repo>
 cd orunmila
 node bin/orunmila.js install                  # defaults to Claude Code
 # or pick your agent:
+node bin/orunmila.js install --agent antigravity
 node bin/orunmila.js install --agent cursor
 node bin/orunmila.js install --agent aider
 node bin/orunmila.js install --agent codex
@@ -176,6 +177,7 @@ behind anything. (Not yet wired up in this v0 - see Roadmap.)
 | Agent | `--agent` id | Config written | Notes |
 |---|---|---|---|
 | Claude Code | `claude-code` (default) | `.claude/settings.json` | Richest hook surface; the original target |
+| Antigravity | `antigravity` | `.agents/hooks.json` | Google's agent-first IDE; nested `toolCall` payload mapped automatically |
 | Cursor | `cursor` | `.cursor/hooks.json` | `edit_file` / `run_terminal_cmd` mapped automatically |
 | Aider | `aider` | `.aider/hooks.json` | No native hooks — pair with `watch-fs` (disk sentinel) |
 | Codex CLI | `codex` | `.codex/hooks.json` | `apply_patch` / exec mapped automatically |
@@ -214,7 +216,7 @@ what this project wants.
 
 This is not another activity logger - [Gryph](https://github.com/safedep/gryph)
 already does local-first audit trails (file reads/writes/diffs/commands)
-for Claude Code, Cursor, Gemini CLI and others, well, and is worth using
+for Claude Code, Cursor, Antigravity and others, well, and is worth using
 alongside this for raw session forensics. The Claude Code hooks ecosystem
 more broadly (`claude-code-hooks-mastery`, `claude-hooks`, etc.) is the
 proven plumbing this project builds on rather than reinvents. What's new

@@ -8,6 +8,14 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ## [Unreleased]
 
+### Added
+
+- **Antigravity adapter.** Native support for Google's agent-first IDE —
+  `orunmila install --agent antigravity` writes hooks into `.agents/hooks.json`
+  (or `~/.gemini/config/hooks.json` with `--global`). Handles the nested
+  `toolCall.name` / `toolCall.args` payload and Antigravity's tool names
+  (`edit_file`, `view_file`, `run_command`, `grep_search`, `find_by_name`).
+
 ## [0.1.0] — 2026-06-20
 
 First public release. orunmila dye-stains an AI coding agent's session:

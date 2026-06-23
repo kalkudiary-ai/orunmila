@@ -162,6 +162,27 @@ Opens as a self-contained `.html` file: a colored grid of every file
 touched this session (color = worst outcome that touched it, size = how
 much), plus a turn-by-turn breakdown underneath.
 
+## Cross-agent comparison
+
+Use multiple agents on the same codebase? `stats` aggregates every
+captured session and compares reliability, phantom rates, and tool usage
+side by side:
+
+```bash
+orunmila stats
+```
+
+For controlled benchmarks, the task corpus provides identical prompts to
+run across agents:
+
+```bash
+node bin/bench.js --agent claude-code
+node bin/bench.js --agent antigravity
+orunmila stats              # side-by-side comparison
+```
+
+See `corpus/README.md` for the task format and how to add your own.
+
 ## Deep verify (optional, off by default)
 
 The default reconciler is pure heuristic text/diff matching - free, local,

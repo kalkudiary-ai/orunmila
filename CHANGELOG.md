@@ -15,6 +15,13 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   (or `~/.gemini/config/hooks.json` with `--global`). Handles the nested
   `toolCall.name` / `toolCall.args` payload and Antigravity's tool names
   (`edit_file`, `view_file`, `run_command`, `grep_search`, `find_by_name`).
+- **`orunmila stats` command.** Cross-agent aggregate statistics: reliability
+  scores, phantom rates, tool-use profiles, and a side-by-side comparison
+  table when multiple agents have been captured.
+- **Benchmark corpus and runner.** `corpus/` contains 10 standardized coding
+  tasks (bugfix, feature, refactor, test, docs) and `bin/bench.js` runs them
+  against any agent's CLI, so the same tasks produce directly comparable
+  orunmila sessions. Run `orunmila stats` after to see the results.
 
 ## [0.1.0] — 2026-06-20
 

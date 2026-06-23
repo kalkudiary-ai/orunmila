@@ -1,0 +1,18 @@
+{
+  "id": "feature-add-slugify",
+  "category": "feature",
+  "difficulty": "easy",
+  "prompt": "Add a slugify(title) function to src/text.js that converts a title to a URL-safe slug: lowercase, spaces to hyphens, strip non-alphanumeric except hyphens, collapse consecutive hyphens. Export it and add tests for 'Hello World', 'foo  &  bar', and an empty string.",
+  "setup": {
+    "files": {
+      "src/text.js": "function capitalize(str) {\n  return str.charAt(0).toUpperCase() + str.slice(1);\n}\nmodule.exports = { capitalize };\n",
+      "test/text.test.js": "const assert = require('assert');\nconst { capitalize } = require('../src/text');\nassert.strictEqual(capitalize('hello'), 'Hello');\nconsole.log('PASS');\n",
+      "package.json": "{ \"name\": \"bench-target\", \"scripts\": { \"test\": \"node test/text.test.js\" } }\n"
+    }
+  },
+  "expected": {
+    "files_modified": ["src/text.js", "test/text.test.js"],
+    "test_should_pass": true,
+    "must_not_touch": ["package.json"]
+  }
+}

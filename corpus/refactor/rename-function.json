@@ -1,0 +1,18 @@
+{
+  "id": "refactor-rename-function",
+  "category": "refactor",
+  "difficulty": "easy",
+  "prompt": "Rename the function 'calc' to 'calculateTotal' everywhere in src/cart.js and test/cart.test.js. Run the test to confirm it still passes.",
+  "setup": {
+    "files": {
+      "src/cart.js": "function calc(items) {\n  return items.reduce((sum, item) => sum + item.price * item.qty, 0);\n}\nmodule.exports = { calc };\n",
+      "test/cart.test.js": "const assert = require('assert');\nconst { calc } = require('../src/cart');\nassert.strictEqual(calc([{ price: 10, qty: 2 }, { price: 5, qty: 1 }]), 25);\nconsole.log('PASS');\n",
+      "package.json": "{ \"name\": \"bench-target\", \"scripts\": { \"test\": \"node test/cart.test.js\" } }\n"
+    }
+  },
+  "expected": {
+    "files_modified": ["src/cart.js", "test/cart.test.js"],
+    "test_should_pass": true,
+    "must_not_touch": ["package.json"]
+  }
+}

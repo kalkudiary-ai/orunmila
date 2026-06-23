@@ -1,0 +1,18 @@
+{
+  "id": "feature-add-filter",
+  "category": "feature",
+  "difficulty": "easy",
+  "prompt": "Add a filterByTag(items, tag) function to src/items.js that returns only items whose tags array includes the given tag. Export it and add a test.",
+  "setup": {
+    "files": {
+      "src/items.js": "function allItems() {\n  return [\n    { id: 1, name: 'Widget', tags: ['hardware', 'sale'] },\n    { id: 2, name: 'Gadget', tags: ['electronics'] },\n    { id: 3, name: 'Doohickey', tags: ['hardware'] },\n  ];\n}\nmodule.exports = { allItems };\n",
+      "test/items.test.js": "const assert = require('assert');\nconst { allItems } = require('../src/items');\nassert.strictEqual(allItems().length, 3);\nconsole.log('PASS');\n",
+      "package.json": "{ \"name\": \"bench-target\", \"scripts\": { \"test\": \"node test/items.test.js\" } }\n"
+    }
+  },
+  "expected": {
+    "files_modified": ["src/items.js", "test/items.test.js"],
+    "test_should_pass": true,
+    "must_not_touch": ["package.json"]
+  }
+}

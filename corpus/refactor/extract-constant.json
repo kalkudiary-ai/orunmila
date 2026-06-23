@@ -1,0 +1,18 @@
+{
+  "id": "refactor-extract-constant",
+  "category": "refactor",
+  "difficulty": "easy",
+  "prompt": "The magic number 86400 appears three times in src/time.js. Extract it into a named constant SECONDS_PER_DAY at the top of the file and replace all three usages. Run the test to confirm nothing broke.",
+  "setup": {
+    "files": {
+      "src/time.js": "function daysToSeconds(days) {\n  return days * 86400;\n}\n\nfunction secondsToDays(seconds) {\n  return seconds / 86400;\n}\n\nfunction isMoreThanOneDay(seconds) {\n  return seconds > 86400;\n}\n\nmodule.exports = { daysToSeconds, secondsToDays, isMoreThanOneDay };\n",
+      "test/time.test.js": "const assert = require('assert');\nconst { daysToSeconds, secondsToDays, isMoreThanOneDay } = require('../src/time');\nassert.strictEqual(daysToSeconds(1), 86400);\nassert.strictEqual(secondsToDays(86400), 1);\nassert.strictEqual(isMoreThanOneDay(90000), true);\nassert.strictEqual(isMoreThanOneDay(3600), false);\nconsole.log('PASS');\n",
+      "package.json": "{ \"name\": \"bench-target\", \"scripts\": { \"test\": \"node test/time.test.js\" } }\n"
+    }
+  },
+  "expected": {
+    "files_modified": ["src/time.js"],
+    "test_should_pass": true,
+    "must_not_touch": ["test/time.test.js", "package.json"]
+  }
+}

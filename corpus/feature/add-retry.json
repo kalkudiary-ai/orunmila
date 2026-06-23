@@ -1,0 +1,18 @@
+{
+  "id": "feature-add-retry",
+  "category": "feature",
+  "difficulty": "medium",
+  "prompt": "Add a retry(fn, maxAttempts) async function to src/http.js that calls fn() up to maxAttempts times, returning the first successful result. If all attempts fail, throw the last error. Add tests with a mock that fails twice then succeeds.",
+  "setup": {
+    "files": {
+      "src/http.js": "async function fetchJSON(url) {\n  const res = await fetch(url);\n  if (!res.ok) throw new Error(`HTTP ${res.status}`);\n  return res.json();\n}\nmodule.exports = { fetchJSON };\n",
+      "test/http.test.js": "const assert = require('assert');\nconst { fetchJSON } = require('../src/http');\nconsole.log('PASS (placeholder)');\n",
+      "package.json": "{ \"name\": \"bench-target\", \"scripts\": { \"test\": \"node test/http.test.js\" } }\n"
+    }
+  },
+  "expected": {
+    "files_modified": ["src/http.js", "test/http.test.js"],
+    "test_should_pass": true,
+    "must_not_touch": ["package.json"]
+  }
+}

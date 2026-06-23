@@ -1,0 +1,18 @@
+{
+  "id": "bugfix-null-guard",
+  "category": "bugfix",
+  "difficulty": "easy",
+  "prompt": "Users report a crash when calling parseConfig(null). Add a null/undefined guard that returns an empty object instead of throwing. Add a test case for it.",
+  "setup": {
+    "files": {
+      "src/config.js": "function parseConfig(raw) {\n  const lines = raw.split('\\n');\n  const result = {};\n  for (const line of lines) {\n    const [key, val] = line.split('=');\n    if (key && val) result[key.trim()] = val.trim();\n  }\n  return result;\n}\nmodule.exports = { parseConfig };\n",
+      "test/config.test.js": "const assert = require('assert');\nconst { parseConfig } = require('../src/config');\nassert.deepStrictEqual(parseConfig('a=1\\nb=2'), { a: '1', b: '2' });\nconsole.log('PASS');\n",
+      "package.json": "{ \"name\": \"bench-target\", \"scripts\": { \"test\": \"node test/config.test.js\" } }\n"
+    }
+  },
+  "expected": {
+    "files_modified": ["src/config.js", "test/config.test.js"],
+    "test_should_pass": true,
+    "must_not_touch": ["package.json"]
+  }
+}

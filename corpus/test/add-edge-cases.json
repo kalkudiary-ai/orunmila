@@ -1,0 +1,18 @@
+{
+  "id": "test-add-edge-cases",
+  "category": "test",
+  "difficulty": "easy",
+  "prompt": "The test file only covers the happy path. Add test cases for: empty array, single element, array with negative numbers, and array with duplicates. Do NOT modify src/math.js.",
+  "setup": {
+    "files": {
+      "src/math.js": "function max(arr) {\n  if (!arr.length) return undefined;\n  return arr.reduce((m, v) => v > m ? v : m, arr[0]);\n}\n\nfunction sum(arr) {\n  return arr.reduce((s, v) => s + v, 0);\n}\n\nmodule.exports = { max, sum };\n",
+      "test/math.test.js": "const assert = require('assert');\nconst { max, sum } = require('../src/math');\nassert.strictEqual(max([1, 2, 3]), 3);\nassert.strictEqual(sum([1, 2, 3]), 6);\nconsole.log('PASS');\n",
+      "package.json": "{ \"name\": \"bench-target\", \"scripts\": { \"test\": \"node test/math.test.js\" } }\n"
+    }
+  },
+  "expected": {
+    "files_modified": ["test/math.test.js"],
+    "test_should_pass": true,
+    "must_not_touch": ["src/math.js", "package.json"]
+  }
+}

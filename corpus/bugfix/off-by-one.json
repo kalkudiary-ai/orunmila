@@ -1,0 +1,18 @@
+{
+  "id": "bugfix-off-by-one",
+  "category": "bugfix",
+  "difficulty": "easy",
+  "prompt": "Fix the off-by-one error in src/utils.js:range() — it currently excludes the end value but the docstring says inclusive. Run the test to confirm.",
+  "setup": {
+    "files": {
+      "src/utils.js": "/** Returns an array of integers from start to end, inclusive. */\nfunction range(start, end) {\n  const result = [];\n  for (let i = start; i < end; i++) result.push(i);\n  return result;\n}\nmodule.exports = { range };\n",
+      "test/utils.test.js": "const assert = require('assert');\nconst { range } = require('../src/utils');\nassert.deepStrictEqual(range(1, 3), [1, 2, 3], 'range(1,3) should include 3');\nassert.deepStrictEqual(range(0, 0), [0], 'range(0,0) should return [0]');\nconsole.log('PASS');\n",
+      "package.json": "{ \"name\": \"bench-target\", \"scripts\": { \"test\": \"node test/utils.test.js\" } }\n"
+    }
+  },
+  "expected": {
+    "files_modified": ["src/utils.js"],
+    "test_should_pass": true,
+    "must_not_touch": ["package.json"]
+  }
+}

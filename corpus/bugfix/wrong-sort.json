@@ -1,0 +1,18 @@
+{
+  "id": "bugfix-wrong-sort",
+  "category": "bugfix",
+  "difficulty": "easy",
+  "prompt": "The leaderboard sorts by score but it's ascending — highest score should be first. Fix the sort in src/leaderboard.js and run the test.",
+  "setup": {
+    "files": {
+      "src/leaderboard.js": "function rank(players) {\n  return [...players].sort((a, b) => a.score - b.score);\n}\nmodule.exports = { rank };\n",
+      "test/leaderboard.test.js": "const assert = require('assert');\nconst { rank } = require('../src/leaderboard');\nconst result = rank([{ name: 'A', score: 10 }, { name: 'B', score: 30 }, { name: 'C', score: 20 }]);\nassert.deepStrictEqual(result.map(p => p.name), ['B', 'C', 'A']);\nconsole.log('PASS');\n",
+      "package.json": "{ \"name\": \"bench-target\", \"scripts\": { \"test\": \"node test/leaderboard.test.js\" } }\n"
+    }
+  },
+  "expected": {
+    "files_modified": ["src/leaderboard.js"],
+    "test_should_pass": true,
+    "must_not_touch": ["package.json"]
+  }
+}

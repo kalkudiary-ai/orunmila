@@ -1,0 +1,18 @@
+{
+  "id": "docs-add-jsdoc",
+  "category": "docs",
+  "difficulty": "easy",
+  "prompt": "Add JSDoc comments to every exported function in src/format.js. Include @param types, @returns, and a one-line description. Do NOT change any logic. Run the test to confirm nothing broke.",
+  "setup": {
+    "files": {
+      "src/format.js": "function padLeft(str, len, char) {\n  while (str.length < len) str = char + str;\n  return str;\n}\n\nfunction truncate(str, max) {\n  return str.length > max ? str.slice(0, max - 1) + '…' : str;\n}\n\nfunction initials(name) {\n  return name.split(' ').map(w => w[0]).join('').toUpperCase();\n}\n\nmodule.exports = { padLeft, truncate, initials };\n",
+      "test/format.test.js": "const assert = require('assert');\nconst { padLeft, truncate, initials } = require('../src/format');\nassert.strictEqual(padLeft('5', 3, '0'), '005');\nassert.strictEqual(truncate('hello world', 5), 'hell…');\nassert.strictEqual(initials('John Doe'), 'JD');\nconsole.log('PASS');\n",
+      "package.json": "{ \"name\": \"bench-target\", \"scripts\": { \"test\": \"node test/format.test.js\" } }\n"
+    }
+  },
+  "expected": {
+    "files_modified": ["src/format.js"],
+    "test_should_pass": true,
+    "must_not_touch": ["test/format.test.js", "package.json"]
+  }
+}

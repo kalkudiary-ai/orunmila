@@ -1,7 +1,7 @@
 {
   "all": true,
   "include": ["src/**/*.js", "bin/**/*.js"],
-  "exclude": ["test/**", "coverage/**", "**/node_modules/**"],
+  "exclude": ["test/**", "coverage/**", "**/node_modules/**", "bin/bench.js"],
   "reporter": ["text", "html", "json-summary"],
   "report-dir": "coverage",
   "temp-dir": "coverage/tmp",

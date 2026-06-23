@@ -14,6 +14,7 @@ const transcript = require('../src/capture/transcript');
 const { startSentinel } = require('../src/capture/fs-sentinel');
 const { effectiveIgnore } = require('../src/capture/fs-sentinel/ignore');
 const { getAdapter, listAgents, configPath } = require('../src/capture/agents');
+const { computeStats, formatStats } = require('../src/stats');
 
 const args = process.argv.slice(2);
 const cmd = args[0];
@@ -296,6 +297,11 @@ function cmdPrune() {
   console.log(`  ${eventlog.dataDir()}  (reports/, cache/, output/) if you no longer need them.`);
 }
 
+function cmdStats() {
+  const stats = computeStats();
+  console.log(formatStats(stats));
+}
+
 function cmdAgents() {
   console.log('Supported agents (use with: orunmila install --agent <id>):\n');
   for (const a of listAgents()) {
@@ -307,6 +313,7 @@ function cmdAgents() {
 const COMMANDS = {
   install: cmdInstall,
   agents: cmdAgents,
+  stats: cmdStats,
   status: cmdStatus,
   prune: cmdPrune,
   report: cmdReport,
@@ -325,6 +332,7 @@ if (!cmd || !COMMANDS[cmd]) {
 Usage:
   orunmila install [--agent ID] [--global]     install capture hooks for an agent (default: claude-code)
   orunmila agents                    list supported agents and their config locations
+  orunmila stats                     cross-agent reliability scores, phantom rates, and comparisons
   orunmila status                    show event log location, size, and counts
   orunmila prune [--keep N]          cap the log to the N most-recent sessions (default 20; explicit, never automatic)
   orunmila report [--session ID] [--turn ID]   print a terminal stain report

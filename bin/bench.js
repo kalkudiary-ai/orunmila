@@ -33,7 +33,7 @@ function flag(name, fallback) {
 }
 
 const AGENT_CLI = {
-  'claude-code': (prompt) => `claude --print ${shellQuote(prompt)}`,
+  'claude-code': (prompt) => `claude -p --dangerously-skip-permissions --allowedTools 'Edit,Write,Bash,Read' -- ${shellQuote(prompt)}`,
   antigravity: (prompt) => `antigravity --prompt ${shellQuote(prompt)}`,
   codex: (prompt) => `codex --prompt ${shellQuote(prompt)}`,
   // Agents without a headless CLI:

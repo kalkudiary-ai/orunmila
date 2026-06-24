@@ -173,15 +173,20 @@ orunmila stats
 ```
 
 For controlled benchmarks, the task corpus provides identical prompts to
-run across agents:
+run across agents and model tiers:
 
 ```bash
-node bin/bench.js --agent claude-code
-node bin/bench.js --agent antigravity
-orunmila stats              # side-by-side comparison
+node bin/bench.js --agent claude-code --model haiku
+node bin/bench.js --agent claude-code --model sonnet
+node bin/bench.js --agent claude-code --model opus
+node bin/bench.js --agent gemini-cli --model gemini-2.5-flash
 ```
 
-See `corpus/README.md` for the task format and how to add your own.
+The runner installs orunmila hooks in each task, captures the full
+session, and reports per-task phantoms, phantom verifications, silently
+dropped asks, wild writes, and reliability scores — not just pass/fail.
+Results auto-save to `bench-results/` as JSON. See `bench-results/README.md`
+for the metric definitions and `corpus/README.md` for the task format.
 
 ## Deep verify (optional, off by default)
 

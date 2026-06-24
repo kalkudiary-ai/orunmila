@@ -37,7 +37,8 @@ function buildCli(agentId, model) {
   const BUILDERS = {
     'claude-code': (prompt) =>
       `claude -p --dangerously-skip-permissions --allowedTools 'Edit,Write,Bash,Read'${modelFlag} -- ${shellQuote(prompt)}`,
-    antigravity: (prompt) => `antigravity --prompt ${shellQuote(prompt)}`,
+    'gemini-cli': (prompt) =>
+      `npx @google/gemini-cli -p ${shellQuote(prompt)} -y${modelFlag}`,
     codex: (prompt) => `codex --prompt ${shellQuote(prompt)}`,
     cursor: null,
     aider: (prompt) => `aider --message ${shellQuote(prompt)} --yes`,
@@ -78,6 +79,17 @@ function installHooksForBench(taskDir, agentId) {
       },
     };
     fs.writeFileSync(path.join(dir, 'settings.json'), JSON.stringify(settings, null, 2));
+  } else if (agentId === 'gemini-cli') {
+    const dir = path.join(taskDir, '.gemini');
+    fs.mkdirSync(dir, { recursive: true });
+    const connector = path.join(ROOT, 'src/capture/connector.js');
+    const hooks = {
+      PreInvocation: [{ matcher: '*', hooks: [{ type: 'command', command: `node "${connector}" antigravity prompt` }] }],
+      PreToolUse: [{ matcher: 'edit_file|write_file', hooks: [{ type: 'command', command: `node "${connector}" antigravity preTool` }] }],
+      PostToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: `node "${connector}" antigravity postTool` }] }],
+      Stop: [{ matcher: '*', hooks: [{ type: 'command', command: `node "${connector}" antigravity stop` }] }],
+    };
+    fs.writeFileSync(path.join(dir, 'hooks.json'), JSON.stringify({ orunmila: hooks }, null, 2));
   }
 }
 
@@ -203,7 +215,7 @@ function main() {
   const cliBuilder = buildCli(agentId, model);
   if (!cliBuilder) {
     console.error(`Agent "${agentId}" has no headless CLI support yet.`);
-    console.error('Supported: ' + ['claude-code', 'antigravity', 'codex', 'aider'].join(', '));
+    console.error('Supported: ' + ['claude-code', 'gemini-cli', 'codex', 'aider'].join(', '));
     console.error(`\nFor ${agentId}, run tasks manually with orunmila hooks installed, then compare with: orunmila stats`);
     process.exit(1);
   }
@@ -284,6 +296,40 @@ function main() {
   console.log(`  Reliability:       ${overallReliability !== null ? overallReliability + '%' : '— (no scorable claims)'}`);
   console.log(`  Phantom rate:      ${overallPhantomRate}%`);
   console.log('');
+
+  // Auto-save results to bench-results/
+  const resultsDir = path.join(ROOT, 'bench-results');
+  fs.mkdirSync(resultsDir, { recursive: true });
+  const date = new Date().toISOString().slice(0, 10);
+  const safeTag = agentTag.replace(/[:/]/g, '_');
+  const outFile = path.join(resultsDir, `${date}_${safeTag}.json`);
+  const output = {
+    agent: agentId,
+    model: model || 'default',
+    tag: agentTag,
+    date,
+    corpus_version: `v1-${tasks.length}tasks`,
+    tasks: results.map((r) => ({
+      id: r.taskId, category: r.category, elapsed: r.elapsed,
+      test: r.testPassed,
+      claims: r.metrics.total_claims, verified: r.metrics.verified,
+      phantom: r.metrics.phantom, phantom_verification: r.metrics.phantom_verification,
+      partial: r.metrics.partial, silently_dropped: r.metrics.silently_dropped,
+      untracked_writes: r.metrics.untracked_writes,
+      reliability: r.metrics.reliability,
+    })),
+    totals: {
+      tasks: results.length, passed: totals.passed, failed: totals.failed,
+      total_claims: totals.total_claims, verified: totals.verified,
+      partial: totals.partial, phantom: totals.phantom,
+      phantom_verification: totals.phantom_verification,
+      silently_dropped: totals.silently_dropped,
+      untracked_writes: totals.untracked_writes,
+      reliability: overallReliability, phantom_rate: overallPhantomRate,
+    },
+  };
+  fs.writeFileSync(outFile, JSON.stringify(output, null, 2));
+  console.log(`  Results saved to ${outFile}\n`);
 }
 
 main();

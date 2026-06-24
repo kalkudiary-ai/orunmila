@@ -18,10 +18,13 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 - **`orunmila stats` command.** Cross-agent aggregate statistics: reliability
   scores, phantom rates, tool-use profiles, and a side-by-side comparison
   table when multiple agents have been captured.
-- **Benchmark corpus and runner.** `corpus/` contains 10 standardized coding
-  tasks (bugfix, feature, refactor, test, docs) and `bin/bench.js` runs them
-  against any agent's CLI, so the same tasks produce directly comparable
-  orunmila sessions. Run `orunmila stats` after to see the results.
+- **Benchmark runner with full reconciliation.** `bin/bench.js` runs the
+  10-task corpus against any agent's CLI with orunmila hooks installed,
+  capturing phantoms, phantom verifications, silently dropped asks, wild
+  writes, and reliability scores per task — not just pass/fail.
+  Supports `--model` for tier comparison (e.g. `--model haiku` vs `--model
+  opus`). Results auto-save to `bench-results/` as structured JSON.
+  Supports Claude Code and Gemini CLI (`--agent gemini-cli`).
 
 ## [0.1.0] — 2026-06-20
 

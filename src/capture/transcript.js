@@ -53,6 +53,25 @@ const EXTRACTORS = [
       ? { role: line.message.role, text: textOf(line.message.content) }
       : null,
   (line) => (line.type === 'user' || line.type === 'assistant' ? { role: line.type, text: textOf(line.content) } : null),
+  // Gemini CLI: type 'gemini' = assistant, content + thoughts + toolCalls
+  (line) => {
+    if (line.type === 'gemini') {
+      const parts = [];
+      if (line.content) parts.push(String(line.content));
+      if (Array.isArray(line.thoughts)) {
+        for (const t of line.thoughts) {
+          if (t.description) parts.push(t.description);
+        }
+      }
+      if (Array.isArray(line.toolCalls)) {
+        for (const tc of line.toolCalls) {
+          if (tc.description) parts.push(tc.description);
+        }
+      }
+      return parts.length ? { role: 'assistant', text: parts.join('\n') } : null;
+    }
+    return null;
+  },
 ];
 
 function normalize(line) {

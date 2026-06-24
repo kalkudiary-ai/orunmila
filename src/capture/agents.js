@@ -209,6 +209,30 @@ const REGISTRY = {
     },
   }),
 
+  // Gemini CLI — Google's standalone CLI agent (@google/gemini-cli). Uses
+  // SessionStart/SessionEnd/BeforeTool/AfterTool event names and provides
+  // session_id + transcript_path on every payload. Tool payload is similar to
+  // Antigravity (nested toolCall or flat tool_name).
+  'gemini-cli': withDefaults({
+    id: 'gemini-cli',
+    label: 'Gemini CLI',
+    config: { dir: '.gemini', file: 'settings.json' },
+    globalConfig: { dir: '.gemini/config', file: 'settings.json' },
+    events: {
+      prompt: 'SessionStart',
+      preTool: 'BeforeTool',
+      postTool: 'AfterTool',
+      stop: 'SessionEnd',
+    },
+    preToolMatcher: 'edit_file|write_file',
+    fields: {
+      toolName: (p) => (p.toolCall && p.toolCall.name) || p.tool_name || p.toolName || p.tool || '',
+      toolInput: (p) => (p.toolCall && p.toolCall.args) || p.tool_input || p.toolInput || p.input || p.arguments || {},
+      toolResponse: (p) => (p.toolCall && p.toolCall.result) || p.tool_response || p.tool_result || p.toolResponse || p.result || {},
+      transcriptPath: (p) => p.transcript_path || p.transcriptPath || p.transcript || null,
+    },
+  }),
+
   // Generic — a fallback for any agent that can be configured to run a command
   // per lifecycle event with a JSON payload on stdin. Uses the most permissive
   // field defaults. This is the "no extra work" path the project promises: an

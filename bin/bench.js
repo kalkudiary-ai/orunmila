@@ -38,7 +38,7 @@ function buildCli(agentId, model) {
     'claude-code': (prompt) =>
       `claude -p --dangerously-skip-permissions --allowedTools 'Edit,Write,Bash,Read'${modelFlag} -- ${shellQuote(prompt)}`,
     'gemini-cli': (prompt) =>
-      `npx @google/gemini-cli -p ${shellQuote(prompt)} -y${modelFlag}`,
+      `npx @google/gemini-cli -p ${shellQuote(prompt)} -y --skip-trust${modelFlag}`,
     codex: (prompt) => `codex --prompt ${shellQuote(prompt)}`,
     cursor: null,
     aider: (prompt) => `aider --message ${shellQuote(prompt)} --yes`,
@@ -84,12 +84,12 @@ function installHooksForBench(taskDir, agentId) {
     fs.mkdirSync(dir, { recursive: true });
     const connector = path.join(ROOT, 'src/capture/connector.js');
     const hooks = {
-      PreInvocation: [{ matcher: '*', hooks: [{ type: 'command', command: `node "${connector}" antigravity prompt` }] }],
-      PreToolUse: [{ matcher: 'edit_file|write_file', hooks: [{ type: 'command', command: `node "${connector}" antigravity preTool` }] }],
-      PostToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: `node "${connector}" antigravity postTool` }] }],
-      Stop: [{ matcher: '*', hooks: [{ type: 'command', command: `node "${connector}" antigravity stop` }] }],
+      SessionStart: [{ matcher: '*', hooks: [{ type: 'command', command: `node "${connector}" gemini-cli prompt` }] }],
+      BeforeTool: [{ matcher: 'edit_file|write_file', hooks: [{ type: 'command', command: `node "${connector}" gemini-cli preTool` }] }],
+      AfterTool: [{ matcher: '*', hooks: [{ type: 'command', command: `node "${connector}" gemini-cli postTool` }] }],
+      SessionEnd: [{ matcher: '*', hooks: [{ type: 'command', command: `node "${connector}" gemini-cli stop` }] }],
     };
-    fs.writeFileSync(path.join(dir, 'hooks.json'), JSON.stringify({ orunmila: hooks }, null, 2));
+    fs.writeFileSync(path.join(dir, 'settings.json'), JSON.stringify({ hooks }, null, 2));
   }
 }
 
@@ -170,7 +170,7 @@ function runTask(task, agentId, agentTag, cliBuilder) {
       cwd: dir,
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 180_000,
-      env: { ...process.env, HOME: os.homedir(), ORUNMILA_HOME: orunmilaHome },
+      env: { ...process.env, HOME: os.homedir(), ORUNMILA_HOME: orunmilaHome, GEMINI_CLI_TRUST_WORKSPACE: 'true' },
     });
   } catch (err) {
     status = err.status || 1;
@@ -196,8 +196,12 @@ function runTask(task, agentId, agentTag, cliBuilder) {
     `phantoms: ${metrics.phantom} | phantom_verify: ${metrics.phantom_verification} | ` +
     `dropped: ${metrics.silently_dropped} | wild_writes: ${metrics.untracked_writes}`);
 
-  try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ }
-  try { fs.rmSync(orunmilaHome, { recursive: true, force: true }); } catch { /* best effort */ }
+  if (!args.includes('--keep')) {
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ }
+    try { fs.rmSync(orunmilaHome, { recursive: true, force: true }); } catch { /* best effort */ }
+  } else {
+    console.log(`  [${task.id}] kept: task=${dir} orunmila=${orunmilaHome}`);
+  }
 
   return {
     taskId: task.id, category: task.category, elapsed: parseFloat(elapsed),
@@ -231,9 +235,14 @@ function main() {
   console.log(`\n=== orunmila benchmark: ${agentTag} ===`);
   console.log(`Corpus: ${corpusDir} (${tasks.length} task${tasks.length === 1 ? '' : 's'})\n`);
 
+  const delay = parseInt(flag('delay', '0'), 10);
   const results = [];
-  for (const task of tasks) {
-    results.push(runTask(task, agentId, agentTag, cliBuilder));
+  for (let i = 0; i < tasks.length; i++) {
+    if (i > 0 && delay > 0) {
+      console.log(`  (waiting ${delay}s for rate limits...)`);
+      execSync(`sleep ${delay}`);
+    }
+    results.push(runTask(tasks[i], agentId, agentTag, cliBuilder));
   }
 
   // --- Summary table ---

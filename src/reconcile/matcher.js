@@ -194,4 +194,59 @@ function summarize(claimResults, subtaskResults, undisclosed, untracked) {
   };
 }
 
-module.exports = { reconcileTurn };
+const OPPOSING_VERBS = {
+  added: ['removed', 'deleted'],
+  created: ['removed', 'deleted'],
+  implemented: ['removed', 'deleted', 'reverted'],
+  wrote: ['removed', 'deleted'],
+  installed: ['removed', 'deleted', 'uninstalled'],
+  configured: ['removed', 'deleted', 'disabled'],
+  introduced: ['removed', 'deleted', 'reverted'],
+  set: ['removed', 'deleted', 'disabled', 'reverted'],
+  fixed: ['broke', 'reverted'],
+  updated: ['reverted'],
+  replaced: ['reverted'],
+  removed: ['added', 'created', 'implemented', 'restored'],
+  deleted: ['added', 'created', 'restored'],
+};
+
+function detectContradictions(turnResults) {
+  const allClaims = [];
+  for (const turn of turnResults) {
+    for (const cr of (turn.claims || [])) {
+      allClaims.push({ turn: turn.turn_id, claim: cr.claim, outcome: cr.outcome });
+    }
+  }
+
+  const contradictions = [];
+  for (let i = 0; i < allClaims.length; i++) {
+    for (let j = i + 1; j < allClaims.length; j++) {
+      const a = allClaims[i], b = allClaims[j];
+      if (a.turn === b.turn) continue;
+
+      const aTargets = (a.claim.targets || []);
+      const bTargets = (b.claim.targets || []);
+      const shared = aTargets.filter((ta) =>
+        bTargets.some((tb) => ta.value === tb.value && ta.kind === tb.kind)
+      );
+      if (!shared.length) continue;
+
+      for (const va of (a.claim.verbs || [])) {
+        const opposites = OPPOSING_VERBS[va];
+        if (!opposites) continue;
+        for (const vb of (b.claim.verbs || [])) {
+          if (opposites.includes(vb)) {
+            contradictions.push({
+              target: shared[0].value,
+              earlier: { turn: a.turn, text: a.claim.text, verb: va },
+              later: { turn: b.turn, text: b.claim.text, verb: vb },
+            });
+          }
+        }
+      }
+    }
+  }
+  return contradictions;
+}
+
+module.exports = { reconcileTurn, detectContradictions };

@@ -41,10 +41,26 @@ const ACTION_VERBS = [
 ];
 
 function splitSentences(text) {
-  return text
+  const sentences = text
     .split(/(?<=[.!?])\s+(?=[A-Z0-9`*-])|\n+/)
     .map((s) => s.trim())
     .filter(Boolean);
+
+  const result = [];
+  for (const s of sentences) {
+    result.push(...splitCompoundClaims(s));
+  }
+  return result;
+}
+
+function splitCompoundClaims(sentence) {
+  const parts = [];
+  const semiParts = sentence.split(/\s*;\s+/);
+  for (const part of semiParts) {
+    const subParts = part.split(/,?\s+(?:and\s+then|and\s+also|then\s+also)\s+/i);
+    parts.push(...subParts);
+  }
+  return parts.map((p) => p.trim()).filter(Boolean);
 }
 
 function containsAny(lowerText, list) {

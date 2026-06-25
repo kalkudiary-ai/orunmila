@@ -1,6 +1,6 @@
-# orunmila
+# orunmila — *The Diviner*
 
-> Did your AI coding agent actually do what it said? orunmila stains the proof.
+> Did your AI coding agent actually do what it said? Orunmila — named after the Yoruba *orisha* of wisdom and divination — reads the session and tells you the truth. **The Diviner** stains the proof.
 
 [![CI](https://github.com/kalkudiary-ai/orunmila/actions/workflows/ci.yml/badge.svg)](https://github.com/kalkudiary-ai/orunmila/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/orunmila.svg)](https://www.npmjs.com/package/orunmila)
@@ -26,6 +26,38 @@ Works with any AI coding agent — Claude Code, Antigravity, Cursor, Aider,
 Codex CLI, Continue, or anything that can run a command per hook event. One adapter
 maps an agent's hooks into a shared event schema; everything downstream is
 agent-agnostic. See "Supported agents" below.
+
+## What's new
+
+Recent additions to The Diviner:
+
+- **Interactive HTML report.** `orunmila trail` now renders a six-tab session
+  view: **Timeline** (turn-by-turn pips), **Tree** (project files with
+  stain bars), **Graph** (2D radial — zoom, pan, search, filter by channel
+  or outcome), **3D Graph** (force-directed WebGL view with hover/click
+  detail), **Dashboard** (donut + KPI cards), and **Report** (copy-paste
+  prompt to send the agent back to fix every flagged item).
+- **Glossary tab.** Plain-English definitions for every outcome (`verified`,
+  `partial`, `phantom`, `phantom_verification`, `silently_dropped`,
+  `undisclosed`, `untracked_write`, `unverifiable`), every channel, and
+  every metric (Reliability, Phantom Rate, ConfIdx, Touches). Severity-coded
+  so a first-time reader can self-onboard without leaving the report.
+- **Report tab reordered** — stats lead, copy-paste prompt next, findings
+  last. The prompt is the action; you shouldn't have to scroll past 20
+  findings to reach it.
+- **3D Graph rewritten.** Single-script CDN load (no chained loader), bundles
+  its own three.js (no context conflicts), disposes previous instances on
+  re-render (no WebGL context leaks), and ships lenient `rendererConfig`
+  (`powerPreference: 'low-power'`, `failIfMajorPerformanceCaveat: false`)
+  so restrictive Chrome states still get a context.
+- **Model personality summaries.** `bench-results/README.md` now includes
+  one-line character reads for every benchmarked model — *honest workhorse*,
+  *talks confidently, sometimes too confidently*, *underpromises and
+  overdelivers*, *the cautionary tail* — each grounded in the specific
+  metric that distinguishes that model.
+- **Dashboard default port → 3773.** `node bin/dashboard.js` now serves on
+  `http://localhost:3773` by default (was 3000). Override with
+  `PORT=… node bin/dashboard.js` if you need something else.
 
 ## Why this exists
 
@@ -185,7 +217,7 @@ node bin/bench.js --agent gemini-cli --model gemini-2.5-flash
 The runner installs orunmila hooks in each task, captures the full
 session, and reports per-task phantoms, phantom verifications, silently
 dropped asks, wild writes, and reliability scores — not just pass/fail.
-Results auto-save to `bench-results/` as JSON. See `bench-results/README.md`
+Divinations auto-save to `bench-results/` as JSON. See `bench-results/README.md`
 for the metric definitions and `corpus/README.md` for the task format.
 
 ## Deep verify (optional, off by default)

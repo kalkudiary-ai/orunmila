@@ -351,7 +351,7 @@ function renderSessionHtml(sessionId, reports, trail) {
   // The rich, tabbed, stain-first visual (Graph/Tree/Timeline/Dashboard). Only
   // built when a trail model is present; `orunmila html` (no trail) is untouched.
   const visualBlock = trail && trail.turns && trail.turns.length
-    ? renderTrailVisual(buildVizData(trail, stainByKeyFrom(files)))
+    ? renderTrailVisual(buildVizData(trail, stainByKeyFrom(files), reports))
     : '';
   const totals = reports.reduce((acc, r) => {
     for (const k of Object.keys(r.summary)) acc[k] = (acc[k] || 0) + r.summary[k];

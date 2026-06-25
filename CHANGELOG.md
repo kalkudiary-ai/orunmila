@@ -10,6 +10,43 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ### Added
 
+- **Nickname: *The Diviner*.** Adopted across user-facing surfaces —
+  README hero, benchmark divinations doc, dashboard intro. Reflects
+  Orunmila's role as the Yoruba orisha of wisdom and divination, and the
+  tool's role as the one that reads what an agent actually did.
+- **Glossary tab in the HTML report.** Every outcome, channel, and metric
+  defined in plain English with severity coding, so a first-time viewer
+  can self-onboard without leaving the page.
+- **3D Graph tab.** Force-directed WebGL view of the session graph with
+  hover/click detail, particle-animated edges, and channel/outcome filters.
+  Rewritten to use a single-script bundled UMD (no chained loader / no
+  context leaks) with a lenient `rendererConfig` for restrictive Chrome
+  states.
+- **Model personality summaries** in `bench-results/README.md` — one-line
+  character reads for every benchmarked model, grounded in the specific
+  metric that distinguishes it (ConfIdx, phantom rate, claim volume, etc.).
+
+### Changed
+
+- **Report tab reordered**: stats → copy-paste prompt → findings. The
+  prompt is the action; it shouldn't be buried under the findings list.
+- **Dashboard default port** is now `3773` (was `3000`). Override with
+  `PORT=… node bin/dashboard.js`.
+- **"Results" → "Divinations"** in user-facing labels (`bench-results/README.md`,
+  main README). Directory paths and code identifiers are unchanged for
+  backwards compatibility.
+
+### Fixed
+
+- **3D Graph black-screen / failed-load.** Previous version chained three
+  separate `<script>` loads (three.js + OrbitControls + 3d-force-graph),
+  with `examples/js/controls/OrbitControls.js` removed in three.js v0.148+,
+  so the chain stalled. Loading three.js separately also conflicted with
+  the bundled copy inside 3d-force-graph, stacking WebGL contexts until
+  Chrome's per-process cap blacked out the canvas. New loader uses a
+  single UMD that bundles its own three.js, disposes the previous
+  instance on re-render, and falls back to jsdelivr if unpkg fails.
+
 - **Antigravity adapter.** Native support for Google's agent-first IDE —
   `orunmila install --agent antigravity` writes hooks into `.agents/hooks.json`
   (or `~/.gemini/config/hooks.json` with `--global`). Handles the nested

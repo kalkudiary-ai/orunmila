@@ -176,8 +176,9 @@ function applyRedaction(reports, trail) {
 function cmdHtml() {
   const sessionId = flag('session', eventlog.latestSessionId());
   if (!sessionId) return console.log('No sessions captured yet.');
-  const { reports } = applyRedaction(listSessionReports(sessionId), null);
-  const html = renderSessionHtml(sessionId, reports);
+  const rawTrail = trailForSession(sessionId);
+  const { reports, trail } = applyRedaction(listSessionReports(sessionId), rawTrail);
+  const html = renderSessionHtml(sessionId, reports, trail);
   const outPath = flag('out', path.join(process.cwd(), `orunmila-${sessionId}.html`));
   fs.writeFileSync(outPath, html);
   console.log(`Wrote ${outPath}`);

@@ -254,10 +254,15 @@ function renderTurn(report) {
   const claims = report.claims.map(renderClaim).join('\n') || '<p class="dim">No checkable claims.</p>';
   const subtasks = report.subtasks.length > 1 ? report.subtasks.map(renderSubtask).join('\n') : '';
   const undisclosed = (report.undisclosed || [])
-    .map((u) => `<div class="card" style="border-left-color:${COLORS.undisclosed}">
+    .map((u) => {
+      const count = u.occurrences && u.occurrences > 1
+        ? ` <span class="dim">×${u.occurrences}</span>`
+        : '';
+      return `<div class="card" style="border-left-color:${COLORS.undisclosed}">
         <div class="card-head"><span class="badge" style="background:${COLORS.undisclosed}">undisclosed</span></div>
-        <div class="claim-text">${esc(u.path)}</div>
-      </div>`)
+        <div class="claim-text">${esc(u.path)}${count}</div>
+      </div>`;
+    })
     .join('\n');
 
   // Untracked writes render FIRST, in their own loud block (PRD 6.4: never

@@ -6,9 +6,18 @@ const path = require('path');
 const os = require('os');
 const eventlog = require('../src/store/eventlog');
 const { loadReport, listSessionReports } = require('../src/reconcile');
+const {
+  rescoreAll,
+  listArchives,
+  loadArchivedReport,
+  listArchivedSessionReports,
+  KEYS: RESCORE_KEYS,
+} = require('../src/reconcile/rescore');
 const { renderTurn } = require('../src/render/terminal');
 const { renderSessionHtml } = require('../src/render/html');
 const { redactForRender } = require('../src/render/redact');
+const { renderJson } = require('../src/render/json');
+const feedback = require('../src/feedback');
 const { trailForSession } = require('../src/trail');
 const transcript = require('../src/capture/transcript');
 const { startSentinel } = require('../src/capture/fs-sentinel');
@@ -144,18 +153,33 @@ function cmdStatus() {
   console.log('Override in .orunmila/ignore (one path per line; "!entry" un-ignores a default).');
 }
 
+// All inspection commands honor --archive <stamp>: when set, they read from the
+// snapshot under <dataDir>/archive/<stamp>/ instead of the live reports. The
+// archive holds the original pre-rescore scores; live always shows current.
+function loadReportsForRead(sessionId) {
+  const stamp = flag('archive', null);
+  if (stamp) {
+    const reports = listArchivedSessionReports(stamp, sessionId);
+    return { reports, fromArchive: stamp };
+  }
+  return { reports: listSessionReports(sessionId), fromArchive: null };
+}
+
 function cmdReport() {
   const sessionId = flag('session', eventlog.latestSessionId());
   if (!sessionId) return console.log('No sessions captured yet.');
   const turn = flag('turn', null);
+  const stamp = flag('archive', null);
   if (turn) {
-    const report = loadReport(sessionId, turn);
-    if (!report) return console.log(`No report for ${sessionId}/${turn} yet.`);
+    const report = stamp ? loadArchivedReport(stamp, sessionId, turn) : loadReport(sessionId, turn);
+    if (!report) return console.log(`No report for ${sessionId}/${turn}${stamp ? ` in archive ${stamp}` : ''}.`);
+    if (stamp) console.log(`(archived snapshot: ${stamp})`);
     console.log(renderTurn(report));
     return;
   }
-  const reports = listSessionReports(sessionId);
-  if (!reports.length) return console.log(`No turns reconciled yet for session ${sessionId}.`);
+  const { reports, fromArchive } = loadReportsForRead(sessionId);
+  if (!reports.length) return console.log(`No turns reconciled yet for session ${sessionId}${fromArchive ? ` in archive ${fromArchive}` : ''}.`);
+  if (fromArchive) console.log(`(archived snapshot: ${fromArchive})\n`);
   for (const r of reports) console.log(renderTurn(r));
 }
 
@@ -177,10 +201,13 @@ function cmdHtml() {
   const sessionId = flag('session', eventlog.latestSessionId());
   if (!sessionId) return console.log('No sessions captured yet.');
   const rawTrail = trailForSession(sessionId);
-  const { reports, trail } = applyRedaction(listSessionReports(sessionId), rawTrail);
+  const { reports: rawReports, fromArchive } = loadReportsForRead(sessionId);
+  const { reports, trail } = applyRedaction(rawReports, rawTrail);
   const html = renderSessionHtml(sessionId, reports, trail);
-  const outPath = flag('out', path.join(process.cwd(), `orunmila-${sessionId}.html`));
+  const suffix = fromArchive ? `-archive-${fromArchive}` : '';
+  const outPath = flag('out', path.join(process.cwd(), `orunmila-${sessionId}${suffix}.html`));
   fs.writeFileSync(outPath, html);
+  if (fromArchive) console.log(`(archived snapshot: ${fromArchive})`);
   console.log(`Wrote ${outPath}`);
 }
 
@@ -190,11 +217,14 @@ function cmdTrail() {
   const sessionId = flag('session', eventlog.latestSessionId());
   if (!sessionId) return console.log('No sessions captured yet.');
   const rawTrail = trailForSession(sessionId);
-  const { reports, trail } = applyRedaction(listSessionReports(sessionId), rawTrail);
+  const { reports: rawReports, fromArchive } = loadReportsForRead(sessionId);
+  const { reports, trail } = applyRedaction(rawReports, rawTrail);
   const html = renderSessionHtml(sessionId, reports, trail);
-  const outPath = flag('out', path.join(process.cwd(), `orunmila-trail-${sessionId}.html`));
+  const suffix = fromArchive ? `-archive-${fromArchive}` : '';
+  const outPath = flag('out', path.join(process.cwd(), `orunmila-trail-${sessionId}${suffix}.html`));
   fs.writeFileSync(outPath, html);
   const t = rawTrail.totals;
+  if (fromArchive) console.log(`(archived snapshot: ${fromArchive})`);
   console.log(`Wrote ${outPath}`);
   console.log(`Trail (the glove): ${t.touches} touches across ${t.artifacts} artifacts in ${t.turns} turns.`);
 }
@@ -303,11 +333,151 @@ function cmdStats() {
   console.log(formatStats(stats));
 }
 
+function cmdRescore() {
+  const dryRun = args.includes('--dry-run');
+  if (dryRun) console.log('Rescore (dry run — no files written):\n');
+  else console.log('Re-reconciling every persisted report with the current engine.\n');
+  const result = rescoreAll({ dryRun, logger: (line) => console.log(line) });
+  console.log();
+  if (!result.turns) {
+    console.log('No persisted reports to rescore.');
+    return;
+  }
+  console.log(`Sessions: ${result.sessions}    Turns: ${result.turns}`);
+  if (result.archive) console.log(`Originals archived to: ~/.orunmila/archive/${result.archive}/`);
+  console.log('\nAggregate totals (before → after):');
+  for (const k of RESCORE_KEYS) {
+    const b = result.before[k];
+    const a = result.after[k];
+    const d = a - b;
+    const dStr = d > 0 ? `+${d}` : `${d}`;
+    console.log(`  ${k.padEnd(24)} ${String(b).padStart(6)} → ${String(a).padStart(6)}  (${dStr})`);
+  }
+  if (result.archive) {
+    console.log(`\nInspect originals any time with:`);
+    console.log(`  orunmila report --archive ${result.archive} [--session ID]`);
+    console.log(`  orunmila html   --archive ${result.archive} [--session ID]`);
+    console.log(`  orunmila trail  --archive ${result.archive} [--session ID]`);
+  }
+}
+
+function cmdArchives() {
+  const archives = listArchives();
+  if (!archives.length) {
+    console.log('No archives yet. Run `orunmila rescore` to create one.');
+    return;
+  }
+  console.log(`Archived rescore snapshots (~/.orunmila/archive/):\n`);
+  for (const a of archives) {
+    const m = a.manifest || {};
+    console.log(`  ${a.stamp}    turns: ${m.turns ?? '?'}    sessions: ${m.sessions ?? '?'}    engine: ${m.engine_before ?? '?'} → ${m.engine_after ?? '?'}`);
+  }
+  console.log(`\nUse with any inspection command:  orunmila report|html|trail --archive <stamp>`);
+}
+
 function cmdAgents() {
   console.log('Supported agents (use with: orunmila install --agent <id>):\n');
   for (const a of listAgents()) {
     const adapter = getAdapter(a.id);
     console.log(`  ${a.id.padEnd(12)} ${a.label}  (config: ${adapter.config.dir}/${adapter.config.file})`);
+  }
+}
+
+// Parse --include (and the --include-text shorthand). Comma-separated.
+function parseIncludes() {
+  const out = new Set();
+  if (args.includes('--include-text')) out.add('claim_text');
+  const i = args.indexOf('--include');
+  if (i !== -1 && args[i + 1] && !args[i + 1].startsWith('--')) {
+    for (const f of String(args[i + 1]).split(',').map((s) => s.trim()).filter(Boolean)) {
+      out.add(f);
+    }
+  }
+  return Array.from(out);
+}
+
+// Look up the agent id captured by the install hooks — best-effort. The
+// event log carries `agent_id` when available; fall back to the most
+// recently installed adapter on disk, then to null.
+function detectAgent() {
+  try {
+    const all = eventlog.readAll();
+    for (let i = all.length - 1; i >= 0; i--) {
+      if (all[i] && all[i].agent_id) return String(all[i].agent_id);
+    }
+  } catch { /* ok */ }
+  return null;
+}
+
+function cmdJson() {
+  const sessionId = flag('session', eventlog.latestSessionId());
+  if (!sessionId) {
+    console.error('No sessions captured yet.');
+    process.exit(1);
+  }
+  const turn = flag('turn', null);
+  const include = parseIncludes();
+  const home = !args.includes('--no-redact-home');
+  const { reports } = loadReportsForRead(sessionId);
+  const events = eventlog.readSession(sessionId);
+  const json = renderJson({
+    sessionId,
+    agent: detectAgent(),
+    reports,
+    events,
+    turn,
+    include,
+    redactOpts: { home, root: process.cwd() },
+  });
+  const out = flag('out', null);
+  if (out) {
+    fs.writeFileSync(out, json);
+    console.log(`Wrote ${out}`);
+  } else {
+    process.stdout.write(json + '\n');
+  }
+}
+
+function cmdFeedback() {
+  const sessionId = flag('session', eventlog.latestSessionId());
+  if (!sessionId) {
+    console.error('No sessions captured yet.');
+    process.exit(1);
+  }
+  const include = parseIncludes();
+  const home = !args.includes('--no-redact-home');
+  const dir = flag('dir', path.join(process.cwd(), '.orunmila-feedback'));
+  const { reports } = loadReportsForRead(sessionId);
+  const events = eventlog.readSession(sessionId);
+  const { file, payload } = feedback.writeFeedback({
+    sessionId,
+    agent: detectAgent(),
+    reports,
+    events,
+    dir,
+    include,
+    redactOpts: { home, root: process.cwd() },
+  });
+  console.log(`Wrote ${file}`);
+  console.log(`Cases: ${payload.cases.length} (claim_text included: ${payload.included_fields.includes('claim_text') ? 'yes' : 'no'})`);
+  if (!payload.included_fields.includes('claim_text')) {
+    console.log(`Re-run with --include claim_text to make these cases corpus-runnable.`);
+  }
+  console.log(`Drop folder INDEX: ${path.join(path.dirname(file), '..', 'INDEX.md')}`);
+}
+
+function cmdFeedbackImport() {
+  const dir = flag('dir', path.join(process.cwd(), '.orunmila-feedback'));
+  const corpusDir = flag('corpus', path.join(process.cwd(), 'test', 'cases', 'precision'));
+  const force = args.includes('--force');
+  const stats = feedback.importFeedback({
+    dir, corpusDir, force,
+    logger: (line) => console.log(line),
+  });
+  console.log(`\nRead: ${stats.read}    Written: ${stats.written}    Skipped: ${stats.skipped}`);
+  if (stats.skipped) {
+    console.log('Skips:');
+    for (const r of stats.skippedReasons) console.log(`  - ${r}`);
   }
 }
 
@@ -321,6 +491,11 @@ const COMMANDS = {
   html: cmdHtml,
   trail: cmdTrail,
   glove: cmdTrail, // alias: "the glove" is the user-facing name for the trail lens
+  rescore: cmdRescore,
+  archives: cmdArchives,
+  json: cmdJson,
+  feedback: cmdFeedback,
+  'feedback-import': cmdFeedbackImport,
   demo: cmdDemo,
   watch: cmdWatch,
   'watch-fs': cmdWatchFs,
@@ -336,9 +511,14 @@ Usage:
   orunmila stats                     cross-agent reliability scores, phantom rates, and comparisons
   orunmila status                    show event log location, size, and counts
   orunmila prune [--keep N]          cap the log to the N most-recent sessions (default 20; explicit, never automatic)
-  orunmila report [--session ID] [--turn ID]   print a terminal stain report
-  orunmila html [--session ID] [--out path] [--no-redact-home]   generate the mismatch-only HTML report
-  orunmila trail [--session ID] [--out path] [--no-redact-home]  unified report: complete trail (the glove) + lineage + orunmila stains
+  orunmila report [--session ID] [--turn ID] [--archive STAMP]   print a terminal stain report (live, or a pinned archived snapshot)
+  orunmila html [--session ID] [--out path] [--archive STAMP] [--no-redact-home]   generate the mismatch-only HTML report
+  orunmila trail [--session ID] [--out path] [--archive STAMP] [--no-redact-home]  unified report: complete trail (the glove) + lineage + orunmila stains
+  orunmila rescore [--dry-run]       re-reconcile every persisted report with the current engine (originals archived, never deleted)
+  orunmila archives                  list archived rescore snapshots you can read back with --archive <stamp>
+  orunmila json [--session ID] [--turn ID] [--out path] [--include claim_text] [--no-redact-home]   machine-readable per-turn stain output (schema_version 1.0)
+  orunmila feedback [--session ID] [--dir path] [--include claim_text] [--no-redact-home]   write sanitized accuracy cases to a local drop folder (precision-corpus superset)
+  orunmila feedback-import [--dir path] [--corpus path] [--force]   copy cases[] entries from a feedback drop folder into test/cases/precision/
   orunmila demo [--out path]         render a sample unified report from a scripted session (no setup, for a first look)
   orunmila watch [--root dir]        live-tail new turn reports + run the filesystem sentinel
   orunmila watch-fs [--root dir]     run ONLY the filesystem sentinel (independent disk observer)

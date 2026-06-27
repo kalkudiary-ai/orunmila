@@ -80,7 +80,8 @@ function renderTurn(report) {
   if (report.undisclosed && report.undisclosed.length) {
     lines.push(paint('\nUndisclosed changes (touched, never mentioned by any claim):', C.bold));
     for (const u of report.undisclosed) {
-      lines.push(`  \u2795 ${paint(u.path, C.magenta)}`);
+      const count = u.occurrences && u.occurrences > 1 ? `  ${paint('\u00d7' + u.occurrences, C.dim)}` : '';
+      lines.push(`  \u2795 ${paint(u.path, C.magenta)}${count}`);
     }
   }
 

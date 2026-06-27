@@ -1,0 +1,12 @@
+{
+  "name": "precision: sentences whose subject is an external actor are not agent work-claims",
+  "note": "From the 400-issue dogfood report. 'Chrome has actively disabled GPU acceleration' is the agent describing the world, not reporting work done. Subject is Chrome, not the agent.",
+  "source": "dogfood:DOGFOOD_51.md",
+  "kind": "negative",
+  "prompt": "why is webgl failing",
+  "claim": "Chrome has actively disabled GPU acceleration for the renderer process. GitHub enforces this by making you push to another branch first. The dashboard server is still running at http://localhost:8765/report.html.",
+  "events": [],
+  "expect": {
+    "not_outcomes": ["phantom", "phantom_verification"]
+  }
+}

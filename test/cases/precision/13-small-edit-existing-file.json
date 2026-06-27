@@ -1,0 +1,19 @@
+{
+  "name": "precision: a small edit inside an existing logic file is not 'partial' scaffolding",
+  "note": "From the 327-issue dogfood report. Rename refactor edits (a few lines per file) got graded 'partial' because the substance ratio of the hunk was low. An edit with context lines is a real edit, not a stub.",
+  "source": "dogfood:DOGFOOD_327.md",
+  "kind": "negative",
+  "prompt": "rename gloveForSession to trailForSession",
+  "claim": "I renamed gloveForSession to trailForSession in src/trail/index.js.",
+  "events": [
+    {
+      "type": "file_write",
+      "path": "src/trail/index.js",
+      "diff": "--- a/src/trail/index.js\n+++ b/src/trail/index.js\n@@ -10,7 +10,7 @@ const x = require('./lineage');\n function existingHelper() {\n   return doSomething();\n }\n-function gloveForSession(s) {\n+function trailForSession(s) {\n   return lineageForTurn(s);\n }\n const z = require('./store');\n",
+      "failed": false
+    }
+  ],
+  "expect": {
+    "not_outcomes": ["partial"]
+  }
+}

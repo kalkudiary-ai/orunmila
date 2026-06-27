@@ -1,0 +1,14 @@
+{
+  "name": "precision: writes to agent-managed memory/plan files are not stub partials",
+  "note": "From the 23-issue dogfood report. The agent wrote a short note to project_latency_instrumentation_state.md (in ~/.claude/projects/.../memory/) and got graded 'partial' because the diff is small. Memory files are operational, not work output.",
+  "source": "dogfood:DOGFOOD_23.md",
+  "kind": "negative",
+  "prompt": "remember that the merge landed",
+  "claim": "I updated the memory to record that PR #14 merged.",
+  "events": [
+    { "type": "file_write", "path": "~/.claude/projects/-kalku/memory/project_latency_instrumentation_state.md", "diff": "+Merged — smoke passed and PR #14 is in main.\n", "failed": false }
+  ],
+  "expect": {
+    "not_outcomes": ["partial"]
+  }
+}

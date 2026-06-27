@@ -1,0 +1,14 @@
+{
+  "name": "precision: a phrase target like 'CI' matches the resulting .github/workflows file",
+  "note": "From the 327-issue dogfood report. The user asked for 'GitHub Actions CI' and the agent landed .github/workflows/ci.yml several turns later. The local-turn target list didn't include the basename, so the file got flagged 'undisclosed' repeatedly. The phrase→path alias map covers this.",
+  "source": "dogfood:DOGFOOD_327.md",
+  "kind": "negative",
+  "prompt": "add GitHub Actions CI",
+  "claim": "Added CI.",
+  "events": [
+    { "type": "file_write", "path": ".github/workflows/ci.yml", "diff": "+name: CI\n+on: [push]\n+jobs:\n+  test:\n+    runs-on: ubuntu-latest\n+    steps:\n+      - uses: actions/checkout@v4\n+      - run: npm test\n", "failed": false }
+  ],
+  "expect": {
+    "undisclosed_paths_exclude": [".github/workflows/ci.yml"]
+  }
+}

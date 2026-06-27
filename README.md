@@ -194,6 +194,56 @@ Opens as a self-contained `.html` file: a colored grid of every file
 touched this session (color = worst outcome that touched it, size = how
 much), plus a turn-by-turn breakdown underneath.
 
+## Machine-readable output + feedback loop
+
+The terminal and HTML reports are for humans. `orunmila json` emits the same
+per-turn reconciliation as structured JSON for downstream tooling (IDE
+diagnostics, dashboards, automated analysis). It's deterministic — same event
+log + same options → byte-identical output — which means golden-file tests
+and stable diffs are trivial.
+
+```bash
+node bin/orunmila.js json                                    # latest session/turn to stdout
+node bin/orunmila.js json --turn t12 --out report.json       # one turn to a file
+node bin/orunmila.js json --include claim_text               # opt the agent's claim text into the output
+```
+
+The schema is `1.0` and versioned. Per-claim entries carry **two confidence
+axes** — `extraction_confidence` (is this text a claim of this type?) and
+`verdict_confidence` (is the outcome right given the parse?) — kept separate
+because fusing them makes calibration analysis impossible. A reserved
+`label` slot is all-null by default so an optional labeling pass can land
+later with no schema bump. Full contract: [docs/SCHEMA.md](docs/SCHEMA.md).
+
+**Privacy is by construction, not by configuration.** Raw text fields
+(`claim_text`, future `prompt_text`/`diff_hunks`/`command_output_snippets`)
+are excluded by default; `--include <field>` opts them in. Sanitization
+(home-prefix collapse + `.orunmila/redact`) is applied per string-valued
+field DURING emit on every default and opt-in field — `--include` only gates
+which raw text fields *enter* the pipeline. The `classification_features`
+breadcrumbs the emitter ships by default carry categories, counts, and
+pattern-IDs only — never raw substrings from the claim text.
+
+### The homeward feedback loop
+
+The reason for shipping JSON: **teach Orunmila to identify agent claims
+better, using your own builds as the training corpus.** `orunmila feedback`
+writes sanitized accuracy cases to a local drop folder; each entry is a
+**strict superset of `test/cases/precision/*.json`** so contributing them
+back is a copy, not a translation.
+
+```bash
+node bin/orunmila.js feedback                                # writes .orunmila-feedback/sessions/<date>-<id>.json
+node bin/orunmila.js feedback --include claim_text           # populate cases[] with the real text (corpus-runnable)
+node bin/orunmila.js feedback-import --dir .orunmila-feedback/   # cp cases[] into test/cases/precision/
+```
+
+The drop folder includes an `INDEX.md` that points back to the upstream repo
+with exact contribution steps. Without `--include claim_text` the file is
+still written, but `cases[]` entries carry no claim text and are not
+corpus-runnable — re-run with the flag on builds whose content you're
+comfortable sharing.
+
 ## Cross-agent comparison
 
 Use multiple agents on the same codebase? `stats` aggregates every

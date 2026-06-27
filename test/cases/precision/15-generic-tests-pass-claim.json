@@ -1,0 +1,14 @@
+{
+  "name": "precision: a generic 'all tests pass' claim matches any passing test command in the turn",
+  "note": "From the 327-issue dogfood report. The agent said 'All 17 tests pass.' after running the suite. The verification claim names no target, but provenance.classify already does the loose match against any test-like command. This case asserts the existing behavior is wired through end-to-end.",
+  "source": "dogfood:DOGFOOD_327.md",
+  "kind": "positive",
+  "prompt": "run the tests",
+  "claim": "All 17 tests pass.",
+  "events": [
+    { "type": "command_run", "source": "hook", "command": "node test/all.js", "exit_code": 0, "failed": false }
+  ],
+  "expect": {
+    "claim_outcomes_include": ["verified"]
+  }
+}

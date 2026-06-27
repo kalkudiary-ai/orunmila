@@ -22,6 +22,8 @@
  *   kind "literal" - a quoted string, matched verbatim
  */
 
+const { sanitize } = require('./sanitize');
+
 // Split a multi-part ask into subtasks. Bullets/numbered lists first; then
 // comma/conjunction splitting as a fallback. The comma case matters: "do A,
 // do B, and do C" must become three items, not two.
@@ -48,21 +50,47 @@ const ACTION_VERBS_FOR_PHRASE = [
   'support', 'handle', 'build', 'optimize', 'optimized', 'enable',
 ];
 
+// A real subtask sentence has a verb of intent OR a concrete target. Pure
+// status pastes ("9 passed, 0 failed", task-notification XML, npm error
+// stacks) would otherwise be reified into subtasks the agent then gets
+// graded for "silently dropping". See review/DOGFOOD_*.md.
+const INTENT_VERB_RE = new RegExp(
+  String.raw`\b(?:${ACTION_VERBS_FOR_PHRASE.join('|')}|build|builds|ship|ships|publish|publishes|test|tests|run|runs|need|needs|should|must|please|make|makes|set|sets|do|does|tweak|tweaks|cover|covers|raise|raises|address|addresses|check|checks|verify|verifies|investigate|investigates|use|uses|enforce|enforces)\b`,
+  'i'
+);
+
+function looksLikeIntent(text) {
+  if (!text) return false;
+  if (INTENT_VERB_RE.test(text)) return true;
+  // A short bare noun phrase that names a file or component is also OK as a
+  // subtask — "the dashboard", "src/auth.js" — but only when it has at least
+  // one extractable target. We let the caller's target extraction decide.
+  return extractTargets(text).length > 0;
+}
+
 function extractSubtasks(promptText) {
   if (!promptText || !promptText.trim()) return [];
 
-  const lines = promptText.split('\n').map((l) => l.trim()).filter(Boolean);
+  const cleaned = sanitize(promptText);
+  if (!cleaned.trim()) return [];
+
+  const lines = cleaned.split('\n').map((l) => l.trim()).filter(Boolean);
   const bulletItems = lines.map((l) => l.match(BULLET_LINE)).filter(Boolean).map((m) => m[1].trim());
 
   let raw;
   if (bulletItems.length >= 2) {
     raw = bulletItems;
   } else {
-    raw = promptText
+    raw = cleaned
       .split(SPLIT_CONNECTORS)
       .map((s) => s.trim())
       .filter((s) => s.length > 3);
   }
+
+  // Drop fragments that aren't plausibly an intent: a leftover sentence
+  // with no verb-of-intent and no concrete target is almost always a noise
+  // line that survived sanitize (e.g. a quoted greeting, a header word).
+  raw = raw.filter(looksLikeIntent);
 
   return raw.map((text, i) => ({
     id: `task${i + 1}`,

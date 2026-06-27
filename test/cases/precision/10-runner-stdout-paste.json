@@ -1,0 +1,14 @@
+{
+  "name": "precision: pasted test-runner stdout is not a set of user subtasks",
+  "note": "From the 400-issue dogfood report. Pasted PASS/FAIL lines from `npm test` got split into hundreds of 'subtasks' the agent then got graded for silently dropping. Noise-line filter must remove them before subtask splitting.",
+  "source": "dogfood:DOGFOOD_400.md",
+  "kind": "negative",
+  "prompt": "PASS  post-tool-use: a Write deletes its before-snapshot slot\nPASS  stop: writes claim + turn_end events\nFAIL  some other thing\n9 passed, 0 failed\nnpm error code 1\nat process.processTicksAndRejections (node:internal/process/task_queues:95:5)\nfix the failure",
+  "claim": "I fixed the failure in post-tool-use.js by ensuring the slot deletion happens before the diff write.",
+  "events": [
+    { "type": "file_write", "path": "src/capture/claude-code/post-tool-use.js", "diff": "+delete this.beforeSnapshot[id];\n+return diff;\n", "failed": false }
+  ],
+  "expect": {
+    "summary": { "silently_dropped": 0 }
+  }
+}

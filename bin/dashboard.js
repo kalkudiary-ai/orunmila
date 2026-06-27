@@ -7,6 +7,7 @@ const path = require('path');
 const os = require('os');
 const { renderSessionHtml } = require('../src/render/html');
 const { listSessionReports } = require('../src/reconcile');
+const { listArchives, listArchivedSessionReports } = require('../src/reconcile/rescore');
 const { trailForSession } = require('../src/trail');
 const { redactForRender } = require('../src/render/redact');
 
@@ -567,13 +568,21 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify(loadSessions()));
   }
-  const sessionMatch = req.url.match(/^\/session\/([a-f0-9-]+)$/);
+  if (req.url === '/api/archives') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify(listArchives().map((a) => ({ stamp: a.stamp, manifest: a.manifest }))));
+  }
+  // Optional archive snapshot: /session/<id>?archive=<stamp>
+  const sessionMatch = req.url.match(/^\/session\/([a-f0-9-]+)(?:\?(.*))?$/);
   if (sessionMatch) {
     const sessionId = sessionMatch[1];
+    const params = new URLSearchParams(sessionMatch[2] || '');
+    const stamp = params.get('archive');
     try {
       const rawTrail = trailForSession(sessionId);
-      const { reports, trail } = redactForRender(listSessionReports(sessionId), rawTrail, { home: true, root: process.cwd() });
-      if (!reports.length) { res.writeHead(404); return res.end('No reports for session ' + sessionId); }
+      const liveReports = stamp ? listArchivedSessionReports(stamp, sessionId) : listSessionReports(sessionId);
+      const { reports, trail } = redactForRender(liveReports, rawTrail, { home: true, root: process.cwd() });
+      if (!reports.length) { res.writeHead(404); return res.end('No reports for session ' + sessionId + (stamp ? ` (archive ${stamp})` : '')); }
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       return res.end(renderSessionHtml(sessionId, reports, trail));
     } catch (e) { res.writeHead(500); return res.end('Error: ' + e.message); }

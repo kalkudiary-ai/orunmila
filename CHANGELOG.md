@@ -10,6 +10,43 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ### Added
 
+- **Machine-readable JSON emitter (`orunmila json`).** Third sibling of the
+  terminal and HTML renderers — same reconciler output, new format.
+  schema_version `1.0`. Pure and deterministic: same event log + same options
+  → byte-identical JSON, including `generated_at` (derived from the last
+  event ts, not wall-clock). Two confidence axes per claim are emitted
+  separately — `extraction_confidence` (is this text a claim of this type?)
+  and `verdict_confidence` (is the outcome right given correct parse?) —
+  because fusing them makes calibration analysis impossible. `claim_type`
+  ships `other`-heavy on purpose; building a real classifier is the first
+  thing the corpus loop will drive. Reserves a 3-field `label` slot
+  (`value`/`source`/`labeled_at`) so an optional labeling pass can land
+  later with no schema bump. See [docs/SCHEMA.md](docs/SCHEMA.md).
+- **Homeward feedback pipe (`orunmila feedback`).** Writes sanitized
+  per-session accuracy cases to a local `.orunmila-feedback/` drop folder.
+  Each `cases[i]` entry is a **strict superset of `test/cases/precision/*.json`** —
+  the precision corpus the engine already scores against — so contributing
+  back is a copy, not a translation. INDEX.md points home with exact
+  contribution steps.
+- **Corpus ingest (`orunmila feedback-import`).** Walks a drop folder and
+  copies `cases[]` entries into `test/cases/precision/` as standalone case
+  files. Non-destructive: never overwrites without `--force`; skips and
+  reports collisions.
+- **Per-field text inclusion (`--include`).** Raw text fields are excluded
+  by default — `--include claim_text` opts the claim text in. Reserved
+  future opt-ins: `prompt_text`, `diff_hunks`, `command_output_snippets`.
+  Sanitization (home-prefix collapse + `.orunmila/redact`) is applied
+  per-string-field DURING emit (never post-serialization), on default AND
+  opt-in fields. `--include` only gates which raw text fields ENTER the
+  pipeline; sanitization always runs on what exits. Keeps "privacy-clean by
+  construction" literally true even with `--include claim_text`.
+- **`classification_features` breadcrumbs.** When a claim's type can't be
+  cleanly resolved, the JSON emitter records the categories, counts, and
+  pattern-IDs the extractor already computed (`hedge_count`, `verb_count`,
+  `target_kinds`, `pattern_ids: ["claim.assertive_anchor", …]`) — never
+  raw substrings from the claim text. This is the privacy guarantee that
+  lets the feature signal ship by default without leaking the original
+  phrasing when `--include claim_text` is off.
 - **Nickname: *The Diviner*.** Adopted across user-facing surfaces —
   README hero, benchmark divinations doc, dashboard intro. Reflects
   Orunmila's role as the Yoruba orisha of wisdom and divination, and the

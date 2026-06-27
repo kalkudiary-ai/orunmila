@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { readTurn, readBetween, dataDir, TYPES } = require('../store/eventlog');
 const { reconcileTurn } = require('./matcher');
+const { extractSubtasks } = require('./task-extractor');
 
 /**
  * Time-window correlation for the Filesystem Sentinel (PRD 6.4 / SENTINEL §5).
@@ -30,6 +31,31 @@ function reportPath(sessionId, turnId) {
   return path.join(dir, `${turnId}.json`);
 }
 
+// Walk all prior turns of the session, extract their subtask targets, and
+// accumulate them. A turn-N write that satisfies a turn-1 ask should not
+// be flagged "undisclosed" just because the turn-N claim text doesn't
+// repeat the file basename. See review/DOGFOOD_*.md.
+function priorSessionTargets(sessionId, currentTurnId) {
+  const targets = [];
+  let i = 1;
+  while (true) {
+    const tid = `t${i}`;
+    if (tid === currentTurnId) break;
+    const events = readTurn(sessionId, tid);
+    if (!events.length) break;
+    const promptEvent = events.find((e) => e.type === TYPES.USER_PROMPT);
+    if (promptEvent && promptEvent.text) {
+      const subtasks = extractSubtasks(promptEvent.text);
+      for (const s of subtasks) {
+        for (const t of s.targets || []) targets.push(t);
+      }
+    }
+    i++;
+    if (i > 1000) break; // hard safety bound
+  }
+  return targets;
+}
+
 function reconcileAndPersist(sessionId, turnId) {
   const events = readTurn(sessionId, turnId);
   const promptEvent = events.find((e) => e.type === TYPES.USER_PROMPT);
@@ -41,10 +67,13 @@ function reconcileAndPersist(sessionId, turnId) {
   const sentinelEvents = sentinelWritesForTurn(events);
   const turnEvents = events.concat(sentinelEvents);
 
+  const sessionTargets = priorSessionTargets(sessionId, turnId);
+
   const report = reconcileTurn({
     promptText: promptEvent ? promptEvent.text : '',
     claimText: claimEvent ? claimEvent.text : '',
     turnEvents,
+    sessionTargets,
   });
 
   const full = {

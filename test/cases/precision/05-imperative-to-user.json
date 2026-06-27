@@ -1,0 +1,12 @@
+{
+  "name": "precision: imperatives addressed to the user are not work-claims",
+  "note": "From the 51-issue dogfood report. The agent told the user to click a tab and visit chrome://gpu. Each got flagged phantom because backtick targets exist. Speech-act gate should drop both.",
+  "source": "dogfood:DOGFOOD_51.md",
+  "kind": "negative",
+  "prompt": "the 3d graph is broken",
+  "claim": "Click **3D Graph** there — should now get a real WebGL context. Open a new tab and go to **`chrome://gpu`**.",
+  "events": [],
+  "expect": {
+    "not_outcomes": ["phantom", "phantom_verification"]
+  }
+}

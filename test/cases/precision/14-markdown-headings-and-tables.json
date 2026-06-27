@@ -1,0 +1,12 @@
+{
+  "name": "precision: markdown headings and table rows in narration are not claims",
+  "note": "From the 400-issue dogfood report. A scoreboard table the agent rendered to the user got split into rows-as-claims. Headings ('## What I'd build') got reified too.",
+  "source": "dogfood:DOGFOOD_400.md",
+  "kind": "negative",
+  "prompt": "show me the scoreboard",
+  "claim": "## Updated scoreboard\n| Model | Pass | ConfIdx |\n| DeepSeek Chat | 6/10 | 17% |\n| Qwen 2.5 | 5/10 | 22% |\n| GitHub stars | 3 | n/a |",
+  "events": [],
+  "expect": {
+    "not_outcomes": ["phantom", "phantom_verification"]
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "precision: harness-injected wrapper tags are stripped from the user ask",
+  "note": "From the 23-issue dogfood report. <ide_opened_file> got reified as the original ask, then graded silently_dropped because no file write addressed it. Wrapper tags must be stripped before subtask extraction.",
+  "source": "dogfood:DOGFOOD_23.md",
+  "kind": "negative",
+  "prompt": "<ide_opened_file>The user opened the file ~/Downloads/PRD.md in the IDE\nThis may or may not be related to the current task.</ide_opened_file>\nreview the flow map for time optimization",
+  "claim": "I reviewed the flow map and added probe spans to telegram.ts.",
+  "events": [
+    { "type": "file_write", "path": "apps/api/src/routes/webhooks/telegram.ts", "diff": "+const probeA = await db.query('select 1');\n+const probeB = await db.query('select 1');\n+span.end({ probeA, probeB });\n", "failed": false }
+  ],
+  "expect": {
+    "not_outcomes": ["silently_dropped"]
+  }
+}

@@ -138,6 +138,10 @@ function isLikelyNewOrEmptyFile(e) {
 
 function outcomeForClaim(claim, prov) {
   if (prov.provenance === 'unverifiable') return 'unverifiable';
+  // A claim confirmed by captured VCS/CI state (a merged PR, all-green checks)
+  // is satisfied by durable evidence rather than an in-turn diff. It is NOT a
+  // phantom — this is the verdict that undoes the two-session false positives.
+  if (prov.provenance === 'resolved-since') return 'verified';
   if (prov.provenance === 'not_sent' || prov.provenance === 'disregarded_failure') {
     return claim.verificationClaim ? 'phantom_verification' : 'phantom';
   }
@@ -200,7 +204,22 @@ function findUntrackedWrites(turnEvents) {
   });
 }
 
-function reconcileTurn({ promptText, claimText, turnEvents, sessionTargets }) {
+// "Evidence-detached" is a property of the RUN, not of one turn: it means
+// capture was never active (a post-hoc, transcript-only re-read), so absence of
+// a receipt proves nothing. It must NOT be inferred from an empty turn — a live
+// turn where the agent did nothing but claim is a genuine phantom, and that
+// signal must survive. So the caller (which knows whether an eventlog exists for
+// the session) supplies it; the default is false, i.e. trust the capture.
+// hasCaptureEvidence lets that caller decide at SESSION scope.
+const CAPTURE_EVIDENCE_TYPES = new Set([
+  'file_read', 'file_write', 'command_run', 'network_call', 'tool_call', 'tool_result',
+  'git_state', 'pr_state', 'ci_state',
+]);
+function hasCaptureEvidence(events) {
+  return (events || []).some((e) => CAPTURE_EVIDENCE_TYPES.has(e.type));
+}
+
+function reconcileTurn({ promptText, claimText, turnEvents, sessionTargets, evidenceDetached = false }) {
   const subtasks = extractSubtasks(promptText);
   const claims = extractClaims(claimText);
 
@@ -211,7 +230,7 @@ function reconcileTurn({ promptText, claimText, turnEvents, sessionTargets }) {
   const untrackedPaths = new Set(untracked.map((e) => String(e.path)));
 
   const claimResults = claims.map((claim) => {
-    const prov = provenance.classify(claim, turnEvents);
+    const prov = provenance.classify(claim, turnEvents, { evidenceDetached });
     return {
       claim,
       provenance: prov.provenance,
@@ -291,6 +310,10 @@ function reconcileTurn({ promptText, claimText, turnEvents, sessionTargets }) {
     claims: claimResults,
     undisclosed,
     untracked,
+    // 'receipted' = tool events were captured, so absence of a receipt is
+    // meaningful. 'evidence-detached' = none were, so no-evidence findings are
+    // suppressed and every render path inherits the caveat from this one field.
+    evidenceBasis: evidenceDetached ? 'evidence-detached' : 'receipted',
     summary: summarize(claimResults, subtaskResults, undisclosed, untracked),
   };
 }
@@ -385,5 +408,6 @@ module.exports = {
   detectContradictions,
   isInfrastructurePath,
   aliasMatchesPath,
+  hasCaptureEvidence,
   PHRASE_ALIASES,
 };

@@ -2,8 +2,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const { readTurn, readBetween, dataDir, TYPES } = require('../store/eventlog');
-const { reconcileTurn } = require('./matcher');
+const { readTurn, readBetween, readSession, dataDir, TYPES } = require('../store/eventlog');
+const { reconcileTurn, hasCaptureEvidence } = require('./matcher');
 const { extractSubtasks } = require('./task-extractor');
 
 /**
@@ -69,11 +69,19 @@ function reconcileAndPersist(sessionId, turnId) {
 
   const sessionTargets = priorSessionTargets(sessionId, turnId);
 
+  // Detachment is a SESSION-level fact: if the whole session logged no capture
+  // events (a bare transcript re-read with no eventlog), absence of a receipt is
+  // meaningless and no-evidence findings must be suppressed. If any turn in the
+  // session captured a tool event, capture was active — so a single empty turn
+  // is a real do-nothing and its phantoms must still fire.
+  const evidenceDetached = !hasCaptureEvidence(readSession(sessionId));
+
   const report = reconcileTurn({
     promptText: promptEvent ? promptEvent.text : '',
     claimText: claimEvent ? claimEvent.text : '',
     turnEvents,
     sessionTargets,
+    evidenceDetached,
   });
 
   const full = {

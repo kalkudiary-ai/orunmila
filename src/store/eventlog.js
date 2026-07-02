@@ -37,6 +37,13 @@ const TYPES = Object.freeze({
   TURN_CLAIM: 'turn_claim',       // the agent's own text response for the turn
   TURN_END: 'turn_end',
   SESSION_END: 'session_end',
+  // VCS / CI evidence — derived from gh/git command output at capture time so
+  // merge and check state become first-class receipts, not lossy transcript
+  // prose. These never go stale the way a code snapshot does: a PR_STATE with
+  // state:'merged' is a durable fact about the world at the moment it was seen.
+  GIT_STATE: 'git_state',         // { head_sha, branch } — repo position at capture
+  PR_STATE: 'pr_state',           // { pr_number, pr_state: merged|open|closed, merged_sha }
+  CI_STATE: 'ci_state',           // { ref, checks: [{ name, conclusion }] }
 });
 
 /**

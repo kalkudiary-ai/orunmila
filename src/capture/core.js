@@ -22,6 +22,7 @@ const { sha256 } = require('./fs-sentinel/hasher');
 const { bumpTurn, turnId } = require('./turnstate');
 const { reconcileAndPersist } = require('../reconcile');
 const { renderTurn } = require('../render/terminal');
+const { deriveVcsEvents } = require('./vcs-evidence');
 const defaultTranscript = require('./transcript');
 
 // --- shared fs helpers (moved verbatim from the claude-code hooks) ----------
@@ -193,13 +194,23 @@ function handlePostTool(payload, adapter) {
     // signalled failure (top-level error / a failure hook), record a non-zero
     // exit rather than null — a known failure shouldn't read as "unknown".
     const code = adapter.fields.exitCode(response);
+    const command = adapter.fields.command(input);
     append(Object.assign({}, base, {
       type: TYPES.COMMAND_RUN,
-      command: adapter.fields.command(input),
+      command,
       exit_code: code === null && failed ? 1 : code,
       stdout_excerpt: full.slice(0, 2000),
       output_path: outputPath,
     }));
+    // A gh/git command's output is durable VCS/CI evidence (merge state, check
+    // conclusions, HEAD). Derive typed events from the FULL output so merge and
+    // CI state become first-class receipts, not lossy transcript prose. Only on
+    // success — a failed command asserts nothing about the world.
+    if (!failed) {
+      for (const ev of deriveVcsEvents(command, full)) {
+        append(Object.assign({}, base, ev));
+      }
+    }
   } else if (kind === 'network') {
     const target = adapter.fields.url(input);
     append(Object.assign({}, base, {

@@ -113,7 +113,7 @@ function handlePreTool(payload, adapter) {
   if (adapter.classifyTool(toolName, input) !== 'write') return;
   const filePath = adapter.fields.filePath(input);
   if (!filePath) return;
-  let before = '';
+  let before;
   try {
     before = fs.readFileSync(filePath, 'utf8');
   } catch {
@@ -154,13 +154,13 @@ function handlePostTool(payload, adapter) {
   if (kind === 'write') {
     const filePath = adapter.fields.filePath(input);
     if (!filePath) return;
-    let before = '';
+    let before;
     try {
       before = fs.readFileSync(cacheSlot(sessionId, filePath), 'utf8');
     } catch {
       before = '';
     }
-    let after = '';
+    let after;
     try {
       after = fs.readFileSync(filePath, 'utf8');
     } catch {

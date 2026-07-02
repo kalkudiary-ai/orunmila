@@ -126,7 +126,7 @@ async function runTaskDirectApi(task, model, _agentTag) {
 
   console.log(`  [${task.id}] running...`);
   const start = Date.now();
-  let responseText = '';
+  let responseText;
   let status = 0;
   try {
     responseText = await callOpenRouter(model, systemPrompt, task.prompt);
@@ -384,7 +384,7 @@ function runTask(task, agentId, agentTag, cliBuilder) {
 
   const start = Date.now();
   let status = 0;
-  let agentStdout = '';
+  let agentStdout;
   try {
     agentStdout = execSync(cmd, {
       cwd: dir,

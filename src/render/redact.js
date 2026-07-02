@@ -44,7 +44,7 @@ const PLACEHOLDER = '[redacted]';
  */
 function readRedactList(root) {
   const file = path.join(root, '.orunmila', 'redact');
-  let text = '';
+  let text;
   try {
     text = fs.readFileSync(file, 'utf8');
   } catch {

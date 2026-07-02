@@ -21,7 +21,7 @@ function unifiedDiff(before, after, label) {
   const b = path.join(tmp, 'b');
   fs.writeFileSync(a, before || '');
   fs.writeFileSync(b, after || '');
-  let out = '';
+  let out;
   try {
     out = execFileSync('diff', ['-u', '--label', `${label} (before)`, '--label', `${label} (after)`, a, b], {
       encoding: 'utf8',

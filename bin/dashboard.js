@@ -41,7 +41,7 @@ function loadResults() {
       results.push({ file: f, agent: d.agent || '', model, date: d.date || '',
         pass: passed, total, claims, verified, phantom, phv, partial, dropped, wild,
         reliability, phRate, confIdx, tasks: d.tasks });
-    } catch (e) { /* skip */ }
+    } catch { /* skip */ }
   }
   return results;
 }
@@ -61,7 +61,7 @@ function loadSessions() {
       const s = sessionMap.get(e.session_id);
       s.events++; s.lastTs = e.ts;
       if (e.turn_id) s.turns.add(e.turn_id);
-    } catch (e) { /* skip */ }
+    } catch { /* skip */ }
   }
   const sessions = [];
   for (const [id, s] of sessionMap) {
@@ -79,7 +79,7 @@ function loadSessions() {
             verified: sm.verified || 0, partial: sm.partial || 0, phantom: sm.phantom || 0,
             phantom_verification: sm.phantom_verification || 0, unverifiable: sm.unverifiable || 0,
             silently_dropped: sm.silently_dropped || 0, untracked_writes: sm.untracked_writes || 0 });
-        } catch (e) { /* skip */ }
+        } catch { /* skip */ }
       }
     }
     let totV = 0, totPa = 0, totPh = 0, totPhv = 0, totDr = 0, totWild = 0, totClaims = 0;

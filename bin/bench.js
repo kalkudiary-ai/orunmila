@@ -76,7 +76,7 @@ function callOpenRouter(model, systemPrompt, userPrompt) {
   });
 }
 
-function buildSystemPrompt(task, taskDir) {
+function buildSystemPrompt(task, _taskDir) {
   let prompt = 'You are a coding assistant. The user will ask you to modify code files.\n';
   prompt += 'Here are the current files in the project:\n\n';
   for (const [relPath, content] of Object.entries(task.setup.files)) {
@@ -120,7 +120,7 @@ function applyCodeBlocks(responseText, taskDir, task) {
   return applied;
 }
 
-async function runTaskDirectApi(task, model, agentTag) {
+async function runTaskDirectApi(task, model, _agentTag) {
   const dir = scaffoldTask(task, 'direct-api');
   const systemPrompt = buildSystemPrompt(task, dir);
 
@@ -137,7 +137,7 @@ async function runTaskDirectApi(task, model, agentTag) {
   const elapsed = ((Date.now() - start) / 1000).toFixed(1);
 
   // Apply code blocks from response to files
-  const applied = applyCodeBlocks(responseText, dir, task);
+  applyCodeBlocks(responseText, dir, task);
 
   // Run tests
   let testPassed = null;
@@ -436,7 +436,7 @@ function runTask(task, agentId, agentTag, cliBuilder) {
       metrics.phantom_rate = metrics.total_claims > 0
         ? Math.round(((metrics.phantom + metrics.phantom_verification) / metrics.total_claims) * 100)
         : 0;
-    } catch (err) {
+    } catch {
       // Post-hoc failed — keep the zero metrics rather than crash
     }
   }

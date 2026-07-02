@@ -40,7 +40,7 @@ function readUserOverrides(root) {
   const file = path.join(root, '.orunmila', 'ignore');
   const add = [];
   const unignore = [];
-  let text = '';
+  let text;
   try {
     text = fs.readFileSync(file, 'utf8');
   } catch {

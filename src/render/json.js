@@ -32,7 +32,6 @@
  * fields. Reuses src/render/redact.js (already exposes string-level helpers).
  */
 
-const { readSession, TYPES } = require('../store/eventlog');
 const { buildRedactor } = require('./redact');
 
 const SCHEMA_VERSION = '1.0';

@@ -246,4 +246,55 @@ it('reportFixture()/trailFixture() with no opts.root falls back to cwd (default 
   assert.strictEqual(reports[0].claims[0].evidence[0].path, '~/proj/secret/keys.js');
 });
 
+it('artifact nested touches[], touched[] and output_path are all redacted (trail-json leak guard)', () => {
+  // The trail-json surface serialises an artifact's nested touch rows and its
+  // `touched` lineage array verbatim; before the fix these leaked absolute home
+  // paths even when the top-level trail stream was scrubbed. Guard both, plus the
+  // output_path sidecar which is an absolute path under ~/.orunmila.
+  const trail = {
+    session_id: 's1',
+    turns: [
+      {
+        turn_id: 't1',
+        prompt: 'go',
+        trail: [{ channel: 'command', command: 'run', key: 'cmd:run', output_path: `${HOME}/.orunmila/output/s1/c.txt` }],
+        edges: [],
+        artifacts: [
+          {
+            key: `${HOME}/proj/src/app.js`,
+            label: 'app.js',
+            path: `${HOME}/proj/src/app.js`,
+            channels: ['write'],
+            touch_count: 1,
+            touches: [{ channel: 'write', path: `${HOME}/proj/src/app.js`, key: `${HOME}/proj/src/app.js`, output_path: `${HOME}/.orunmila/output/s1/c.txt` }],
+            touched_by: [`${HOME}/proj/secret/keys.js`],
+            touched: [`${HOME}/proj/src/other.js`],
+          },
+        ],
+      },
+    ],
+    artifacts: [
+      {
+        key: `${HOME}/proj/src/app.js`,
+        label: 'app.js',
+        path: `${HOME}/proj/src/app.js`,
+        channels: ['write'],
+        touch_count: 1,
+        touched_by: [`${HOME}/proj/secret/keys.js`],
+        touched: [`${HOME}/proj/src/other.js`],
+      },
+    ],
+    totals: { turns: 1, artifacts: 1, touches: 1 },
+  };
+  const { trail: t } = redactForRender([], trail, {});
+  const blob = JSON.stringify(t);
+  assert.ok(!blob.includes(HOME), 'no raw home prefix survives anywhere in the redacted trail');
+  const turnArt = t.turns[0].artifacts[0];
+  assert.strictEqual(turnArt.touches[0].path, '~/proj/src/app.js', 'nested touch path collapsed');
+  assert.strictEqual(turnArt.touches[0].output_path, '~/.orunmila/output/s1/c.txt', 'nested touch output_path collapsed');
+  assert.deepStrictEqual(turnArt.touched, ['~/proj/src/other.js'], 'touched lineage array collapsed');
+  assert.strictEqual(t.turns[0].trail[0].output_path, '~/.orunmila/output/s1/c.txt', 'trail-row output_path collapsed');
+  assert.deepStrictEqual(t.artifacts[0].touched, ['~/proj/src/other.js'], 'session touched array collapsed');
+});
+
 runAll('redact (privacy pass)');

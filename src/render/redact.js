@@ -173,6 +173,31 @@ function redactReports(reports, R) {
   }));
 }
 
+// Sanitise one trail row (a chronological touch entry). Rows appear both in
+// each turn's `trail[]` stream AND nested inside every artifact's `touches[]`,
+// so this is factored out to keep the two paths identical — the trail-json
+// surface serialises the nested touches, so an unredacted touch row would leak
+// an absolute path even when the top-level trail stream was scrubbed.
+function redactRow(row, R) {
+  const path_ = row.path != null ? R.path(row.path) : row.path;
+  const out = {
+    ...row,
+    path: path_,
+    command: row.command != null ? R.text(row.command) : row.command,
+    host: row.host != null ? R.text(row.host) : row.host,
+    target: row.target != null ? R.text(row.target) : row.target,
+    // output_path is an absolute sidecar path under ~/.orunmila; scrub it too or
+    // the home prefix rides along in the serialised trail.
+    output_path: row.output_path != null ? R.path(row.output_path) : row.output_path,
+  };
+  // The row's `key` is the artifact key (the full path for files); the visual
+  // layer falls back to it for a node's label, so redact it the same way. A
+  // redacted file path collapses its key to the placeholder so it can't
+  // resurface in the graph/tree (or the JSON) under its raw key.
+  if (out.key != null) out.key = path_ === PLACEHOLDER ? PLACEHOLDER : R.path(out.key);
+  return out;
+}
+
 function redactTrail(trail, R) {
   if (!trail) return trail;
   return {
@@ -180,22 +205,7 @@ function redactTrail(trail, R) {
     turns: (trail.turns || []).map((t) => ({
       ...t,
       prompt: t.prompt != null ? R.text(t.prompt) : t.prompt,
-      trail: (t.trail || []).map((row) => {
-        const path_ = row.path != null ? R.path(row.path) : row.path;
-        const out = {
-          ...row,
-          path: path_,
-          command: row.command != null ? R.text(row.command) : row.command,
-          host: row.host != null ? R.text(row.host) : row.host,
-          target: row.target != null ? R.text(row.target) : row.target,
-        };
-        // The trail row's `key` is the artifact key (the full path for files);
-        // the visual layer falls back to it for a node's label, so redact it the
-        // same way. A redacted file path collapses its key to the placeholder so
-        // it can't resurface in the graph/tree under its raw key.
-        if (out.key != null) out.key = path_ === PLACEHOLDER ? PLACEHOLDER : R.path(out.key);
-        return out;
-      }),
+      trail: (t.trail || []).map((row) => redactRow(row, R)),
       edges: (t.edges || []).map((e) => ({ ...e, from: R.path(e.from), to: R.path(e.to) })),
       artifacts: (t.artifacts || []).map((a) => redactArtifact(a, R)),
     })),
@@ -215,7 +225,14 @@ function redactArtifact(a, R) {
     if (out.key != null) out.key = R.path(out.key);
     if (out.label != null) out.label = R.text(out.label);
   }
+  // Lineage arrays hold artifact KEYS (absolute paths for files), so both must be
+  // path-redacted — not just touched_by. `touched` was previously left raw, which
+  // leaked home paths once the trail was serialised to JSON.
   if (Array.isArray(out.touched_by)) out.touched_by = out.touched_by.map((t) => R.path(t));
+  if (Array.isArray(out.touched)) out.touched = out.touched.map((t) => R.path(t));
+  // Nested touch rows carry their own path/key/command/host/target and are
+  // serialised verbatim by trail-json, so each one is redacted like a trail row.
+  if (Array.isArray(out.touches)) out.touches = out.touches.map((row) => redactRow(row, R));
   return out;
 }
 

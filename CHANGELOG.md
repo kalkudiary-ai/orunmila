@@ -10,6 +10,53 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ### Added
 
+- **Machine-readable trail (`orunmila trail --json`).** The glove (complete
+  trail + lineage) now has a JSON sibling alongside its HTML render — the
+  existing `trailForSession` model, serialized. Carries its OWN
+  `schema_version` (`1.0`) rather than borrowing the reconciler's `json`
+  schema, because the trail is recordings, not verdicts (no
+  `claim_type`/`outcome`/`verdict_confidence`). Honors `--out <path>` (else
+  stdout); the redaction notice is written to stderr so piped stdout stays
+  valid JSON. Reuses the existing render-time privacy pass (home-prefix
+  collapse + `.orunmila/redact`).
+- **`--facts-only` projection for `trail --json`.** Drops the inferred
+  lineage layer — per-turn `edges` and every artifact's `touched_by` /
+  `touched` — leaving pure recordings: touches, diffs, commands, exit codes,
+  hashes, channels, sub-agent attribution. For a facts-first review that
+  wants ground truth with no heuristic edges (the read→write links are a
+  turn-scoped guess, honestly stamped `inferred:true`, but a guess). The
+  output self-declares its mode via a top-level `facts_only` boolean. One
+  boolean, not a field-selection DSL.
+- **`sentinel_active` on the trail model.** A top-level boolean saying whether
+  the independent disk observer (the Filesystem Sentinel, run via
+  `orunmila watch`/`watch-fs`) contributed any writes to THIS session's turn
+  windows. `false` means "the sentinel saw nothing here" — the trail is
+  hook-announced touches only, with no out-of-band cross-check. Never left
+  silent, so absence of independent observation is a visible fact.
+
+### Changed
+
+- **`install --agent claude-code` now refuses a second registration.** The
+  idempotency guard matches an existing orunmila capture hook by script
+  BASENAME (`user-prompt-submit.js`, `pre-tool-use.js`, `post-tool-use.js`,
+  `stop.js`), not exact command string — so a second install pointing at a
+  DIFFERENT copy of orunmila (e.g. `~/.claude/orunmila/...` vs
+  `tools/orunmila/...`) is caught. Two live registrations double every
+  captured event and double-bump the turn counter (the dual-install
+  corruption). Install now refuses with a non-zero exit and prints WHERE the
+  existing hook lives, rather than silently adding a duplicate.
+
+### Fixed
+
+- **Trail redaction now scrubs nested touch rows, the `touched` lineage array,
+  and `output_path` sidecars.** `redactArtifact` previously redacted
+  `touched_by` but left an artifact's nested `touches[]`, its `touched[]`
+  array, and every row's `output_path` (an absolute path under
+  `~/.orunmila/output/`) raw. The HTML renderer didn't surface those fields so
+  the gap was latent; the new `trail --json` serializes them verbatim, which
+  would have leaked the OS username / absolute paths into a shareable
+  artifact. All three are now path-redacted like every other trail field.
+
 - **Machine-readable JSON emitter (`orunmila json`).** Third sibling of the
   terminal and HTML renderers — same reconciler output, new format.
   schema_version `1.0`. Pure and deterministic: same event log + same options

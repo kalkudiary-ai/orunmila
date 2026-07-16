@@ -17,6 +17,7 @@ const { renderTurn } = require('../src/render/terminal');
 const { renderSessionHtml } = require('../src/render/html');
 const { redactForRender } = require('../src/render/redact');
 const { renderJson } = require('../src/render/json');
+const { renderTrailJson } = require('../src/render/trail-json');
 const feedback = require('../src/feedback');
 const { trailForSession } = require('../src/trail');
 const transcript = require('../src/capture/transcript');
@@ -52,11 +53,56 @@ function mergeClaudeHook(settings, eventName, matcher, command) {
   settings.hooks[eventName].push({ matcher, hooks: [{ type: 'command', command }] });
 }
 
+// The four purpose-named Claude-Code capture scripts. We detect an existing
+// install by SCRIPT BASENAME (not full command string) so that a second install
+// pointing at a DIFFERENT copy of orunmila (e.g. ~/.claude/orunmila/... vs
+// tools/orunmila/...) is caught. Two live registrations double every captured
+// event and double-bump the turn counter — the dual-install corruption — so the
+// basename match is the guard, not the exact path.
+const CLAUDE_HOOK_BASENAMES = [
+  'user-prompt-submit.js',
+  'pre-tool-use.js',
+  'post-tool-use.js',
+  'stop.js',
+];
+
+// Find any already-registered orunmila capture hook in a Claude settings object,
+// matched by script basename. Returns [{ event, command }] for each one found so
+// the caller can tell the user exactly WHERE the existing install lives.
+function findExistingClaudeHooks(settings) {
+  const found = [];
+  const hooks = (settings && settings.hooks) || {};
+  for (const [eventName, entries] of Object.entries(hooks)) {
+    for (const entry of entries || []) {
+      for (const h of (entry && entry.hooks) || []) {
+        const cmd = h && h.command ? String(h.command) : '';
+        if (CLAUDE_HOOK_BASENAMES.some((b) => cmd.includes(b))) {
+          found.push({ event: eventName, command: cmd });
+        }
+      }
+    }
+  }
+  return found;
+}
+
 // Claude Code keeps its four purpose-named scripts (its hook system wants one
 // command per event and they're the test entry points). Every other agent maps
 // each of its own event names to `connector.js <agent> <phase>`.
+//
+// Returns { installed: boolean }. Refuses (installed:false) rather than adding a
+// second registration when an orunmila hook already exists in this settings file
+// — silently skipping would hide the dual-install; we print where it was found.
 function installClaudeCode(root, p) {
   const settings = readJson(p, {});
+  const existing = findExistingClaudeHooks(settings);
+  if (existing.length) {
+    console.error(`Refusing to install: an existing orunmila capture hook is already registered in ${p}.`);
+    console.error('Two live registrations double every captured event and double-bump the turn counter (the dual-install corruption).');
+    console.error('Found:');
+    for (const e of existing) console.error(`  [${e.event}] ${e.command}`);
+    console.error('Remove the existing registration first (or point it at this copy) before installing again.');
+    return { installed: false };
+  }
   // Quote the script path: it can contain spaces (e.g. C:\Users\Jane Doe\...)
   // and, on Windows, backslash separators. Both are safe inside double quotes
   // for the shell that runs the hook command on every platform.
@@ -67,6 +113,7 @@ function installClaudeCode(root, p) {
   mergeClaudeHook(settings, 'PostToolUseFailure', '*', s('post-tool-use.js'));
   mergeClaudeHook(settings, 'Stop', '*', s('stop.js'));
   fs.writeFileSync(p, JSON.stringify(settings, null, 2));
+  return { installed: true };
 }
 
 // Antigravity: { "orunmila": { "EventName": [{ "matcher": "...", "hooks": [{ "type": "command", "command": "..." }] }] } }
@@ -113,7 +160,11 @@ function cmdInstall() {
   fs.mkdirSync(path.dirname(p), { recursive: true });
 
   if (adapter.id === 'claude-code') {
-    installClaudeCode(root, p);
+    const res = installClaudeCode(root, p);
+    if (res && res.installed === false) {
+      process.exitCode = 1;
+      return;
+    }
   } else if (adapter.id === 'antigravity') {
     installAntigravity(adapter, root, p);
   } else {
@@ -218,6 +269,31 @@ function cmdTrail() {
   if (!sessionId) return console.log('No sessions captured yet.');
   const rawTrail = trailForSession(sessionId);
   const { reports: rawReports, fromArchive } = loadReportsForRead(sessionId);
+
+  // --json: emit the trail model (the glove) as machine-readable JSON instead of
+  // the HTML page. --facts-only drops the inferred lineage layer, leaving pure
+  // recordings. Redaction (home-collapse + .orunmila/redact) is applied first,
+  // exactly like the HTML path; its notice goes to stderr so stdout stays valid
+  // JSON when piped.
+  if (args.includes('--json')) {
+    const factsOnly = args.includes('--facts-only');
+    const home = !args.includes('--no-redact-home');
+    const { trail, redactList } = redactForRender([], rawTrail, { home, root: process.cwd() });
+    if (redactList.length) {
+      process.stderr.write(`Redacting ${redactList.length} path pattern(s) from the trail (.orunmila/redact): ${redactList.join(', ')}\n`);
+    }
+    if (home) process.stderr.write('Home-directory prefix collapsed to ~ in the trail (disable with --no-redact-home).\n');
+    const json = renderTrailJson(trail, { factsOnly });
+    const out = flag('out', null);
+    if (out) {
+      fs.writeFileSync(out, json);
+      console.log(`Wrote ${out}`);
+    } else {
+      process.stdout.write(json + '\n');
+    }
+    return;
+  }
+
   const { reports, trail } = applyRedaction(rawReports, rawTrail);
   const html = renderSessionHtml(sessionId, reports, trail);
   const suffix = fromArchive ? `-archive-${fromArchive}` : '';
@@ -514,6 +590,7 @@ Usage:
   orunmila report [--session ID] [--turn ID] [--archive STAMP]   print a terminal stain report (live, or a pinned archived snapshot)
   orunmila html [--session ID] [--out path] [--archive STAMP] [--no-redact-home]   generate the mismatch-only HTML report
   orunmila trail [--session ID] [--out path] [--archive STAMP] [--no-redact-home]  unified report: complete trail (the glove) + lineage + orunmila stains
+  orunmila trail --json [--facts-only] [--session ID] [--out path] [--no-redact-home]   machine-readable trail (the glove); --facts-only drops the inferred lineage layer (edges/touched_by), leaving pure recordings
   orunmila rescore [--dry-run]       re-reconcile every persisted report with the current engine (originals archived, never deleted)
   orunmila archives                  list archived rescore snapshots you can read back with --archive <stamp>
   orunmila json [--session ID] [--turn ID] [--out path] [--include claim_text] [--no-redact-home]   machine-readable per-turn stain output (schema_version 1.0)

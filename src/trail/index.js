@@ -44,9 +44,11 @@ function trailForSession(sessionId) {
 
   const turns = [];
   const sessionArtifacts = new Map(); // key -> aggregated artifact across the session
+  let sentinelWriteCount = 0; // how many independently-observed disk writes fell inside this session's turn windows
 
   for (const [turnId, hookEvents] of byTurn) {
     const sentinel = sentinelWritesForTurn(hookEvents, allSentinel);
+    sentinelWriteCount += sentinel.length;
     const turnEvents = hookEvents.concat(sentinel);
     const lineage = lineageForTurn(turnEvents);
 
@@ -95,6 +97,12 @@ function trailForSession(sessionId) {
   return {
     session_id: sessionId,
     generated_at: new Date().toISOString(),
+    // Honest signal for a facts-first reader: did the independent disk observer
+    // (the Filesystem Sentinel, run via `orunmila watch`/`watch-fs`) contribute
+    // anything to THIS session? false means "the sentinel saw nothing here" —
+    // the trail is hook-announced touches only, with no out-of-band cross-check.
+    // Never left silent, so absence of independent observation is visible.
+    sentinel_active: sentinelWriteCount > 0,
     turns,
     artifacts,
     totals: {

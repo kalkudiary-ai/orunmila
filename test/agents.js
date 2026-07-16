@@ -348,4 +348,33 @@ it('cli: install --agent unknown exits non-zero and lists known agents', () => {
   rmrf(work);
 });
 
+it('cli: install --agent claude-code refuses a second registration pointing at a different copy', () => {
+  const home = tmpHome();
+  const work = tmpDir();
+  // Pre-seed settings.json with an orunmila hook from a DIFFERENT install copy —
+  // the exact dual-install failure mode (~/.claude/orunmila vs tools/orunmila).
+  // The guard matches by script basename, so the different path must not fool it.
+  const claudeDir = path.join(work, '.claude');
+  fs.mkdirSync(claudeDir, { recursive: true });
+  const foreign = 'node "/some/other/copy/orunmila/src/capture/claude-code/stop.js"';
+  fs.writeFileSync(
+    path.join(claudeDir, 'settings.json'),
+    JSON.stringify({ hooks: { Stop: [{ matcher: '*', hooks: [{ type: 'command', command: foreign }] }] } }, null, 2)
+  );
+
+  const r = run('bin/orunmila.js', { args: ['install'], env: { ORUNMILA_HOME: home }, cwd: work });
+  assert.notStrictEqual(r.status, 0, 'refuses with a non-zero exit');
+  const out = (r.stderr + r.stdout).toLowerCase();
+  assert.ok(out.includes('existing'), 'explains an existing install was found');
+  assert.ok(out.includes('stop.js'), 'points at WHERE the existing hook lives');
+
+  // It must NOT have added the repo copy alongside the foreign one.
+  const cfg = JSON.parse(fs.readFileSync(path.join(claudeDir, 'settings.json'), 'utf8'));
+  assert.strictEqual(cfg.hooks.Stop.length, 1, 'no second Stop registration added');
+  assert.strictEqual(cfg.hooks.Stop[0].hooks[0].command, foreign, 'existing hook left untouched');
+  assert.ok(!cfg.hooks.PostToolUse, 'no new event registrations written');
+  rmrf(home);
+  rmrf(work);
+});
+
 runAll('agents');

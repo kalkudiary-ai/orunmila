@@ -80,6 +80,20 @@ it('eventlog: latestSessionId is null on an empty log', () => {
   assert.strictEqual(eventlog.latestSessionId(), null);
 });
 
+it('eventlog: latestSessionId skips null-session sentinel events at the tail', () => {
+  // Regression: the continuously-running fs sentinel appends disk-write events
+  // with session_id === null. Those must not mask the latest real session, or
+  // no-arg `trail` degrades to "No sessions captured yet." while sessions exist.
+  tmpHome();
+  seedEvents([
+    { session_id: 'A', turn_id: 't1', type: 'file_read' },
+    { session_id: 'B', turn_id: 't1', type: 'file_write' },
+    { session_id: null, source: 'fs-sentinel', type: 'file_write', path: 'x.txt' },
+    { session_id: null, source: 'fs-sentinel', type: 'file_write', path: 'y.txt' },
+  ]);
+  assert.strictEqual(eventlog.latestSessionId(), 'B');
+});
+
 it('eventlog: readBetween honors open and closed time windows', () => {
   tmpHome();
   fs.writeFileSync(

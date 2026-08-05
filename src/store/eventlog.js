@@ -136,9 +136,18 @@ function groupByTurn(events) {
 }
 
 function latestSessionId() {
+  // Return the most-recent event that actually belongs to a session. The
+  // filesystem sentinel appends disk-write events with session_id === null
+  // (it observes the disk, not any agent turn); when the sentinel runs
+  // continuously those null-session events routinely sit at the tail of the
+  // log, so taking the literal last line would report "no session" even
+  // though real sessions exist. Skip null-session events — same rule
+  // sessionsByRecency() already applies.
   const all = readAll();
-  if (!all.length) return null;
-  return all[all.length - 1].session_id;
+  for (let i = all.length - 1; i >= 0; i--) {
+    if (all[i].session_id) return all[i].session_id;
+  }
+  return null;
 }
 
 /** Sessions ordered by when each was last active (oldest first, newest last). */

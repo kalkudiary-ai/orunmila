@@ -1,0 +1,334 @@
+'use strict';
+
+/**
+ * evaluate.js — run the law set against one turn. Pure, and that is the point.
+ *
+ * evaluateTurn() takes text and events in, and returns findings out. It touches
+ * no disk, no clock, no globals. That buys three things at once:
+ *
+ *   1. the run-time gate can call it inside a Stop hook, where it must be fast
+ *      and must never throw;
+ *   2. `orunmila laws --check` can call it over any historical session, so laws
+ *      written today can be run against sessions from months ago;
+ *   3. it is testable without a fixture directory.
+ *
+ * ── The receipt model ──────────────────────────────────────────────────────
+ *
+ * Every evidentiary law reduces to one question: DOES A RECEIPT EXIST for what
+ * was asserted? Receipts come in two strengths, and the distinction is the
+ * entire substance of the grep law:
+ *
+ *   FULL   the turn read the file, wrote it, or ran a command over it whose
+ *          output covers it. The agent has seen the thing it is talking about.
+ *
+ *   WEAK   the turn only pattern-matched it — a Grep/Glob tool call, or a
+ *          grep/rg/ag invocation through the shell. A pattern match proves a
+ *          string occurs. It cannot tell you what the code does, what else is
+ *          there, or what you failed to search for. It licenses "at least
+ *          these"; it never licenses "this is how it works", and it never,
+ *          under any circumstance, licenses "all of them".
+ *
+ * The shell path matters more than the tool path. Agents overwhelmingly reach
+ * for grep through Bash, which the capture layer records as a command_run, not
+ * a pattern_read — so a grep law that only inspected pattern_read events would
+ * miss the ordinary case and quietly pass everything. Both paths are handled.
+ *
+ * ── On honesty ─────────────────────────────────────────────────────────────
+ *
+ * Every finding carries `heuristic: true`. The law layer reads prose, and prose
+ * is not a fact. These findings sit BESIDE the glove's recordings and the
+ * sentinel's observations — never inside them, and never presented with the
+ * same authority. A finding says "recheck this", not "you lied".
+ */
+
+const { extractAssertions } = require('./assert-extractor');
+const { maskQuoted } = require('./assert-extractor');
+const { basename } = require('../reconcile/task-extractor');
+
+// Shell invocations that are pattern matches wearing a command's clothes.
+const SHELL_PATTERN_RE = /(^|[|;&]\s*)(grep|egrep|fgrep|rg|ag|ack|ripgrep)\b/i;
+// Shell invocations that genuinely surface a file's contents.
+const SHELL_READ_RE = /(^|[|;&]\s*)(cat|head|tail|less|more|bat|sed\s+-n|awk|jq|nl)\b/i;
+
+/**
+ * How strong a receipt is this file_read? Prefers the explicit `read_kind`
+ * field when the capture layer recorded one, and falls back to the hash proxy
+ * for events captured before that field existed — which is most of any user's
+ * history, so the fallback is the common path, not a corner case.
+ *
+ * The proxy: a full read of a real file carries a content hash; a pattern read
+ * stores the PATTERN in `path` and has no hash to carry. A read that failed
+ * outright is neither — it is evidence of nothing.
+ */
+function readStrength(e) {
+  if (e.read_kind === 'pattern') return 'weak';
+  if (e.read_kind === 'full') return 'full';
+  if (e.failed === true) return 'none';
+  return e.hash ? 'full' : 'weak';
+}
+
+/**
+ * Fold a turn's events into the receipts the rules join against.
+ */
+function buildReceipts(turnEvents) {
+  const full = [];   // { text, kind } — things the turn actually saw
+  const weak = [];   // { text, kind } — things the turn only pattern-matched
+  const passingCommands = [];
+  const failedCommands = [];
+
+  for (const e of turnEvents || []) {
+    if (e.type === 'file_read') {
+      const strength = readStrength(e);
+      if (strength === 'none') continue;
+      const bucket = strength === 'full' ? full : weak;
+      bucket.push({ text: String(e.path || ''), kind: strength === 'full' ? 'read' : 'pattern_read' });
+      continue;
+    }
+
+    if (e.type === 'file_write') {
+      // Writing a file means having produced its content — the strongest
+      // receipt there is for a claim about what it now contains.
+      full.push({ text: String(e.path || ''), kind: 'write' });
+      continue;
+    }
+
+    if (e.type === 'command_run') {
+      const command = String(e.command || '');
+      const out = String(e.stdout_excerpt || '');
+      const ok = e.exit_code === 0 || (e.exit_code === undefined && e.failed !== true);
+      if (ok) passingCommands.push({ command, out });
+      else failedCommands.push({ command, exit_code: e.exit_code });
+
+      // A grep run through the shell is a WEAK receipt no matter how confident
+      // the sentence that follows it. A cat/head/sed -n is a real look at the
+      // content and counts as full.
+      const isPattern = SHELL_PATTERN_RE.test(command);
+      const bucket = isPattern && !SHELL_READ_RE.test(command) ? weak : full;
+      // Both the command line and its output can name the target: `cat x.js`
+      // names it in the command; `npm test` names the failing file in stdout.
+      bucket.push({ text: command + '\n' + out, kind: isPattern ? 'shell_pattern' : 'command' });
+      continue;
+    }
+
+    // A tool call IS a receipt, and forgetting that was the single largest
+    // source of false accusations when this layer was first measured against
+    // real sessions: an agent that answers a question by querying the database
+    // through an MCP tool has done the work, but every one of those turns read
+    // as "zero receipts" and every claim in them as invented. Reading the
+    // database is not reading a file, and the layer must not mistake the
+    // difference for an absence of evidence.
+    //
+    // The tool's name and its input are what name the target — an execute_sql
+    // call carries the table in its query, a log fetch carries the service.
+    if (e.type === 'tool_call') {
+      let inputText;
+      try {
+        inputText = typeof e.input === 'string' ? e.input : JSON.stringify(e.input || {});
+      } catch {
+        inputText = ''; // an un-serialisable input is still a receipt for the tool name
+      }
+      full.push({ text: `${e.tool_name || 'tool'} ${inputText}`, kind: 'tool_call' });
+      continue;
+    }
+
+    if (e.type === 'network_call') {
+      full.push({ text: `${e.tool_name || 'network'} ${e.host || ''} ${e.target || ''}`, kind: 'network_call' });
+      continue;
+    }
+  }
+
+  return { full, weak, passingCommands, failedCommands };
+}
+
+/**
+ * Does this receipt text cover this target? Paths are compared on basename so
+ * `src/wallet/debit.ts` in a claim matches a read of the absolute path; symbols
+ * and literals are substring-matched, lower-cased on both sides.
+ */
+function covers(receiptText, target) {
+  const hay = String(receiptText || '').toLowerCase();
+  if (!hay) return false;
+  const needle = String(target.value || '').toLowerCase();
+  if (!needle || needle.length < 3) return false; // too short to match meaningfully
+  if (target.kind === 'path') {
+    return hay.includes(needle) || basename(hay).includes(needle);
+  }
+  return hay.includes(needle);
+}
+
+/** 'full' | 'weak' | 'none' — the best receipt the turn holds for one target. */
+function receiptStrength(target, receipts) {
+  if (receipts.full.some((r) => covers(r.text, target))) return 'full';
+  if (receipts.weak.some((r) => covers(r.text, target))) return 'weak';
+  return 'none';
+}
+
+function finding(law, assertion, detail) {
+  return {
+    law_id: law.id,
+    title: law.title,
+    severity: law.severity,
+    kind: law.kind,
+    rule: law.rule || null,
+    message: law.message,
+    remedy: law.remedy,
+    cite: law.cite,
+    source: law.source,
+    layer: law.layer,
+    // Never presented with the authority of a glove recording. The law layer
+    // reads prose; prose is not a fact.
+    heuristic: true,
+    evidence: {
+      text: assertion ? assertion.text : null,
+      targets: assertion ? assertion.targets.map((t) => `${t.kind}:${t.raw || t.value}`) : [],
+      ...detail,
+    },
+  };
+}
+
+// --- the evidentiary rules --------------------------------------------------
+// Each takes (assertion, receipts, ctx) and returns a detail object to attach,
+// or null for "this law does not fire here". They are deliberately small and
+// each answers exactly one yes/no question about whether a receipt exists.
+
+const RULES = {
+  pattern_read_only(assertion, receipts) {
+    if (!assertion.targets.length) return null;
+    const strengths = assertion.targets.map((t) => ({ t, s: receiptStrength(t, receipts) }));
+    // Fires only when the turn DID look — via a pattern — and never looked
+    // properly. If any target was genuinely read, the agent has done the work.
+    if (strengths.some((x) => x.s === 'full')) return null;
+    const weak = strengths.filter((x) => x.s === 'weak');
+    if (!weak.length) return null;
+    return {
+      pattern_matched_targets: weak.map((x) => x.t.raw || x.t.value),
+      weak_receipts: receipts.weak.map((r) => r.kind + ': ' + r.text.split('\n')[0].slice(0, 120)),
+    };
+  },
+
+  no_receipt(assertion, receipts) {
+    if (!assertion.targets.length) return null;
+    const strengths = assertion.targets.map((t) => receiptStrength(t, receipts));
+    // Every single target unseen. If even one was looked at, this is a partial
+    // claim, not an invented one — and the other rules cover that case.
+    if (!strengths.every((s) => s === 'none')) return null;
+    return {
+      unreceipted_targets: assertion.targets.map((t) => t.raw || t.value),
+      receipts_in_turn: receipts.full.length + receipts.weak.length,
+    };
+  },
+
+  absolute_without_enumeration(assertion, receipts) {
+    if (!assertion.absolute) return null;
+    if (!assertion.targets.length) return null;
+    // An absolute needs a receipt that could have enumerated the set. A single
+    // full read of one member cannot license "all of them" — but it is at least
+    // evidence, so the rule fires only when nothing was properly read at all.
+    const anyFull = assertion.targets.some((t) => receiptStrength(t, receipts) === 'full');
+    if (anyFull) return null;
+    return {
+      absolute_claim: true,
+      absolute_marker: assertion.absoluteMarker,
+      enumerating_receipts: 0,
+    };
+  },
+
+  hedged_assertion(assertion) {
+    if (!assertion.hedged) return null;
+    return { hedged: true };
+  },
+
+  verification_without_command(assertion, receipts) {
+    if (!assertion.verification) return null;
+    if (receipts.passingCommands.length) return null;
+    return {
+      passing_commands: 0,
+      failed_commands: receipts.failedCommands.map((c) => `exit ${c.exit_code}: ${c.command}`),
+    };
+  },
+};
+
+// --- lexical evaluation -----------------------------------------------------
+
+function lexicalHits(law, { claimText, promptText, turnEvents }) {
+  const hits = [];
+  const scopes = law.scope === 'any' ? ['claim', 'command', 'prompt'] : [law.scope];
+
+  const subjects = [];
+  if (scopes.includes('claim') && claimText) subjects.push({ where: 'claim', text: claimText });
+  if (scopes.includes('prompt') && promptText) subjects.push({ where: 'prompt', text: promptText });
+  if (scopes.includes('command')) {
+    for (const e of turnEvents || []) {
+      if (e.type === 'command_run' && e.command) subjects.push({ where: 'command', text: String(e.command) });
+    }
+  }
+
+  for (const subject of subjects) {
+    // A command is matched raw: quoting inside a shell line is syntax, not the
+    // agent quoting itself. Prose is masked so a word being DISCUSSED does not
+    // trip the law that forbids USING it — without this, the turn that explains
+    // a law violates it.
+    const text = law.maskQuoted && subject.where !== 'command' ? maskQuoted(subject.text) : subject.text;
+    if (law.unless.some((re) => re.test(text))) continue;
+    for (let i = 0; i < law.patterns.length; i++) {
+      const m = law.patterns[i].exec(text);
+      if (!m) continue;
+      hits.push({
+        where: subject.where,
+        pattern: law.rawPatterns[i] || String(law.patterns[i]),
+        matched: m[0],
+        excerpt: subject.text.slice(Math.max(0, m.index - 60), m.index + 120).trim(),
+      });
+      break; // one hit per law per subject is enough to make the point
+    }
+  }
+  return hits;
+}
+
+/**
+ * Evaluate every active law against one turn.
+ *
+ * @param {object}   input
+ * @param {string}   input.claimText   the agent's own response text for the turn
+ * @param {string}   input.promptText  the instruction that opened the turn
+ * @param {object[]} input.turnEvents  every captured event in the turn
+ * @param {object[]} input.laws        the resolved, active law set
+ * @returns {{ findings: object[], blocking: object[], assertions: object[] }}
+ */
+function evaluateTurn({ claimText = '', promptText = '', turnEvents = [], laws = [] } = {}) {
+  const receipts = buildReceipts(turnEvents);
+  const assertions = extractAssertions(claimText);
+  const findings = [];
+
+  for (const law of laws) {
+    if (!law.enabled) continue;
+
+    if (law.kind === 'lexical') {
+      for (const hit of lexicalHits(law, { claimText, promptText, turnEvents })) {
+        findings.push(finding(law, null, { where: hit.where, pattern: hit.pattern, matched: hit.matched, excerpt: hit.excerpt }));
+      }
+      continue;
+    }
+
+    const rule = RULES[law.rule];
+    if (!rule) continue; // schema validation already rejected unknown rules
+    for (const assertion of assertions) {
+      const detail = rule(assertion, receipts, { laws });
+      if (detail) findings.push(finding(law, assertion, detail));
+    }
+  }
+
+  return {
+    findings,
+    blocking: findings.filter((f) => f.severity === 'block'),
+    assertions,
+    receipts: {
+      full: receipts.full.length,
+      weak: receipts.weak.length,
+      passing_commands: receipts.passingCommands.length,
+      failed_commands: receipts.failedCommands.length,
+    },
+  };
+}
+
+module.exports = { evaluateTurn, buildReceipts, receiptStrength, readStrength, covers, RULES, SHELL_PATTERN_RE };

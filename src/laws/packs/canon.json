@@ -1,0 +1,78 @@
+{
+  "pack": "canon",
+  "layer": 4,
+  "title": "The canon — orunmila's built-in laws",
+  "description": "The laws that apply to any coding agent regardless of project: do not assert what you have no receipt for, and do not dress a pattern match up as a reading. Every entry can be retuned or switched off by id from a layer-5 file (~/.orunmila/laws.json or <repo>/.orunmila/laws.json).",
+  "laws": [
+    {
+      "id": "no-grep-as-basis",
+      "title": "A pattern match is never the basis for a claim",
+      "severity": "block",
+      "detect": { "kind": "evidentiary", "rule": "pattern_read_only" },
+      "message": "This rests on a pattern match (grep/glob) with no full read of the target. A grep tells you a string occurs somewhere; it cannot tell you what the code does, what else is there, or what you did not search for.",
+      "remedy": "Read the target in full, then answer again from what the file actually says.",
+      "cite": "canon"
+    },
+    {
+      "id": "no-claim-without-receipt",
+      "title": "No assertion without a receipt",
+      "severity": "warn",
+      "note": "Ships as a warning pending a capture-layer gap, not because the rule is wrong. Measured against real sessions it is the loudest law in the canon, and the residue is dominated by one cause: a TOOL_CALL event records the tool name and its INPUT but never its RESULT (TYPES.TOOL_RESULT exists and is never written). So a claim answered by a database query has its evidence in the returned rows, which the event log does not hold, and the law reads that as no evidence at all. Once tool results are captured, re-measure and escalate to block — the rule is sound, the log is short.",
+      "detect": { "kind": "evidentiary", "rule": "no_receipt" },
+      "message": "This states something about a target the turn never read, ran, or wrote. There is no receipt behind it — it is being asserted from prior belief, not from evidence.",
+      "remedy": "Open the artifact or run the command, then state what it actually shows. If you cannot check it, say plainly that you have not checked it.",
+      "cite": "canon"
+    },
+    {
+      "id": "no-absolute-without-enumeration",
+      "title": "\"All\" and \"none\" require an enumeration",
+      "severity": "warn",
+      "note": "Ships as a warning, not a block, on measured evidence: the rule has to catch bare counts (\"the fix is one additive field\") to be worth having, and once it does it also catches ordinary prose (\"it needs two things\"). Blocking on that is unusable. The finding names the marker that fired, so a project whose absolutes are load-bearing can escalate this to block from its own layer-5 file with a one-line patch entry.",
+      "detect": { "kind": "evidentiary", "rule": "absolute_without_enumeration" },
+      "message": "This makes an absolute or counted claim (all / every / none / only / a specific number) without a receipt that could have enumerated the set. A pattern match proves existence, never exhaustiveness.",
+      "remedy": "Enumerate the set from a full read or a command whose output covers it — or drop the absolute and say what you actually confirmed.",
+      "cite": "canon"
+    },
+    {
+      "id": "no-green-without-command",
+      "title": "No \"it works\" without a passing command",
+      "severity": "block",
+      "detect": { "kind": "evidentiary", "rule": "verification_without_command" },
+      "message": "This claims verification — tested, passing, green, works — with no command in this turn that exited zero to back it.",
+      "remedy": "Run it and show the real output, or withdraw the claim of verification.",
+      "cite": "canon"
+    },
+    {
+      "id": "no-uncertainty-as-fact",
+      "title": "Uncertainty must be flagged, not smoothed over",
+      "severity": "warn",
+      "detect": { "kind": "evidentiary", "rule": "hedged_assertion" },
+      "message": "This is hedged language doing the work of a fact. A reader cannot tell whether it was checked or guessed.",
+      "remedy": "Either verify it and state it plainly, or mark it explicitly as unverified.",
+      "cite": "canon"
+    },
+    {
+      "id": "no-assumption-language",
+      "title": "Do not build on an assumption you have not named",
+      "severity": "warn",
+      "detect": {
+        "kind": "lexical",
+        "scope": "claim",
+        "patterns": [
+          "\\bi (?:would |'d )?assume\\b",
+          "\\bassuming (?:that |it |this |the )",
+          "\\bpresumably\\b",
+          "\\bmy guess is\\b",
+          "\\bshould be (?:fine|safe|correct|enough|ok|okay)\\b",
+          "\\bin theory\\b",
+          "\\bi'?d expect\\b"
+        ],
+        "unless": ["\\bdo not assume\\b", "\\bnever assume\\b", "\\bwithout assuming\\b"],
+        "mask_quoted": true
+      },
+      "message": "An assumption is being used as a premise. Assumptions are allowed; unnamed ones are not.",
+      "remedy": "Check it, or state it as an explicit assumption the reader can reject.",
+      "cite": "canon"
+    }
+  ]
+}

@@ -51,6 +51,36 @@ const SHELL_PATTERN_RE = /(^|[|;&]\s*)(grep|egrep|fgrep|rg|ag|ack|ripgrep)\b/i;
 const SHELL_READ_RE = /(^|[|;&]\s*)(cat|head|tail|less|more|bat|sed\s+-n|awk|jq|nl)\b/i;
 
 /**
+ * Does this command's exit code actually mean what it appears to mean?
+ *
+ * In a POSIX shell a pipeline reports the exit status of its LAST stage only.
+ * `npm test | tail -5` exits 0 when the suite is on fire, because `tail`
+ * succeeded. Every "green" receipt in this module rests on an exit code, so an
+ * unguarded pipeline launders a red run into a silent pass — and a verification
+ * law that accepts one is worse than no law, because it certifies the failure.
+ *
+ * This was not a theoretical hole. It was found by running orunmila's own
+ * close-out gate over the session that built this file: three test runs failed
+ * and §2b reported "none", because every one had been piped through grep or
+ * tail and the pipeline's own exit code was grep's.
+ *
+ * `set -o pipefail` (or an explicit PIPESTATUS check) restores the meaning, so
+ * a command that opts into it is trusted. `||` and `|&` are not pipes for this
+ * purpose. Quoted spans are stripped first so a literal "|" in an argument does
+ * not count.
+ */
+function hasUnguardedPipe(command) {
+  const cmd = String(command || '');
+  if (/pipefail|PIPESTATUS/.test(cmd)) return false;
+  const bare = cmd
+    .replace(/"[^"]*"/g, '""')
+    .replace(/'[^']*'/g, "''")
+    .replace(/\|\|/g, '')  // logical OR is not a pipeline
+    .replace(/\|&/g, '');  // bash's |& is a redirect form, not a plain pipe
+  return bare.includes('|');
+}
+
+/**
  * How strong a receipt is this file_read? Prefers the explicit `read_kind`
  * field when the capture layer recorded one, and falls back to the hash proxy
  * for events captured before that field existed — which is most of any user's
@@ -75,6 +105,10 @@ function buildReceipts(turnEvents) {
   const weak = [];   // { text, kind } — things the turn only pattern-matched
   const passingCommands = [];
   const failedCommands = [];
+  // Exited zero, but through an unguarded pipeline — the zero is the last
+  // stage's, not the work's. Kept separate so a finding can say so out loud
+  // rather than silently treating it as either pass or fail.
+  const unreliableCommands = [];
 
   for (const e of turnEvents || []) {
     if (e.type === 'file_read') {
@@ -96,7 +130,13 @@ function buildReceipts(turnEvents) {
       const command = String(e.command || '');
       const out = String(e.stdout_excerpt || '');
       const ok = e.exit_code === 0 || (e.exit_code === undefined && e.failed !== true);
-      if (ok) passingCommands.push({ command, out });
+      // A green exit only counts as PROOF OF GREEN when the exit code means what
+      // it says. A piped command still counts as a content receipt below (its
+      // output really did name those files) — it just cannot certify that
+      // anything passed. The two roles are separated deliberately.
+      const laundered = hasUnguardedPipe(command);
+      if (ok && !laundered) passingCommands.push({ command, out });
+      else if (ok && laundered) unreliableCommands.push({ command });
       else failedCommands.push({ command, exit_code: e.exit_code });
 
       // A grep run through the shell is a WEAK receipt no matter how confident
@@ -127,7 +167,12 @@ function buildReceipts(turnEvents) {
       } catch {
         inputText = ''; // an un-serialisable input is still a receipt for the tool name
       }
-      full.push({ text: `${e.tool_name || 'tool'} ${inputText}`, kind: 'tool_call' });
+      // The result is included only when the user opted into capturing it
+      // (ORUNMILA_CAPTURE_TOOL_RESULTS=1). Without it the tool name and input
+      // still form a receipt — weaker, but real: a query that names a table is
+      // evidence the table was looked at, even if the rows are off-log.
+      const resultText = e.result_excerpt ? '\n' + String(e.result_excerpt) : '';
+      full.push({ text: `${e.tool_name || 'tool'} ${inputText}${resultText}`, kind: 'tool_call' });
       continue;
     }
 
@@ -137,7 +182,7 @@ function buildReceipts(turnEvents) {
     }
   }
 
-  return { full, weak, passingCommands, failedCommands };
+  return { full, weak, passingCommands, failedCommands, unreliableCommands };
 }
 
 /**
@@ -244,6 +289,9 @@ const RULES = {
     return {
       passing_commands: 0,
       failed_commands: receipts.failedCommands.map((c) => `exit ${c.exit_code}: ${c.command}`),
+      // Named explicitly so the remedy is obvious: the run may well have been
+      // green, but this pipeline cannot say so.
+      exit_code_laundered_by_pipe: receipts.unreliableCommands.map((c) => c.command),
     };
   },
 };
@@ -327,8 +375,9 @@ function evaluateTurn({ claimText = '', promptText = '', turnEvents = [], laws =
       weak: receipts.weak.length,
       passing_commands: receipts.passingCommands.length,
       failed_commands: receipts.failedCommands.length,
+      unreliable_commands: receipts.unreliableCommands.length,
     },
   };
 }
 
-module.exports = { evaluateTurn, buildReceipts, receiptStrength, readStrength, covers, RULES, SHELL_PATTERN_RE };
+module.exports = { evaluateTurn, buildReceipts, receiptStrength, readStrength, covers, hasUnguardedPipe, RULES, SHELL_PATTERN_RE };

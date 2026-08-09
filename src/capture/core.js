@@ -186,6 +186,14 @@ function handlePostTool(payload, adapter) {
       path: filePath,
       hash: prov.hash,
       bytes: prov.bytes,
+      // Whether the agent READ the file or merely PATTERN-MATCHED it. Both have
+      // always been recorded as file_read, and the pattern_read classification
+      // was computed here and then thrown away — so nothing downstream could
+      // tell "I read debit.ts" from "I grepped for debit". They are not the same
+      // evidence: a pattern match proves a string occurs, a read shows what the
+      // code does. Additive and backwards-compatible; events captured before
+      // this field simply lack it, and readers fall back to the hash proxy.
+      read_kind: kind === 'pattern_read' ? 'pattern' : 'full',
     }));
   } else if (kind === 'command') {
     const full = adapter.fields.stdout(response) + (adapter.fields.stderr(response) ? '\n' + adapter.fields.stderr(response) : '');
@@ -223,11 +231,38 @@ function handlePostTool(payload, adapter) {
   } else {
     // Generic catch-all — MCP tools, plan tools, anything the agent ships next.
     // Better to log loosely than drop silently.
-    append(Object.assign({}, base, {
+    const event = {
       type: TYPES.TOOL_CALL,
       tool_name: toolName,
       input,
-    }));
+    };
+
+    // A tool's RESULT is where its evidence lives. A claim answered by an MCP
+    // database query has its proof in the returned rows, and recording only the
+    // tool name and its input means that claim reads as unevidenced downstream.
+    //
+    // OFF BY DEFAULT, AND DELIBERATELY SO. events.jsonl is plaintext, unencrypted
+    // and unredacted on disk (only rendered output goes through the redaction
+    // pass). Tool results are exactly the payloads most likely to carry other
+    // people's personal data and live credentials — database rows, user records,
+    // a platform's variable listing. Turning this on converts the event log into
+    // a store of that data. That is a decision for the person whose machine it
+    // is, made knowingly, not a default someone discovers after the fact.
+    //
+    // Enable with ORUNMILA_CAPTURE_TOOL_RESULTS=1, and read SECURITY.md first.
+    if (process.env.ORUNMILA_CAPTURE_TOOL_RESULTS === '1') {
+      let text;
+      try {
+        text = typeof response === 'string' ? response : JSON.stringify(response);
+      } catch {
+        text = ''; // circular or un-serialisable result — the tool call still counts
+      }
+      // Bounded hard: enough to name what came back, never a bulk dump.
+      event.result_excerpt = String(text || '').slice(0, 2000);
+      event.result_bytes = String(text || '').length;
+    }
+
+    append(Object.assign({}, base, event));
   }
 }
 

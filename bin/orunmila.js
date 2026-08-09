@@ -451,6 +451,104 @@ function cmdArchives() {
   console.log(`\nUse with any inspection command:  orunmila report|html|trail --archive <stamp>`);
 }
 
+/**
+ * orunmila laws [--check] [--session ID] [--json]
+ *
+ * Without --check: print the law set actually in force and where each law came
+ * from. This is the surface the installer will reuse — a user should never have
+ * to guess which rules are watching them, or which file to edit to change one.
+ *
+ * With --check: run those laws over a captured session, read-only. No hook, no
+ * blocking, no writes. It is how a law set is measured against real work BEFORE
+ * anyone decides it is trustworthy enough to interrupt an agent.
+ */
+function cmdLaws() {
+  const dim = (s) => `\x1b[2m${s}\x1b[0m`;
+  const { loadLaws, activeLaws } = require('../src/laws/load');
+  const root = path.resolve(flag('root', process.cwd()));
+  const { laws, errors, layers } = loadLaws({ root });
+
+  if (errors.length) {
+    console.log(`\x1b[31m${errors.length} problem(s) loading your laws — these rules are NOT in force:\x1b[0m`);
+    for (const e of errors) console.log(`  - ${e}`);
+    console.log('');
+  }
+
+  if (!args.includes('--check')) {
+    const active = activeLaws(laws);
+    console.log(`Laws in force: ${active.length} of ${laws.length} defined.\n`);
+    console.log('Layers (later files override earlier ones by law id):');
+    for (const l of layers) {
+      const label = l.key === 'canon' ? 'canon   ' : l.key === 'user' ? 'yours   ' : 'project ';
+      const state = l.present ? `${String(l.contributed).padStart(2)} law(s)` : '  absent';
+      console.log(`  layer ${l.layer}  ${label}  ${state}   ${l.file}`);
+    }
+    console.log('\nWrite your own laws in either layer-5 file above. To retune one of the');
+    console.log('canon laws without restating it, add an entry with just its id:');
+    console.log('  { "id": "no-uncertainty-as-fact", "severity": "block" }\n');
+
+    for (const law of laws) {
+      const sev = law.severity === 'block' ? '\x1b[31mblock\x1b[0m' : law.severity === 'deny' ? '\x1b[31mdeny \x1b[0m' : '\x1b[33mwarn \x1b[0m';
+      const off = law.enabled ? '' : dim('  (disabled)');
+      console.log(`  [${sev}] ${law.id.padEnd(34)} ${law.title}${off}`);
+      const how = law.kind === 'evidentiary' ? `evidentiary: ${law.rule}` : `lexical: ${law.rawPatterns.length} pattern(s) over ${law.scope}`;
+      console.log(dim(`            ${how}   ·   layer ${law.layer}`));
+      if (law.patchedBy) console.log(dim(`            overridden by ${law.patchedBy.join(', ')}`));
+      if (law.remedy) console.log(dim(`            → ${law.remedy}`));
+    }
+    return;
+  }
+
+  // --check: replay the laws over a real session.
+  const { evaluateTurn } = require('../src/laws/evaluate');
+  const sessionId = flag('session', eventlog.latestSessionId());
+  if (!sessionId) return console.log('No sessions captured yet.');
+  const events = eventlog.readSession(sessionId);
+  const byTurn = eventlog.groupByTurn(events.filter((e) => e.turn_id));
+  const active = activeLaws(laws);
+
+  const out = { session_id: sessionId, laws_in_force: active.length, turns: [] };
+  let claimed = 0;
+  let flagged = 0;
+  let blocked = 0;
+
+  for (const [turnId, turnEvents] of byTurn) {
+    const claim = turnEvents.find((e) => e.type === eventlog.TYPES.TURN_CLAIM);
+    const prompt = turnEvents.find((e) => e.type === eventlog.TYPES.USER_PROMPT);
+    if (!claim || !claim.text || !String(claim.text).trim()) continue;
+    claimed++;
+    const res = evaluateTurn({
+      claimText: String(claim.text),
+      promptText: prompt && prompt.text ? String(prompt.text) : '',
+      turnEvents,
+      laws: active,
+    });
+    if (!res.findings.length) continue;
+    flagged++;
+    if (res.blocking.length) blocked++;
+    out.turns.push({ turn_id: turnId, receipts: res.receipts, findings: res.findings });
+  }
+
+  if (args.includes('--json')) {
+    process.stdout.write(JSON.stringify(out, null, 2) + '\n');
+    return;
+  }
+
+  console.log(`Session ${sessionId} — ${active.length} law(s) over ${claimed} claimed turn(s).\n`);
+  for (const t of out.turns) {
+    console.log(`\x1b[1m${t.turn_id}\x1b[0m ${dim(`(receipts: ${t.receipts.full} full, ${t.receipts.weak} weak, ${t.receipts.passing_commands} passing cmd, ${t.receipts.unreliable_commands} laundered)`)}`);
+    for (const f of t.findings) {
+      const sev = f.severity === 'block' ? '\x1b[31mblock\x1b[0m' : '\x1b[33mwarn \x1b[0m';
+      console.log(`  [${sev}] ${f.law_id}`);
+      if (f.evidence.text) console.log(dim(`          "${String(f.evidence.text).replace(/\s+/g, ' ').slice(0, 150)}"`));
+      if (f.remedy) console.log(dim(`          → ${f.remedy}`));
+    }
+    console.log('');
+  }
+  console.log(`${flagged} turn(s) raised a finding; ${blocked} would block.`);
+  console.log(dim('Findings are heuristic — they read prose, not facts. They sit beside the glove, never inside it.'));
+}
+
 function cmdAgents() {
   console.log('Supported agents (use with: orunmila install --agent <id>):\n');
   for (const a of listAgents()) {
@@ -560,6 +658,7 @@ function cmdFeedbackImport() {
 const COMMANDS = {
   install: cmdInstall,
   agents: cmdAgents,
+  laws: cmdLaws,
   stats: cmdStats,
   status: cmdStatus,
   prune: cmdPrune,
@@ -584,6 +683,8 @@ if (!cmd || !COMMANDS[cmd]) {
 Usage:
   orunmila install [--agent ID] [--global]     install capture hooks for an agent (default: claude-code)
   orunmila agents                    list supported agents and their config locations
+  orunmila laws [--root dir]         show the laws in force and which layer each came from (layer 4 = the canon, layer 5 = yours)
+  orunmila laws --check [--session ID] [--json]   replay those laws over a captured session, read-only — measure a law set before trusting it
   orunmila stats                     cross-agent reliability scores, phantom rates, and comparisons
   orunmila status                    show event log location, size, and counts
   orunmila prune [--keep N]          cap the log to the N most-recent sessions (default 20; explicit, never automatic)

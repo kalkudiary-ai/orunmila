@@ -113,6 +113,13 @@ function lineageForTurn(turnEvents) {
     if (e.target) trailEntry.target = e.target;
     if (e.hash) trailEntry.hash = e.hash;
     if (typeof e.bytes === 'number') trailEntry.bytes = e.bytes;
+    // A read and a pattern match are both file_read events; carry the
+    // distinction through to the trail so the glove can show which one it was.
+    // Note the channel is deliberately NOT changed: channelOf() still returns
+    // 'read' for both, because the channel value is consumed by the renderers
+    // and the close-out script, and altering it would be a behaviour change
+    // rather than an addition.
+    if (e.read_kind) trailEntry.read_kind = e.read_kind;
     if (e.output_path) trailEntry.output_path = e.output_path;
     if (e.diff) trailEntry.diff_volume = diffVolume(e.diff);
     if (typeof e.exit_code === 'number') trailEntry.exit_code = e.exit_code;

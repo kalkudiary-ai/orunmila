@@ -11,12 +11,12 @@
  *      on the same claim once the file has actually been read.
  */
 
-const { assert, fs, path, tmpHome, tmpDir, rmrf, it, runAll } = require('./helpers');
+const { assert, fs, path, tmpHome, tmpDir, rmrf, run, it, runAll } = require('./helpers');
 
 const { validateLaw } = require('../src/laws/schema');
 const { loadLaws, activeLaws, lawPaths } = require('../src/laws/load');
 const { extractAssertions, isFactualAssertion } = require('../src/laws/assert-extractor');
-const { evaluateTurn, buildReceipts, receiptStrength, readStrength } = require('../src/laws/evaluate');
+const { evaluateTurn, buildReceipts, receiptStrength, readStrength, hasUnguardedPipe } = require('../src/laws/evaluate');
 
 // --- helpers ---------------------------------------------------------------
 
@@ -379,6 +379,144 @@ it('verification law: a FAILED command does not license a green claim, and the e
   });
   assert.strictEqual(res.findings.length > 0, true);
   assert.ok(/exit 1/.test(res.findings[0].evidence.failed_commands.join(' ')), 'the failing exit is quoted back');
+});
+
+// --- exit-code integrity ----------------------------------------------------
+//
+// Found by running orunmila's own close-out gate over the session that built
+// this file: three test runs failed and §2b reported "none", because each had
+// been piped through grep or tail and the pipeline reported the LAST stage's
+// exit code. A verification law that trusts that zero certifies the failure.
+
+it('pipes: an unguarded pipeline launders the exit code; pipefail and || do not', () => {
+  assert.strictEqual(hasUnguardedPipe('npm test | tail -5'), true);
+  assert.strictEqual(hasUnguardedPipe('npm test 2>&1 | grep -E "FAIL"'), true);
+  assert.strictEqual(hasUnguardedPipe('npm test'), false);
+  assert.strictEqual(hasUnguardedPipe('npm test || echo failed'), false, '|| is a logical OR, not a pipeline');
+  assert.strictEqual(hasUnguardedPipe('set -o pipefail; npm test | tail -5'), false, 'pipefail restores the meaning');
+  assert.strictEqual(hasUnguardedPipe('echo "a|b"'), false, 'a pipe inside quotes is an argument, not a pipeline');
+});
+
+it('pipes: a piped green run does NOT license a green claim, and the finding says why', () => {
+  const laws = CANON().filter((l) => l.id === 'no-green-without-command');
+  const res = evaluateTurn({
+    // The exact shape from the build session: the suite is piped to grep, so
+    // the recorded exit code is grep's, and it is 0 whatever the suite did.
+    claimText: 'The tests pass and debit.ts is correct.',
+    turnEvents: [{ type: 'command_run', command: 'npm test 2>&1 | grep -E "FAIL|passed"', exit_code: 0, stdout_excerpt: '' }],
+    laws,
+  });
+  assert.strictEqual(res.findings.length > 0, true, 'a laundered zero must not certify green');
+  assert.deepStrictEqual(
+    res.findings[0].evidence.exit_code_laundered_by_pipe,
+    ['npm test 2>&1 | grep -E "FAIL|passed"'],
+    'and the finding names the pipeline responsible'
+  );
+  assert.strictEqual(res.receipts.unreliable_commands, 1);
+});
+
+it('pipes: the same run un-piped does license the claim', () => {
+  const laws = CANON().filter((l) => l.id === 'no-green-without-command');
+  const res = evaluateTurn({
+    claimText: 'The tests pass and debit.ts is correct.',
+    turnEvents: [{ type: 'command_run', command: 'npm test', exit_code: 0, stdout_excerpt: '14/14 suites passed' }],
+    laws,
+  });
+  assert.deepStrictEqual(res.findings, [], 'an honest exit code is honest evidence');
+});
+
+it('pipes: a piped command is still a CONTENT receipt, just not a proof of green', () => {
+  const r = buildReceipts([
+    { type: 'command_run', command: 'cat src/wallet/refund.ts | head -40', exit_code: 0, stdout_excerpt: 'export function refund()' },
+  ]);
+  assert.strictEqual(receiptStrength({ kind: 'path', value: 'refund.ts' }, r), 'full', 'the output really did show the file');
+  assert.strictEqual(r.passingCommands.length, 0, 'but it certifies nothing about passing');
+  assert.strictEqual(r.unreliableCommands.length, 1);
+});
+
+// --- capture-level proof (not just the reader's opinion of the reader) ------
+//
+// The two tests above prove the EVALUATOR grades read_kind correctly. They say
+// nothing about whether the capture layer ever writes it. These drive the real
+// Claude Code hook script end to end and read the resulting event log back.
+
+function captureToolEvent(payload) {
+  const home = tmpHome();
+  const res = run('src/capture/claude-code/post-tool-use.js', { input: JSON.stringify(payload), env: { ORUNMILA_HOME: home } });
+  assert.strictEqual(res.status, 0, `capture hook must never fail the agent (stderr: ${res.stderr})`);
+  const logPath = path.join(home, 'events.jsonl');
+  const lines = fs.existsSync(logPath) ? fs.readFileSync(logPath, 'utf8').split('\n').filter(Boolean) : [];
+  return lines.map((l) => JSON.parse(l));
+}
+
+it('capture: a Grep tool call is written to the log as read_kind "pattern"', () => {
+  const events = captureToolEvent({
+    session_id: 'sess-grep',
+    tool_name: 'Grep',
+    tool_input: { pattern: 'tier_snapshot_at_issue' },
+    tool_response: {},
+  });
+  const read = events.find((e) => e.type === 'file_read');
+  assert.ok(read, 'a pattern read is still recorded as file_read: ' + JSON.stringify(events));
+  assert.strictEqual(read.read_kind, 'pattern', 'and now carries the distinction that used to be discarded');
+});
+
+it('capture: a Read tool call is written to the log as read_kind "full"', () => {
+  const events = captureToolEvent({
+    session_id: 'sess-read',
+    tool_name: 'Read',
+    tool_input: { file_path: __filename },
+    tool_response: {},
+  });
+  const read = events.find((e) => e.type === 'file_read');
+  assert.ok(read, 'a full read is recorded');
+  assert.strictEqual(read.read_kind, 'full');
+  assert.ok(read.hash, 'and still carries its content hash — the old proxy is unchanged, not replaced');
+});
+
+it('capture: tool RESULTS are not written unless explicitly opted into', () => {
+  const home = tmpHome();
+  const payload = JSON.stringify({
+    session_id: 'sess-tool',
+    tool_name: 'mcp__supabase__execute_sql',
+    tool_input: { query: 'select * from users' },
+    tool_response: { rows: [{ email: 'someone@example.com' }] },
+  });
+
+  const off = run('src/capture/claude-code/post-tool-use.js', { input: payload, env: { ORUNMILA_HOME: home } });
+  assert.strictEqual(off.status, 0);
+  let log = fs.readFileSync(path.join(home, 'events.jsonl'), 'utf8');
+  assert.ok(!/someone@example\.com/.test(log), 'a tool result must not reach the plaintext log by default');
+  assert.ok(/execute_sql/.test(log), 'but the call itself is recorded');
+
+  const home2 = tmpHome();
+  const on = run('src/capture/claude-code/post-tool-use.js', {
+    input: payload,
+    env: { ORUNMILA_HOME: home2, ORUNMILA_CAPTURE_TOOL_RESULTS: '1' },
+  });
+  assert.strictEqual(on.status, 0);
+  log = fs.readFileSync(path.join(home2, 'events.jsonl'), 'utf8');
+  assert.ok(/someone@example\.com/.test(log), 'and IS captured once the user opts in, knowingly');
+});
+
+// --- read_kind, the additive capture field ----------------------------------
+
+it('read_kind: a Grep tool call is a weak receipt even when it carries a hash', () => {
+  // The capture layer now records read_kind, so the hash proxy is no longer the
+  // only signal — and where the two disagree, the explicit field wins.
+  const r = buildReceipts([
+    { type: 'file_read', path: 'src/wallet/debit.ts', hash: 'abc', bytes: 10, read_kind: 'pattern' },
+  ]);
+  assert.strictEqual(receiptStrength({ kind: 'path', value: 'debit.ts' }, r), 'weak');
+});
+
+it('read_kind: history captured before the field existed still grades correctly', () => {
+  const r = buildReceipts([
+    { type: 'file_read', path: 'src/wallet/debit.ts', hash: 'abc', bytes: 10 }, // old full read
+    { type: 'file_read', path: '**/*.ts' },                                      // old glob
+  ]);
+  assert.strictEqual(receiptStrength({ kind: 'path', value: 'debit.ts' }, r), 'full');
+  assert.strictEqual(receiptStrength({ kind: 'path', value: '*.ts' }, r), 'weak');
 });
 
 it('lexical law over commands: a forbidden shell invocation is caught in the command stream', () => {

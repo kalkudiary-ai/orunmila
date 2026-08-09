@@ -159,11 +159,23 @@ function cmdInstall() {
   const p = configPath(adapter, { global, home: os.homedir(), cwd: process.cwd() });
   fs.mkdirSync(path.dirname(p), { recursive: true });
 
+  // The law gate is a SEPARATE registration from capture, so it must be
+  // installable on its own. Someone who set capture up months ago and now wants
+  // the laws would otherwise be turned away by the duplicate-install guard
+  // before ever reaching the gate — the feature would be unreachable for every
+  // existing user, which is most of them.
+  const wantsLaws = args.includes('--with-laws');
+  let captureInstalled = true;
+
   if (adapter.id === 'claude-code') {
     const res = installClaudeCode(root, p);
     if (res && res.installed === false) {
-      process.exitCode = 1;
-      return;
+      captureInstalled = false;
+      if (!wantsLaws) {
+        process.exitCode = 1;
+        return;
+      }
+      console.log('(Capture is already installed — leaving it alone and installing the law gate only.)\n');
     }
   } else if (adapter.id === 'antigravity') {
     installAntigravity(adapter, root, p);
@@ -171,8 +183,77 @@ function cmdInstall() {
     installGeneric(adapter, root, p);
   }
 
-  console.log(`Capture hooks for ${adapter.label} installed into ${p}`);
-  console.log(`Restart ${adapter.label} (or start a new session) for them to take effect.`);
+  if (captureInstalled) console.log(`Capture hooks for ${adapter.label} installed into ${p}`);
+
+  // The law layer is opt-in and, when it goes in, it is READ OUT. A rule that
+  // can interrupt someone's work must never be something they discover by being
+  // interrupted — so installing it prints every law in force, its severity, and
+  // the file to edit to change it.
+  if (args.includes('--with-laws')) {
+    if (adapter.id !== 'claude-code') {
+      console.log('\n--with-laws currently supports claude-code only; capture is installed, the gate is not.');
+    } else {
+      const settings = readJson(p, {});
+      const gate = `node "${path.join(root, 'src/capture/claude-code', 'law-gate.js')}"`;
+      mergeClaudeHook(settings, 'Stop', '*', gate);
+      fs.writeFileSync(p, JSON.stringify(settings, null, 2));
+      console.log('Law gate installed on the Stop hook.\n');
+      printLawsForReview({ root: process.cwd() });
+    }
+  } else {
+    console.log('\nThe law layer is available and NOT installed. It checks your claims against the');
+    console.log('evidence in each turn and speaks up at run time. See what it would enforce with:');
+    console.log('  orunmila laws');
+    console.log('Install it with:  orunmila install --agent claude-code --with-laws');
+  }
+
+  console.log(`\nRestart ${adapter.label} (or start a new session) for these to take effect.`);
+}
+
+/**
+ * Read the law set out loud at install time. Deliberately verbose about the two
+ * things a person needs to consent to: which laws can STOP their agent, and
+ * where to go to change any of it.
+ */
+function printLawsForReview({ root }) {
+  const dim = (s) => `\x1b[2m${s}\x1b[0m`;
+  const { loadLaws, activeLaws, lawPaths } = require('../src/laws/load');
+  const { laws, errors } = loadLaws({ root });
+  const active = activeLaws(laws);
+  const blocking = active.filter((l) => l.severity === 'block' || l.severity === 'deny');
+
+  console.log('\x1b[1mThese are the laws you are about to be held to.\x1b[0m');
+  console.log(dim('Read them now — a rule that can interrupt your work should not be a surprise later.\n'));
+
+  if (blocking.length) {
+    console.log(`\x1b[31m${blocking.length} law(s) CAN STOP A TURN:\x1b[0m`);
+    for (const l of blocking) {
+      console.log(`  • ${l.id} — ${l.title}`);
+      if (l.remedy) console.log(dim(`      → ${l.remedy}`));
+    }
+  } else {
+    console.log('No law is set to stop a turn. Every finding will be advice the agent can act on.');
+  }
+
+  const advisory = active.filter((l) => l.severity === 'warn');
+  if (advisory.length) {
+    console.log(`\n${advisory.length} law(s) advise only (surfaced at run time, never blocking):`);
+    for (const l of advisory) console.log(dim(`  • ${l.id} — ${l.title}`));
+  }
+
+  if (errors.length) {
+    console.log(`\n\x1b[31m${errors.length} law(s) failed to load and are NOT in force:\x1b[0m`);
+    for (const e of errors) console.log(`  - ${e}`);
+  }
+
+  const p = lawPaths({ root });
+  console.log('\nMake them yours:');
+  console.log(`  your laws     ${p.user}`);
+  console.log(`  this project  ${p.project}`);
+  console.log(dim('  Retune any law without restating it:  { "id": "no-grep-as-basis", "severity": "block" }'));
+  console.log(dim('  Switch one off:                       { "id": "no-grep-as-basis", "enabled": false }'));
+  console.log(dim('  Turn the whole gate off for a session: ORUNMILA_LAWS=off'));
+  console.log(dim('  Scaffold your own file:                orunmila laws --init'));
 }
 
 function logSizeKB() {
@@ -472,6 +553,51 @@ function cmdLaws() {
     console.log(`\x1b[31m${errors.length} problem(s) loading your laws — these rules are NOT in force:\x1b[0m`);
     for (const e of errors) console.log(`  - ${e}`);
     console.log('');
+  }
+
+  // --init: scaffold the caller's own layer-5 file. Written as a WORKING
+  // example rather than an empty stub, because the first thing anyone wants is
+  // to retune a canon law, and the patch-by-id form is the non-obvious part.
+  if (args.includes('--init')) {
+    const { lawPaths } = require('../src/laws/load');
+    const target = args.includes('--project') ? lawPaths({ root }).project : lawPaths({ root }).user;
+    if (fs.existsSync(target)) {
+      console.log(`${target} already exists — not overwriting it.`);
+      console.log('Edit it directly, or see what is currently in force with: orunmila laws');
+      return;
+    }
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(
+      target,
+      JSON.stringify(
+        {
+          $comment:
+            'Your own laws (layer 5). These sit on top of orunmila\'s canon (layer 4). An entry with a "detect" block defines a new law; an entry with only an "id" patches the canon law of that id. See: orunmila laws',
+          laws: [
+            {
+              $comment: 'Patch a canon law without restating it — severity and enabled are the useful fields.',
+              id: 'no-grep-as-basis',
+              severity: 'warn',
+            },
+            {
+              $comment: 'A law of your own. Lexical laws are regexes over your agent\'s claim text, its commands, or your prompt.',
+              id: 'example-house-rule',
+              title: 'Say what this project actually does',
+              severity: 'warn',
+              enabled: false,
+              detect: { kind: 'lexical', scope: 'claim', patterns: ['\\bvercel\\b'], unless: [] },
+              message: 'This project does not deploy to Vercel.',
+              remedy: 'Check where it actually deploys before saying so.',
+            },
+          ],
+        },
+        null,
+        2
+      ) + '\n'
+    );
+    console.log(`Wrote ${target}`);
+    console.log('It ships with one patch and one disabled example — edit both, then run: orunmila laws');
+    return;
   }
 
   if (!args.includes('--check')) {

@@ -253,8 +253,14 @@ it('grep law: fires when the only receipt for the claim is a pattern match', () 
     laws: GREP_LAW(),
   });
   assert.strictEqual(res.findings.length > 0, true, 'a claim resting on a grep is caught');
-  assert.strictEqual(res.blocking.length > 0, true, 'and it blocks, per the canon severity');
   assert.strictEqual(res.findings[0].heuristic, true, 'never dressed up as a glove fact');
+  // It ADVISES, it does not block — a measured decision, not a softening of the
+  // principle. Across 194 real sessions this law fired 12 times and roughly 2
+  // were genuine; the rest were dependency and tool names that happened to sit
+  // in a grep pattern ("it requires internet to load Three.js"). A 20%-precision
+  // signal belongs in the agent's ear, not across its path. The severity lives
+  // in the canon pack, so escalating it is a one-line layer-5 patch.
+  assert.deepStrictEqual(res.blocking, [], 'advisory until the target extraction earns better than 20% precision');
 });
 
 it('grep law: goes quiet once the file has actually been read in full', () => {
@@ -570,6 +576,116 @@ it('the whole canon over an ordinary, well-evidenced turn stays quiet', () => {
     [],
     'a claim backed by a real read must not be flagged: ' + JSON.stringify(res.findings.map((f) => [f.law_id, f.evidence.text]))
   );
+});
+
+// --- the run-time gate ------------------------------------------------------
+
+const { decideForTurn, runGate } = require('../src/laws/gate');
+const { getAdapter } = require('../src/capture/agents');
+
+// A turn that claims green with no passing command — the one shape measured
+// precise enough to be worth stopping (8 firings in 1,174 real turns, all real).
+const GREEN_LIE = {
+  claimText: 'Full suite green, 1463 tests pass, and debit.ts is correct.',
+  turnEvents: [{ type: 'file_read', path: '/repo/src/wallet/debit.ts', hash: 'abc', bytes: 100 }],
+};
+
+it('gate: a clean turn produces no output at all', () => {
+  tmpHome();
+  const out = decideForTurn({
+    sessionId: 's1',
+    turnId: 't1',
+    claimText: 'I read src/wallet/debit.ts and it debits the annual wallet first.',
+    turnEvents: [{ type: 'file_read', path: '/repo/src/wallet/debit.ts', hash: 'abc', bytes: 100 }],
+    root: tmpDir(),
+  });
+  assert.strictEqual(out, null, 'silence is the common case and must cost nothing');
+});
+
+it('gate: an unbacked green claim blocks the turn, and the reason tells the agent what to do', () => {
+  tmpHome();
+  const out = decideForTurn({ sessionId: 's2', turnId: 't1', ...GREEN_LIE, root: tmpDir() });
+  assert.strictEqual(out.decision, 'block');
+  assert.ok(/no-green-without-command/.test(out.reason), out.reason);
+  assert.ok(/answer again/i.test(out.reason), 'the reason must be actionable, not just an accusation');
+});
+
+it('gate: a warn-only finding advises without stopping the turn', () => {
+  tmpHome();
+  const out = decideForTurn({
+    sessionId: 's3',
+    turnId: 't1',
+    // no receipt for dispatch.ts — a warn law, never a block
+    claimText: 'The router in dispatch.ts already handles the retry case.',
+    turnEvents: [],
+    root: tmpDir(),
+  });
+  assert.ok(out && out.hookSpecificOutput, 'advisory, not a block: ' + JSON.stringify(out));
+  assert.strictEqual(out.hookSpecificOutput.hookEventName, 'Stop');
+  assert.ok(/advisory/i.test(out.hookSpecificOutput.additionalContext));
+  assert.strictEqual(out.decision, undefined, 'a warn law must never stop a turn');
+});
+
+it('gate: the block budget prevents the loop trap, and says so instead of going quiet', () => {
+  tmpHome();
+  const root = tmpDir();
+  const args = { sessionId: 's4', turnId: 't1', ...GREEN_LIE, root };
+
+  assert.strictEqual(decideForTurn(args).decision, 'block', 'block 1 of 2');
+  assert.strictEqual(decideForTurn(args).decision, 'block', 'block 2 of 2');
+
+  const third = decideForTurn(args);
+  assert.strictEqual(third.decision, undefined, 'budget spent — it must stand down rather than pin the agent');
+  const text = third.hookSpecificOutput.additionalContext;
+  assert.ok(/standing down/i.test(text), 'and it must SAY it stood down: ' + text);
+  assert.ok(/UNRESOLVED, not forgiven/.test(text), 'a silenced law must not read as a pass');
+  rmrf(root);
+});
+
+it('gate: the budget is per turn, so the next turn is judged fresh', () => {
+  tmpHome();
+  const root = tmpDir();
+  decideForTurn({ sessionId: 's5', turnId: 't1', ...GREEN_LIE, root });
+  decideForTurn({ sessionId: 's5', turnId: 't1', ...GREEN_LIE, root });
+  const nextTurn = decideForTurn({ sessionId: 's5', turnId: 't2', ...GREEN_LIE, root });
+  assert.strictEqual(nextTurn.decision, 'block', 'a spent budget must not disarm the rest of the session');
+  rmrf(root);
+});
+
+it('gate: ORUNMILA_LAWS=off disables it entirely', () => {
+  tmpHome();
+  const prev = process.env.ORUNMILA_LAWS;
+  process.env.ORUNMILA_LAWS = 'off';
+  try {
+    const out = runGate({ session_id: 's6', claim: GREEN_LIE.claimText }, getAdapter('claude-code'), { root: tmpDir() });
+    assert.strictEqual(out, null, 'the kill switch must be absolute');
+  } finally {
+    if (prev === undefined) delete process.env.ORUNMILA_LAWS;
+    else process.env.ORUNMILA_LAWS = prev;
+  }
+});
+
+it('gate: a turn with no claim text is never judged', () => {
+  tmpHome();
+  assert.strictEqual(runGate({ session_id: 's7' }, getAdapter('claude-code'), { root: tmpDir() }), null);
+});
+
+it('gate hook: exits 0 and emits valid JSON for a blocking turn', () => {
+  const home = tmpHome();
+  const res = run('src/capture/claude-code/law-gate.js', {
+    input: JSON.stringify({ session_id: 's8', claim: GREEN_LIE.claimText }),
+    env: { ORUNMILA_HOME: home },
+  });
+  assert.strictEqual(res.status, 0, 'a non-zero exit from a Stop hook blocks the agent by itself');
+  const out = JSON.parse(res.stdout);
+  assert.strictEqual(out.decision, 'block');
+});
+
+it('gate hook: exits 0 silently on garbage input rather than refusing the turn', () => {
+  const home = tmpHome();
+  const res = run('src/capture/claude-code/law-gate.js', { input: 'not json at all{{{', env: { ORUNMILA_HOME: home } });
+  assert.strictEqual(res.status, 0, 'a broken law engine may stop enforcing; it may never stop the agent');
+  assert.strictEqual(res.stdout.trim(), '', 'and it must say nothing rather than something malformed');
 });
 
 runAll('laws (layers 4 + 5)');

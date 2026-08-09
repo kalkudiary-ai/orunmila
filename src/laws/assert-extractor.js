@@ -110,6 +110,38 @@ const VERIFICATION_RE = new RegExp(
   'i'
 );
 
+/**
+ * A verification WORD is not a verification CLAIM.
+ *
+ * Measured over 194 real sessions, this was the dominant false positive by a
+ * wide margin — around 16 of every 19 firings of the green law. The word
+ * "tested" was matching in sentences that assert the OPPOSITE, or that use it
+ * as an adjective, or that quote it while discussing verification itself:
+ *
+ *   "capture hooks exist for one agent; Cursor/Aider aren't tested"   negation
+ *   "branch coverage was low because the new branches weren't tested" negation
+ *   "the multiplier logic is unit-tested"                             hyphenated
+ *   "empty ⇒ open by the tested logic"                                adjectival
+ *   "the verification verb is in a future frame (should work)"        quoting
+ *
+ * Every one of those is an agent being careful, and flagging them punishes
+ * precisely the behaviour the law exists to encourage. A negated or attributive
+ * use is disqualified before the claim is ever graded.
+ */
+const NEGATED_VERIFICATION_RE = new RegExp(
+  [
+    // "not / never / isn't / aren't / weren't ... tested|passing|works|green"
+    String.raw`\b(?:not|never|no|without|isn'?t|aren'?t|wasn'?t|weren'?t|don'?t|doesn'?t|didn'?t|cannot|can'?t|un)\b[^.!?]{0,24}?\b(?:tested|passing|passes|pass|green|works|compiles)\b`,
+    // hyphenated adjective: "unit-tested", "battle-tested", "well-tested"
+    String.raw`\w-tested\b`,
+    // attributive: "the tested logic", "a tested path"
+    String.raw`\b(?:the|a|an|that|this|those|these|its|their)\s+tested\b`,
+    // future / hypothetical framing: "should work", "will pass", "let's see if it works"
+    String.raw`\b(?:should|would|will|might|may|could|hope|expect|see if|check if|to be)\b[^.!?]{0,24}?\b(?:work|works|pass|passes|passing|green|compile|compiles)\b`,
+  ].join('|'),
+  'i'
+);
+
 // --- speech-act filters (see header note on the deliberate duplication) ------
 
 const HEADING_RE = /^\s*#{1,6}\s+/;
@@ -140,7 +172,14 @@ function maskQuoted(s) {
     .replace(/```[\s\S]*?```/g, (m) => ' '.repeat(m.length))
     .replace(/`[^`]*`/g, (m) => ' '.repeat(m.length))
     .replace(/"[^"]*"/g, (m) => ' '.repeat(m.length))
-    .replace(/'[^']*'/g, (m) => ' '.repeat(m.length));
+    .replace(/'[^']*'/g, (m) => ' '.repeat(m.length))
+    // Markdown emphasis is how an agent quotes a phrase it is DISCUSSING when
+    // backticks would be too code-like: "the verb is in a future frame (*should
+    // work*, *let's see if it works*)". Measured against real sessions, that
+    // exact sentence — from a turn analysing verification detection — was the
+    // last surviving false positive of the green law. Emphasis is quotation.
+    .replace(/\*\*[^*]+\*\*/g, (m) => ' '.repeat(m.length))
+    .replace(/\*[^*\n]+\*/g, (m) => ' '.repeat(m.length));
 }
 
 /**
@@ -192,7 +231,7 @@ function extractAssertions(claimText) {
     if (!isFactualAssertion(sentence)) return;
     const targets = evaluableTargets(sentence);
     const masked = maskQuoted(sentence);
-    const isVerification = VERIFICATION_RE.test(masked);
+    const isVerification = VERIFICATION_RE.test(masked) && !NEGATED_VERIFICATION_RE.test(masked);
     // Keep the marker that fired, not just the boolean. A universal quantifier
     // ("all", "none", "never") and a bare count ("two things") are both
     // unenumerated, but they are not equally dangerous, and a finding that

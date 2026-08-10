@@ -47,6 +47,7 @@ for (const e of events) {
 const stats = {
   sessions: 0,
   claimed_turns: 0,
+  collapsed_turns: 0,   // turn_ids holding >1 claim — the capture boundary bug
   flagged_turns: 0,
   blocking_turns: 0,
   findings: 0,
@@ -63,9 +64,15 @@ function bump(lawId, firedTurn) {
 for (const [, sessionEvents] of bySession) {
   stats.sessions += 1;
   for (const [, turnEvents] of groupByTurn(sessionEvents)) {
-    const claim = turnEvents.find((e) => e.type === TYPES.TURN_CLAIM);
     const prompt = turnEvents.find((e) => e.type === TYPES.USER_PROMPT);
-    if (!claim || !claim.text || !String(claim.text).trim()) continue;
+    // Judge EVERY claim in the turn. Sessions captured before the turn-boundary
+    // fix folded several responses into one turn_id (39.1% of claimed turns),
+    // and taking only the first left the later ones unjudged entirely.
+    const claims = turnEvents.filter((e) => e.type === TYPES.TURN_CLAIM && e.text && String(e.text).trim());
+    const collapsed = claims.length > 1;
+    if (collapsed) stats.collapsed_turns += 1;
+
+    for (const claim of claims) {
     stats.claimed_turns += 1;
 
     const res = evaluateTurn({
@@ -96,6 +103,7 @@ for (const [, sessionEvents] of bySession) {
       else if (hasCmd) stats.receipt_law.command_only += 1;
       else stats.receipt_law.neither += 1;
     }
+    }
   }
 }
 
@@ -107,7 +115,8 @@ if (process.argv.includes('--json')) {
 const pct = (n, d) => (d ? ((100 * n) / d).toFixed(1) + '%' : '—');
 
 console.log(`Laws measured: ${active.length} in force, root ${root}`);
-console.log(`Corpus: ${stats.sessions} session(s), ${stats.claimed_turns} claimed turn(s)\n`);
+console.log(`Corpus: ${stats.sessions} session(s), ${stats.claimed_turns} claimed turn(s)`);
+console.log(`${stats.collapsed_turns} turn_id(s) hold more than one claim — captured before the turn-boundary fix.\n`);
 console.log(`${stats.flagged_turns} turn(s) raised a finding (${pct(stats.flagged_turns, stats.claimed_turns)}), ${stats.blocking_turns} would block.\n`);
 
 console.log('law                                 turns   fire rate   findings   share');

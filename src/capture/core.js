@@ -19,7 +19,7 @@ const path = require('path');
 const { append, readTurn, TYPES, dataDir } = require('../store/eventlog');
 const { unifiedDiff } = require('../reconcile/difftool');
 const { sha256 } = require('./fs-sentinel/hasher');
-const { bumpTurn, turnId } = require('./turnstate');
+const { bumpTurn, writeTurnId, closeTurn } = require('./turnstate');
 const { reconcileAndPersist } = require('../reconcile');
 const { renderTurn } = require('../render/terminal');
 const { deriveVcsEvents } = require('./vcs-evidence');
@@ -92,10 +92,10 @@ function isFailure(payload, adapter, response) {
  */
 function handlePrompt(payload, adapter) {
   const sessionId = adapter.fields.sessionId(payload);
-  bumpTurn(sessionId);
+  const promptTurn = `t${bumpTurn(sessionId)}`;
   append({
     session_id: sessionId,
-    turn_id: turnId(sessionId),
+    turn_id: promptTurn,
     agent: adapter.id,
     type: TYPES.USER_PROMPT,
     text: adapter.fields.prompt(payload),
@@ -133,7 +133,7 @@ function handlePreTool(payload, adapter) {
  */
 function handlePostTool(payload, adapter) {
   const sessionId = adapter.fields.sessionId(payload);
-  const turn = turnId(sessionId);
+  const turn = writeTurnId(sessionId);
   const toolName = adapter.fields.toolName(payload);
   const input = adapter.fields.toolInput(payload);
   const response = adapter.fields.toolResponse(payload);
@@ -274,7 +274,7 @@ function handlePostTool(payload, adapter) {
  */
 function handleStop(payload, adapter) {
   const sessionId = adapter.fields.sessionId(payload);
-  const turn = turnId(sessionId);
+  const turn = writeTurnId(sessionId);
   const transcriptPath = adapter.fields.transcriptPath(payload);
   const transcript = adapter.transcript || defaultTranscript;
 
@@ -296,6 +296,15 @@ function handleStop(payload, adapter) {
   append({ session_id: sessionId, turn_id: turn, agent: adapter.id, type: TYPES.TURN_END });
 
   const report = reconcileAndPersist(sessionId, turn);
+
+  // Mark the turn finished WITHOUT advancing the counter. Several Stop hooks run
+  // in sequence — capture first, the law gate last — and the gate resolves its
+  // turn by reading this state. An eager bump here would hand it a brand-new
+  // empty turn, and it would judge nothing while appearing to work. The counter
+  // moves on the next write instead, so a continuation with no user prompt still
+  // gets a turn of its own rather than folding into this one.
+  closeTurn(sessionId);
+
   return renderTurn(report);
 }
 

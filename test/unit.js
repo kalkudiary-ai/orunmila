@@ -729,17 +729,29 @@ it('sentinel: the default onError logs to stderr without a custom log opt', () =
 
 // --- capture/turnstate ------------------------------------------------------
 
-it('turnstate: currentTurn defaults to 1, bumpTurn increments and persists', () => {
+it('turnstate: a turn advances when the last one CLOSED, not on every prompt', () => {
   tmpHome();
   assert.strictEqual(turnstate.currentTurn('S'), 1, 'fresh session starts at turn 1');
-  assert.strictEqual(turnstate.bumpTurn('S'), 2, 'bump returns the next turn');
-  assert.strictEqual(turnstate.turnId('S'), 't2', 'turnId reflects the bumped value');
+  // A prompt into an OPEN turn must not split it. That is the mid-flight message
+  // case, where the claim would otherwise be stranded away from the work it
+  // describes -- 16.0% of claimed turns, measured.
+  assert.strictEqual(turnstate.bumpTurn('S'), 1, 'no advance while the turn is still open');
+  assert.strictEqual(turnstate.turnId('S'), 't1');
+
+  // Stop CLOSES without advancing, so the law gate -- a later Stop hook -- still
+  // resolves the turn that just finished rather than a fresh empty one.
+  turnstate.closeTurn('S');
+  assert.strictEqual(turnstate.turnId('S'), 't1', 'a reader still sees the closed turn');
+  assert.strictEqual(turnstate.writeTurnId('S'), 't2', 'the next WRITE is what opens t2');
+  assert.strictEqual(turnstate.turnId('S'), 't2');
 });
 
 it('turnstate: a missing sessionId is bucketed under "unknown"', () => {
   tmpHome();
   // exercises the `sessionId || "unknown"` branch in statePath()
-  assert.strictEqual(turnstate.bumpTurn(), 2);
+  assert.strictEqual(turnstate.bumpTurn(), 1);
+  turnstate.closeTurn();
+  assert.strictEqual(turnstate.writeTurnId(), 't2');
   assert.strictEqual(turnstate.turnId(), 't2');
 });
 

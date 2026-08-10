@@ -44,6 +44,7 @@
 const { extractAssertions } = require('./assert-extractor');
 const { maskQuoted } = require('./assert-extractor');
 const { basename } = require('../reconcile/task-extractor');
+const HOME_DIR = require('os').homedir().toLowerCase();
 
 // Shell invocations that are pattern matches wearing a command's clothes.
 const SHELL_PATTERN_RE = /(^|[|;&]\s*)(grep|egrep|fgrep|rg|ag|ack|ripgrep)\b/i;
@@ -190,10 +191,23 @@ function buildReceipts(turnEvents) {
  * `src/wallet/debit.ts` in a claim matches a read of the absolute path; symbols
  * and literals are substring-matched, lower-cased on both sides.
  */
+// A receipt and a claim can name the same file in different scripts: the shell
+// prints an absolute path, prose writes `~/tools/…`, and an arrow in a sentence
+// may be the Unicode → rather than ->. The match is a raw substring test, so
+// those spellings silently read as NO EVIDENCE AT ALL — a false accusation
+// against a turn that did the work. Normalise both sides before comparing.
+function normaliseForMatch(s) {
+  return String(s || '')
+    .toLowerCase()
+    .split(HOME_DIR).join('~')   // absolute home path and ~ become one spelling
+    .replace(/[→⇒]/g, '->')
+    .replace(/\\/g, '/');
+}
+
 function covers(receiptText, target) {
-  const hay = String(receiptText || '').toLowerCase();
+  const hay = normaliseForMatch(receiptText);
   if (!hay) return false;
-  const needle = String(target.value || '').toLowerCase();
+  const needle = normaliseForMatch(target.value);
   if (!needle || needle.length < 3) return false; // too short to match meaningfully
   if (target.kind === 'path') {
     return hay.includes(needle) || basename(hay).includes(needle);

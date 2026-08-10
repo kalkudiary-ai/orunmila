@@ -24,7 +24,7 @@ function readEvents(home) {
 
 // --- user-prompt-submit -----------------------------------------------------
 
-it('user-prompt-submit: bumps the turn and logs the prompt text', () => {
+it('user-prompt-submit: logs the prompt text into the turn in flight', () => {
   const home = tmpHome();
   const r = run(HOOK('user-prompt-submit.js'), {
     env: { ORUNMILA_HOME: home },
@@ -34,7 +34,7 @@ it('user-prompt-submit: bumps the turn and logs the prompt text', () => {
   const ev = readEvents(home).find((e) => e.type === 'user_prompt');
   assert.ok(ev, 'user_prompt event written');
   assert.strictEqual(ev.text, 'add a login form');
-  assert.strictEqual(ev.turn_id, 't2', 'turn bumped from default 1 to 2');
+  assert.strictEqual(ev.turn_id, 't1', 'the first prompt opens t1; a prompt no longer force-bumps');
   rmrf(home);
 });
 
@@ -697,9 +697,9 @@ it('cli: report --turn for an existing turn renders just that turn', () => {
   fs.writeFileSync(tr, JSON.stringify({ role: 'assistant', content: 'I wrote a.js.' }) + '\n');
   run(HOOK('stop.js'), { env: { ORUNMILA_HOME: home }, input: JSON.stringify({ session_id: 'S', transcript_path: tr }) });
 
-  // user-prompt-submit bumps the turn from the default t1 to t2, so the
-  // persisted report lands under t2.
-  const r = cli(['report', '--session', 'S', '--turn', 't2'], { ORUNMILA_HOME: home });
+  // A prompt no longer force-bumps, so the whole exchange -- work and claim --
+  // lands in t1 together.
+  const r = cli(['report', '--session', 'S', '--turn', 't1'], { ORUNMILA_HOME: home });
   assert.strictEqual(r.status, 0);
   assert.ok(r.stdout.includes('orunmila'), 'the single-turn report renders');
   rmrf(home);

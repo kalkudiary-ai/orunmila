@@ -721,4 +721,26 @@ it('gate hook: exits 0 silently on garbage input rather than refusing the turn',
   assert.strictEqual(res.stdout.trim(), '', 'and it must say nothing rather than something malformed');
 });
 
+// --- receipt matching: a path is the same path however it is spelled ---------
+// Found by Opon firing on the turn that HAD run the command it wanted: prose
+// wrote `~/tools/…`, the shell printed the absolute path, and the raw substring
+// match read real evidence as no evidence at all.
+
+it("a ~ path in a claim matches a receipt holding the absolute path, and vice versa", () => {
+  const { covers } = require("../src/laws/evaluate");
+  const home = require("os").homedir();
+  const receipt = `readlink -f /usr/local/bin/orunmila\n${home}/tools/orunmila/bin/orunmila.js`;
+  const target = (value) => ({ kind: "path", value });
+  assert.ok(covers(receipt, target("~/tools/orunmila/bin/orunmila.js")), "tilde claim vs absolute receipt");
+  assert.ok(covers(receipt, target(`${home}/tools/orunmila/bin/orunmila.js`)), "absolute claim vs absolute receipt");
+  assert.ok(covers("cat ~/tools/orunmila/bin/orunmila.js", target(`${home}/tools/orunmila/bin/orunmila.js`)), "absolute claim vs tilde receipt");
+  assert.ok(!covers(receipt, target("~/some/other/project/file.js")), "and it must NOT start matching unrelated paths");
+});
+
+it("a Unicode arrow in a claim does not hide a receipt written with ->", () => {
+  const { covers } = require("../src/laws/evaluate");
+  const receipt = "ls -la /usr/local/lib/node_modules\norunmila -> /Users/x/tools/orunmila";
+  assert.ok(covers(receipt, { kind: "literal", value: "orunmila → /Users/x/tools/orunmila" }));
+});
+
 runAll('laws (layers 4 + 5)');

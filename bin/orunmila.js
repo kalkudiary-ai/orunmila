@@ -639,9 +639,12 @@ function cmdLaws() {
   let blocked = 0;
 
   for (const [turnId, turnEvents] of byTurn) {
-    const claim = turnEvents.find((e) => e.type === eventlog.TYPES.TURN_CLAIM);
     const prompt = turnEvents.find((e) => e.type === eventlog.TYPES.USER_PROMPT);
-    if (!claim || !claim.text || !String(claim.text).trim()) continue;
+    // Judge EVERY claim in the turn. Historical sessions captured before the
+    // turn-boundary fix folded several responses into one turn_id, and taking
+    // only the first left the later ones unjudged entirely.
+    const claims = turnEvents.filter((e) => e.type === eventlog.TYPES.TURN_CLAIM && e.text && String(e.text).trim());
+    for (const claim of claims) {
     claimed++;
     const res = evaluateTurn({
       claimText: String(claim.text),
@@ -653,6 +656,7 @@ function cmdLaws() {
     flagged++;
     if (res.blocking.length) blocked++;
     out.turns.push({ turn_id: turnId, receipts: res.receipts, findings: res.findings });
+    }
   }
 
   if (args.includes('--json')) {

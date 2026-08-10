@@ -246,7 +246,10 @@ const GREP_LAW = () => CANON().filter((l) => l.id === 'no-grep-as-basis');
 
 it('grep law: fires when the only receipt for the claim is a pattern match', () => {
   const res = evaluateTurn({
-    claimText: 'The wallet reads from tier_snapshot_at_issue in debit.ts.',
+    // Written as a PATH, not a bare basename: the narrowed rule fires only for
+    // targets that name a file in this codebase, which is what excludes the
+    // dependency-name false positives ("it requires internet to load Three.js").
+    claimText: 'The wallet reads from tier_snapshot_at_issue in src/wallet/debit.ts.',
     turnEvents: [
       { type: 'command_run', command: 'grep -rn tier_snapshot_at_issue src/', exit_code: 0, stdout_excerpt: 'src/wallet/debit.ts:40' },
     ],
@@ -254,18 +257,15 @@ it('grep law: fires when the only receipt for the claim is a pattern match', () 
   });
   assert.strictEqual(res.findings.length > 0, true, 'a claim resting on a grep is caught');
   assert.strictEqual(res.findings[0].heuristic, true, 'never dressed up as a glove fact');
-  // It ADVISES, it does not block — a measured decision, not a softening of the
-  // principle. Across 194 real sessions this law fired 12 times and roughly 2
-  // were genuine; the rest were dependency and tool names that happened to sit
-  // in a grep pattern ("it requires internet to load Three.js"). A 20%-precision
-  // signal belongs in the agent's ear, not across its path. The severity lives
-  // in the canon pack, so escalating it is a one-line layer-5 patch.
-  assert.deepStrictEqual(res.blocking, [], 'advisory until the target extraction earns better than 20% precision');
+  assert.strictEqual(res.blocking.length > 0, true, 'and it blocks — the narrowed rule earned it on real data');
 });
 
 it('grep law: goes quiet once the file has actually been read in full', () => {
   const res = evaluateTurn({
-    claimText: 'The wallet reads from tier_snapshot_at_issue in debit.ts.',
+    // Written as a PATH, not a bare basename: the narrowed rule fires only for
+    // targets that name a file in this codebase, which is what excludes the
+    // dependency-name false positives ("it requires internet to load Three.js").
+    claimText: 'The wallet reads from tier_snapshot_at_issue in src/wallet/debit.ts.',
     turnEvents: [
       { type: 'command_run', command: 'grep -rn tier_snapshot_at_issue src/', exit_code: 0, stdout_excerpt: 'src/wallet/debit.ts:40' },
       { type: 'file_read', path: '/repo/src/wallet/debit.ts', hash: 'deadbeef', bytes: 900 },
@@ -273,6 +273,39 @@ it('grep law: goes quiet once the file has actually been read in full', () => {
     laws: GREP_LAW(),
   });
   assert.strictEqual(res.findings.length, 0, 'having done the reading, the claim stands');
+});
+
+/**
+ * REGRESSION — the dependency-name false positive, measured and then designed out.
+ *
+ * The first cut of the grep law fired 12 times across 194 real sessions with
+ * about 2 genuine. Every false positive was a DEPENDENCY or command name that
+ * happened to sit in a grep pattern. Those are claims about the world, not this
+ * codebase, and reading a local file would settle none of them. Narrowing to
+ * path-shaped targets took 12 firings to 1 — the genuine one — which is what
+ * let this law be escalated to block.
+ */
+it('regression: a dependency named in prose must never block a turn', () => {
+  const laws = GREP_LAW();
+  const greped = [{ type: 'command_run', command: 'grep -rn "force-graph" src/', exit_code: 0, stdout_excerpt: 'src/render/trail-visual.js:12 three.js' }];
+
+  for (const claim of [
+    'It requires internet to load Three.js and 3d-force-graph from CDN.',
+    'The 3D graph now uses 3d-force-graph for the layout.',
+    'debug-transcript exists because parsers do silently come back empty.',
+  ]) {
+    const res = evaluateTurn({ claimText: claim, turnEvents: greped, laws });
+    assert.deepStrictEqual(res.findings, [], `a package/command name is not a claim about this repo: "${claim}"`);
+  }
+});
+
+it('regression: the genuine catch still fires — a named FILE claimed from a grep alone', () => {
+  const res = evaluateTurn({
+    claimText: 'grep of src/render/trail-visual.js returns 0 hits, so only one THREE. reference remains.',
+    turnEvents: [{ type: 'command_run', command: 'grep -n nodeThreeObject src/render/trail-visual.js', exit_code: 0, stdout_excerpt: '' }],
+    laws: GREP_LAW(),
+  });
+  assert.strictEqual(res.blocking.length > 0, true, 'a claim about what is NOT in a file needs the file read, not matched');
 });
 
 it('no-receipt law: fires on a confident claim about a file the turn never opened', () => {

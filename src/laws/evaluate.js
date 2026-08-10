@@ -237,9 +237,30 @@ function finding(law, assertion, detail) {
 // each answers exactly one yes/no question about whether a receipt exists.
 
 const RULES = {
+  /**
+   * Narrowed to targets written as a PATH — something with a separator in it,
+   * like `src/render/trail-visual.js`.
+   *
+   * Measured over 194 sessions this law fired 12 times and about 2 were real.
+   * Every false positive was the same shape: a DEPENDENCY or command name that
+   * happened to sit in a grep pattern — "it requires internet to load Three.js
+   * and 3d-force-graph from CDN", "debug-transcript exists because parsers come
+   * back empty". Those are claims about the world, not about this codebase, and
+   * no amount of reading a local file would settle them.
+   *
+   * The single genuine catch named a real path: "grep nodeThreeObject(
+   * src/render/trail-visual.js returns 0 hits, only one THREE. reference
+   * remains" — a claim about what IS and IS NOT in a specific file, resting
+   * entirely on a pattern match. That is the law exactly.
+   *
+   * Requiring a separator is deliberately conservative: it misses a bare
+   * basename ("debit.ts is fine"). For a law that STOPS a turn, a miss costs a
+   * catch and a false fire costs trust, and trust is the scarcer resource.
+   */
   pattern_read_only(assertion, receipts) {
-    if (!assertion.targets.length) return null;
-    const strengths = assertion.targets.map((t) => ({ t, s: receiptStrength(t, receipts) }));
+    const pathTargets = assertion.targets.filter((t) => t.kind === 'path' && /[\\/]/.test(String(t.raw || '')));
+    if (!pathTargets.length) return null;
+    const strengths = pathTargets.map((t) => ({ t, s: receiptStrength(t, receipts) }));
     // Fires only when the turn DID look — via a pattern — and never looked
     // properly. If any target was genuinely read, the agent has done the work.
     if (strengths.some((x) => x.s === 'full')) return null;

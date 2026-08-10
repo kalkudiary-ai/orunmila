@@ -220,7 +220,7 @@ function printLawsForReview({ root }) {
   const { loadLaws, activeLaws, lawPaths } = require('../src/laws/load');
   const { laws, errors } = loadLaws({ root });
   const active = activeLaws(laws);
-  const blocking = active.filter((l) => l.severity === 'block' || l.severity === 'deny');
+  const blocking = active.filter((l) => l.severity === 'block');
 
   console.log('\x1b[1mThese are the laws you are about to be held to.\x1b[0m');
   console.log(dim('Read them now — a rule that can interrupt your work should not be a surprise later.\n'));
@@ -614,7 +614,7 @@ function cmdLaws() {
     console.log('  { "id": "no-uncertainty-as-fact", "severity": "block" }\n');
 
     for (const law of laws) {
-      const sev = law.severity === 'block' ? '\x1b[31mblock\x1b[0m' : law.severity === 'deny' ? '\x1b[31mdeny \x1b[0m' : '\x1b[33mwarn \x1b[0m';
+      const sev = law.severity === 'block' ? '\x1b[31mblock\x1b[0m' : '\x1b[33mwarn \x1b[0m';
       const off = law.enabled ? '' : dim('  (disabled)');
       console.log(`  [${sev}] ${law.id.padEnd(34)} ${law.title}${off}`);
       const how = law.kind === 'evidentiary' ? `evidentiary: ${law.rule}` : `lexical: ${law.rawPatterns.length} pattern(s) over ${law.scope}`;

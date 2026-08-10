@@ -7,8 +7,8 @@
     {
       "id": "no-grep-as-basis",
       "title": "A pattern match is never the basis for a claim",
-      "severity": "warn",
-      "note": "The principle is right and the detector is not yet sharp enough to stop a turn over. Measured across 194 real sessions it fired 12 times and only about 2 were genuine; the rest were package and tool names that happened to appear in a grep pattern ('it requires internet to load Three.js'). It surfaces as run-time advice, which is where a 20%-precision signal belongs. Escalate it from a layer-5 file once the target extraction distinguishes a dependency named in prose from a symbol whose behaviour is being asserted.",
+      "severity": "block",
+      "note": "Blocks, on measurement. The first cut fired 12 times across 194 real sessions with only ~2 genuine, and every false positive was the same shape: a dependency or command name that happened to sit in a grep pattern ('it requires internet to load Three.js'). Narrowing the rule to targets written as a PATH removed that class by construction rather than by tuning a threshold — 12 firings became 1, and that one is the genuine article: a claim about what is and is not inside a named file, resting entirely on a pattern match. Deliberately conservative: a bare basename is not enough to stop a turn, because for a blocking law a miss costs a catch and a false fire costs trust.",
       "detect": { "kind": "evidentiary", "rule": "pattern_read_only" },
       "message": "This rests on a pattern match (grep/glob) with no full read of the target. A grep tells you a string occurs somewhere; it cannot tell you what the code does, what else is there, or what you did not search for.",
       "remedy": "Read the target in full, then answer again from what the file actually says.",

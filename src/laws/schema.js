@@ -34,12 +34,16 @@
  *   'warn'   record it in law_findings; surface at close-out; never interrupt.
  *   'block'  the Stop gate refuses the turn and hands the reason back to the
  *            agent, which must re-run and answer properly.
- *   'deny'   the PreToolUse gate refuses the tool call outright. Blunt; reserved
- *            for laws where the act itself is forbidden (`git add -A`), not the
- *            claim resting on it.
+ *
+ * (A third severity, 'deny' — refuse the tool call itself at PreToolUse — was
+ * specified before anything implemented it, and has been removed. See below.)
  */
 
-const SEVERITIES = new Set(['warn', 'block', 'deny']);
+// 'deny' (refuse the tool call itself, at PreToolUse) was specified here before
+// anything implemented it. A severity the engine silently ignores is the exact
+// failure this project exists to catch — a rule that looks enforced and is not —
+// so it is removed until a PreToolUse gate exists to honour it.
+const SEVERITIES = new Set(['warn', 'block']);
 const KINDS = new Set(['lexical', 'evidentiary']);
 const SCOPES = new Set(['claim', 'command', 'prompt', 'any']);
 

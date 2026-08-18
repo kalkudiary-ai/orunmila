@@ -240,6 +240,48 @@ it('receipts: a grep run through the shell is weak; a cat through the shell is f
   assert.strictEqual(receiptStrength({ kind: 'path', value: 'refund.ts' }, r), 'full', 'shell cat is a full receipt');
 });
 
+it('receipts: a pager downstream of a grep does NOT upgrade it to a read', () => {
+  // The regression this guards. The rule was once "is a pattern AND the line
+  // does not also mention cat/head/tail/sed", so `grep x src | head` matched on
+  // its `head` and was filed as a FULL READ of every file the grep named.
+  // Measured over a real corpus on 2026-08-16: 292 of 457 shell greps (63.9%)
+  // were piped into a pager — `| head` alone was 219 — so nearly two thirds of
+  // every pattern match ever run was recorded as though the file had been read.
+  // That is precisely the receipt no-grep-as-basis must never find.
+  for (const command of [
+    'grep -rn "debit" src/ | head',
+    'grep -rn "debit" src/ | head -40',
+    'grep -rn "debit" src/ | cat',
+    'grep -rn "debit" src/ | tail -5',
+    'ps aux | grep -i debit | grep -v grep | head',
+  ]) {
+    const r = buildReceipts([{ type: 'command_run', command, exit_code: 0, stdout_excerpt: 'src/wallet/debit.ts:12' }]);
+    assert.strictEqual(receiptStrength({ kind: 'path', value: 'debit.ts' }, r), 'weak', command);
+  }
+});
+
+it('receipts: independent commands on one line are graded separately', () => {
+  // Why the read exemption could not simply be deleted: a compound line can
+  // honestly do both. 49 of those 292 were this shape — a real partial read of
+  // one file beside a pattern match of another. Splitting on `;`/`&&`/`||` (but
+  // NOT on a single `|`, whose stages share one pipeline) files each half where
+  // it belongs instead of letting either one speak for the whole line.
+  const r = buildReceipts([
+    { type: 'command_run', command: 'sed -n "1,40p" src/a.ts && grep -rn "x" src/b.ts | head', exit_code: 0, stdout_excerpt: '' },
+  ]);
+  assert.strictEqual(receiptStrength({ kind: 'path', value: 'a.ts' }, r), 'full', 'the sed really did read a.ts');
+  assert.strictEqual(receiptStrength({ kind: 'path', value: 'b.ts' }, r), 'weak', 'the grep only pattern-matched b.ts');
+});
+
+it('receipts: a non-pattern command still contributes its OUTPUT as a full receipt', () => {
+  // Guards the other direction: attributing output separately must not cost
+  // `npm test` its ability to name a failing file that appears only in stdout.
+  const r = buildReceipts([
+    { type: 'command_run', command: 'npm test', exit_code: 0, stdout_excerpt: 'FAIL src/wallet/debit.ts' },
+  ]);
+  assert.strictEqual(receiptStrength({ kind: 'path', value: 'debit.ts' }, r), 'full');
+});
+
 // --- the evidentiary rules --------------------------------------------------
 
 const GREP_LAW = () => CANON().filter((l) => l.id === 'no-grep-as-basis');

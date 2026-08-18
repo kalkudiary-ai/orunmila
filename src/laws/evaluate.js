@@ -48,8 +48,43 @@ const HOME_DIR = require('os').homedir().toLowerCase();
 
 // Shell invocations that are pattern matches wearing a command's clothes.
 const SHELL_PATTERN_RE = /(^|[|;&]\s*)(grep|egrep|fgrep|rg|ag|ack|ripgrep)\b/i;
-// Shell invocations that genuinely surface a file's contents.
-const SHELL_READ_RE = /(^|[|;&]\s*)(cat|head|tail|less|more|bat|sed\s+-n|awk|jq|nl)\b/i;
+
+/**
+ * Split a shell line into INDEPENDENT commands, and grade each one separately.
+ *
+ * Receipt strength is a property of a PIPELINE, not of a whole line, and reading
+ * the line as one unit had a precise and measurable consequence. The rule used to
+ * be "is this a pattern AND does the line not also mention cat/head/tail/sed -n".
+ * So `grep -rn "x" src/ | head` matched on its `head` and was filed as a FULL
+ * READ of every file the grep named.
+ *
+ * Measured over this user's own corpus on 2026-08-16: 457 shell greps, of which
+ * 292 (63.9%) were piped into head/tail/cat/sed/awk — `| head` alone accounted
+ * for 219. Nearly two thirds of every pattern match ever run was recorded as
+ * though the agent had read the files. That is the exact receipt
+ * no-grep-as-basis must NOT find, and it is the largest reason the law fired
+ * ZERO times across 137 claimed turns while the corpus filled with greps.
+ *
+ * The fix is not to drop the read exemption wholesale, because a compound line
+ * can honestly do both: `sed -n '1,40p' a.ts; grep x b.ts` really did read a.ts
+ * and really did only pattern-match b.ts. 49 of the 292 were that shape. So:
+ *
+ *   - split on `;`, `&&`, `||` — these separate INDEPENDENT commands;
+ *   - do NOT split on a single `|` — those stages share one pipeline;
+ *   - a pattern stage ANYWHERE in a pipeline filters what the agent saw, so the
+ *     whole pipeline is weak. A pager downstream of a grep truncates a pattern
+ *     match; it does not turn one into a read.
+ */
+function classifyShellLine(command) {
+  const full = [];
+  const weak = [];
+  for (const segment of String(command || '').split(/;|&&|\|\|/)) {
+    const seg = segment.trim();
+    if (!seg) continue;
+    (SHELL_PATTERN_RE.test(seg) ? weak : full).push(seg);
+  }
+  return { full, weak };
+}
 
 /**
  * Does this command's exit code actually mean what it appears to mean?
@@ -141,13 +176,25 @@ function buildReceipts(turnEvents) {
       else failedCommands.push({ command, exit_code: e.exit_code });
 
       // A grep run through the shell is a WEAK receipt no matter how confident
-      // the sentence that follows it. A cat/head/sed -n is a real look at the
-      // content and counts as full.
-      const isPattern = SHELL_PATTERN_RE.test(command);
-      const bucket = isPattern && !SHELL_READ_RE.test(command) ? weak : full;
-      // Both the command line and its output can name the target: `cat x.js`
-      // names it in the command; `npm test` names the failing file in stdout.
-      bucket.push({ text: command + '\n' + out, kind: isPattern ? 'shell_pattern' : 'command' });
+      // the sentence that follows it, and no matter what is piped after it. Each
+      // independent command on the line is filed on its own merits — see
+      // classifyShellLine for why the whole line cannot be graded as one.
+      const segments = classifyShellLine(command);
+      for (const seg of segments.full) full.push({ text: seg, kind: 'command' });
+      for (const seg of segments.weak) weak.push({ text: seg, kind: 'shell_pattern' });
+
+      // Output is attributed separately, because it can name a target the
+      // command line never does: `npm test` names the failing file only in
+      // stdout. But if ANY stage on the line was a pattern, what came back is
+      // filtered — so the output is only as strong as the weakest thing that
+      // shaped it. `npm test > out.txt; grep FAIL out.txt` shows you grep's
+      // view, not the suite's.
+      if (out) {
+        (segments.weak.length ? weak : full).push({
+          text: out,
+          kind: segments.weak.length ? 'shell_pattern' : 'command',
+        });
+      }
       continue;
     }
 

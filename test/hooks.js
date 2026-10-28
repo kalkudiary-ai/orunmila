@@ -766,4 +766,157 @@ it('cli: debug-transcript dumps parsed lines, and warns with no path', () => {
   rmrf(work);
 });
 
+// --- the two lenses --------------------------------------------------------
+// The Stain Map (capture + report) and the Closeout Gate (the law layer on
+// Stop) are separate products with separate install paths. These lock the
+// separation itself: that one can exist without the other, that the original
+// --with-laws spelling keeps working, and that the CLI can tell you which you
+// have without you reading a config file by hand.
+
+/** Read the hook commands registered in a work dir's settings, flattened. */
+function hookCommands(work) {
+  const p = path.join(work, '.claude', 'settings.json');
+  if (!fs.existsSync(p)) return [];
+  const settings = JSON.parse(fs.readFileSync(p, 'utf8'));
+  const out = [];
+  for (const [event, entries] of Object.entries(settings.hooks || {})) {
+    for (const entry of entries || []) {
+      for (const h of (entry && entry.hooks) || []) out.push({ event, command: String(h.command || '') });
+    }
+  }
+  return out;
+}
+const hasStainMap = (work) => hookCommands(work).some((h) => h.command.includes('post-tool-use.js'));
+const hasGate = (work) => hookCommands(work).some((h) => h.command.includes('law-gate.js'));
+
+it('lenses: install alone installs the Stain Map and NOT the Closeout Gate', () => {
+  const home = tmpHome();
+  const work = tmpDir();
+  const r = run('bin/orunmila.js', { args: ['install'], env: { ORUNMILA_HOME: home }, cwd: work });
+  assert.strictEqual(r.status, 0);
+  assert.ok(hasStainMap(work), 'Stain Map installed');
+  assert.ok(!hasGate(work), 'the gate is NOT installed by default — it can refuse a turn, so it is opt-in');
+  assert.ok(r.stdout.includes('Closeout Gate'), 'the second lens is advertised, not hidden');
+  rmrf(home);
+  rmrf(work);
+});
+
+it('lenses: install --with-gate installs both', () => {
+  const home = tmpHome();
+  const work = tmpDir();
+  const r = run('bin/orunmila.js', { args: ['install', '--with-gate'], env: { ORUNMILA_HOME: home }, cwd: work });
+  assert.strictEqual(r.status, 0);
+  assert.ok(hasStainMap(work), 'Stain Map installed');
+  assert.ok(hasGate(work), 'Closeout Gate installed');
+  assert.ok(r.stdout.includes('CAN STOP A TURN'), 'the blocking laws are read out at install time');
+  rmrf(home);
+  rmrf(work);
+});
+
+it('lenses: --with-laws is still accepted as the original spelling of --with-gate', () => {
+  const home = tmpHome();
+  const work = tmpDir();
+  const r = run('bin/orunmila.js', { args: ['install', '--with-laws'], env: { ORUNMILA_HOME: home }, cwd: work });
+  assert.strictEqual(r.status, 0, '--with-laws must never break: it is in instructions people already followed');
+  assert.ok(hasStainMap(work) && hasGate(work), 'both lenses installed via the old flag');
+  rmrf(home);
+  rmrf(work);
+});
+
+it('lenses: --gate-only adds the gate, leaves capture untouched, and says the gate has nothing to judge', () => {
+  const home = tmpHome();
+  const work = tmpDir();
+  const r = run('bin/orunmila.js', { args: ['install', '--gate-only'], env: { ORUNMILA_HOME: home }, cwd: work });
+  assert.strictEqual(r.status, 0);
+  assert.ok(hasGate(work), 'gate installed');
+  assert.ok(!hasStainMap(work), '--gate-only does not install capture');
+  assert.ok(
+    r.stdout.includes('nothing to read') || r.stdout.includes('NOT installed'),
+    'warns that a gate with no Stain Map under it judges nothing'
+  );
+  rmrf(home);
+  rmrf(work);
+});
+
+it('lenses: --with-gate over an existing Stain Map adds the gate without duplicating capture', () => {
+  const home = tmpHome();
+  const work = tmpDir();
+  run('bin/orunmila.js', { args: ['install'], env: { ORUNMILA_HOME: home }, cwd: work });
+  const captureBefore = hookCommands(work).filter((h) => h.command.includes('post-tool-use.js')).length;
+  const r = run('bin/orunmila.js', { args: ['install', '--with-gate'], env: { ORUNMILA_HOME: home }, cwd: work });
+  assert.strictEqual(r.status, 0, 'adding the second lens is a success, not a refusal');
+  const captureAfter = hookCommands(work).filter((h) => h.command.includes('post-tool-use.js')).length;
+  assert.strictEqual(captureAfter, captureBefore, 'capture is not registered twice (the dual-install corruption)');
+  assert.ok(hasGate(work), 'gate added');
+  assert.ok(
+    !r.stdout.includes('Remove the existing registration first') && !r.stderr.includes('Remove the existing registration first'),
+    'does not tell the user to remove an install on a run that succeeded'
+  );
+  rmrf(home);
+  rmrf(work);
+});
+
+it('lenses: a duplicate plain install is still refused with a non-zero exit', () => {
+  const home = tmpHome();
+  const work = tmpDir();
+  run('bin/orunmila.js', { args: ['install'], env: { ORUNMILA_HOME: home }, cwd: work });
+  const r = run('bin/orunmila.js', { args: ['install'], env: { ORUNMILA_HOME: home }, cwd: work });
+  assert.notStrictEqual(r.status, 0, 'a second capture install must fail loudly');
+  assert.ok(r.stderr.includes('Refusing to install'), 'and say why');
+  rmrf(home);
+  rmrf(work);
+});
+
+it('lenses: the lenses command names both and reports which are installed', () => {
+  const home = tmpHome();
+  const work = tmpDir();
+  const before = run('bin/orunmila.js', { args: ['lenses'], env: { ORUNMILA_HOME: home }, cwd: work });
+  assert.strictEqual(before.status, 0);
+  assert.ok(before.stdout.includes('The Stain Map'), 'names the first lens');
+  assert.ok(before.stdout.includes('The Closeout Gate'), 'names the second lens');
+  assert.ok(before.stdout.includes('neither'), 'reports an empty install honestly');
+
+  run('bin/orunmila.js', { args: ['install', '--with-gate'], env: { ORUNMILA_HOME: home }, cwd: work });
+  const after = run('bin/orunmila.js', { args: ['lenses'], env: { ORUNMILA_HOME: home }, cwd: work });
+  assert.strictEqual(after.status, 0);
+  assert.ok(after.stdout.includes('installed'), 'reports what is installed');
+  assert.ok(after.stdout.includes('law-gate.js'), 'shows WHERE the gate hook lives, not just that it exists');
+  rmrf(home);
+  rmrf(work);
+});
+
+it('lenses: --gate-only is refused for an agent that cannot run the gate', () => {
+  const home = tmpHome();
+  const work = tmpDir();
+  const r = run('bin/orunmila.js', { args: ['install', '--agent', 'cursor', '--gate-only'], env: { ORUNMILA_HOME: home }, cwd: work });
+  assert.notStrictEqual(r.status, 0, 'refuses rather than installing a gate that cannot fire');
+  assert.ok(r.stderr.includes('claude-code only'), 'says why');
+  rmrf(home);
+  rmrf(work);
+});
+
+it('lenses: status reports which lenses are live, and flags the kill switch', () => {
+  const home = tmpHome();
+  const work = tmpDir();
+  fs.mkdirSync(home, { recursive: true });
+  fs.writeFileSync(path.join(home, 'events.jsonl'), JSON.stringify({ session_id: 'S', type: 'file_read' }) + '\n');
+
+  const off = run('bin/orunmila.js', { args: ['status'], env: { ORUNMILA_HOME: home }, cwd: work });
+  assert.strictEqual(off.status, 0);
+  assert.ok(off.stdout.includes('Lenses:'), 'status leads with lens state');
+
+  run('bin/orunmila.js', { args: ['install', '--with-gate'], env: { ORUNMILA_HOME: home }, cwd: work });
+  const killed = run('bin/orunmila.js', {
+    args: ['status'],
+    env: { ORUNMILA_HOME: home, ORUNMILA_LAWS: 'off' },
+    cwd: work,
+  });
+  assert.ok(
+    killed.stdout.includes('ORUNMILA_LAWS=off'),
+    'an installed gate disabled by the env var must not read as simply "on"'
+  );
+  rmrf(home);
+  rmrf(work);
+});
+
 runAll('hooks + cli');

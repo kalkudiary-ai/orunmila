@@ -85,6 +85,80 @@ function findExistingClaudeHooks(settings) {
   return found;
 }
 
+// The Closeout Gate's single hook script. Detected separately from capture so
+// the CLI can report the two lenses independently — someone can hold either one
+// without the other, and "is the gate on?" must be answerable without guessing.
+const GATE_HOOK_BASENAME = 'law-gate.js';
+
+// Find the registered Closeout Gate hook, if any. Same basename strategy as
+// findExistingClaudeHooks: a gate pointing at a different copy of orunmila is
+// still a gate.
+function findExistingGateHooks(settings) {
+  const found = [];
+  const hooks = (settings && settings.hooks) || {};
+  for (const [eventName, entries] of Object.entries(hooks)) {
+    for (const entry of entries || []) {
+      for (const h of (entry && entry.hooks) || []) {
+        const c = h && h.command ? String(h.command) : '';
+        if (c.includes(GATE_HOOK_BASENAME)) found.push({ event: eventName, command: c });
+      }
+    }
+  }
+  return found;
+}
+
+// THE TWO LENSES. Orunmila is one tool with two jobs, and which job a team
+// wants is genuinely not predictable — some want the record, some want the
+// refusal, and the ones who want both want to turn them on separately. So the
+// split is structural here, not a line in the README: each lens has its own
+// install path, its own uninstall, and its own row in `orunmila lenses`.
+const LENSES = {
+  'stain-map': {
+    name: 'The Stain Map',
+    verb: 'observes',
+    one_line: 'Records everything the agent touched, then checks its story against the evidence.',
+    refuses: false,
+    agents: 'all supported agents',
+    install: 'orunmila install',
+  },
+  'closeout-gate': {
+    name: 'The Closeout Gate',
+    verb: 'refuses',
+    one_line: "Stops a turn ending on a claim the turn's own evidence does not support.",
+    refuses: true,
+    agents: 'claude-code only',
+    install: 'orunmila install --with-gate',
+  },
+};
+
+/**
+ * Which lenses are actually registered, and where. Reads the agent's own config
+ * file rather than inferring from anything orunmila wrote down, because the
+ * user may have edited it by hand — and a lens report that trusts its own notes
+ * instead of the config is exactly the kind of claim this project exists to
+ * distrust.
+ */
+function lensState({ agentId = 'claude-code', global = false } = {}) {
+  const adapter = getAdapter(agentId);
+  if (!adapter) return null;
+  const p = configPath(adapter, { global, home: os.homedir(), cwd: process.cwd() });
+  const settings = readJson(p, null);
+  if (settings === null) {
+    return { configPath: p, exists: false, stainMap: [], gate: [], adapter };
+  }
+  // Non-claude agents register capture through connector.js; detect either shape.
+  const captureHooks = adapter.id === 'claude-code'
+    ? findExistingClaudeHooks(settings)
+    : (JSON.stringify(settings).includes('connector.js') ? [{ event: '(connector)', command: 'connector.js' }] : []);
+  return {
+    configPath: p,
+    exists: true,
+    stainMap: captureHooks,
+    gate: adapter.id === 'claude-code' ? findExistingGateHooks(settings) : [],
+    adapter,
+  };
+}
+
 // Claude Code keeps its four purpose-named scripts (its hook system wants one
 // command per event and they're the test entry points). Every other agent maps
 // each of its own event names to `connector.js <agent> <phase>`.
@@ -92,16 +166,25 @@ function findExistingClaudeHooks(settings) {
 // Returns { installed: boolean }. Refuses (installed:false) rather than adding a
 // second registration when an orunmila hook already exists in this settings file
 // — silently skipping would hide the dual-install; we print where it was found.
-function installClaudeCode(root, p) {
+function installClaudeCode(root, p, { tolerateExisting = false } = {}) {
   const settings = readJson(p, {});
   const existing = findExistingClaudeHooks(settings);
   if (existing.length) {
-    console.error(`Refusing to install: an existing orunmila capture hook is already registered in ${p}.`);
-    console.error('Two live registrations double every captured event and double-bump the turn counter (the dual-install corruption).');
-    console.error('Found:');
-    for (const e of existing) console.error(`  [${e.event}] ${e.command}`);
-    console.error('Remove the existing registration first (or point it at this copy) before installing again.');
-    return { installed: false };
+    // Two live capture registrations double every event and double-bump the
+    // turn counter, so a duplicate is always refused. But WHY the caller is
+    // here decides how alarming that should sound: someone running
+    // `install --with-gate` over an existing Stain Map is about to get exactly
+    // what they asked for, and telling them to "remove the existing
+    // registration first" is wrong advice for a run that is going to succeed.
+    // So the refusal only speaks when the caller has nothing else to offer.
+    if (!tolerateExisting) {
+      console.error(`Refusing to install: an existing orunmila capture hook is already registered in ${p}.`);
+      console.error('Two live registrations double every captured event and double-bump the turn counter (the dual-install corruption).');
+      console.error('Found:');
+      for (const e of existing) console.error(`  [${e.event}] ${e.command}`);
+      console.error('Remove the existing registration first (or point it at this copy) before installing again.');
+    }
+    return { installed: false, existing };
   }
   // Quote the script path: it can contain spaces (e.g. C:\Users\Jane Doe\...)
   // and, on Windows, backslash separators. Both are safe inside double quotes
@@ -159,23 +242,56 @@ function cmdInstall() {
   const p = configPath(adapter, { global, home: os.homedir(), cwd: process.cwd() });
   fs.mkdirSync(path.dirname(p), { recursive: true });
 
-  // The law gate is a SEPARATE registration from capture, so it must be
-  // installable on its own. Someone who set capture up months ago and now wants
-  // the laws would otherwise be turned away by the duplicate-install guard
-  // before ever reaching the gate — the feature would be unreachable for every
+  // The Closeout Gate is a SEPARATE registration from the Stain Map, so it must
+  // be installable on its own. Someone who set capture up months ago and now
+  // wants the gate would otherwise be turned away by the duplicate-install
+  // guard before ever reaching it — the feature would be unreachable for every
   // existing user, which is most of them.
-  const wantsLaws = args.includes('--with-laws');
+  //
+  // --with-laws is the original spelling of --with-gate. It keeps working
+  // forever: it is in install instructions people have already followed.
+  const wantsGate = args.includes('--with-gate') || args.includes('--with-laws');
+  const gateOnly = args.includes('--gate-only');
   let captureInstalled = true;
 
+  // --gate-only: register the gate and leave capture alone. The gate JUDGES the
+  // events capture records (gate.js reads them back through readTurn), so it is
+  // not a standalone product — without the Stain Map underneath it there is
+  // nothing to judge and it will pass every turn in silence. Say so out loud
+  // rather than installing something inert.
+  if (gateOnly) {
+    if (adapter.id !== 'claude-code') {
+      console.error(`--gate-only is claude-code only; ${adapter.label} can run the Stain Map but not the Closeout Gate.`);
+      process.exitCode = 1;
+      return;
+    }
+    const state = lensState({ agentId: adapter.id, global });
+    if (!state.stainMap.length) {
+      console.log('Note: the Stain Map is NOT installed in this config.');
+      console.log('The Closeout Gate judges the events the Stain Map records, so on its own it has');
+      console.log('nothing to read and will pass every turn silently. Install both with:');
+      console.log('  orunmila install --with-gate\n');
+    }
+    const settings = readJson(p, {});
+    const gate = `node "${path.join(root, 'src/capture/claude-code', 'law-gate.js')}"`;
+    mergeClaudeHook(settings, 'Stop', '*', gate);
+    fs.writeFileSync(p, JSON.stringify(settings, null, 2));
+    console.log(`${LENSES['closeout-gate'].name} installed on the Stop hook in ${p}.\n`);
+    printLawsForReview({ root: process.cwd() });
+    console.log(`\nRestart ${adapter.label} (or start a new session) for this to take effect.`);
+    return;
+  }
+
   if (adapter.id === 'claude-code') {
-    const res = installClaudeCode(root, p);
+    const res = installClaudeCode(root, p, { tolerateExisting: wantsGate });
     if (res && res.installed === false) {
       captureInstalled = false;
-      if (!wantsLaws) {
+      if (!wantsGate) {
         process.exitCode = 1;
         return;
       }
-      console.log('(Capture is already installed — leaving it alone and installing the law gate only.)\n');
+      console.log(`${LENSES['stain-map'].name} is already installed here — leaving it exactly as it is.`);
+      console.log('Adding the second lens only.\n');
     }
   } else if (adapter.id === 'antigravity') {
     installAntigravity(adapter, root, p);
@@ -183,28 +299,30 @@ function cmdInstall() {
     installGeneric(adapter, root, p);
   }
 
-  if (captureInstalled) console.log(`Capture hooks for ${adapter.label} installed into ${p}`);
+  if (captureInstalled) console.log(`${LENSES['stain-map'].name} installed for ${adapter.label} into ${p}`);
 
   // The law layer is opt-in and, when it goes in, it is READ OUT. A rule that
   // can interrupt someone's work must never be something they discover by being
   // interrupted — so installing it prints every law in force, its severity, and
   // the file to edit to change it.
-  if (args.includes('--with-laws')) {
+  if (wantsGate) {
     if (adapter.id !== 'claude-code') {
-      console.log('\n--with-laws currently supports claude-code only; capture is installed, the gate is not.');
+      console.log(`\nThe ${LENSES['closeout-gate'].name} is claude-code only; the Stain Map is installed, the gate is not.`);
     } else {
       const settings = readJson(p, {});
       const gate = `node "${path.join(root, 'src/capture/claude-code', 'law-gate.js')}"`;
       mergeClaudeHook(settings, 'Stop', '*', gate);
       fs.writeFileSync(p, JSON.stringify(settings, null, 2));
-      console.log('Law gate installed on the Stop hook.\n');
+      console.log(`${LENSES['closeout-gate'].name} installed on the Stop hook.\n`);
       printLawsForReview({ root: process.cwd() });
     }
   } else {
-    console.log('\nThe law layer is available and NOT installed. It checks your claims against the');
-    console.log('evidence in each turn and speaks up at run time. See what it would enforce with:');
+    console.log(`\nThe second lens, ${LENSES['closeout-gate'].name}, is available and NOT installed.`);
+    console.log('The Stain Map you just installed only ever reports. The gate can REFUSE a turn whose');
+    console.log('claims its own evidence does not support. See exactly what it would enforce first:');
     console.log('  orunmila laws');
-    console.log('Install it with:  orunmila install --agent claude-code --with-laws');
+    console.log('Then add it with:  orunmila install --agent claude-code --with-gate');
+    console.log('Compare the two lenses any time with:  orunmila lenses');
   }
 
   console.log(`\nRestart ${adapter.label} (or start a new session) for these to take effect.`);
@@ -256,6 +374,75 @@ function printLawsForReview({ root }) {
   console.log(dim('  Scaffold your own file:                orunmila laws --init'));
 }
 
+/**
+ * `orunmila lenses` — which lens is which, what each one can do, and which of
+ * them you actually have installed right now.
+ *
+ * This command exists because the two lenses are easy to conflate and the
+ * difference is the whole decision: one records and reports, the other can
+ * stop your agent. Nobody should have to read source to find out which is live.
+ */
+function cmdLenses() {
+  const dim = (t) => `\x1b[2m${t}\x1b[0m`;
+  const bold = (t) => `\x1b[1m${t}\x1b[0m`;
+  const agentId = flag('agent', 'claude-code');
+  const global = args.includes('--global');
+  const state = lensState({ agentId, global });
+
+  if (!state) {
+    console.error(`Unknown agent "${agentId}". Try: orunmila agents`);
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log(bold('orunmila has two lenses. They are installed separately and used for different jobs.\n'));
+
+  // Pad on VISIBLE width: the header cells carry ANSI bold codes, and padEnd
+  // counts those bytes, which knocks the header out of line with the rows.
+  // eslint-disable-next-line no-control-regex -- stripping ANSI requires matching ESC
+  const ANSI_RE = /\x1b\[[0-9;]*m/g;
+  const vis = (t) => String(t).replace(ANSI_RE, '').length;
+  const pad = (t, n) => String(t) + ' '.repeat(Math.max(0, n - vis(t)));
+
+  const rows = [
+    ['', bold('The Stain Map'), bold('The Closeout Gate')],
+    ['what it does', 'records + reports', 'refuses'],
+    ['when', 'after each turn', "before a turn is allowed to end"],
+    ['can it stop the agent?', 'never', 'yes — 2 of its laws block'],
+    ['agents', 'all supported agents', 'claude-code only'],
+    ['install', 'orunmila install', 'orunmila install --with-gate'],
+    ['add to an existing install', '—', 'orunmila install --gate-only'],
+    ['turn off for one session', '—', 'ORUNMILA_LAWS=off'],
+    ['read it', 'orunmila trail', 'orunmila laws'],
+  ];
+  const w0 = Math.max(...rows.map((r) => vis(r[0])));
+  for (const [a, b, c] of rows) {
+    console.log(`  ${pad(a, w0)}   ${pad(b, 29)} ${c}`);
+  }
+
+  console.log(dim('\n  The gate judges the events the Stain Map records, so the gate needs the Stain'));
+  console.log(dim('  Map underneath it. The Stain Map is useful entirely on its own.'));
+
+  console.log(`\n${bold('Installed right now')} ${dim(`(${state.configPath})`)}`);
+  if (!state.exists) {
+    console.log('  neither — no config file at that path yet.');
+  } else {
+    const mark = (on) => (on ? '\x1b[32m✓ installed\x1b[0m' : '\x1b[2m· not installed\x1b[0m');
+    console.log(`  ${pad('The Stain Map', 20)} ${mark(state.stainMap.length)}`);
+    for (const h of state.stainMap) console.log(dim(`      [${h.event}] ${h.command}`));
+    if (state.adapter.id === 'claude-code') {
+      console.log(`  ${pad('The Closeout Gate', 20)} ${mark(state.gate.length)}`);
+      for (const h of state.gate) console.log(dim(`      [${h.event}] ${h.command}`));
+    } else {
+      console.log(`  ${pad('The Closeout Gate', 20)} ${dim('· unavailable for this agent (claude-code only)')}`);
+    }
+  }
+
+  if (state.exists && state.stainMap.length && !state.gate.length && state.adapter.id === 'claude-code') {
+    console.log(dim('\n  To add the gate without touching capture:  orunmila install --gate-only'));
+  }
+}
+
 function logSizeKB() {
   try {
     return Math.round(fs.statSync(eventlog.logPath()).size / 1024);
@@ -267,6 +454,24 @@ function logSizeKB() {
 function cmdStatus() {
   const all = eventlog.readAll();
   const sessions = new Set(all.map((e) => e.session_id));
+
+  // Which lenses are live, first — before any counts. A log with events in it
+  // says capture ran at some point; it does not say the gate is on, and those
+  // are the two separate things a person checking status actually wants.
+  const ls = lensState({ agentId: flag('agent', 'claude-code'), global: args.includes('--global') });
+  if (ls) {
+    const mk = (on) => (on ? '\x1b[32mon\x1b[0m' : '\x1b[2moff\x1b[0m');
+    const gateCell = ls.adapter.id === 'claude-code'
+      ? mk(ls.gate.length)
+      : '\x1b[2mn/a (claude-code only)\x1b[0m';
+    console.log(`Lenses: Stain Map ${mk(ls.stainMap.length)}  |  Closeout Gate ${gateCell}`);
+    if (String(process.env.ORUNMILA_LAWS || '').toLowerCase() === 'off') {
+      console.log('  \x1b[33mORUNMILA_LAWS=off is set in this shell — the gate is disabled regardless of install.\x1b[0m');
+    }
+    console.log(`  config: ${ls.configPath}`);
+    console.log('  detail: orunmila lenses\n');
+  }
+
   console.log(`Event log: ${eventlog.logPath()}`);
   console.log(`Events captured: ${all.length}`);
   console.log(`Log size: ${logSizeKB()} KB`);
@@ -792,6 +997,7 @@ const COMMANDS = {
   stats: cmdStats,
   status: cmdStatus,
   prune: cmdPrune,
+  lenses: cmdLenses,
   report: cmdReport,
   html: cmdHtml,
   trail: cmdTrail,
@@ -810,27 +1016,50 @@ const COMMANDS = {
 if (!cmd || !COMMANDS[cmd]) {
   console.log(`orunmila - claim-vs-reality verification for AI coding agents
 
-Usage:
-  orunmila install [--agent ID] [--global]     install capture hooks for an agent (default: claude-code)
-  orunmila agents                    list supported agents and their config locations
-  orunmila laws [--root dir]         show the laws in force and which layer each came from (layer 4 = the canon, layer 5 = yours)
-  orunmila laws --check [--session ID] [--json]   replay those laws over a captured session, read-only — measure a law set before trusting it
-  orunmila stats                     cross-agent reliability scores, phantom rates, and comparisons
-  orunmila status                    show event log location, size, and counts
-  orunmila prune [--keep N]          cap the log to the N most-recent sessions (default 20; explicit, never automatic)
-  orunmila report [--session ID] [--turn ID] [--archive STAMP]   print a terminal stain report (live, or a pinned archived snapshot)
-  orunmila html [--session ID] [--out path] [--archive STAMP] [--no-redact-home]   generate the mismatch-only HTML report
-  orunmila trail [--session ID] [--out path] [--archive STAMP] [--no-redact-home]  unified report: complete trail (the glove) + lineage + orunmila stains
-  orunmila trail --json [--facts-only] [--session ID] [--out path] [--no-redact-home]   machine-readable trail (the glove); --facts-only drops the inferred lineage layer (edges/touched_by), leaving pure recordings
-  orunmila rescore [--dry-run]       re-reconcile every persisted report with the current engine (originals archived, never deleted)
-  orunmila archives                  list archived rescore snapshots you can read back with --archive <stamp>
-  orunmila json [--session ID] [--turn ID] [--out path] [--include claim_text] [--no-redact-home]   machine-readable per-turn stain output (schema_version 1.0)
-  orunmila feedback [--session ID] [--dir path] [--include claim_text] [--no-redact-home]   write sanitized accuracy cases to a local drop folder (precision-corpus superset)
-  orunmila feedback-import [--dir path] [--corpus path] [--force]   copy cases[] entries from a feedback drop folder into test/cases/precision/
-  orunmila demo [--out path]         render a sample unified report from a scripted session (no setup, for a first look)
-  orunmila watch [--root dir]        live-tail new turn reports + run the filesystem sentinel
-  orunmila watch-fs [--root dir]     run ONLY the filesystem sentinel (independent disk observer)
-  orunmila debug-transcript <path>   inspect why transcript parsing isn't matching your install
+Usage: orunmila <command> [options]
+
+TWO LENSES, installed separately (orunmila lenses — which do I have?):
+
+  The Stain Map      records + reports. Never refuses. All supported agents.
+  The Closeout Gate  refuses a turn whose claims its evidence doesn't support.
+                     claude-code only. 2 of its 6 laws block; the rest advise.
+
+Install
+  orunmila install [--agent ID] [--global]        the Stain Map alone (default agent: claude-code)
+  orunmila install --with-gate [--agent ID]       both lenses (--with-laws is the original spelling, still works)
+  orunmila install --gate-only                    add the Closeout Gate to an existing Stain Map install
+  orunmila lenses [--agent ID] [--global]         the two lenses side by side + which are installed right now
+  orunmila agents                                 list supported agents and their config locations
+
+The Stain Map — read what happened
+  orunmila trail [--session ID] [--out path] [--archive STAMP] [--no-redact-home]
+                                                  THE REPORT: complete trail (the glove) + lineage + stains
+  orunmila trail --json [--facts-only] [--session ID] [--out path]
+                                                  machine-readable trail; --facts-only drops the inferred lineage layer
+  orunmila report [--session ID] [--turn ID] [--archive STAMP]   terminal stain report (live, or a pinned snapshot)
+  orunmila html [--session ID] [--out path] [--archive STAMP]    mismatch-only HTML report
+  orunmila json [--session ID] [--turn ID] [--include claim_text]   per-turn stain output (schema_version 1.0)
+  orunmila demo [--out path]                      sample report from a scripted session — no setup, for a first look
+  orunmila watch [--root dir]                     live-tail new turn reports + run the filesystem sentinel
+  orunmila watch-fs [--root dir]                  run ONLY the filesystem sentinel (independent disk observer)
+
+The Closeout Gate — read and tune what it enforces
+  orunmila laws [--root dir]                      the laws in force + which layer each came from (4 = canon, 5 = yours)
+  orunmila laws --check [--session ID] [--json]   replay those laws over a captured session, read-only
+  orunmila laws --init                            scaffold your own laws file so you can retune or add to them
+                                                  ORUNMILA_LAWS=off disables the gate for one session
+
+Both lenses
+  orunmila status [--agent ID]                    which lenses are live, event log location, size, counts
+  orunmila stats                                  cross-agent reliability scores, phantom rates, comparisons
+  orunmila prune [--keep N]                       cap the log to the N most-recent sessions (explicit, never automatic)
+  orunmila rescore [--dry-run]                    re-reconcile every persisted report (originals archived, never deleted)
+  orunmila archives                               list archived rescore snapshots, readable with --archive <stamp>
+  orunmila feedback [--session ID] [--include claim_text]   write sanitized accuracy cases to a local drop folder
+  orunmila feedback-import [--dir path] [--force]  copy those cases into test/cases/precision/
+  orunmila debug-transcript <path>                inspect why transcript parsing isn't matching your install
+
+Docs: README.md · known issues with status: review/ISSUES.md
 `);
   process.exit(cmd ? 1 : 0);
 }

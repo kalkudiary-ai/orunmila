@@ -35,7 +35,10 @@
   "files": [
     "bin/",
     "src/",
+    "skills/",
     "README.md",
+    "CHANGELOG.md",
+    "SKILL.md",
     "LICENSE"
   ],
   "engines": {

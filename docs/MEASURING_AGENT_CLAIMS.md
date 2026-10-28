@@ -215,6 +215,8 @@ rather print this next to the number than let the number flatter the tool.
 
 ---
 
-**Orunmila** is MIT licensed, has zero runtime dependencies, runs entirely on
-your machine, and makes no network calls of its own.
+**Orunmila** is MIT licensed, has zero runtime dependencies, and runs entirely
+on your machine. The CLI makes no outbound requests; the HTML report's optional
+3D Graph tab fetches a rendering library from a CDN when opened, which is noted
+in the README rather than left for someone to discover in a packet trace.
 [github.com/kalkudiary-ai/orunmila](https://github.com/kalkudiary-ai/orunmila)

@@ -31,6 +31,7 @@ Severity legend: **P0** = a central claim of the tool is false until fixed ·
 | P1-7 | A double-extension basename (`login.test.js`) extracts as its tail (`test.js`) | P1 | **Closed** — found + fixed 2026-10-28 |
 | P1-8 | A weak phrase target stands in for a named file nothing touched | P1 | **Closed** — found + fixed 2026-10-28 |
 | P2-7 | Coverage thresholds were never met, so `prepublishOnly` blocked every publish | P2 | **Closed** — found + fixed 2026-10-28 |
+| P2-8 | The report's 3D Graph tab fetches a CDN script, against a stated privacy claim | P2 | **Open** — docs corrected 2026-10-28 |
 | P2-1 | `partial` / scaffolding detection effectively never fires | P2 | **Closed** |
 | P2-2 | Turn tracking is not concurrency-safe | P2 | **Open** — narrowed |
 | P2-3 | Sub-agent (Task tool) writes are unreconciled | P2 | **Closed for Claude Code**, open elsewhere |
@@ -558,6 +559,52 @@ under concurrent load.
 
 ---
 
+## P2-8 · The report's 3D Graph tab fetches a CDN script, against a stated privacy claim — OPEN
+
+**Found 2026-10-28**, by an advisory law finding on a sentence that merely
+*mentioned* the tension. Worth recording how it surfaced: the gate flagged a
+prose claim as unreceipted, checking it meant reading the renderer, and the
+renderer disagreed with the docs.
+
+`src/render/trail-visual.js:615-616` loads `3d-force-graph@1.73.4` from
+`unpkg.com`, falling back to `cdn.jsdelivr.net`, when a viewer opens the
+**3D Graph** tab. The tab's own help text has always said so
+(`trail-visual.js:400`: *"Loads a small 3D library from a CDN — needs
+internet"*), so this was never hidden in the UI.
+
+The docs were another matter. They said:
+
+- `docs/MEASURING_AGENT_CLAIMS.md`: *"makes no network calls of its own"*
+- `skills/orunmila/SKILL.md`: *"Nothing leaves their machine."*
+- `README.md`: *"runs entirely on your machine"*
+
+The first two were false as written. **No session content is transmitted** —
+it is a plain script fetch — but the request discloses the viewer's IP and the
+fact that a report was opened, to a third-party CDN. For a tool whose pitch is
+local-first privacy, that is exactly the claim you cannot be loose about, and
+it is the kind a security reviewer checks first.
+
+**Docs corrected** in README (headline + the privacy section, where a careful
+reader actually looks), the write-up, and the free skill. The behaviour is
+unchanged and the issue stays open, because the honest fix is a choice someone
+should make deliberately:
+
+1. **Bundle it.** Inline the library so the report is genuinely self-contained.
+   Costs ~1MB on every generated report, for a tab most people never open.
+2. **Make it opt-in.** Render the tab behind a click that says plainly it will
+   fetch from a CDN, so the network request follows informed consent.
+3. **Drop the tab.** The 2D Graph covers the same information and is
+   self-contained.
+
+My read is (2) — it is cheap, it keeps the feature, and it converts a silent
+request into a disclosed one. But it is a product call, not a repair.
+
+**Acceptance test:** open a generated report with the network disabled and
+click every tab. Nothing fails silently, and no tab issues a request the user
+did not consent to.
+
+---
+
 ## P3-1 · `command_run` stdout truncated to 2000 chars — CLOSED
 
 `src/capture/core.js:200` now writes the full output to a local sidecar under
@@ -638,10 +685,12 @@ cases rather than a missing document.
    law precise enough to block a turn.
 4. **P3-2** — make session resolution explicit at every gate-shaped caller.
 5. **P2-2** — serialise the turn counter.
-6. **P2-4** — subtask-only and command-touched tiles in `orunmila html`.
-7. **P2-6** — make the live sentinel test poll to a deadline instead of sleeping
+6. **P2-8** — decide the CDN question, then make the report's behaviour match
+   its privacy claim.
+7. **P2-4** — subtask-only and command-touched tiles in `orunmila html`.
+8. **P2-6** — make the live sentinel test poll to a deadline instead of sleeping
    past the debounce.
-8. **P2-7 follow-up** — write the tests that let the coverage floor ratchet up.
+9. **P2-7 follow-up** — write the tests that let the coverage floor ratchet up.
 
 ## How the numbers on this page are produced
 

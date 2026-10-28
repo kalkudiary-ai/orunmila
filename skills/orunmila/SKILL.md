@@ -71,8 +71,14 @@ nothing touched in their real log.
   missing, not that the agent lied. A green stain means the receipt checks out,
   not that the code is correct. It narrows where to look; it does not replace
   looking.
-- **Nothing leaves their machine.** No telemetry, no account. The event log is a
-  local append-only `~/.orunmila/events.jsonl`.
+- **Nothing leaves their machine, with one exception to name out loud.** No
+  telemetry, no account; the event log is a local append-only
+  `~/.orunmila/events.jsonl`, and no session content is ever transmitted. The
+  one outbound request in the whole product is the HTML report's **3D Graph**
+  tab, which fetches a rendering library from a CDN when a viewer opens that
+  tab — so opening it reveals their IP to unpkg/jsdelivr. Every other tab is
+  self-contained. Tell a privacy-sensitive user this before they open a report
+  in front of someone.
 - **Detection accuracy is 100% on a labelled set of 17 turns / 38 assertions**
   (`npm run accuracy` in a clone reproduces it). Say "100% on our labelled set",
   not "100% accurate" — the set is small, and saying so is the point.

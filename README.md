@@ -42,6 +42,14 @@ Summary: 1 verified, 0 partial, 1 phantom, 1 phantom-verification,
 100% free, MIT licensed, runs entirely on your machine. No telemetry, no
 account, no API key required for the default mode.
 
+**One exception, stated up front because it is a privacy claim.** The `orunmila`
+CLI itself makes no outbound requests. The HTML report it generates has one tab
+— **3D Graph** — that fetches a `3d-force-graph` bundle from unpkg (falling back
+to jsdelivr) when a viewer opens it. Opening that tab therefore reveals the
+viewer's IP, and the fact that they opened a report, to a CDN. Every other tab
+is fully self-contained and works offline. Tracked as
+[P2-8](review/ISSUES.md).
+
 <!-- IMAGE SLOTS — the files are not in the repo yet. Drop them in docs/images/
      and delete this comment wrapper (keep the three lines) to make them live.
 
@@ -692,6 +700,13 @@ behind anything. (Not yet wired up in this v0 - see Roadmap.)
   nothing leaves the machine.
 
 ## Sharing a report (privacy)
+
+**Before anything else: one tab in the report reaches the network.** The
+**3D Graph** tab fetches `3d-force-graph` from unpkg (fallback jsdelivr) on
+open. No session content is sent — it is a plain script fetch — but the request
+itself discloses the viewer's IP and that a report was opened. If that matters
+for your threat model, avoid that one tab; the rest of the report is entirely
+self-contained and works with no network at all.
 
 The HTML report is the one artifact you're likely to *share* - paste in an
 issue, send a teammate, screenshot. The event log itself stays complete and

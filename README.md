@@ -50,34 +50,15 @@ viewer's IP, and the fact that they opened a report, to a CDN. Every other tab
 is fully self-contained and works offline. Tracked as
 [P2-8](review/ISSUES.md).
 
-<!-- IMAGE SLOTS — the files are not in the repo yet. Drop them in docs/images/
-     and delete this comment wrapper (keep the three lines) to make them live.
-
-     1. docs/images/stain-map.png
-        `npx orunmila demo` -> open orunmila-demo.html -> screenshot from the
-        title down to the end of "FILES WORTH A LOOK (RANKED BY SEVERITY)".
-        That crop carries the whole value in one frame: the verdict, the
-        severity bar, and the ranked files with cache.bin flagged
-        UNTRACKED WRITE.
-
-     2. docs/images/fix-it-prompt.png
-        Same report, "Report" tab. Screenshot the five counters plus the
-        COPY-PASTE PROMPT box. This is the differentiator against an activity
-        logger: it is not a diagnosis, it is the message that sends the agent
-        back to fix its own work.
-
-     3. docs/images/findings.png
-        Same tab, scrolled to FINDINGS. Five colour-coded rows with the real
-        claim text — it teaches the whole outcome vocabulary without a legend.
-
-     NOT YET: docs/images/closeout-gate.gif. The gate blocks on "The build is
-     green" but not on "Tests pass" (P0-3), so a GIF recorded today would be
-     demonstrating the one phrasing that works. Fix P0-3, measure, then record.
-
 ![Orunmila's report: what the agent claimed, against what it actually did](docs/images/stain-map.png)
+
+*One ordinary session. The agent wrote the validation, invented a test file, and said the tests passed. Ranked by severity, worst first.*
+
 ![The fix-it prompt: findings turned into a message that sends the agent back](docs/images/fix-it-prompt.png)
+
+*Every finding becomes a prompt you paste straight back into the agent. It is not a diagnosis you then have to act on — it is the message that makes the agent act.*
+
 ![Findings: phantom, phantom test, dropped, undisclosed, untracked write](docs/images/findings.png)
--->
 
 ## The two lenses
 

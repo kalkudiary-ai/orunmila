@@ -7,6 +7,10 @@ coverage/
 
 # npm pack output — a build artifact, never committed
 *.tgz
+
+# npm auth. A project-level .npmrc is where publish tokens get written, and
+# committing one leaks a credential with write access to the package.
+.npmrc
 report.html
 .aider.chat.history.md
 .aider.input.history

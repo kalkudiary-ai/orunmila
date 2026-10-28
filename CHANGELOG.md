@@ -8,6 +8,22 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The gate no longer judges the previous turn's claim text (P0-4).**
+  `runGate` reads its claim from `lastAssistantText(transcript_path)`. When the
+  Stop hook fired before the host had flushed that turn's final assistant
+  message, it got the PREVIOUS turn's text and judged words the agent had not
+  written in the turn being judged — measured in a real session as two
+  consecutive turns with byte-identical captured claims, where the gate
+  re-flagged a sentence that had already been retracted. It landed on the
+  blocking path: an agent that withdrew an unbacked claim could be blocked again
+  on the stale text, spending the per-turn block budget on a phantom and leaving
+  the gate stood down for anything real that followed. The claim text is now
+  fingerprinted onto the turn state and compared against the previous turn's; a
+  byte-identical match declines to judge rather than judging stale data, and
+  records `skipped_stale_claim` so it stays measurable instead of silent.
+
 ## [0.2.0] — 2026-10-28
 
 ### Added

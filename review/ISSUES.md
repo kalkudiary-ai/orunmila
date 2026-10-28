@@ -22,7 +22,7 @@ Severity legend: **P0** = a central claim of the tool is false until fixed ·
 | P0-1 | Filesystem Sentinel does not exist | P0 | **Closed** — shipped and measured |
 | P0-2 | Sentinel writes carry no session id, so concurrent sessions adopt each other's writes | P0 | **Open** — architectural |
 | P0-3 | The blocking verification law never sees the most common way an agent claims a pass | P0 | **Open** — found 2026-10-28 |
-| P0-4 | The gate can judge the PREVIOUS turn's claim text, so it re-flags findings already fixed | P0 | **Open** — found 2026-10-28 |
+| P0-4 | The gate can judge the PREVIOUS turn's claim text, so it re-flags findings already fixed | P0 | **Closed** — found + fixed 2026-10-28 |
 | P1-1 | Plain-English subtasks produce false `silently_dropped` | P1 | **Closed** |
 | P1-2 | Filename matching is actually extension matching | P1 | **Closed** |
 | P1-3 | `undisclosed` flags everything when keywords are empty | P1 | **Closed** |
@@ -200,7 +200,7 @@ claim "Tests pass."  + a command with exit 0      => does NOT fire
 
 ---
 
-## P0-4 · The gate can judge the previous turn's claim text — OPEN
+## P0-4 · The gate can judge the previous turn's claim text — CLOSED
 
 **Found 2026-10-28**, by being on the receiving end of it: the gate flagged a
 sentence that had already been retracted in the turn before, and the sentence
@@ -245,14 +245,35 @@ stale entry. Distinguishing them needs instrumentation at the hook boundary.
 4. It is the failure a new user hits in week one, and the one most likely to
    make them conclude the tool is broken and switch it off.
 
-**Fix sketch.** Hash the claim text and record it on the turn; if a turn's
-captured claim is byte-identical to the immediately preceding turn's, treat it
-as not-yet-available rather than as a claim — judge nothing and say so, instead
-of judging stale text. A short bounded re-read of the transcript before giving
-up would close the flush race directly, but the hook must stay fast and must
-never hang, so the duplicate guard is the safer first move.
+**Fixed** in `src/laws/gate.js`. `runGate` now fingerprints the claim text
+(sha256, first 16 hex) and stores it on the turn's state. Before judging, it
+compares against the *previous* turn's fingerprint; on a byte-identical match it
+declines to judge and returns null.
 
-**Acceptance test** (fails today):
+The reasoning for the shape of this fix: identical consecutive claims mean the
+transcript had not caught up when Stop fired, so the agent has not said anything
+new and there is nothing honest to judge. This **declines to act on absent
+data** — it does not silence a finding, which is the distinction that matters
+against this project's own rule that a gate going quiet is worse than no gate.
+The skip is written to the turn state as `skipped_stale_claim: true`, so
+`laws --check` and any firing-rate measurement can see it rather than counting
+the same claim twice.
+
+A bounded re-read of the transcript would close the flush race more directly,
+but the Stop hook must stay fast and must never hang, so the duplicate guard is
+the correct first move. The re-read remains available if the guard proves too
+coarse.
+
+Locked by five tests in `test/laws.js`: the repeat is skipped, the skip is
+recorded, a genuinely new claim still blocks, the first turn is never treated as
+a repeat, and the fingerprint write does not clobber the block counter.
+
+**Still owed:** the 18%-of-claimed-turns and 8-in-1,174 figures were derived
+from captured `turn_claim` events that may contain duplicates. They should be
+re-derived with duplicates collapsed before either is quoted again. The guard
+prevents new double-counting; it does not retroactively clean the old numbers.
+
+**Acceptance test** (now passes):
 ```
 two consecutive turns in one session
 => their captured turn_claim texts are never byte-identical
@@ -737,25 +758,22 @@ cases rather than a missing document.
 
 ## Suggested fix order (by leverage)
 
-1. **P0-4** — stale claim text on the blocking path. It makes the gate flag
-   work already fixed, which is the fastest route to someone switching it off,
-   and it casts doubt on the two firing-rate figures the project quotes.
-2. **P0-3** — the blocking law's extraction gap. It is cheap to fix, it is the
+1. **P0-3** — the blocking law's extraction gap. It is cheap to fix, it is the
    feature the project leads with, and the docs currently describe behaviour the
    code does not have.
-3. **P0-2** — sentinel session identity. It is the only open item that can
+2. **P0-2** — sentinel session identity. It is the only open item that can
    produce a confidently wrong answer rather than a missing one, and the flag it
    corrupts is the sentinel's whole reason for existing.
-4. **P1-5** — pipe-laundered receipts. Cheap to detect, and it defeats the one
+3. **P1-5** — pipe-laundered receipts. Cheap to detect, and it defeats the one
    law precise enough to block a turn.
-5. **P3-2** — make session resolution explicit at every gate-shaped caller.
-6. **P2-2** — serialise the turn counter.
-7. **P2-8** — decide the CDN question, then make the report's behaviour match
+4. **P3-2** — make session resolution explicit at every gate-shaped caller.
+5. **P2-2** — serialise the turn counter.
+6. **P2-8** — decide the CDN question, then make the report's behaviour match
    its privacy claim.
-8. **P2-4** — subtask-only and command-touched tiles in `orunmila html`.
-9. **P2-6** — make the live sentinel test poll to a deadline instead of sleeping
+7. **P2-4** — subtask-only and command-touched tiles in `orunmila html`.
+8. **P2-6** — make the live sentinel test poll to a deadline instead of sleeping
    past the debounce.
-10. **P2-7 follow-up** — write the tests that let the coverage floor ratchet up.
+9. **P2-7 follow-up** — write the tests that let the coverage floor ratchet up.
 
 ## How the numbers on this page are produced
 

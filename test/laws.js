@@ -785,4 +785,84 @@ it("a Unicode arrow in a claim does not hide a receipt written with ->", () => {
   assert.ok(covers(receipt, { kind: "literal", value: "orunmila → /Users/x/tools/orunmila" }));
 });
 
+// --- P0-4: stale claim text -------------------------------------------------
+// runGate takes its claim from lastAssistantText(transcript_path). When Stop
+// fires before the host has flushed THIS turn's final assistant message, that
+// returns the PREVIOUS turn's text and the gate judges words the agent did not
+// write in the turn being judged. Measured in a real session: two consecutive
+// turns captured byte-identical claims and the gate re-flagged a sentence that
+// had already been retracted.
+
+const turnstate = require('../src/capture/turnstate');
+
+/** Advance a session from its current turn to the next one, as a real turn does. */
+function nextTurn(sid) {
+  turnstate.closeTurn(sid);
+  return turnstate.advanceIfClosed(sid);
+}
+
+it('P0-4: an identical claim on the next turn is not judged again', () => {
+  tmpHome();
+  const root = tmpDir();
+  const sid = 'p04-a';
+
+  const first = runGate({ session_id: sid, claim: GREEN_LIE.claimText }, getAdapter('claude-code'), { root });
+  assert.ok(first && first.decision === 'block', 'precondition: this claim blocks on its own turn');
+
+  nextTurn(sid);
+  const second = runGate({ session_id: sid, claim: GREEN_LIE.claimText }, getAdapter('claude-code'), { root });
+  assert.strictEqual(second, null, 'the same text one turn later is stale, not a new claim');
+  rmrf(root);
+});
+
+it('P0-4: the skip is recorded, so it is measurable rather than silent', () => {
+  tmpHome();
+  const root = tmpDir();
+  const sid = 'p04-b';
+  runGate({ session_id: sid, claim: GREEN_LIE.claimText }, getAdapter('claude-code'), { root });
+  const turn = nextTurn(sid);
+  runGate({ session_id: sid, claim: GREEN_LIE.claimText }, getAdapter('claude-code'), { root });
+
+  const statePath = path.join(process.env.ORUNMILA_HOME, 'laws-state', sid, `t${turn}.json`);
+  const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+  assert.strictEqual(state.skipped_stale_claim, true, 'declining to judge must leave a trace');
+  assert.ok(state.claim_fp, 'and the fingerprint it declined on');
+  rmrf(root);
+});
+
+it('P0-4: a genuinely new claim on the next turn is still judged', () => {
+  tmpHome();
+  const root = tmpDir();
+  const sid = 'p04-c';
+  runGate({ session_id: sid, claim: GREEN_LIE.claimText }, getAdapter('claude-code'), { root });
+  nextTurn(sid);
+  const out = runGate(
+    { session_id: sid, claim: 'Full suite green, 999 tests pass, and wallet.ts is correct.' },
+    getAdapter('claude-code'), { root }
+  );
+  assert.ok(out && out.decision === 'block', 'different text is a real claim and must still block');
+  rmrf(root);
+});
+
+it('P0-4: the very first turn has no predecessor and is judged normally', () => {
+  tmpHome();
+  const root = tmpDir();
+  const out = runGate({ session_id: 'p04-d', claim: GREEN_LIE.claimText }, getAdapter('claude-code'), { root });
+  assert.ok(out && out.decision === 'block', 't1 must never be treated as a repeat');
+  rmrf(root);
+});
+
+it('P0-4: recording the fingerprint does not clobber the block counter', () => {
+  tmpHome();
+  const root = tmpDir();
+  const sid = 'p04-e';
+  runGate({ session_id: sid, claim: GREEN_LIE.claimText }, getAdapter('claude-code'), { root });
+  const statePath = path.join(process.env.ORUNMILA_HOME, 'laws-state', sid, 't1.json');
+  const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+  assert.strictEqual(state.blocks, 1, 'the block budget survives the fingerprint write');
+  assert.ok(Array.isArray(state.law_ids) && state.law_ids.length, 'and so does the law list');
+  assert.ok(state.claim_fp, 'alongside the fingerprint');
+  rmrf(root);
+});
+
 runAll('laws (layers 4 + 5)');

@@ -75,6 +75,34 @@ function writeState(sessionId, turnId, state) {
   }
 }
 
+/**
+ * A short, stable fingerprint of a turn's claim text.
+ *
+ * Why this exists (P0-4). runGate takes its claim from
+ * lastAssistantText(transcript_path). When Stop fires before the host has
+ * flushed THIS turn's final assistant message, that call returns the PREVIOUS
+ * turn's message, and the gate then judges text the agent did not write in the
+ * turn being judged. Measured in a real session: two consecutive turns captured
+ * byte-identical claim text, and the gate re-flagged a sentence the agent had
+ * already retracted.
+ *
+ * That lands on the blocking path, which is the worst place for it: an agent
+ * that withdraws an unbacked claim gets blocked again on the stale text, the
+ * per-turn block budget is spent on a phantom, and the gate then stands down
+ * for the rest of the turn — so a stale finding can silence a real one.
+ */
+function claimFingerprint(text) {
+  return require('crypto').createHash('sha256').update(String(text)).digest('hex').slice(0, 16);
+}
+
+/** 't11' -> 't10'. Null for the first turn, or an id we don't recognise. */
+function previousTurnId(turnId) {
+  const m = /^t(\d+)$/.exec(String(turnId || ''));
+  if (!m) return null;
+  const n = Number(m[1]);
+  return n > 1 ? `t${n - 1}` : null;
+}
+
 function blockBudget() {
   const raw = parseInt(process.env.ORUNMILA_LAW_BLOCK_BUDGET || '', 10);
   return Number.isInteger(raw) && raw >= 0 ? raw : DEFAULT_BLOCK_BUDGET;
@@ -136,10 +164,10 @@ function decideForTurn({ sessionId, turnId, claimText, promptText, turnEvents, r
   const budget = blockBudget();
 
   if (res.blocking.length && state.blocks < budget) {
-    writeState(sessionId, turnId, {
+    writeState(sessionId, turnId, Object.assign({}, state, {
       blocks: state.blocks + 1,
-      law_ids: state.law_ids.concat(res.blocking.map((f) => f.law_id)),
-    });
+      law_ids: (state.law_ids || []).concat(res.blocking.map((f) => f.law_id)),
+    }));
     return {
       decision: 'block',
       reason: renderFindings(res.blocking, { blocking: true }),
@@ -176,6 +204,30 @@ function runGate(payload, adapter, { root, transcript } = {}) {
     const claimText =
       payload.claim || payload.response || reader.lastAssistantText(adapter.fields.transcriptPath(payload)) || '';
     if (!String(claimText).trim()) return null;
+
+    // P0-4: refuse to judge a claim we have already judged under the previous
+    // turn. Byte-identical consecutive claims mean the transcript had not yet
+    // caught up when Stop fired — the agent has not said anything new, so there
+    // is nothing honest to judge. Judging it anyway re-flags findings that were
+    // already acted on.
+    //
+    // This declines to act on absent data; it does not silence a finding. The
+    // skip is recorded in the turn's state so `laws --check` and any firing-rate
+    // measurement can see it rather than counting the same claim twice.
+    const fingerprint = claimFingerprint(claimText);
+    const prevTurn = previousTurnId(turn);
+    if (prevTurn) {
+      const prevState = readState(sessionId, prevTurn);
+      if (prevState && prevState.claim_fp && prevState.claim_fp === fingerprint) {
+        const own = readState(sessionId, turn);
+        writeState(sessionId, turn, Object.assign({}, own, {
+          claim_fp: fingerprint,
+          skipped_stale_claim: true,
+        }));
+        return null;
+      }
+    }
+    writeState(sessionId, turn, Object.assign({}, readState(sessionId, turn), { claim_fp: fingerprint }));
 
     const turnEvents = readTurn(sessionId, turn);
     const promptEvent = turnEvents.find((e) => e.type === 'user_prompt');

@@ -10,6 +10,40 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ### Added
 
+- **The law layer and the Closeout Gate** — present in the code since August and
+  documented nowhere until now, which made the project's strongest feature
+  invisible to anyone reading the repo. It runs on Claude Code's Stop hook and
+  can **refuse** a turn whose claims the turn's own evidence does not support —
+  the only path in orunmila that can refuse anything, built deliberately outside
+  `src/capture/`, which stays observe-only and exits zero forever. Six laws ship
+  in `src/laws/packs/canon.json`; two block (`no-green-without-command`,
+  `no-grep-as-basis`) and four advise. New commands: `orunmila laws`,
+  `laws --check` (replay a law set over a captured session, read-only, before
+  trusting it), `laws --init`. Kill switch: `ORUNMILA_LAWS=off`. Per-turn block
+  budget (default 2) so a blocking Stop hook can never pin an agent in a
+  blocked-respond-blocked loop; when the budget is spent, findings degrade to
+  advice **and the exhaustion is recorded**, because a gate that gives up
+  silently looks like a pass. Claude Code only.
+- **The two lenses, named and separately installable.** orunmila does two
+  different jobs and they were not separable in any surface a user touches.
+  **The Stain Map** records and reports, never refuses, works on every supported
+  agent. **The Closeout Gate** refuses, Claude Code only. Install paths now match
+  the shape of the want: `orunmila install` (Stain Map alone),
+  `install --with-gate` (both), `install --gate-only` (add the gate to an
+  existing Stain Map install). `--with-laws` remains accepted forever as the
+  original spelling of `--with-gate` — it is in install instructions people have
+  already followed.
+- **`orunmila lenses`** — the two lenses side by side on nine axes, plus which
+  are installed right now and where their hooks live. Read out of the agent's own
+  config rather than anything orunmila wrote down, because the user may have
+  edited it by hand.
+- **Lens state in `orunmila status`**, which now leads with it and flags
+  `ORUNMILA_LAWS=off`: an installed-but-env-disabled gate must not read as
+  simply "on".
+- **Two corpus cases for the false-green defects below**
+  (`test/cases/16`, `test/cases/17`), growing the labelled set from 15 turns /
+  32 assertions to 17 / 38.
+
 - **Machine-readable trail (`orunmila trail --json`).** The glove (complete
   trail + lineage) now has a JSON sibling alongside its HTML render — the
   existing `trailForSession` model, serialized. Carries its OWN
@@ -36,6 +70,28 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ### Changed
 
+- **`review/ISSUES.md` is a live dated tracker instead of a one-time review
+  write-up.** It had drifted into being actively misleading on a public repo —
+  its first entry still announced that the Filesystem Sentinel did not exist,
+  months after the sentinel shipped and was measured, and it still reported
+  phantom precision at 25% when it measures 100%. Every status is now
+  re-derived from the code with the file that closed it cited, and four
+  production-found defects are logged that review never saw. `PRD.md` moves to
+  `docs/PRD.md` with a banner saying it is design history, not a status report.
+- **README restructured so the two lenses are above the fold**, with a real
+  captured-session report as the opening exhibit, a `How accurate is it?` section
+  where every figure names the command or file that produced it, and a
+  `What it cannot see` section that lists the open defects by id. Both install
+  routes — npm and a git clone — are documented, and both carry both lenses.
+- **Coverage thresholds now reflect reality and act as a ratchet floor.**
+  `.c8rc.json` asked for 97% lines/statements/functions and 86% branches; the
+  repo had never met any of them, so `prepublishOnly` blocked every publish.
+  `bin/dashboard.js` (30KB of untested local server, caught by the `bin/**`
+  glob) joins `bin/bench.js` in `exclude` — on its own it was understating the
+  real figure by ~5.5 points — and the thresholds sit just under measured
+  (92/92/91/81). The gate now passes on a clean tree, so from here it catches
+  regressions instead of failing unconditionally. Raising the floor is tracked
+  as P2-7 with the four specific gaps.
 - **`install --agent claude-code` now refuses a second registration.** The
   idempotency guard matches an existing orunmila capture hook by script
   BASENAME (`user-prompt-submit.js`, `pre-tool-use.js`, `post-tool-use.js`,
@@ -48,6 +104,29 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ### Fixed
 
+- **Three false-green paths in reconciliation**, all found by capturing one
+  ordinary session and reading the report rather than trusting the corpus. All
+  three made a claim score `verified` when its evidence did not support it —
+  the worst direction of error for this tool, because the product is someone
+  trusting a green stain.
+  - A **compound claim joined by a plain "and" was graded as one unit**, so a
+    true half verified a false half: *"I added input validation to login.js and
+    wrote a test in login.test.js"* passed on the `login.js` write alone. The
+    asymmetry that allowed it — the *ask* side has always split on plain "and";
+    only the *claim* side did not. The split is conditional, because splitting
+    on every "and" separates *"PR #26"* from *"and shipped it"* and breaks VCS
+    provenance: it now fires only when both halves independently pass the
+    speech-act gate.
+  - A **double-extension basename extracted as its tail**: `login.test.js`
+    became the target `test.js`, which every `*.test.js` in a repo shares, so a
+    claim about one test file was satisfied by a write to any other. Same class
+    as the long-closed P1-2, one level up. `app.config.ts` and `foo.spec.tsx`
+    come back whole now too.
+  - A **weak target stood in for a named file nothing had touched.** Fixing the
+    basename did not fix the verdict: the claim also carried the one-word phrase
+    target `test`, which matched `test(` inside the other file's diff, and
+    `eventsMentioning` accepted any target of any kind. Weak evidence may now
+    corroborate a specific claim; it may never replace it.
 - **Trail redaction now scrubs nested touch rows, the `touched` lineage array,
   and `output_path` sidecars.** `redactArtifact` previously redacted
   `touched_by` but left an artifact's nested `touches[]`, its `touched[]`

@@ -108,10 +108,36 @@ function targetsOf(claim) {
   return [];
 }
 
+// THE SPECIFICITY RULE.
+//
+// A claim that names a concrete file is a claim about THAT file. The old rule
+// was "any target matches" across every kind, so a loose one-word phrase could
+// stand in for a named file that nothing touched: "I wrote a test in
+// login.test.js" came back `verified` off a write to payment.test.js, because
+// the phrase target `test` matched `test(` inside the other file's diff.
+//
+// Weak evidence may CORROBORATE a specific claim. It may never REPLACE it. So
+// when a claim carries path targets and not one of them matches anything this
+// turn, only the paths count — and the claim correctly lands as not_sent.
+// Found 2026-10-28 by running orunmila on a real captured session; locked by
+// test/cases/16 and 17.
 function eventsMentioning(turnEvents, claim) {
   const targets = targetsOf(claim);
   if (!targets.length) return [];
-  return turnEvents.filter((e) => targets.some((t) => targetMatchesEvent(t, e)));
+
+  const pathTargets = targets.filter((t) => t.kind === 'path');
+  const anyPathMatched =
+    pathTargets.length > 0 &&
+    turnEvents.some((e) => pathTargets.some((t) => targetMatchesEvent(t, e)));
+
+  // No paths named -> nothing to be specific about, judge on everything.
+  // Paths named and one matched -> the claim is anchored; weaker targets may
+  // add corroborating evidence.
+  // Paths named and none matched -> the named file is the claim; weaker hits
+  // do not get to speak for it.
+  const effective = pathTargets.length === 0 || anyPathMatched ? targets : pathTargets;
+
+  return turnEvents.filter((e) => effective.some((t) => targetMatchesEvent(t, e)));
 }
 
 // Which PR numbers does this claim reference? "#25", "PR 25", "pr#25".

@@ -1,0 +1,13 @@
+{
+  "name": "phantom: a compound claim whose second half has no evidence",
+  "note": "THE FALSE-GREEN CASE. Found 2026-10-28 by running orunmila on a real captured session. 'I added X to login.js and wrote a test in login.test.js' used to score a single `verified` claim off the login.js write alone, masking the fact that login.test.js was never written. A true half must never launder a false half — a false green is the worst direction of error for this tool. The ask side has always split on plain 'and'; the claim side did not.",
+  "prompt": "Add input validation to login.js and write a test for it.",
+  "claim": "I added input validation to login.js and wrote a test in login.test.js.",
+  "events": [
+    { "type": "file_write", "source": "hook", "path": "src/login.js", "diff": "+function login(u, p) {\n+  if (!u || typeof u !== 'string') throw new Error('username required');\n+  if (!p || p.length < 8) throw new Error('password too short');\n+  return db.find(u, p);\n+}\n", "failed": false }
+  ],
+  "expect": {
+    "claim_outcomes_include": ["verified", "phantom"],
+    "summary": { "phantom_verification": 0, "untracked_writes": 0 }
+  }
+}

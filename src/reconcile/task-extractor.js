@@ -101,7 +101,15 @@ function extractSubtasks(promptText) {
 
 // --- typed target extraction -------------------------------------------------
 
-const PATH_RE = /(?:[\w./-]*\/)?[\w-]+\.(?:js|ts|jsx|tsx|py|rb|go|rs|java|json|md|yml|yaml|css|html|sql|sh|toml)\b/gi;
+// A basename may itself contain dots: login.test.js, app.config.ts, foo.spec.tsx.
+// The old pattern's basename was `[\w-]+`, which cannot cross a dot, so it
+// matched only the TAIL — `login.test.js` extracted as `test.js`. That made
+// every *.test.js in a repo share one target, so a claim about login.test.js
+// was satisfied by a write to payment.test.js: a false green, and the same
+// class of fault as P1-2 (extension-vs-basename) one level up.
+// `(?:\.[\w-]+)*` lets the basename span inner dots; the trailing extension
+// group still anchors the match, and backtracking hands `.js` back to it.
+const PATH_RE = /(?:[\w./-]*\/)?[\w-]+(?:\.[\w-]+)*\.(?:js|ts|jsx|tsx|py|rb|go|rs|java|json|md|yml|yaml|css|html|sql|sh|toml)\b/gi;
 const CODESPAN_RE = /`([^`]+)`/g;
 const DQUOTE_RE = /"([^"]+)"/g;
 const SQUOTE_RE = /'([^']+)'/g;
@@ -163,7 +171,16 @@ function extractTargets(text) {
     if (ACTION_VERBS_FOR_PHRASE.includes(w)) {
       const phrase = [];
       for (let j = i + 1; j < words.length && phrase.length < 3; j++) {
-        const cw = words[j].toLowerCase().replace(/[^a-z0-9_-]/g, '');
+        const rawWord = words[j];
+        // A filename is already a `path` target with its real value. Stripping
+        // its punctuation here produced junk phrases ("a.js" -> "ajs",
+        // "parser.js" -> "parserjs") that can never match anything.
+        PATH_RE.lastIndex = 0;
+        if (PATH_RE.test(rawWord)) {
+          if (phrase.length) break;
+          continue;
+        }
+        const cw = rawWord.toLowerCase().replace(/[^a-z0-9_-]/g, '');
         if (!cw || STOPWORDS.has(cw)) {
           if (phrase.length) break;
           continue;

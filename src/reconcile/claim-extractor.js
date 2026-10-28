@@ -124,12 +124,40 @@ function splitSentences(text) {
   return result;
 }
 
+// A plain "and" joining TWO assertions of work is two claims, not one. Left
+// unsplit, a true half verifies a false half: "I added validation to login.js
+// and wrote a test in login.test.js" scored `verified` off the login.js write
+// alone, masking the fact that login.test.js was never written. That is a false
+// green, which is the worst direction of error for this tool, and it was the
+// asymmetry that made it possible — the ASK side (task-extractor's
+// SPLIT_CONNECTORS) has always split on plain "and"; the CLAIM side never did.
+//
+// But splitting on every "and" is not safe either, and the reason is worth
+// keeping: "I fixed the bug in PR #26 and shipped it." puts the PR number in
+// one half and the merge language in the other, and the VCS provenance check
+// needs them together to catch a "shipped" claim against a PR captured OPEN.
+// So the plain-"and" split is CONDITIONAL — it fires only when both halves
+// stand on their own as assertions of completed work. A trailing fragment that
+// needs its sibling for meaning ("and shipped it", "and it works", "and
+// retries to the client") keeps its sibling.
+const PLAIN_AND_RE = /,?\s+and\s+/i;
+
+function splitOnPlainAnd(part) {
+  const halves = part.split(PLAIN_AND_RE);
+  if (halves.length < 2) return [part];
+  // Every half must be independently assertive, or the sentence stays whole.
+  if (!halves.every((h) => h.trim() && isAssertiveAboutWork(h))) return [part];
+  return halves;
+}
+
 function splitCompoundClaims(sentence) {
   const parts = [];
   const semiParts = sentence.split(/\s*;\s+/);
   for (const part of semiParts) {
+    // Explicit sequencing connectors split unconditionally — they are only ever
+    // used between two complete actions.
     const subParts = part.split(/,?\s+(?:and\s+then|and\s+also|then\s+also)\s+/i);
-    parts.push(...subParts);
+    for (const sub of subParts) parts.push(...splitOnPlainAnd(sub));
   }
   return parts.map((p) => p.trim()).filter(Boolean);
 }

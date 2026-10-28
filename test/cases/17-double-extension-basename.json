@@ -1,0 +1,13 @@
+{
+  "name": "phantom: a claim about login.test.js is not satisfied by a write to payment.test.js",
+  "note": "Found 2026-10-28. The path regex's basename could not cross a dot, so `login.test.js` extracted as the target `test.js` — which every *.test.js in a repo shares. A claim about one test file was therefore verified by a write to any other. Same class as the closed P1-2 (extension-vs-basename), one level up, and in the same false-green direction.",
+  "prompt": "Write a test for the login flow.",
+  "claim": "I wrote a test in login.test.js.",
+  "events": [
+    { "type": "file_write", "source": "hook", "path": "src/payment.test.js", "diff": "+test('payment charges once', () => {\n+  expect(charge(1)).toBe(1);\n+});\n", "failed": false }
+  ],
+  "expect": {
+    "claim_outcomes_include": ["phantom"],
+    "not_outcomes": ["verified"]
+  }
+}

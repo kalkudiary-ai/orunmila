@@ -224,10 +224,19 @@ into cases — that is the most valuable contribution this project can receive.
 
 | Finding | Number | Source |
 |---|---|---|
-| Turns judged across real sessions | 194 sessions / 1,174 turns | comment in `src/laws/gate.js` |
-| How often the evidentiary laws fire | 18% of claimed turns | same |
-| The strictest blocking law's precision | 8 blocks in 1,174 turns, every one genuine | same |
+| Turns judged across real sessions | 111 sessions / 796 claimed turns | `scripts/measure-laws.js`, re-run 2026-10-28 |
+| How often the evidentiary laws fire | 52% of claimed turns (414 / 796) | same |
+| The strictest blocking law | 13 turns (1.6%); of its 14 findings, 12 genuine | same |
 | Agent harness changes a model's score | same model, 47%–76% reliability depending on harness | [`bench-results/README.md`](bench-results/README.md) |
+
+These numbers were re-derived on 2026-10-28 and they replace an earlier set
+(*194 sessions / 1,174 turns, 18% firing rate, 8 blocks every one genuine*).
+Treat them as a different measurement, not a correction: the old run was taken
+from a different repo root, where project-level laws apply on top of the canon,
+over a larger corpus. What is **not** corpus-dependent is why the old precision
+figure can no longer be quoted — until 2026-10-28 the blocking law's receipt
+side was broken ([P0-5](review/ISSUES.md)), so it was judging against a receipt
+set in which 98.4% of all captured commands had been filed as failures.
 
 The full write-up of these measurements, with the methodology and the one run
 that was thrown away for being junk:
@@ -356,27 +365,38 @@ Shipped in `src/laws/packs/canon.json`. Two block; four advise.
 | `no-uncertainty-as-fact` | uncertainty smoothed over instead of flagged | advises |
 | `no-assumption-language` | building on an unnamed assumption | advises |
 
-**Known gap, and it is a big one.** This law only sees sentences its assertion
-extractor recognises, and that extractor currently requires a copula. *"The
-build is green"* and *"Tests are passing"* fire it; **"Tests pass.", "All tests
-pass.", "I ran the tests and they pass.", "I tested it and it works." and "It
-works." do not** — they are dropped before the law is consulted, so it never
-gets the chance to judge them. The verification vocabulary itself already covers
-all of those; the filter upstream is what loses them. Tracked as
-[P0-3](review/ISSUES.md), with the fix and the measurement it needs before the
-severity can be trusted again.
+**This had a big gap, closed 2026-10-28.** The law used to see only
+copula-shaped sentences carrying an adjacent vocabulary match — *"The build is
+green"* fired it, while **"Tests pass.", "All tests pass.", "The test suite
+passes.", "I ran the tests and they pass." and "It works." did not.** Three
+separate filters were dropping them (a length floor, a state-verb test and a
+first-person filter) and two of them also missed the vocabulary, which required
+`tests` and `pass` to be adjacent. Fixed in `src/laws/assert-extractor.js`, with
+the full phrasing table as a regression test in `test/laws.js`; the history is
+[P0-3](review/ISSUES.md).
+
+Fixing detection alone took the blocking rate from 1.6% to **10.3%** of claimed
+turns, which is unshippable — and that is how [P0-5](review/ISSUES.md) was
+found: the law's *receipt* side had been reading an unobserved exit code as a
+failure, so nearly every command ever captured counted as a failed one. With
+both fixed the firing rate is back to 1.6% with materially better recall. The
+two defects had been concealing each other.
 
 ### Why only two block
 
-This was decided on measurement, not taste. Across 194 real sessions the
-evidentiary laws fire on **18% of claimed turns**, and only
-`no-green-without-command` proved precise enough to be worth stopping a turn
-over: **8 firings in 1,174 turns, every one genuine.**
+This was decided on measurement, not taste. Over 111 sessions / 796 claimed
+turns the evidentiary laws touch **414 turns**, and only
+`no-green-without-command` is precise enough to be worth stopping a turn over:
+**13 turns, 1.6% of claimed turns, and 12 of its 14 findings genuine.** Both
+false positives are the bare word *"tested"* used adjectivally — *"SIDE_NOT_MINE
+— tested first, wins any overlap"* — a family `assert-extractor.js` documents
+and partly disqualifies already.
 
-Read that honestly alongside P0-3 above: a law that cannot see the dominant
-phrasing of its own target has high precision partly *because* it has narrow
-recall. The accurate statement is **8 firings, all genuine, out of an unknown
-number of real occurrences.** Recall has not been measured.
+Recall is now measured rather than unknown, which is what makes that precision
+figure worth anything: **8 of the 14 findings are phrasings the pre-2026-10-28
+vocabulary could not match at all.** The honest caveat that remains is the size
+of the labelled set behind the accuracy numbers above — 17 turns — not the
+law's reach.
 
 The rest are useful as a nudge and unusable as a wall. A false advisory costs the
 agent a sentence of attention; a false block costs the whole session — and an

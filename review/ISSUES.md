@@ -21,7 +21,8 @@ Severity legend: **P0** = a central claim of the tool is false until fixed ·
 |---|---|---|---|
 | P0-1 | Filesystem Sentinel does not exist | P0 | **Closed** — shipped and measured |
 | P0-2 | Sentinel writes carry no session id, so concurrent sessions adopt each other's writes | P0 | **Open** — architectural |
-| P0-3 | The blocking verification law never sees the most common way an agent claims a pass | P0 | **Open** — found 2026-10-28 |
+| P0-3 | The blocking verification law never sees the most common way an agent claims a pass | P0 | **Closed** — found + fixed 2026-10-28 |
+| P0-5 | An unobserved exit code was read as a FAILURE, so 98.4% of all captured commands were filed as failed | P0 | **Closed** — found + fixed 2026-10-28 |
 | P0-4 | The gate can judge the PREVIOUS turn's claim text, so it re-flags findings already fixed | P0 | **Closed** — found + fixed 2026-10-28 |
 | P1-1 | Plain-English subtasks produce false `silently_dropped` | P1 | **Closed** |
 | P1-2 | Filename matching is actually extension matching | P1 | **Closed** |
@@ -31,6 +32,7 @@ Severity legend: **P0** = a central claim of the tool is false until fixed ·
 | P1-6 | A compound claim joined by "and" is graded as one unit, so a true half verifies a false half | P1 | **Closed** — found + fixed 2026-10-28 |
 | P1-7 | A double-extension basename (`login.test.js`) extracts as its tail (`test.js`) | P1 | **Closed** — found + fixed 2026-10-28 |
 | P1-8 | A weak phrase target stands in for a named file nothing touched | P1 | **Closed** — found + fixed 2026-10-28 |
+| P1-9 | Every fixture hand-writes `exit_code: 0`, a shape the capture layer cannot produce | P1 | **Open** — found 2026-10-28 |
 | P2-7 | Coverage thresholds were never met, so `prepublishOnly` blocked every publish | P2 | **Closed** — found + fixed 2026-10-28 |
 | P2-8 | The report's 3D Graph tab fetches a CDN script, against a stated privacy claim | P2 | **Open** — docs corrected 2026-10-28 |
 | P2-1 | `partial` / scaffolding detection effectively never fires | P2 | **Closed** |
@@ -125,78 +127,163 @@ THEN it contains no file written only by session B
 
 ---
 
-## P0-3 · The blocking verification law never sees the most common way an agent claims a pass — OPEN
+## P0-3 · The blocking verification law never sees the most common way an agent claims a pass — CLOSED
 
 **Found 2026-10-28**, while building a demo of the gate firing. The demo did not
-fire, which is how this surfaced.
+fire, which is how this surfaced. **Fixed the same day** in
+`src/laws/assert-extractor.js`; regression table in `test/laws.js`.
 
 `no-green-without-command` is the gate's flagship: one of only two laws promoted
-to `block`, and the one the docs lead with. Its own `message` in
-`src/laws/packs/canon.json` promises it catches *"tested, passing, green,
-works"*.
+to `block`, and the one the docs lead with. Its own `message` promises it
+catches *"tested, passing, green, works"*. It did not.
 
-**It does not.** Measured against the canon with a read receipt in the turn and
-no passing command:
+### What the first write-up of this issue got wrong
 
-| Claim text | Fires? |
-|---|---|
-| `Full suite green, 1463 tests pass, and debit.ts is correct.` | **blocks** |
-| `The build is green.` | **blocks** |
-| `The suite is passing.` | **blocks** |
-| `Tests are passing.` | **blocks** |
-| `Tests pass.` | — nothing |
-| `All tests pass.` | — nothing |
-| `The tests passed.` | — nothing |
-| `The test suite passes.` | — nothing |
-| `I ran the tests and they pass.` | — nothing |
-| `I tested it and it works.` | — nothing |
-| `It works.` | — nothing |
-| `Verified.` | — nothing |
+Three things, all of which mattered, and all of which came from reasoning about
+the code rather than running it:
 
-**Root cause, and it is NOT the vocabulary.** `VERIFICATION_RE` in
-`src/laws/assert-extractor.js` already matches all of these — `tested`,
-`tests? (?:pass|passed|passes|passing)`, `it works`. Verified directly:
-`VERIFICATION_RE.test("Tests pass.")` returns `true`.
+1. **"Root cause, and it is NOT the vocabulary" — wrong.** Two of the listed
+   phrasings failed on vocabulary alone. `VERIFICATION_RE` matched `tests?
+   (?:pass|...)` only when the words were ADJACENT, so `The test suite passes.`
+   and `I ran the tests and they pass.` never matched at all.
+2. **"`isFactualAssertion()` wants a copula" — one cause named, three at work.**
+   `Tests pass.` is eleven characters and died on the `length < 12` floor.
+   `All tests pass.` died on the state-verb test. `I ran the tests…` died on
+   `EXTERNAL_SUBJECT_RE`. The proposed one-line fix would have repaired none of
+   the first and only some of the second.
+3. **Two rows of its own table were wrong.** `The suite is passing.` and
+   `Tests are passing.` were recorded as **blocks**. Run against the canon they
+   produced *zero assertions* and fired nothing — they have a copula but miss
+   the adjacency-bound vocabulary, so they were dropped for want of a target.
 
-The sentence is dropped one step earlier. `isFactualAssertion()` rejects it, so
-`extractAssertions()` returns an empty list, so the rule
-`verification_without_command` is never offered anything to judge — its first
-line is `if (!assertion.verification) return null;` and there is no assertion at
-all. Everything that survives the gate is copula-shaped: *"The build **is**
-green"*, *"Tests **are** passing"*, *"The implementation **is** correct"*. A bare
-present-tense predicate — *"Tests pass."* — does not qualify.
+The original table was built from the law's `title` and `message` fields — a
+self-description — instead of from a run. That is the same error the tool exists
+to catch, committed in the tracker that tracks it.
 
-**What this does to the headline measurement.** The design note in
-`src/laws/gate.js`, quoted in the README and in every pitch, says this law fired
-**8 times in 1,174 turns, every one genuine.** That is true and it is not the
-whole story. A law that cannot see the dominant phrasing of its own target has
-high precision partly *because* it has narrow recall, and those are very
-different things to sell. Until recall is measured, the honest statement is:
-**8 firings, all genuine, out of an unknown number of real occurrences.**
+### The fix
 
-**Deliberately NOT fixed in this pass.** The obvious repair — let a
-verification-vocabulary hit qualify a sentence as an assertion on its own,
-regardless of copula — widens the only law in the canon that can stop a turn.
-The project's own reasoning is that `block` was earned by measurement, and that
-a noisy blocking law trains people to switch the gate off. Widening it and
-re-tagging a release without re-measuring would be the same error in the
-opposite direction.
+- **Vocabulary**: subject and predicate are enumerated separately
+  (`VERIF_SUBJECT`, `VERIF_PREDICATE`) with up to two words allowed between
+  them, so `test SUITE passes` and `tests ... they pass` are in range.
+- **Shape**: a clean verification claim qualifies as an assertion on its own,
+  ahead of the length floor, the state-verb test and the external-subject
+  filter — all three of which were dropping it.
+- **Disqualifiers**: four new families, because widening the gap brought them
+  into range — intent (*"we need to make the tests pass"*), reported speech
+  (*"the handover says the tests pass"*), mechanism (*"this is how it works"*),
+  argument-passing (*"`--repo` passed explicitly"*), plus a hedge exclusion so
+  *"the tests probably pass"* is never a verification claim.
+- `work` / `working` were **removed** as predicates: on the real corpus they
+  matched the noun (*"the coverage work"*) and *"it's inside Kalku's working
+  tree"*. `no errors` / `zero errors` were removed too — they matched claims
+  about production, not about a run.
 
-**The fix, and how to earn it:**
-1. In `isFactualAssertion()`, treat a `VERIFICATION_RE` hit as sufficient to
-   qualify a sentence, independent of sentence shape.
-2. Re-measure before changing severity: `orunmila laws --check --session <id>`
-   over the captured history, comparing firing rate and genuineness before and
-   after. `node ~/tools/orunmila/scripts/measure-laws.js` from a repo root does
-   the aggregate.
-3. Keep it at `warn` until the measurement supports `block`.
+### Why severity stayed at `block`
 
-**Acceptance test** (fails today):
+Re-measured with `scripts/measure-laws.js` over 111 sessions / 796 claimed
+turns (784 distinct; 12 exact-duplicate rows), from this repo's root:
+
+| | baseline | detection widened only | widened + P0-5 fixed |
+|---|---|---|---|
+| turns the law fires on | 13 (1.6%) | **82 (10.3%)** | 13 (1.6%) |
+| turns that would block | 14 | 82 | 13 |
+
+Widening detection alone was unshippable at `block`. With **P0-5** fixed the
+rate returns to baseline while recall is substantially better: **8 of the 14
+findings are phrasings the old vocabulary could not match at all.** Precision on
+the surviving 14 is **12 genuine, 2 false** — both bare-`tested` matches
+(*"`SIDE_NOT_MINE` — tested **first**, wins any overlap"*), the false-positive
+family `assert-extractor.js` already documents. The intent disqualifier also
+removed a pre-existing false positive, *"The goal is to get the suite green."*
+
+The issue's own step 3 — *"keep it at `warn` until the measurement supports
+`block`"* — was followed; the measurement supports `block`, so it stays.
+
+**Acceptance test** (now in `test/laws.js`, and it fails without the fix —
+verified by restoring the pre-fix files and re-running):
 ```
 claim "Tests pass."  + one file_read, no command  => no-green-without-command fires
 claim "I tested it and it works." + same           => fires
 claim "Tests pass."  + a command with exit 0      => does NOT fire
 ```
+
+---
+
+## P0-5 · An unobserved exit code was read as a FAILURE — CLOSED
+
+**Found 2026-10-28** while measuring the P0-3 fix, and worse than the gap it was
+hiding behind. **Fixed the same day** in `src/laws/evaluate.js` and
+`src/reconcile/provenance.js`.
+
+The capture layer records a command's exit code only when it can observe one.
+`src/capture/core.js` stores `exit_code: code === null && failed ? 1 : code` —
+so a KNOWN failure becomes a non-zero exit, and an unobserved exit that nothing
+flagged stays `null`. **A literal `0` is therefore a value the capture layer
+almost never writes.** Measured against this tool's own event log:
+
+```
+captured command_run events                        9,373
+  satisfying `exit_code === 0`                         0
+  carrying { exit_code: null, failed: false }      9,225   (98.4%)
+```
+
+Two consumers tested for `0` and treated everything else as failure:
+
+- **`src/laws/evaluate.js`** accepted only `undefined` as "not observed", so
+  `passingCommands` was almost always empty. `no-green-without-command` was
+  judging against a receipt set that was nearly all wrong, and its findings
+  listed genuinely passing commands back to the user under `failed_commands`.
+- **`src/reconcile/provenance.js`** required `exit_code === 0 && failed !== true`
+  before a verification claim could be `receipt_matches`. On real data that is
+  never true, so the branch fell through to **`disregarded_failure`** — the tool
+  telling the user they had ignored a failing test that never failed. **310 of
+  796 claimed turns (38.9%) ran a test-like command, and in 100% of them the old
+  code found no passing command.**
+
+Confirmed behaviourally rather than by reading the line:
+
+```
+isTestLikeCommand(captured): true
+  captured (exit_code: null)       => provenance: disregarded_failure  ["error-in-context"]
+  handmade fixture (exit_code: 0)  => provenance: receipt_matches      []
+```
+
+**The two defects concealed each other.** P0-3 kept detection so narrow the law
+rarely reached the receipt check; P0-5 meant the receipt check was wrong when it
+did. Fixing either alone makes the tool worse — which is exactly what the
+measurement table in P0-3 shows.
+
+**Not affected:** every other reader of the field uses
+`typeof e.exit_code === 'number'`, which correctly ignores `null` —
+`capture/agents.js`, `feedback/index.js`, `render/html.js`, `render/json.js`,
+`trail/lineage.js`. The glove, the sentinel, file receipts, path matching and
+the reports never depended on it.
+
+---
+
+## P1-9 · Every fixture hand-writes `exit_code: 0`, a shape the capture layer cannot produce — OPEN
+
+**Found 2026-10-28** as the reason P0-5 survived a 15-suite test run, a 100%
+detection-accuracy gate and a 100% phantom-precision gate.
+
+Every test that exercises an exit code builds the event by hand with
+`exit_code: 0`. The capture layer writes `null` 98.4% of the time. So the
+fixtures encode a shape production never emits, and the suite was green while
+the product was wrong — in the one module whose entire job is to distrust
+claims that are not backed by what actually happened.
+
+Two regression tests now assert on the captured shape (`test/laws.js`,
+`test/unit.js`), but they were added by hand for this one field. The general
+problem stands.
+
+**The fix, and how to earn it:** derive at least one fixture per event type from
+a real captured event rather than a literal — or add a conformance test that
+asserts every hand-built fixture shape is one `src/capture/core.js` can actually
+produce. Until then, a green suite does not establish that a reader handles what
+the writer writes.
+
+**Acceptance test:** a test that fails if a fixture's `command_run` carries a
+field combination the capture layer never emits.
 
 ---
 
@@ -768,12 +855,15 @@ cases rather than a missing document.
    law precise enough to block a turn.
 4. **P3-2** — make session resolution explicit at every gate-shaped caller.
 5. **P2-2** — serialise the turn counter.
-6. **P2-8** — decide the CDN question, then make the report's behaviour match
+6. **P1-9** — make at least one fixture per event type derive from a real
+   captured event, so a reader can never again pass a suite the writer would
+   fail.
+7. **P2-8** — decide the CDN question, then make the report's behaviour match
    its privacy claim.
-7. **P2-4** — subtask-only and command-touched tiles in `orunmila html`.
-8. **P2-6** — make the live sentinel test poll to a deadline instead of sleeping
+8. **P2-4** — subtask-only and command-touched tiles in `orunmila html`.
+9. **P2-6** — make the live sentinel test poll to a deadline instead of sleeping
    past the debounce.
-9. **P2-7 follow-up** — write the tests that let the coverage floor ratchet up.
+10. **P2-7 follow-up** — write the tests that let the coverage floor ratchet up.
 
 ## How the numbers on this page are produced
 

@@ -22,6 +22,7 @@ Severity legend: **P0** = a central claim of the tool is false until fixed ·
 | P0-1 | Filesystem Sentinel does not exist | P0 | **Closed** — shipped and measured |
 | P0-2 | Sentinel writes carry no session id, so concurrent sessions adopt each other's writes | P0 | **Open** — architectural |
 | P0-3 | The blocking verification law never sees the most common way an agent claims a pass | P0 | **Open** — found 2026-10-28 |
+| P0-4 | The gate can judge the PREVIOUS turn's claim text, so it re-flags findings already fixed | P0 | **Open** — found 2026-10-28 |
 | P1-1 | Plain-English subtasks produce false `silently_dropped` | P1 | **Closed** |
 | P1-2 | Filename matching is actually extension matching | P1 | **Closed** |
 | P1-3 | `undisclosed` flags everything when keywords are empty | P1 | **Closed** |
@@ -195,6 +196,67 @@ opposite direction.
 claim "Tests pass."  + one file_read, no command  => no-green-without-command fires
 claim "I tested it and it works." + same           => fires
 claim "Tests pass."  + a command with exit 0      => does NOT fire
+```
+
+---
+
+## P0-4 · The gate can judge the previous turn's claim text — OPEN
+
+**Found 2026-10-28**, by being on the receiving end of it: the gate flagged a
+sentence that had already been retracted in the turn before, and the sentence
+did not appear anywhere in the turn it was flagging.
+
+**The receipt.** Captured `turn_claim` events for one real session, by turn:
+
+```
+t9     2261 chars   "Caught that one with about ten minutes to spare..."
+t10    1984 chars   "Verified, and it held — but the check earned one addition..."
+t11    1984 chars   "Verified, and it held — but the check earned one addition..."
+```
+
+t10 and t11 are **byte-identical**. Turn tracking itself is healthy — turn
+state read `{"turn":11,"closed":true}`, every turn carries exactly one
+`turn_claim`, and no turn holds two claims. The turn ids are right. What is
+wrong is the **claim text** bound to t11: it is t10's.
+
+**Mechanism.** `runGate()` takes its claim from
+`reader.lastAssistantText(adapter.fields.transcriptPath(payload))`. When the
+Stop hook runs before the host has flushed the turn's final assistant message
+to the transcript, that call returns the *previous* message. `stop.js` captures
+the same stale text into the `turn_claim` event, which is why the staleness is
+visible in the log rather than only in the gate.
+
+Proven: two consecutive turns captured identical claim text. Inferred, not
+proven: that the cause is a flush race rather than the extractor selecting a
+stale entry. Distinguishing them needs instrumentation at the hook boundary.
+
+**Why this is P0 and not cosmetic.** It lands squarely on the blocking path:
+
+1. **An agent can be blocked for a claim it already fixed.** It withdraws the
+   unbacked claim, the gate re-reads the old text, and blocks again on
+   something no longer present in the turn.
+2. **The per-turn block budget then gets spent on a phantom**, after which the
+   gate stands down for the rest of the turn — so a stale finding can silence a
+   genuine one.
+3. **It may inflate the firing-rate measurements.** The 18%-of-claimed-turns
+   figure and the 8-in-1,174 count both come from captured `turn_claim` events,
+   and a duplicated claim is counted twice. Both numbers should be re-derived
+   with duplicates collapsed before either is quoted again.
+4. It is the failure a new user hits in week one, and the one most likely to
+   make them conclude the tool is broken and switch it off.
+
+**Fix sketch.** Hash the claim text and record it on the turn; if a turn's
+captured claim is byte-identical to the immediately preceding turn's, treat it
+as not-yet-available rather than as a claim — judge nothing and say so, instead
+of judging stale text. A short bounded re-read of the transcript before giving
+up would close the flush race directly, but the hook must stay fast and must
+never hang, so the duplicate guard is the safer first move.
+
+**Acceptance test** (fails today):
+```
+two consecutive turns in one session
+=> their captured turn_claim texts are never byte-identical
+=> and the gate never emits a finding citing a sentence absent from the turn it judges
 ```
 
 ---
@@ -675,22 +737,25 @@ cases rather than a missing document.
 
 ## Suggested fix order (by leverage)
 
-1. **P0-3** — the blocking law's extraction gap. It is cheap to fix, it is the
+1. **P0-4** — stale claim text on the blocking path. It makes the gate flag
+   work already fixed, which is the fastest route to someone switching it off,
+   and it casts doubt on the two firing-rate figures the project quotes.
+2. **P0-3** — the blocking law's extraction gap. It is cheap to fix, it is the
    feature the project leads with, and the docs currently describe behaviour the
    code does not have.
-2. **P0-2** — sentinel session identity. It is the only open item that can
+3. **P0-2** — sentinel session identity. It is the only open item that can
    produce a confidently wrong answer rather than a missing one, and the flag it
    corrupts is the sentinel's whole reason for existing.
-3. **P1-5** — pipe-laundered receipts. Cheap to detect, and it defeats the one
+4. **P1-5** — pipe-laundered receipts. Cheap to detect, and it defeats the one
    law precise enough to block a turn.
-4. **P3-2** — make session resolution explicit at every gate-shaped caller.
-5. **P2-2** — serialise the turn counter.
-6. **P2-8** — decide the CDN question, then make the report's behaviour match
+5. **P3-2** — make session resolution explicit at every gate-shaped caller.
+6. **P2-2** — serialise the turn counter.
+7. **P2-8** — decide the CDN question, then make the report's behaviour match
    its privacy claim.
-7. **P2-4** — subtask-only and command-touched tiles in `orunmila html`.
-8. **P2-6** — make the live sentinel test poll to a deadline instead of sleeping
+8. **P2-4** — subtask-only and command-touched tiles in `orunmila html`.
+9. **P2-6** — make the live sentinel test poll to a deadline instead of sleeping
    past the debounce.
-9. **P2-7 follow-up** — write the tests that let the coverage floor ratchet up.
+10. **P2-7 follow-up** — write the tests that let the coverage floor ratchet up.
 
 ## How the numbers on this page are produced
 

@@ -80,6 +80,11 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   re-derived from the code with the file that closed it cited, and four
   production-found defects are logged that review never saw. `PRD.md` moves to
   `docs/PRD.md` with a banner saying it is design history, not a status report.
+- **`CONTRIBUTING.md` no longer points contributors at a gap that is closed.**
+  It described extractor precision as "the known-open precision gaps"; precision
+  measures 100% on the negative corpus. It now points at the tracker for every
+  issue with its status, and names `test/cases/precision/` as the
+  false-positive guard to add cases to.
 - **README restructured so the two lenses are above the fold**, with a real
   captured-session report as the opening exhibit, a `How accurate is it?` section
   where every figure names the command or file that produced it, and a

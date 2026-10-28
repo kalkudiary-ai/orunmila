@@ -57,8 +57,16 @@ and folds the same start into `watch`. `src/reconcile/matcher.js` emits
 `untracked_write` and ranks it above every other outcome.
 
 **Measured, not asserted.** `node test/accuracy.js` scores the two
-configurations separately: hook-only 93.8% (30/32), sentinel ON 100% (32/32).
-The sentinel's worth is the delta: **+6.3 percentage points**.
+configurations separately: hook-only 94.7% (36/38), sentinel ON 100% (38/38).
+The sentinel's worth is the delta: **+5.3 percentage points**.
+
+(Those figures were 93.8% / 100% / +6.3pp against the 15-turn, 32-assertion
+corpus. The corpus grew to 17 turns / 38 assertions when P1-6 and P1-7 were
+closed, and this paragraph went on carrying the old numbers until a cold
+verification pass caught it — in a file whose header claims every status was
+re-derived from code. Logged rather than quietly corrected, because it is the
+same class of drift this page tracks as P3-3, committed by the same hand that
+wrote the tracker, on the same day.)
 
 Design: `SENTINEL_DESIGN.md`. Its §9 ("What this does NOT solve") is still
 accurate and still worth reading — the debounce-window TOCTOU, the inability to

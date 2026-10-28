@@ -12,9 +12,12 @@ validation and tested it"* might mean exactly that, or a stub with a comment and
 no test ever run. Tool-call logs tell you a file changed; they don't check
 whether the agent's own account of the change was true.
 
-**Orunmila reconciles the agent's story against the evidence.** Here is a real
-session — one ordinary ask, one honest write, one invented file, one unbacked
-"tests pass":
+**Orunmila reconciles the agent's story against the evidence.**
+[**See a live report →**](https://kalkudiary-ai.github.io/orunmila/) — a real
+rendered session, no install required.
+
+Here is that session at the terminal — one ordinary ask, one honest write, one
+invented file, one unbacked "tests pass":
 
 ```
 $ orunmila report

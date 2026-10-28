@@ -53,7 +53,7 @@ const ACTION_VERBS_FOR_PHRASE = [
 // A real subtask sentence has a verb of intent OR a concrete target. Pure
 // status pastes ("9 passed, 0 failed", task-notification XML, npm error
 // stacks) would otherwise be reified into subtasks the agent then gets
-// graded for "silently dropping". See review/DOGFOOD_*.md.
+// graded for "silently dropping". See test/cases/precision/ (each case names its source report).
 const INTENT_VERB_RE = new RegExp(
   String.raw`\b(?:${ACTION_VERBS_FOR_PHRASE.join('|')}|build|builds|ship|ships|publish|publishes|test|tests|run|runs|need|needs|should|must|please|make|makes|set|sets|do|does|tweak|tweaks|cover|covers|raise|raises|address|addresses|check|checks|verify|verifies|investigate|investigates|use|uses|enforce|enforces)\b`,
   'i'

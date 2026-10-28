@@ -1,5 +1,9 @@
 # Design: Extractor & Matcher Rewrite (P1-1, P1-2, P1-3)
 
+> **Design document.** Written before the typed-target extractor was built, kept as the record of the
+> reasoning. `PRD §n` references point at [docs/PRD.md](../docs/PRD.md). For
+> current status see [ISSUES.md](ISSUES.md).
+
 This is the accuracy cliff. Three confirmed failures share one root: the
 matcher's only notion of "what a sentence is about" is a handful of code-token
 regexes, and its only notion of "match" is `String.includes`. Fix the

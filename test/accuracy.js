@@ -234,7 +234,7 @@ function main() {
       for (const m of precision.misses) {
         console.log(`    ${m.file}: ${m.count} phantom(s) e.g. "${m.sample}"`);
       }
-      console.log('  (documented in review/ISSUES.md — extractor precision is the known open gap, not a regression)');
+      console.log('  (precision was 100% at 15/15 on 2026-10-28 — a miss here is a REGRESSION; see review/ISSUES.md P1-4)');
     }
   }
 

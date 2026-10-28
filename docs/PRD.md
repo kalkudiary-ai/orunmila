@@ -1,3 +1,12 @@
+> **Design history, not a status report.** As of 2026-10-28 this is the original
+> product spec, kept because it records *why* the tool is shaped the way it is —
+> the forensic gaps it was built around, and the open risks named before any code
+> existed. It is **not** a description of what ships today, and several things it
+> calls future work have since landed (the Filesystem Sentinel above all).
+>
+> For what is built: [README.md](../README.md). For what is broken, with status
+> per item: [review/ISSUES.md](../review/ISSUES.md).
+
 # PRD: Orunmila — Claim-vs-Reality Verification for AI Coding Agents
 
 Status: draft, ready to build from

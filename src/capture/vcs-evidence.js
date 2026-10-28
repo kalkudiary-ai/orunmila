@@ -3,7 +3,7 @@
 /**
  * vcs-evidence.js — turn gh/git command OUTPUT into typed VCS/CI evidence.
  *
- * The dogfood lesson (see review/DOGFOOD_*.md and the two-session write-up):
+ * The dogfood lesson (see test/cases/precision/ (each case names its source report) and the two-session write-up):
  * a claim like "PR #25 merged, that fixed the failover" was reading as
  * `not_sent` because merge state lived only in lossy transcript prose, never
  * in the eventlog. So a review run after main had moved on saw the claim as

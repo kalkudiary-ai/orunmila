@@ -301,7 +301,7 @@ function reconcileTurn({ promptText, claimText, turnEvents, sessionTargets, evid
 
   // Dedupe: the same path getting written N times in one turn should be one
   // finding with a count, not N findings. Same for subsequent reporting
-  // layers — see review/DOGFOOD_*.md (the 327-issue report had test/hooks.js
+  // layers — see test/cases/precision/ (each case names its source report) (the 327-issue report had test/hooks.js
   // listed 13 times).
   const undisclosed = dedupeByPath(undisclosedRaw);
 

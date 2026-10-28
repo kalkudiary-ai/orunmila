@@ -4,7 +4,7 @@
  * sanitize.js
  *
  * Pre-processes prompt and claim text before sentence-splitting. The four
- * dogfood reports (review/DOGFOOD_*.md) showed the extractors were greedy on
+ * dogfood reports (test/cases/precision/ (each case names its source report)) showed the extractors were greedy on
  * the input side: any sentence with a backtick, identifier, or action verb
  * became a "claim" or "subtask", regardless of whether it was prose the agent
  * authored about its own work. The biggest sources of noise were:

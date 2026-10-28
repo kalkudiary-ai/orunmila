@@ -1,5 +1,9 @@
 # Design: Filesystem Sentinel (P0-1)
 
+> **Design document.** Written before the Filesystem Sentinel was built, kept as the record of the
+> reasoning. `PRD §n` references point at [docs/PRD.md](../docs/PRD.md). For
+> current status see [ISSUES.md](ISSUES.md).
+
 This is the "skin that feels the breeze" — the watcher that sees writes the
 agent never announced. It is what makes "catches ALL writes" true instead of
 claimed. Implements PRD §6.4. Zero npm dependencies (uses only `fs`, `path`,

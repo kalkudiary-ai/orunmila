@@ -34,7 +34,7 @@ function reportPath(sessionId, turnId) {
 // Walk all prior turns of the session, extract their subtask targets, and
 // accumulate them. A turn-N write that satisfies a turn-1 ask should not
 // be flagged "undisclosed" just because the turn-N claim text doesn't
-// repeat the file basename. See review/DOGFOOD_*.md.
+// repeat the file basename. See test/cases/precision/ (each case names its source report).
 function priorSessionTargets(sessionId, currentTurnId) {
   const targets = [];
   let i = 1;

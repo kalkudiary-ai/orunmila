@@ -56,8 +56,10 @@ See the "Architecture: how agent-agnostic works" section of the README.
 
 The single most valuable code contribution is improving claim/subtask extraction
 (`src/reconcile/claim-extractor.js`, `task-extractor.js`) **without** adding paid
-API calls. The known-open precision gaps are tracked in `review/ISSUES.md`; the
-accuracy fixtures live in `test/cases/`. Add a fixture that reproduces a
+API calls. Every issue, open and closed, is tracked with its status in
+`review/ISSUES.md`; the accuracy fixtures live in `test/cases/`, and the
+real-log-derived negative corpus (the false-positive guard) in
+`test/cases/precision/`. Add a fixture that reproduces a
 mis-detection, then fix it — that's the ideal PR shape.
 
 ## Pull request checklist

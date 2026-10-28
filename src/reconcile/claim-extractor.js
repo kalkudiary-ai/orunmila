@@ -18,7 +18,7 @@
  *                         an actual command_run with exit 0 in the same turn,
  *                         not just asserted. See provenance.js.
  *
- * Speech-act gate (added after the dogfood reports — see review/DOGFOOD_*.md):
+ * Speech-act gate (added after the dogfood reports — see test/cases/precision/ (each case names its source report)):
  * a sentence only counts as a *claim of completed work* if it's assertive in
  * the agent's own voice. Imperatives to the user ("Click X"), conditionals
  * ("If you'd like…"), offers ("Want me to…"), questions, and statements

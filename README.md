@@ -42,16 +42,33 @@ Summary: 1 verified, 0 partial, 1 phantom, 1 phantom-verification,
 100% free, MIT licensed, runs entirely on your machine. No telemetry, no
 account, no API key required for the default mode.
 
-<!-- IMAGE SLOTS — capture these two, then uncomment. They are the strongest
-     assets this README can carry, and both are left as comments rather than
-     broken links on purpose.
-       1. docs/images/stain-map.png   — run `npx orunmila demo`, open
-          orunmila-demo.html, screenshot the coloured file grid.
-       2. docs/images/closeout-gate.gif — 20-30s screen capture: the agent says
-          "tests pass" with no test run, the gate blocks it, the agent runs the
-          tests and fixes it.
-![The Stain Map](docs/images/stain-map.png)
-![The Closeout Gate](docs/images/closeout-gate.gif)
+<!-- IMAGE SLOTS — the files are not in the repo yet. Drop them in docs/images/
+     and delete this comment wrapper (keep the three lines) to make them live.
+
+     1. docs/images/stain-map.png
+        `npx orunmila demo` -> open orunmila-demo.html -> screenshot from the
+        title down to the end of "FILES WORTH A LOOK (RANKED BY SEVERITY)".
+        That crop carries the whole value in one frame: the verdict, the
+        severity bar, and the ranked files with cache.bin flagged
+        UNTRACKED WRITE.
+
+     2. docs/images/fix-it-prompt.png
+        Same report, "Report" tab. Screenshot the five counters plus the
+        COPY-PASTE PROMPT box. This is the differentiator against an activity
+        logger: it is not a diagnosis, it is the message that sends the agent
+        back to fix its own work.
+
+     3. docs/images/findings.png
+        Same tab, scrolled to FINDINGS. Five colour-coded rows with the real
+        claim text — it teaches the whole outcome vocabulary without a legend.
+
+     NOT YET: docs/images/closeout-gate.gif. The gate blocks on "The build is
+     green" but not on "Tests pass" (P0-3), so a GIF recorded today would be
+     demonstrating the one phrasing that works. Fix P0-3, measure, then record.
+
+![Orunmila's report: what the agent claimed, against what it actually did](docs/images/stain-map.png)
+![The fix-it prompt: findings turned into a message that sends the agent back](docs/images/fix-it-prompt.png)
+![Findings: phantom, phantom test, dropped, undisclosed, untracked write](docs/images/findings.png)
 -->
 
 ## The two lenses

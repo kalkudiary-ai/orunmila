@@ -703,10 +703,14 @@ behind anything. (Not yet wired up in this v0 - see Roadmap.)
 
 **Before anything else: one tab in the report reaches the network.** The
 **3D Graph** tab fetches `3d-force-graph` from unpkg (fallback jsdelivr) on
-open. No session content is sent — it is a plain script fetch — but the request
-itself discloses the viewer's IP and that a report was opened. If that matters
-for your threat model, avoid that one tab; the rest of the report is entirely
-self-contained and works with no network at all.
+open. No session content is sent — verified: the loader sets `script.src` to a
+bare versioned URL with no query string and appends it, and those two URLs are
+the only external references in the entire rendering layer. But the request
+still discloses the viewer's IP and that a report was opened. **And if you
+*host* a report rather than opening it locally, the browser's `Referer` header
+sends the report's URL to the CDN too** — worth knowing before publishing one
+publicly. If any of that matters for your threat model, avoid that one tab;
+every other tab is self-contained and works with no network at all.
 
 The HTML report is the one artifact you're likely to *share* - paste in an
 issue, send a teammate, screenshot. The event log itself stays complete and

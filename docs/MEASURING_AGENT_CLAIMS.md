@@ -204,6 +204,15 @@ The field numbers come from real use rather than fixtures: **194 sessions /
 the one law precise enough to block on fired 8 times — every one genuine
 (`src/laws/gate.js`).
 
+One caveat on that last figure, found the same day as the three defects above
+and for the same reason. That law's assertion extractor requires a copula, so it
+sees *"The build is green"* and *"Tests are passing"* but **not** *"Tests
+pass."*, *"I ran the tests and they pass."* or *"It works."* A law that cannot
+see the dominant phrasing of its own target has high precision partly *because*
+it has narrow recall. "8 firings, all genuine" is true; "8 firings out of an
+unknown number of real occurrences" is the whole of it. Tracked as P0-3. I'd
+rather print this next to the number than let the number flatter the tool.
+
 ---
 
 **Orunmila** is MIT licensed, has zero runtime dependencies, runs entirely on

@@ -50,12 +50,22 @@ turn. Say this up front — do not install and let them discover it.
 
 | Law | What it catches | Default |
 |---|---|---|
-| `no-green-without-command` | "it works" / "tests pass" with no passing command in the turn | **blocks** |
+| `no-green-without-command` | a verification claim with no passing command in the turn (see the gap below) | **blocks** |
 | `no-grep-as-basis` | a claim about a named file resting only on a pattern match | **blocks** |
 | `no-claim-without-receipt` | an assertion with nothing opened or run behind it | advises |
 | `no-absolute-without-enumeration` | "all" / "none" with no enumeration | advises |
 | `no-uncertainty-as-fact` | uncertainty smoothed over instead of flagged | advises |
 | `no-assumption-language` | building on an unnamed assumption | advises |
+
+**Tell the user about this gap before they rely on it.**
+`no-green-without-command` only judges sentences its assertion extractor
+recognises, and that extractor wants a copula. It fires on *"The build is
+green"* and *"Tests are passing"*. It does **not** fire on *"Tests pass."*,
+*"All tests pass."*, *"I ran the tests and they pass."*, *"I tested it and it
+works."* or *"It works."* — those are dropped before the law is consulted.
+Tracked as P0-3 in `review/ISSUES.md`. Setting expectations wrongly here is
+worse than the gap itself: someone who believes the gate catches "tests pass"
+will stop checking for it.
 
 ## Tuning block vs advise
 

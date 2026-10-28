@@ -340,12 +340,22 @@ Shipped in `src/laws/packs/canon.json`. Two block; four advise.
 
 | Law | What it catches | Severity |
 |---|---|---|
-| `no-green-without-command` | "it works" / "tests pass" with no passing command in the turn | **blocks** |
+| `no-green-without-command` | a verification claim with no passing command in the turn | **blocks** |
 | `no-grep-as-basis` | a claim about a named file resting only on a pattern match | **blocks** |
 | `no-claim-without-receipt` | an assertion with nothing opened or run behind it | advises |
 | `no-absolute-without-enumeration` | "all" / "none" without an enumeration | advises |
 | `no-uncertainty-as-fact` | uncertainty smoothed over instead of flagged | advises |
 | `no-assumption-language` | building on an unnamed assumption | advises |
+
+**Known gap, and it is a big one.** This law only sees sentences its assertion
+extractor recognises, and that extractor currently requires a copula. *"The
+build is green"* and *"Tests are passing"* fire it; **"Tests pass.", "All tests
+pass.", "I ran the tests and they pass.", "I tested it and it works." and "It
+works." do not** — they are dropped before the law is consulted, so it never
+gets the chance to judge them. The verification vocabulary itself already covers
+all of those; the filter upstream is what loses them. Tracked as
+[P0-3](review/ISSUES.md), with the fix and the measurement it needs before the
+severity can be trusted again.
 
 ### Why only two block
 
@@ -353,6 +363,11 @@ This was decided on measurement, not taste. Across 194 real sessions the
 evidentiary laws fire on **18% of claimed turns**, and only
 `no-green-without-command` proved precise enough to be worth stopping a turn
 over: **8 firings in 1,174 turns, every one genuine.**
+
+Read that honestly alongside P0-3 above: a law that cannot see the dominant
+phrasing of its own target has high precision partly *because* it has narrow
+recall. The accurate statement is **8 firings, all genuine, out of an unknown
+number of real occurrences.** Recall has not been measured.
 
 The rest are useful as a nudge and unusable as a wall. A false advisory costs the
 agent a sentence of attention; a false block costs the whole session — and an

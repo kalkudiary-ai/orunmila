@@ -98,7 +98,8 @@ ORUNMILA_LAWS=off                         # disable the gate for one session
 
 **What a block means.** The gate runs on the Stop hook. If it blocks, the turn
 is not over: the agent must fix what was flagged and respond again. Two laws
-block - `no-green-without-command` ("it works" with no passing command) and
+block - `no-green-without-command` (a verification claim with no passing
+command; note P0-3 below) and
 `no-grep-as-basis` (a claim about a named file resting only on a pattern
 match). Four advise: `no-claim-without-receipt`,
 `no-absolute-without-enumeration`, `no-uncertainty-as-fact`,
@@ -124,6 +125,11 @@ engine stops enforcing, it never stops the agent.
 ## Honest limits - say these if asked
 
 - The gate is **`claude-code` only**. Other agents get the Stain Map.
+- **`no-green-without-command` misses the most common phrasings.** It fires on
+  "The build is green" and "Tests are passing", but NOT on "Tests pass.", "All
+  tests pass.", "I ran the tests and they pass." or "It works." — those are
+  dropped by the assertion extractor before the law sees them. Tracked as P0-3
+  in `review/ISSUES.md`. Do not promise a user it will catch "tests pass".
 - Law findings are **heuristic: they read prose, not facts.** A finding says
   "recheck this", not "you lied".
 - `exit 0` is not "correct" - it means a command ran and passed, not that it

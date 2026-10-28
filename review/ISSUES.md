@@ -21,6 +21,7 @@ Severity legend: **P0** = a central claim of the tool is false until fixed ·
 |---|---|---|---|
 | P0-1 | Filesystem Sentinel does not exist | P0 | **Closed** — shipped and measured |
 | P0-2 | Sentinel writes carry no session id, so concurrent sessions adopt each other's writes | P0 | **Open** — architectural |
+| P0-3 | The blocking verification law never sees the most common way an agent claims a pass | P0 | **Open** — found 2026-10-28 |
 | P1-1 | Plain-English subtasks produce false `silently_dropped` | P1 | **Closed** |
 | P1-2 | Filename matching is actually extension matching | P1 | **Closed** |
 | P1-3 | `undisclosed` flags everything when keywords are empty | P1 | **Closed** |
@@ -118,6 +119,81 @@ this machine while I worked"*, never as authorship.
 GIVEN two sessions writing to one tree with one sentinel running
 WHEN session A's trail is rendered
 THEN it contains no file written only by session B
+```
+
+---
+
+## P0-3 · The blocking verification law never sees the most common way an agent claims a pass — OPEN
+
+**Found 2026-10-28**, while building a demo of the gate firing. The demo did not
+fire, which is how this surfaced.
+
+`no-green-without-command` is the gate's flagship: one of only two laws promoted
+to `block`, and the one the docs lead with. Its own `message` in
+`src/laws/packs/canon.json` promises it catches *"tested, passing, green,
+works"*.
+
+**It does not.** Measured against the canon with a read receipt in the turn and
+no passing command:
+
+| Claim text | Fires? |
+|---|---|
+| `Full suite green, 1463 tests pass, and debit.ts is correct.` | **blocks** |
+| `The build is green.` | **blocks** |
+| `The suite is passing.` | **blocks** |
+| `Tests are passing.` | **blocks** |
+| `Tests pass.` | — nothing |
+| `All tests pass.` | — nothing |
+| `The tests passed.` | — nothing |
+| `The test suite passes.` | — nothing |
+| `I ran the tests and they pass.` | — nothing |
+| `I tested it and it works.` | — nothing |
+| `It works.` | — nothing |
+| `Verified.` | — nothing |
+
+**Root cause, and it is NOT the vocabulary.** `VERIFICATION_RE` in
+`src/laws/assert-extractor.js` already matches all of these — `tested`,
+`tests? (?:pass|passed|passes|passing)`, `it works`. Verified directly:
+`VERIFICATION_RE.test("Tests pass.")` returns `true`.
+
+The sentence is dropped one step earlier. `isFactualAssertion()` rejects it, so
+`extractAssertions()` returns an empty list, so the rule
+`verification_without_command` is never offered anything to judge — its first
+line is `if (!assertion.verification) return null;` and there is no assertion at
+all. Everything that survives the gate is copula-shaped: *"The build **is**
+green"*, *"Tests **are** passing"*, *"The implementation **is** correct"*. A bare
+present-tense predicate — *"Tests pass."* — does not qualify.
+
+**What this does to the headline measurement.** The design note in
+`src/laws/gate.js`, quoted in the README and in every pitch, says this law fired
+**8 times in 1,174 turns, every one genuine.** That is true and it is not the
+whole story. A law that cannot see the dominant phrasing of its own target has
+high precision partly *because* it has narrow recall, and those are very
+different things to sell. Until recall is measured, the honest statement is:
+**8 firings, all genuine, out of an unknown number of real occurrences.**
+
+**Deliberately NOT fixed in this pass.** The obvious repair — let a
+verification-vocabulary hit qualify a sentence as an assertion on its own,
+regardless of copula — widens the only law in the canon that can stop a turn.
+The project's own reasoning is that `block` was earned by measurement, and that
+a noisy blocking law trains people to switch the gate off. Widening it and
+re-tagging a release without re-measuring would be the same error in the
+opposite direction.
+
+**The fix, and how to earn it:**
+1. In `isFactualAssertion()`, treat a `VERIFICATION_RE` hit as sufficient to
+   qualify a sentence, independent of sentence shape.
+2. Re-measure before changing severity: `orunmila laws --check --session <id>`
+   over the captured history, comparing firing rate and genuineness before and
+   after. `node ~/tools/orunmila/scripts/measure-laws.js` from a repo root does
+   the aggregate.
+3. Keep it at `warn` until the measurement supports `block`.
+
+**Acceptance test** (fails today):
+```
+claim "Tests pass."  + one file_read, no command  => no-green-without-command fires
+claim "I tested it and it works." + same           => fires
+claim "Tests pass."  + a command with exit 0      => does NOT fire
 ```
 
 ---
@@ -552,17 +628,20 @@ cases rather than a missing document.
 
 ## Suggested fix order (by leverage)
 
-1. **P0-2** — sentinel session identity. It is the only open item that can
+1. **P0-3** — the blocking law's extraction gap. It is cheap to fix, it is the
+   feature the project leads with, and the docs currently describe behaviour the
+   code does not have.
+2. **P0-2** — sentinel session identity. It is the only open item that can
    produce a confidently wrong answer rather than a missing one, and the flag it
    corrupts is the sentinel's whole reason for existing.
-2. **P1-5** — pipe-laundered receipts. Cheap to detect, and it defeats the one
+3. **P1-5** — pipe-laundered receipts. Cheap to detect, and it defeats the one
    law precise enough to block a turn.
-3. **P3-2** — make session resolution explicit at every gate-shaped caller.
-4. **P2-2** — serialise the turn counter.
-5. **P2-4** — subtask-only and command-touched tiles in `orunmila html`.
-6. **P2-6** — make the live sentinel test poll to a deadline instead of sleeping
+4. **P3-2** — make session resolution explicit at every gate-shaped caller.
+5. **P2-2** — serialise the turn counter.
+6. **P2-4** — subtask-only and command-touched tiles in `orunmila html`.
+7. **P2-6** — make the live sentinel test poll to a deadline instead of sleeping
    past the debounce.
-7. **P2-7 follow-up** — write the tests that let the coverage floor ratchet up.
+8. **P2-7 follow-up** — write the tests that let the coverage floor ratchet up.
 
 ## How the numbers on this page are produced
 

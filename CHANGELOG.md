@@ -8,6 +8,8 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-10-28
+
 ### Fixed
 
 - **The gate no longer judges the previous turn's claim text (P0-4).**
@@ -279,6 +281,7 @@ renders the result as a colored map of the codebase.
 - Zero runtime dependencies; no network calls by the tool itself; no account
   or API key. Everything stays local in `~/.orunmila/`.
 
-[Unreleased]: https://github.com/kalkudiary-ai/orunmila/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/kalkudiary-ai/orunmila/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/kalkudiary-ai/orunmila/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/kalkudiary-ai/orunmila/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kalkudiary-ai/orunmila/releases/tag/v0.1.0

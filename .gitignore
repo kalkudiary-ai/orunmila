@@ -4,6 +4,9 @@ orunmila-*.html
 examples/demo-report.html
 .DS_Store
 coverage/
+
+# npm pack output — a build artifact, never committed
+*.tgz
 report.html
 .aider.chat.history.md
 .aider.input.history

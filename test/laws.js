@@ -462,6 +462,148 @@ it('verification law: a FAILED command does not license a green claim, and the e
   assert.ok(/exit 1/.test(res.findings[0].evidence.failed_commands.join(' ')), 'the failing exit is quoted back');
 });
 
+/**
+ * REGRESSION — P0-3. The flagship BLOCKING law could not see the commonest way
+ * an agent claims a pass.
+ *
+ * Found 2026-10-28 while building a demo of the gate firing: the demo did not
+ * fire. "The build is green." was caught. "Tests pass.", "All tests pass.",
+ * "I ran the tests and they pass." and "It works." were not — and THREE
+ * different filters were responsible, not one:
+ *
+ *   "Tests pass."                    11 characters — died on the length floor
+ *   "All tests pass."                no copula     — died on the state-verb test
+ *   "I ran the tests and they pass." first person  — died on external-subject
+ *
+ * Two more died on the vocabulary itself, which was a list of ADJACENT word
+ * pairs: "test SUITE passes" has a word in the gap. Those two were recorded in
+ * the issue tracker as CAUGHT, on the strength of the law's title rather than a
+ * run — so this table is the acceptance test from review/ISSUES.md, extended
+ * with the shapes the issue itself got wrong.
+ */
+const GREEN_LAW = () => CANON().filter((l) => l.id === 'no-green-without-command');
+const READ_ONLY = [{ type: 'file_read', path: '/repo/src/x.js', hash: 'abc', bytes: 100 }];
+const greenFires = (claimText, turnEvents = READ_ONLY) =>
+  evaluateTurn({ claimText, promptText: 'go', turnEvents, laws: GREEN_LAW() }).findings.length > 0;
+
+it('P0-3: every common phrasing of "it passed" is seen, not just the copula-shaped ones', () => {
+  for (const claim of [
+    'Full suite green, 1463 tests pass, and debit.ts is correct.',
+    'The build is green.',
+    'The suite is passing.',
+    'Tests are passing.',
+    'Tests pass.',
+    'All tests pass.',
+    'The tests passed.',
+    'The test suite passes.',
+    'I ran the tests and they pass.',
+    'I tested it and it works.',
+    'It works.',
+    'The lint passes and tsc is clean.',
+    'CI is green.',
+    'Everything works.',
+    'The smoke ran clean.',
+  ]) {
+    assert.ok(greenFires(claim), `must fire with no passing command behind it: ${claim}`);
+  }
+});
+
+/**
+ * The other half, and the half that decides whether a BLOCKING law is bearable.
+ * The first five are the documented false positives from assert-extractor's own
+ * comments; the last eight are sentences that FIRED when the vocabulary was
+ * first widened, taken verbatim from this tool's own 111-session corpus. A law
+ * that stops a turn has to stay silent on every one of them.
+ */
+it('P0-3: care, intent, mechanism and the other sense of "passed" stay silent', () => {
+  for (const claim of [
+    // being careful — negation and attributive use
+    'capture hooks exist for one agent; Cursor/Aider are not tested',
+    'branch coverage was low because the new branches were not tested',
+    'the multiplier logic is unit-tested',
+    'empty means open by the tested logic',
+    'the verification verb is in a future frame (*should work*)',
+    // speech acts
+    'Do the tests pass?',
+    'If the tests pass, push it.',
+    'Run the tests and check it works.',
+    "I'll run the tests and confirm it works.",
+    'Once the suite is green we can ship.',
+    // hedged — the green law has no hedge check of its own
+    'The tests probably pass.',
+    'I think the build is green.',
+    // intent, not report
+    'We need to make the tests pass.',
+    'The goal is to get the suite green.',
+    // reported speech, and mechanism rather than outcome
+    'The handover says the tests pass.',
+    'This is how it works.',
+    'Whether the suite passes is the open question.',
+    // measured false positives from the real corpus
+    'the coverage work that made them invisible',
+    'none of it is work you asked for',
+    "my-video has no .git of its own - it's inside Kalku's working tree",
+    'I re-ran it with --repo passed explicitly.',
+    'It contradicted itself and I passed it as clean.',
+    'there have been zero errors in the actual last 24h',
+    'check 1 was not user-scoped so it prints PASS',
+    'The flag is passed to the adapter.',
+  ]) {
+    assert.ok(!greenFires(claim), `must stay silent: ${claim}`);
+  }
+});
+
+it('P0-3: the newly-seen phrasings stand once a passing command backs them', () => {
+  const passing = [{ type: 'command_run', command: 'npm test', exit_code: 0, stdout_excerpt: '15/15 passed' }];
+  for (const claim of ['Tests pass.', 'It works.', 'I ran the tests and they pass.']) {
+    assert.ok(!greenFires(claim, passing), `a real receipt licenses it: ${claim}`);
+  }
+});
+
+/**
+ * REGRESSION — the RECEIPT side of the same law, found while measuring the fix
+ * above and worse than the recall gap it was hiding behind.
+ *
+ * buildReceipts accepted only `undefined` as "exit code not observed". The
+ * capture layer writes `null`: core.js stores
+ * `exit_code: code === null && failed ? 1 : code`, so a command that ran with
+ * nothing signalling failure lands in the log as `{ exit_code: null,
+ * failed: false }`. Measured against this tool's own event log on 2026-10-28,
+ * 9,210 of 9,358 captured commands — 98.4% of every command orunmila has ever
+ * recorded — carry exactly that shape, and every one was being filed as a
+ * FAILURE. The law fired on turns whose suite had plainly gone green, and the
+ * findings listed those passing commands back to the user under
+ * `failed_commands`.
+ *
+ * Every other test in this file builds its events by hand with an explicit
+ * `exit_code: 0`. That is precisely why none of them ever caught it, and why
+ * this one asserts on the shape the capture layer actually writes.
+ */
+it('receipts: an unobserved exit code that nothing flagged as failed is NOT a failure', () => {
+  const r = buildReceipts([
+    { type: 'command_run', command: 'npm test', exit_code: null, failed: false, stdout_excerpt: '15/15 passed' },
+  ]);
+  assert.strictEqual(r.passingCommands.length, 1, 'the shape the capture layer actually writes');
+  assert.strictEqual(r.failedCommands.length, 0, 'an unobserved exit is not evidence of failure');
+});
+
+it('receipts: an unobserved exit code that WAS flagged failed is still a failure', () => {
+  const r = buildReceipts([
+    { type: 'command_run', command: 'npm test', exit_code: null, failed: true, stdout_excerpt: '1 failing' },
+  ]);
+  assert.strictEqual(r.passingCommands.length, 0);
+  assert.strictEqual(r.failedCommands.length, 1, 'failed:true still means failed');
+});
+
+it('receipts: a real captured passing command licenses a green claim end to end', () => {
+  const res = evaluateTurn({
+    claimText: 'Tests pass.',
+    turnEvents: [{ type: 'command_run', command: 'npm test', exit_code: null, failed: false, stdout_excerpt: '15/15 passed' }],
+    laws: GREEN_LAW(),
+  });
+  assert.deepStrictEqual(res.findings, [], 'a command captured the way the hooks capture it is a receipt');
+});
+
 // --- exit-code integrity ----------------------------------------------------
 //
 // Found by running orunmila's own close-out gate over the session that built

@@ -200,7 +200,23 @@ function classify(claim, turnEvents, opts = {}) {
   if (claim.verificationClaim) {
     const testCommands = turnEvents.filter(isTestLikeCommand);
     if (testCommands.length) {
-      const passed = testCommands.some((c) => c.exit_code === 0 && c.failed !== true);
+      // `null` means THE EXIT CODE WAS NOT OBSERVED — it does not mean the run
+      // was non-zero. The capture layer encodes a KNOWN failure as a non-zero
+      // exit on purpose (core.js: `exit_code: code === null && failed ? 1 : code`),
+      // so an unobserved exit that nothing flagged as failed is the closest
+      // thing the log has to "it ran and nothing went wrong".
+      //
+      // Testing for `0` alone inverted that. Measured against this tool's own
+      // event log on 2026-10-28: of 9,373 captured commands, ZERO satisfied
+      // `exit_code === 0` and 9,225 carried `{ exit_code: null, failed: false }`
+      // — so on real data `passed` was ALWAYS false, and every verification
+      // claim backed by a genuinely passing suite came back classified
+      // `disregarded_failure`: the tool telling the user they had ignored a
+      // failing test that never failed. The fixtures all build the event by
+      // hand with `exit_code: 0`, which is exactly why they never saw it.
+      const ranWithoutFailure = (c) =>
+        (c.exit_code === 0 || c.exit_code === null || c.exit_code === undefined) && c.failed !== true;
+      const passed = testCommands.some(ranWithoutFailure);
       if (passed) return { provenance: 'receipt_matches', causeHints: [], evidence: testCommands };
       return { provenance: 'disregarded_failure', causeHints: ['error-in-context'], evidence: testCommands };
     }

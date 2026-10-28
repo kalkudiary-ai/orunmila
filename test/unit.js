@@ -800,6 +800,30 @@ it('provenance: verification claim with a failing test => disregarded_failure', 
   assert.ok(r.causeHints.includes('error-in-context'));
 });
 
+/**
+ * REGRESSION — the reconciler accused the user of ignoring a failure every time
+ * they actually ran a passing suite.
+ *
+ * `passed` tested `exit_code === 0`. The capture layer writes `null` when the
+ * hook could not observe an exit code, reserving a non-zero exit for a KNOWN
+ * failure. Measured on 2026-10-28 against this tool's own log: of 9,373
+ * captured commands, ZERO satisfied `exit_code === 0` and 9,225 carried
+ * `{ exit_code: null, failed: false }` — so on real data this branch always
+ * fell through to `disregarded_failure`.
+ *
+ * The two tests either side of this one pass `exit_code: 0` by hand, which is
+ * precisely why the suite was green while the product was wrong. This one
+ * asserts on the shape the hooks actually write.
+ */
+it('provenance: a REAL captured passing run (exit_code null, failed false) => receipt_matches', () => {
+  const r = provenance.classify(
+    { verificationClaim: true, targets: [] },
+    [{ type: 'command_run', command: 'npm test', exit_code: null, failed: false, stdout_excerpt: '15/15 suites passed' }]
+  );
+  assert.strictEqual(r.provenance, 'receipt_matches', 'an unobserved exit is not a disregarded failure');
+  assert.deepStrictEqual(r.causeHints, []);
+});
+
 it('provenance: verification claim with no test command => not_sent / no-verification-attempted', () => {
   const r = provenance.classify({ verificationClaim: true, targets: [] }, []);
   assert.strictEqual(r.provenance, 'not_sent');

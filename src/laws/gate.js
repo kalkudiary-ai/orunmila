@@ -19,13 +19,32 @@
  *                                                     act on, without stopping it
  *
  * Almost everything here takes the SECOND form, and that is the central design
- * decision, made on measurement rather than taste. Across 194 real sessions the
- * evidentiary laws fire on 18% of claimed turns, and only one of them —
- * verification_without_command — proved precise enough to be worth stopping a
- * turn over (8 firings in 1,174 turns, every one genuine). The rest are useful
- * as a nudge and unusable as a wall: a false advisory costs the agent a sentence
- * of attention, while a false block costs the whole session, and the agent that
- * learns the gate is usually wrong learns to route around it.
+ * decision, made on measurement rather than taste. Only one law —
+ * verification_without_command — has proved precise enough to be worth stopping
+ * a turn over. The rest are useful as a nudge and unusable as a wall: a false
+ * advisory costs the agent a sentence of attention, while a false block costs
+ * the whole session, and the agent that learns the gate is usually wrong learns
+ * to route around it.
+ *
+ * Re-measured 2026-10-28 with scripts/measure-laws.js from this repo's root,
+ * over 111 sessions / 796 claimed turns (784 distinct; 12 exact-duplicate
+ * rows): verification_without_command fires on 13 turns — 1.6% of claimed
+ * turns — and of its 14 findings, 12 are genuine. The two that are not are
+ * both bare-`tested` matches ("SIDE_NOT_MINE — tested first, wins any
+ * overlap"), the false-positive family assert-extractor.js documents. Across
+ * the whole canon the evidentiary laws touch 414 of 796 turns, which is why
+ * only this one blocks.
+ *
+ * An earlier version of this note quoted "18% of claimed turns" and "8 firings
+ * in 1,174 turns, every one genuine", measured over a different corpus (194
+ * sessions, from the kalku root). Those figures are no longer quoted. The
+ * corpora differ, so the new numbers do not refute the old ones directly — but
+ * the old PRECISION claim cannot stand in any case, because until 2026-10-28
+ * the receipt side of this very law was broken (P0-5): buildReceipts accepted
+ * only `undefined` as "exit code not observed" while the capture layer writes
+ * `null`, so 98.4% of every command ever captured was filed as a FAILURE. The
+ * law was judging against a receipt set that was almost entirely wrong, and
+ * its narrow recall (P0-3) was the only thing keeping the firing count low.
  *
  * ── The loop trap ──────────────────────────────────────────────────────────
  *

@@ -165,7 +165,20 @@ function buildReceipts(turnEvents) {
     if (e.type === 'command_run') {
       const command = String(e.command || '');
       const out = String(e.stdout_excerpt || '');
-      const ok = e.exit_code === 0 || (e.exit_code === undefined && e.failed !== true);
+      // `null` and `undefined` both mean THE EXIT CODE WAS NOT OBSERVED, and
+      // the capture layer writes the former: core.js stores
+      // `exit_code: code === null && failed ? 1 : code`, so an unobserved exit
+      // that nothing flagged as a failure lands in the log as exactly
+      // `{ exit_code: null, failed: false }`. Testing only for `undefined`
+      // therefore filed 9,210 of 9,358 captured commands — 98.4% of every
+      // command this tool has ever recorded — as FAILURES, which is why the
+      // verification law fired on turns whose suite had plainly gone green and
+      // why its findings listed passing commands under `failed_commands`.
+      // Every unit test around this rule builds its events by hand with an
+      // explicit `exit_code: 0`, so none of them ever saw the shape the capture
+      // layer actually writes.
+      const unobservedExit = e.exit_code === undefined || e.exit_code === null;
+      const ok = e.exit_code === 0 || (unobservedExit && e.failed !== true);
       // A green exit only counts as PROOF OF GREEN when the exit code means what
       // it says. A piped command still counts as a content receipt below (its
       // output really did name those files) — it just cannot certify that

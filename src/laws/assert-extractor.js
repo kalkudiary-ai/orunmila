@@ -105,8 +105,45 @@ const HEDGE_RE = new RegExp(
  * no exit-zero command behind it is exactly the phantom verification the whole
  * project was built to catch.
  */
+/**
+ * ── On adjacency, the bug this list actually had (P0-3, fixed 2026-10-28) ───
+ *
+ * This was a flat list of ADJACENT word pairs: `tests pass`, `build is green`,
+ * `suite is green`. Adjacency is the wrong model for English. "The test suite
+ * passes", "Tests are passing" and "I ran the tests and they pass" are the same
+ * claim with a word sitting in the gap, and not one of them matched — which is
+ * why the flagship blocking law never saw the commonest way an agent claims a
+ * pass. Two of those phrasings had even been recorded in the issue tracker as
+ * CAUGHT, on the strength of the law's own title rather than a run.
+ *
+ * So subject and predicate are enumerated separately, with at most two words
+ * allowed between them. The cap is what keeps a subject and a predicate from
+ * different clauses ("the tests I still owe you will land once the parser is
+ * green") out of range, and the disqualifiers below carry the rest of the load.
+ */
+const VERIF_SUBJECT = String.raw`(?:tests?|test suite|suite|specs?|build|rebuild|lint(?:er)?|eslint|typecheck|tsc|types|ci|pipeline|smoke|coverage|gate|everything|it|they)`;
+// `work` and `working` are deliberately ABSENT, and that is a measured
+// decision rather than an oversight. Run against this tool's own 111-session
+// corpus, a bare `work` matched the NOUN — "the coverage work that made them
+// invisible", "none of it is work you asked for" — and `working` matched
+// "it's inside Kalku's working tree", helped along by the apostrophe masking
+// that turns `it's ... Kalku's` into `it` + gap + `working`. Only the inflected
+// verb forms survive. "working correctly" is kept as its own phrase below.
+const VERIF_PREDICATE = String.raw`(?:pass(?:es|ed|ing)?|green|works|worked|succeed(?:s|ed)?|successful|clean|compiles?|compiled)`;
+
 const VERIFICATION_RE = new RegExp(
-  String.raw`\b(?:tested|tests? (?:pass|passed|passes|passing)|it works|working correctly|no errors|builds? success|compiles|build is green|all green|suite (?:is )?green|lint passes|smoke(?:d|s)? (?:clean|green|fine))\b`,
+  [
+    String.raw`\btested\b`,
+    String.raw`\b${VERIF_SUBJECT}(?:\s+\w+){0,2}\s+${VERIF_PREDICATE}\b`,
+    String.raw`\b(?:all|everything)\s+(?:green|passing|passes)\b`,
+    // "no errors" / "zero errors" were here and were removed on measurement:
+    // they matched claims about PRODUCTION, not about a run — "there have been
+    // zero errors in the actual last 24h" is settled by a query, not by a
+    // command exiting zero, and demanding one there is the wrong bar.
+    String.raw`\bbuilds? success(?:ful|fully)?\b`,
+    String.raw`\bsmoke(?:d|s)? (?:clean|green|fine)\b`,
+    String.raw`\bworking correctly\b`,
+  ].join('|'),
   'i'
 );
 
@@ -128,7 +165,7 @@ const VERIFICATION_RE = new RegExp(
  * precisely the behaviour the law exists to encourage. A negated or attributive
  * use is disqualified before the claim is ever graded.
  */
-const NEGATED_VERIFICATION_RE = new RegExp(
+const VERIFICATION_DISQUALIFIER_RE = new RegExp(
   [
     // "not / never / isn't / aren't / weren't ... tested|passing|works|green"
     String.raw`\b(?:not|never|no|without|isn'?t|aren'?t|wasn'?t|weren'?t|don'?t|doesn'?t|didn'?t|cannot|can'?t|un)\b[^.!?]{0,24}?\b(?:tested|passing|passes|pass|green|works|compiles)\b`,
@@ -138,6 +175,27 @@ const NEGATED_VERIFICATION_RE = new RegExp(
     String.raw`\b(?:the|a|an|that|this|those|these|its|their)\s+tested\b`,
     // future / hypothetical framing: "should work", "will pass", "let's see if it works"
     String.raw`\b(?:should|would|will|might|may|could|hope|expect|see if|check if|to be)\b[^.!?]{0,24}?\b(?:work|works|pass|passes|passing|green|compile|compiles)\b`,
+    // INTENT, not report — work still to do: "we need to make the tests pass",
+    // "the goal is to get the suite green". Allowing a gap between subject and
+    // predicate brought this entire family into range for the first time, so it
+    // has to be disqualified explicitly or the law starts flagging plans.
+    String.raw`\b(?:need|needs|needed|want|wants|wanted|have|has|had|try|tries|trying|aim|aims|plan|plans|planning|supposed|intend|intends|going)\s+to\b[^.!?]{0,30}?\b(?:pass|passes|passing|work|works|green|compile|compiles|clean|tested)\b`,
+    String.raw`\b(?:to get|to make|to keep|to have|so that|in order to|before|until|after|once)\b[^.!?]{0,30}?\b(?:pass|passes|passing|work|works|green|compile|compiles|clean)\b`,
+    // REPORTED speech. What someone else claimed is not this turn's claim —
+    // "the handover says the tests pass" is a description of a document.
+    String.raw`\b(?:says?|said|claims?|claimed|asserts?|asserted|states?|stated|reports?|reported|insists?|per|according to|documented as|recorded as)\b[^.!?]{0,30}?\b(?:pass|passes|passing|works?|green|tested|compiles?)\b`,
+    // MECHANISM, not outcome: "this is how it works", "whether the suite passes
+    // is the open question". An interrogative or relative frame ahead of the
+    // predicate means the sentence explains or asks, it does not certify.
+    String.raw`\b(?:how|why|what|where|when|whether|which)\b[^.!?]{0,20}?\b(?:works?|pass|passes|passing|green|compiles?)\b`,
+    // ARGUMENT-passing, the other sense of the word entirely: "I re-ran it with
+    // `--repo` passed explicitly", "the flag passed to the adapter", "I passed
+    // it as clean". `in` is deliberately not in this list, because "all tests
+    // passed in CI" is a genuine claim and must still fire.
+    String.raw`\bpass(?:ed|es|ing)?\s+(?:to|into|through|as|explicitly|it|along|down)\b`,
+    // A printed VERDICT is output being described, not a claim of green:
+    // "check 1 wasn't user-scoped so it prints PASS".
+    String.raw`\b(?:prints?|printed|outputs?|shows?|showed|logs?|reports?|returns?|echoes|echoed)\s+(?:\w+\s+){0,2}(?:pass|fail|green)\b`,
   ].join('|'),
   'i'
 );
@@ -190,14 +248,40 @@ function maskQuoted(s) {
  * of a miss is one unflagged sentence; the cost of a false block is the agent
  * spinning against a rule it cannot satisfy.
  */
+function isVerificationClaim(sentence) {
+  const masked = maskQuoted(sentence);
+  if (!VERIFICATION_RE.test(masked)) return false;
+  if (VERIFICATION_DISQUALIFIER_RE.test(masked)) return false;
+  // A hedge is the agent being careful, and the green law has no hedge check of
+  // its own. Flagging "the tests probably pass" would punish exactly the
+  // caution the layer exists to encourage, so a hedged sentence never reaches
+  // the rule as a verification claim. It is still graded as an ordinary
+  // assertion if its shape qualifies, which is where no-uncertainty-as-fact
+  // picks it up.
+  if (HEDGE_RE.test(masked)) return false;
+  return true;
+}
+
 function isFactualAssertion(sentence) {
   const t = sentence.trim();
-  if (!t || t.length < 12) return false;
+  if (!t) return false;
   if (QUESTION_RE.test(t)) return false;
   if (HEADING_RE.test(t)) return false;
   if (IMPERATIVE_RE.test(t)) return false;
   if (CONDITIONAL_RE.test(t)) return false;
   if (OFFER_RE.test(t)) return false;
+
+  // A claim that an execution PASSED qualifies on its own, in whatever shape it
+  // arrives — and the three filters below are precisely the ones that used to
+  // drop it. "Tests pass." is eleven characters, so the length floor killed it.
+  // "All tests pass." has no copula, so the state-verb test killed it. "I ran
+  // the tests and they pass." opens in the first person, so the external-subject
+  // filter killed it. Three different filters, one missing law: measured against
+  // the canon on 2026-10-28, the blocking verification law saw none of the
+  // dominant phrasings of its own target.
+  if (isVerificationClaim(t)) return true;
+
+  if (t.length < 12) return false;
   if (EXTERNAL_SUBJECT_RE.test(t)) return false;
 
   const masked = maskQuoted(t);
@@ -231,7 +315,7 @@ function extractAssertions(claimText) {
     if (!isFactualAssertion(sentence)) return;
     const targets = evaluableTargets(sentence);
     const masked = maskQuoted(sentence);
-    const isVerification = VERIFICATION_RE.test(masked) && !NEGATED_VERIFICATION_RE.test(masked);
+    const isVerification = isVerificationClaim(sentence);
     // Keep the marker that fired, not just the boolean. A universal quantifier
     // ("all", "none", "never") and a bare count ("two things") are both
     // unenumerated, but they are not equally dangerous, and a finding that
@@ -258,6 +342,7 @@ function extractAssertions(claimText) {
 module.exports = {
   extractAssertions,
   isFactualAssertion,
+  isVerificationClaim,
   evaluableTargets,
   maskQuoted,
   splitSentences,

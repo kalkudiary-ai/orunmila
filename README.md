@@ -220,6 +220,10 @@ into cases — that is the most valuable contribution this project can receive.
 | The strictest blocking law's precision | 8 blocks in 1,174 turns, every one genuine | same |
 | Agent harness changes a model's score | same model, 47%–76% reliability depending on harness | [`bench-results/README.md`](bench-results/README.md) |
 
+The full write-up of these measurements, with the methodology and the one run
+that was thrown away for being junk:
+[**I measured how often AI coding agents claim work they didn't do**](docs/MEASURING_AGENT_CLAIMS.md).
+
 That last one is the finding most people don't expect: **the measurement
 framework moves the score more than the model does.** Aider's terse
 SEARCH/REPLACE output suppresses free narration and inflates reliability by
@@ -689,6 +693,18 @@ more broadly (`claude-code-hooks-mastery`, `claude-hooks`, etc.) is the
 proven plumbing this project builds on rather than reinvents. What's new
 here is the reconciliation layer on top: checking the agent's *narrative*
 against the *evidence*, not just recording the evidence.
+
+## Further reading
+
+| | |
+|---|---|
+| [**I measured how often AI coding agents claim work they didn't do**](docs/MEASURING_AGENT_CLAIMS.md) | The findings piece: 10 models, 3 harnesses, 29 runs — and the three false-green defects found in this tool itself. Every figure names its source. |
+| [`review/ISSUES.md`](review/ISSUES.md) | Every known issue, open and closed, with a reproduction and an acceptance test. Dated and re-derived from code, not carried forward. |
+| [`skills/`](skills/) | Four packaged agent skills: a free core audit, plus gate setup, a review workflow, and writing laws for your own codebase. |
+| [`bench-results/README.md`](bench-results/README.md) | All 29 benchmark runs, the metric definitions, and the framework-effect analysis. |
+| [`docs/SCHEMA.md`](docs/SCHEMA.md) | The `orunmila json` contract (`schema_version` 1.0). |
+| [`docs/PRD.md`](docs/PRD.md) | Design history — why the tool is shaped this way. Not a status report. |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | The most valuable contribution is sharpening claim extraction without adding paid API calls. |
 
 ## License
 

@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const eventlog = require('../src/store/eventlog');
+const legacy = require('../src/store/legacy');
 const { loadReport, listSessionReports } = require('../src/reconcile');
 const {
   rescoreAll,
@@ -454,6 +455,7 @@ function logSizeKB() {
 function cmdStatus() {
   const all = eventlog.readAll();
   const sessions = new Set(all.map((e) => e.session_id));
+  if (legacy.isLegacy(eventlog.dataDir())) console.log(`\x1b[33m${legacy.WARNING}\x1b[0m\n`);
 
   // Which lenses are live, first — before any counts. A log with events in it
   // says capture ran at some point; it does not say the gate is on, and those
@@ -688,6 +690,34 @@ function cmdPrune() {
   console.log(`Events: ${res.before} -> ${res.after}.  Log: ${before} KB -> ${logSizeKB()} KB.`);
   console.log('Per-session reports/cache/output sidecars for removed sessions can be deleted from');
   console.log(`  ${eventlog.dataDir()}  (reports/, cache/, output/) if you no longer need them.`);
+}
+
+function cmdLog() {
+  // The user's two explicit choices for a log written before 0.2.2 (legacy.js).
+  // Nothing here runs from a hook, and delete refuses without --yes.
+  const sub = args[1];
+  const dir = eventlog.dataDir();
+  if (sub === 'redact') {
+    const res = legacy.redactAll(dir);
+    const log = res.log ? `${res.log.changed} of ${res.log.lines} event lines changed` : 'no event log found';
+    console.log(`Redacted ${dir}: ${log}; ${res.files_changed} of ${res.files_scanned} other stored files changed.`);
+    console.log('Known secret formats only: an unknown format can survive. Rotate any credential you know an agent saw.');
+    return;
+  }
+  if (sub === 'delete') {
+    const targets = legacy.deletionTargets(dir);
+    if (!args.includes('--yes')) {
+      console.log(targets.length ? 'This would permanently delete:' : `Nothing to delete in ${dir}.`);
+      for (const t of targets) console.log(`  ${t}`);
+      if (targets.length) console.log('Re-run as `orunmila log delete --yes` to delete. Your laws.json is kept.');
+      process.exit(targets.length ? 1 : 0);
+    }
+    const removed = legacy.deleteAll(dir);
+    console.log(`Deleted ${removed.length} item(s) from ${dir}. Your laws.json is kept.`);
+    return;
+  }
+  console.error('Usage: orunmila log redact | orunmila log delete [--yes]');
+  process.exit(1);
 }
 
 function cmdStats() {
@@ -997,6 +1027,7 @@ const COMMANDS = {
   stats: cmdStats,
   status: cmdStatus,
   prune: cmdPrune,
+  log: cmdLog,
   lenses: cmdLenses,
   report: cmdReport,
   html: cmdHtml,
@@ -1053,6 +1084,8 @@ Both lenses
   orunmila status [--agent ID]                    which lenses are live, event log location, size, counts
   orunmila stats                                  cross-agent reliability scores, phantom rates, comparisons
   orunmila prune [--keep N]                       cap the log to the N most-recent sessions (explicit, never automatic)
+  orunmila log redact                             scrub known secret formats from everything already stored
+  orunmila log delete [--yes]                     delete stored session data (lists it first; --yes to delete)
   orunmila rescore [--dry-run]                    re-reconcile every persisted report (originals archived, never deleted)
   orunmila archives                               list archived rescore snapshots, readable with --archive <stamp>
   orunmila feedback [--session ID] [--include claim_text]   write sanitized accuracy cases to a local drop folder

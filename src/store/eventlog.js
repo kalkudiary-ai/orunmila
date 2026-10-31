@@ -26,6 +26,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { redactEvent } = require('./secrets');
+const legacy = require('./legacy');
 
 const TYPES = Object.freeze({
   USER_PROMPT: 'user_prompt',     // the instruction that opened this turn
@@ -86,6 +87,8 @@ function secureDataDir(dir, created) {
       /* absent (ENOENT) is the normal case; a chmod failure must never stop capture */
     }
   }
+  // Must run before this process appends anything: see legacy.js.
+  legacy.detect(dir);
 }
 
 function dataDir() {

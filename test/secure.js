@@ -178,4 +178,121 @@ it('a command containing an API key never reaches the log, excerpt or sidecar', 
   rmrf(home);
 });
 
-runAll('secure (0.2.2: permissions + redaction)');
+// --- legacy (pre-0.2.2) log: warn, then let the user redact or delete -------------
+
+const PROMPT = 'src/capture/claude-code/user-prompt-submit.js';
+const CLI = 'bin/orunmila.js';
+const OLD_KEY = SECRETS.github_token;
+
+function promptPayload(sessionId) {
+  return JSON.stringify({ session_id: sessionId, hook_event_name: 'UserPromptSubmit', prompt: 'hello' });
+}
+
+/** A data dir as 0.2.1 left it: unredacted log, sidecar and report, no log-state.json. */
+function legacyHome() {
+  const home = tmpHome();
+  fs.writeFileSync(
+    path.join(home, 'events.jsonl'),
+    JSON.stringify({ ts: '2026-01-01T00:00:00.000Z', session_id: 'old', type: 'command_run', command: `GH=${OLD_KEY} gh pr list` }) +
+      '\n' +
+      `{"half-written": "${OLD_KEY}\n`
+  );
+  fs.mkdirSync(path.join(home, 'output', 'old'), { recursive: true });
+  fs.writeFileSync(path.join(home, 'output', 'old', 'c1.txt'), `token ${OLD_KEY}\n`);
+  fs.mkdirSync(path.join(home, 'reports', 'old'), { recursive: true });
+  fs.writeFileSync(path.join(home, 'reports', 'old', 't1.json'), JSON.stringify({ claims: [{ text: `used ${OLD_KEY}` }] }));
+  return home;
+}
+
+function warningsIn(stdout) {
+  return stdout
+    .split('\n')
+    .filter((l) => l.startsWith('{'))
+    .map((l) => JSON.parse(l))
+    .filter((o) => o.systemMessage);
+}
+
+it('a fresh install is not legacy and its prompt hook prints nothing', () => {
+  const home = tmpHome();
+  const r = run(PROMPT, { input: promptPayload('s-fresh'), env: { ORUNMILA_HOME: home } });
+  assert.strictEqual(r.status, 0);
+  assert.strictEqual(r.stdout, '');
+  const state = JSON.parse(fs.readFileSync(path.join(home, 'log-state.json'), 'utf8'));
+  assert.strictEqual(state.legacy_unredacted, false);
+  rmrf(home);
+});
+
+it('a pre-0.2.2 log makes the Claude Code prompt hook warn once per session, without blocking', () => {
+  const home = legacyHome();
+  const env = { ORUNMILA_HOME: home };
+  const first = run(PROMPT, { input: promptPayload('s-a'), env });
+  assert.strictEqual(first.status, 0);
+  const w = warningsIn(first.stdout);
+  assert.strictEqual(w.length, 1);
+  assert.ok(w[0].systemMessage.includes('orunmila log redact'));
+  assert.strictEqual(w[0].decision, undefined, 'the warning must never block');
+  assert.strictEqual(warningsIn(run(PROMPT, { input: promptPayload('s-a'), env }).stdout).length, 0, 'second prompt, same session');
+  assert.strictEqual(warningsIn(run(PROMPT, { input: promptPayload('s-b'), env }).stdout).length, 1, 'new session warns again');
+  rmrf(home);
+});
+
+it('other agents never get the warning on hook stdout (status carries it instead)', () => {
+  const home = legacyHome();
+  const r = run('src/capture/connector.js', { args: ['cursor', 'prompt'], input: promptPayload('s-c'), env: { ORUNMILA_HOME: home } });
+  assert.strictEqual(r.status, 0);
+  assert.strictEqual(warningsIn(r.stdout).length, 0);
+  rmrf(home);
+});
+
+it('orunmila status shows the warning while the old log is unredacted', () => {
+  const home = legacyHome();
+  const r = run(CLI, { args: ['status'], env: { ORUNMILA_HOME: home } });
+  assert.strictEqual(r.status, 0);
+  assert.ok(r.stdout.includes('written before 0.2.2'), r.stdout);
+  rmrf(home);
+});
+
+it('orunmila log redact scrubs the log, half-written lines, sidecars and reports, and clears the warning', () => {
+  const home = legacyHome();
+  const env = { ORUNMILA_HOME: home };
+  run(CLI, { args: ['status'], env }); // first 0.2.2 run records the legacy state
+  const r = run(CLI, { args: ['log', 'redact'], env });
+  assert.strictEqual(r.status, 0, r.stderr);
+  for (const rel of ['events.jsonl', 'output/old/c1.txt', 'reports/old/t1.json']) {
+    const text = fs.readFileSync(path.join(home, rel), 'utf8');
+    assert.ok(!text.includes(OLD_KEY), `${rel} still holds the key`);
+  }
+  const lines = fs.readFileSync(path.join(home, 'events.jsonl'), 'utf8').split('\n').filter(Boolean);
+  assert.strictEqual(lines.length, 2, 'no event line lost');
+  assert.deepStrictEqual(JSON.parse(lines[0]).redactions, ['github_token']);
+  assert.strictEqual(modeOf(path.join(home, 'events.jsonl')), 0o600);
+  assert.ok(!run(CLI, { args: ['status'], env }).stdout.includes('written before 0.2.2'));
+  assert.strictEqual(warningsIn(run(PROMPT, { input: promptPayload('s-d'), env }).stdout).length, 0);
+  rmrf(home);
+});
+
+it('orunmila log delete lists and refuses without --yes, then deletes and keeps laws.json', () => {
+  const home = legacyHome();
+  const env = { ORUNMILA_HOME: home };
+  fs.writeFileSync(path.join(home, 'laws.json'), '{"laws":[]}');
+  const dry = run(CLI, { args: ['log', 'delete'], env });
+  assert.strictEqual(dry.status, 1);
+  assert.ok(dry.stdout.includes('events.jsonl'));
+  assert.ok(fs.existsSync(path.join(home, 'events.jsonl')), 'nothing deleted without --yes');
+  const r = run(CLI, { args: ['log', 'delete', '--yes'], env });
+  assert.strictEqual(r.status, 0);
+  for (const rel of ['events.jsonl', 'output', 'reports']) assert.ok(!fs.existsSync(path.join(home, rel)), rel);
+  assert.ok(fs.existsSync(path.join(home, 'laws.json')));
+  assert.ok(!run(CLI, { args: ['status'], env }).stdout.includes('written before 0.2.2'));
+  rmrf(home);
+});
+
+it('orunmila log with no subcommand prints usage and exits 1', () => {
+  const home = tmpHome();
+  const r = run(CLI, { args: ['log'], env: { ORUNMILA_HOME: home } });
+  assert.strictEqual(r.status, 1);
+  assert.ok(r.stderr.includes('orunmila log redact'));
+  rmrf(home);
+});
+
+runAll('secure (0.2.2: permissions + redaction + legacy log)');

@@ -20,6 +20,7 @@ const { append, readTurn, TYPES, dataDir } = require('../store/eventlog');
 const { unifiedDiff } = require('../reconcile/difftool');
 const { sha256 } = require('./fs-sentinel/hasher');
 const { redactString } = require('../store/secrets');
+const legacy = require('../store/legacy');
 const { bumpTurn, writeTurnId, closeTurn } = require('./turnstate');
 const { reconcileAndPersist } = require('../reconcile');
 const { renderTurn } = require('../render/terminal');
@@ -344,6 +345,16 @@ function runHook(phase, adapter) {
   try {
     const handler = HANDLERS[phase];
     const out = handler(payload, adapter);
+    // 0.2.2: a log written by an older version may hold unredacted secrets.
+    // Hooks cannot ask, so tell the user once per session. Claude Code shows
+    // a hook's JSON `systemMessage` to the user without blocking or feeding
+    // it to the agent; other agents read hook stdout differently (Cursor
+    // treats some of it as a decision), so they get the warning from
+    // `orunmila status` only.
+    if (phase === 'prompt' && adapter.id === 'claude-code' && legacy.isLegacy(dataDir())
+      && legacy.firstWarningForSession(dataDir(), adapter.fields.sessionId(payload))) {
+      process.stdout.write(JSON.stringify({ systemMessage: legacy.WARNING }) + '\n');
+    }
     if (phase === 'stop' && typeof out === 'string') {
       try {
         fs.writeFileSync(lastTurnReportPath(), out + '\n', { mode: 0o600 });

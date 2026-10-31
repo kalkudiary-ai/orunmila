@@ -25,6 +25,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { redactEvent } = require('./secrets');
 
 const TYPES = Object.freeze({
   USER_PROMPT: 'user_prompt',     // the instruction that opened this turn
@@ -56,9 +57,41 @@ const TYPES = Object.freeze({
  *   output_path  sidecar file holding full (untruncated) command output
  */
 
+// Owner-only access (0.2.2). The log, sidecars, before-snapshots and reports
+// hold prompts, diffs and command output, so no other account on the machine
+// may read them. The data dir is locked to 0700, which covers everything
+// beneath it, and the top-level files are 0600 as a second layer. A custom
+// ORUNMILA_HOME may be a folder the user shares with other things, so it is
+// only chmodded when it is the default dir or one we just created; the files
+// we own inside it are locked either way. Done once per process: hooks are
+// short-lived, so this costs a couple of syscalls per hook run.
+const DIR_MODE = 0o700;
+const FILE_MODE = 0o600;
+const OWNED_FILES = ['events.jsonl', 'last-turn-report.txt', 'log-state.json', 'laws.json'];
+const OWNED_DIRS = ['cache', 'output', 'reports', 'laws-state', 'archive', 'warned'];
+const secured = new Set();
+
+function secureDataDir(dir, created) {
+  if (secured.has(dir)) return;
+  secured.add(dir);
+  const isDefault = !process.env.ORUNMILA_HOME;
+  const targets = [];
+  if (isDefault || created) targets.push([dir, DIR_MODE]);
+  for (const f of OWNED_FILES) targets.push([path.join(dir, f), FILE_MODE]);
+  for (const d of OWNED_DIRS) targets.push([path.join(dir, d), DIR_MODE]);
+  for (const [p, mode] of targets) {
+    try {
+      fs.chmodSync(p, mode);
+    } catch {
+      /* absent (ENOENT) is the normal case; a chmod failure must never stop capture */
+    }
+  }
+}
+
 function dataDir() {
   const dir = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
-  fs.mkdirSync(dir, { recursive: true });
+  const created = fs.mkdirSync(dir, { recursive: true, mode: DIR_MODE }) !== undefined;
+  secureDataDir(dir, created);
   return dir;
 }
 
@@ -68,8 +101,8 @@ function logPath() {
 
 /** Append one event. Fire-and-forget cheap — this must never slow the agent down. */
 function append(event) {
-  const record = Object.assign({ ts: new Date().toISOString() }, event);
-  fs.appendFileSync(logPath(), JSON.stringify(record) + '\n');
+  const record = redactEvent(Object.assign({ ts: new Date().toISOString() }, event));
+  fs.appendFileSync(logPath(), JSON.stringify(record) + '\n', { mode: FILE_MODE });
   return record;
 }
 
@@ -177,7 +210,7 @@ function pruneToRecentSessions(keep) {
   const survivors = all.filter((e) => kept.has(e.session_id));
   const p = logPath();
   const tmp = p + '.tmp';
-  fs.writeFileSync(tmp, survivors.map((e) => JSON.stringify(e)).join('\n') + (survivors.length ? '\n' : ''));
+  fs.writeFileSync(tmp, survivors.map((e) => JSON.stringify(e)).join('\n') + (survivors.length ? '\n' : ''), { mode: FILE_MODE });
   fs.renameSync(tmp, p);
   return {
     before: all.length,

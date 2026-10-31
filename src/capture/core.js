@@ -19,6 +19,7 @@ const path = require('path');
 const { append, readTurn, TYPES, dataDir } = require('../store/eventlog');
 const { unifiedDiff } = require('../reconcile/difftool');
 const { sha256 } = require('./fs-sentinel/hasher');
+const { redactString } = require('../store/secrets');
 const { bumpTurn, writeTurnId, closeTurn } = require('./turnstate');
 const { reconcileAndPersist } = require('../reconcile');
 const { renderTurn } = require('../render/terminal');
@@ -56,7 +57,7 @@ function writeOutputSidecar(sessionId, callId, full) {
     const dir = path.join(dataDir(), 'output', sessionId || 'unknown');
     fs.mkdirSync(dir, { recursive: true });
     const slot = path.join(dir, (callId || `cmd-${Date.now()}`) + '.txt');
-    fs.writeFileSync(slot, full);
+    fs.writeFileSync(slot, redactString(full).text, { mode: 0o600 });
     return slot;
   } catch {
     return null;
@@ -120,7 +121,7 @@ function handlePreTool(payload, adapter) {
     before = ''; // file doesn't exist yet — a legit "before" state too
   }
   try {
-    fs.writeFileSync(ensureCacheSlot(sessionId, filePath), before);
+    fs.writeFileSync(ensureCacheSlot(sessionId, filePath), before, { mode: 0o600 });
   } catch {
     /* cache failure must never block the agent's tool call */
   }
@@ -345,7 +346,7 @@ function runHook(phase, adapter) {
     const out = handler(payload, adapter);
     if (phase === 'stop' && typeof out === 'string') {
       try {
-        fs.writeFileSync(lastTurnReportPath(), out + '\n');
+        fs.writeFileSync(lastTurnReportPath(), out + '\n', { mode: 0o600 });
       } catch {
         /* best effort */
       }

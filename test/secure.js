@@ -295,4 +295,71 @@ it('orunmila log with no subcommand prints usage and exits 1', () => {
   rmrf(home);
 });
 
-runAll('secure (0.2.2: permissions + redaction + legacy log)');
+// --- dashboard: loopback only -----------------------------------------------------
+
+const http = require('http');
+const os = require('os');
+const { spawn } = require('child_process');
+
+function get(host, port, urlPath = '/api/sessions') {
+  return new Promise((resolve) => {
+    const req = http.get({ host, port, path: urlPath, timeout: 1500 }, (res) => {
+      let body = '';
+      res.on('data', (d) => (body += d));
+      res.on('end', () => resolve({ status: res.statusCode, body }));
+    });
+    req.on('error', (err) => resolve({ error: err.code }));
+    req.on('timeout', () => req.destroy(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })));
+  });
+}
+
+function externalIPv4() {
+  for (const list of Object.values(os.networkInterfaces())) {
+    for (const a of list || []) if (a.family === 'IPv4' && !a.internal) return a.address;
+  }
+  return null;
+}
+
+it('the dashboard answers on 127.0.0.1 and refuses connections on the network address', async () => {
+  const home = tmpHome();
+  const hostile = '<img src=x onerror=alert(1)>';
+  fs.writeFileSync(
+    path.join(home, 'events.jsonl'),
+    JSON.stringify({ ts: new Date().toISOString(), session_id: hostile, agent: 'claude-code', type: 'user_prompt', text: 'hi' }) + '\n'
+  );
+  // The dashboard lists only sessions with at least one reported claim.
+  fs.mkdirSync(path.join(home, 'reports', hostile), { recursive: true });
+  fs.writeFileSync(path.join(home, 'reports', hostile, 't1.json'), JSON.stringify({ summary: { verified: 1 } }));
+  const port = 39000 + Math.floor(Math.random() * 1000);
+  const child = spawn('node', [path.join(__dirname, '..', 'bin', 'dashboard.js')], {
+    env: { ...process.env, ORUNMILA_HOME: home, PORT: String(port) },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  try {
+    await new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error('dashboard did not start')), 5000);
+      child.stdout.on('data', (d) => {
+        if (String(d).includes('dashboard')) {
+          clearTimeout(t);
+          resolve();
+        }
+      });
+    });
+    assert.strictEqual((await get('127.0.0.1', port)).status, 200);
+    const page = await get('127.0.0.1', port, '/');
+    assert.ok(page.body.includes('&lt;img src=x'), 'session id should appear, escaped');
+    assert.ok(!page.body.includes(hostile), 'a session id reached the page as live HTML');
+    const ext = externalIPv4();
+    if (ext) {
+      const r = await get(ext, port);
+      assert.ok(r.error, `dashboard reachable on ${ext}: ${JSON.stringify(r)}`);
+    } else {
+      console.log('      (no external IPv4 interface on this machine: network-side check not run)');
+    }
+  } finally {
+    child.kill();
+    rmrf(home);
+  }
+});
+
+runAll('secure (0.2.2: permissions + redaction + legacy log + dashboard)');

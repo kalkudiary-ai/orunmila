@@ -467,12 +467,12 @@ function renderSessionRow(s, activeSessions) {
   const rColor = s.reliability >= 70 ? 'var(--green)' : s.reliability >= 50 ? 'var(--yellow)' : s.reliability !== null ? 'var(--red)' : 'var(--text3)';
   const narrative = narrativeFor(s);
 
-  return `<a href="/session/${s.id}" class="s-card" target="_blank">
+  return `<a href="/session/${encodeURIComponent(s.id)}" class="s-card" target="_blank">
     <div class="s-card-left">
       <div class="s-pulse ${isActive ? '' : 'inactive'}"></div>
       <div class="s-info">
         <div class="s-agent">${esc(s.agent)}</div>
-        <div class="s-id">${s.id}</div>
+        <div class="s-id">${esc(s.id)}</div>
         ${narrative ? `<div class="s-narrative">${esc(narrative)}</div>` : ''}
       </div>
     </div>
@@ -591,4 +591,7 @@ const server = http.createServer((req, res) => {
   res.end(html());
 });
 
-server.listen(PORT, () => { console.log(`Orunmila dashboard → http://localhost:${PORT}`); });
+// Loopback only (0.2.2). With no host, Node listens on every interface, which
+// served session ids, prompts and reports to anyone on the same network.
+const HOST = '127.0.0.1';
+server.listen(PORT, HOST, () => { console.log(`Orunmila dashboard → http://${HOST}:${PORT}`); });

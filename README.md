@@ -528,6 +528,11 @@ habit it exists to break.
 
 ## What's new
 
+**0.2.2 is a security patch: upgrade, then run `orunmila log redact`.** Earlier
+versions stored your log readable by other accounts on your computer and did not
+redact secrets. Details, and what the patch does not cover, in the
+[0.2.2 advisory](CHANGELOG.md#022--unreleased-security-patch).
+
 Recent additions to The Diviner:
 
 - **Interactive HTML report.** `orunmila trail` now renders a six-tab session

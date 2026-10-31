@@ -8,6 +8,57 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ## [Unreleased]
 
+## [0.2.2] — unreleased (security patch)
+
+### Security advisory
+
+**Versions 0.1.0 to 0.2.1 store everything they capture in `~/.orunmila/` with
+default file permissions, and without redacting secrets.** On most systems that
+means any other account on the same computer can read your prompts, file diffs
+and command output, including any API key, token or password that passed through
+an agent session. Upgrade to 0.2.2, then run `orunmila log redact` (scrub what is
+already stored) or `orunmila log delete --yes` (remove it). If you know an agent
+saw a credential, rotate it: redaction recognises known formats only.
+
+**What 0.2.2 does not do.** It protects your log from *other accounts* on your
+computer. It does not protect it from the agent itself, which runs as your own
+user and can still read and change these files. Separating the two is planned for
+the next major release.
+
+### Fixed
+
+- **Owner-only storage.** `~/.orunmila/` is now `0700` and the files Orunmila owns
+  are `0600`, on creation and, for existing installs, on the next hook run. A
+  custom `ORUNMILA_HOME` that already existed is not chmodded (it may be a shared
+  folder); the files Orunmila owns inside it are.
+- **Secrets are redacted at capture.** Known secret formats (AWS, GitHub,
+  Anthropic, OpenAI, Stripe, Slack, Google and npm keys; PEM private keys; JWTs;
+  bearer tokens; credentials in URLs; upper-case `*_TOKEN=` / `*_PASSWORD=`-style
+  assignments) are replaced with `[REDACTED:<kind>]` before an event or a
+  command-output sidecar is written. Each event lists the kinds removed in a new
+  `redactions` field, never the values. Unknown formats can still get through.
+- **The dashboard listens on `127.0.0.1` only.** `node bin/dashboard.js` used to
+  listen on every network interface, which served your session list and reports
+  to anyone on the same network. It also now escapes session ids in the page.
+
+### Added
+
+- **`orunmila log redact`** scrubs everything already stored (event log,
+  sidecars, reports, last-turn report) in place. Run it with no agent session
+  active.
+- **`orunmila log delete [--yes]`** lists what it would delete, and deletes only
+  with `--yes`. Your `laws.json` is kept.
+- **A one-time warning** when a log from before 0.2.2 exists: from `orunmila
+  status`, and in Claude Code once per session, as a message to you (never
+  shown to the agent, never blocking). Other agents get it from `orunmila
+  status` only. The warning stops once you redact or delete.
+
+### Changed
+
+- `SECURITY.md` no longer says orunmila makes no network calls of its own. Two
+  developer tools ship in `bin/`: `bench.js` runs other agents and can call
+  OpenRouter when you invoke it, and `dashboard.js` is a local web server.
+
 ## [0.2.1] — 2026-10-28
 
 ### Fixed

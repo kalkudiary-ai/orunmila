@@ -176,3 +176,20 @@ corpus.
 
 Adding new values to any of these is a MINOR bump. Renaming or changing the
 semantics of an existing value is MAJOR.
+
+## Event log (`~/.orunmila/events.jsonl`): fields added in 0.2.2
+
+The event log has no `schema_version` and is not yet fully specified here.
+0.2.2 adds two things, both backwards-compatible:
+
+- **`redactions`** (optional, on any event): a sorted list of the secret kinds
+  removed from that event before it was written, for example
+  `["anthropic_key", "bearer_token"]`. Present only when something was removed.
+  The removed text is replaced in place with `[REDACTED:<kind>]`. Kinds:
+  `private_key | aws_access_key | github_token | anthropic_key | openai_key |
+  stripe_key | slack_token | google_api_key | npm_token | jwt | bearer_token |
+  url_credentials | secret_assignment`.
+- **`log-state.json`** (in the data dir, not in the log):
+  `{ schema_version: 1, first_seen_at, legacy_unredacted, redacted_at?, deleted_at? }`.
+  `legacy_unredacted` is true when 0.2.2 first found a log written by an earlier
+  version, and stays true until `orunmila log redact` or `orunmila log delete --yes`.

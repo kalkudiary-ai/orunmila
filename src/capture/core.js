@@ -35,7 +35,7 @@ function cacheSlot(sessionId, filePath) {
 
 function ensureCacheSlot(sessionId, filePath) {
   const dir = path.join(dataDir(), 'cache', sessionId || 'unknown');
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   return path.join(dir, encodeURIComponent(filePath) + '.before');
 }
 
@@ -56,7 +56,7 @@ function writeOutputSidecar(sessionId, callId, full) {
   if (!full) return null;
   try {
     const dir = path.join(dataDir(), 'output', sessionId || 'unknown');
-    fs.mkdirSync(dir, { recursive: true });
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     const slot = path.join(dir, (callId || `cmd-${Date.now()}`) + '.txt');
     fs.writeFileSync(slot, redactString(full).text, { mode: 0o600 });
     return slot;
@@ -122,7 +122,9 @@ function handlePreTool(payload, adapter) {
     before = ''; // file doesn't exist yet — a legit "before" state too
   }
   try {
-    fs.writeFileSync(ensureCacheSlot(sessionId, filePath), before, { mode: 0o600 });
+    // Redacted before it touches disk: the snapshot is a copy of the file, so
+    // it would otherwise keep every secret the file holds until postTool runs.
+    fs.writeFileSync(ensureCacheSlot(sessionId, filePath), redactString(before).text, { mode: 0o600 });
   } catch {
     /* cache failure must never block the agent's tool call */
   }
@@ -168,11 +170,20 @@ function handlePostTool(payload, adapter) {
     } catch {
       after = ''; // file was deleted as part of this action
     }
-    append(Object.assign({}, base, {
+    // Both sides are redacted before diffing. The snapshot already was, so a
+    // raw `after` would show every untouched secret line as changed; and the
+    // diff tool copies both sides to temp files. The kinds go on the event
+    // because append() can no longer find them in an already-redacted diff.
+    const b = redactString(before);
+    const a = redactString(after);
+    const event = Object.assign({}, base, {
       type: TYPES.FILE_WRITE,
       path: filePath,
-      diff: unifiedDiff(before, after, filePath),
-    }));
+      diff: unifiedDiff(b.text, a.text, filePath),
+    });
+    const kinds = [...new Set(b.kinds.concat(a.kinds))];
+    if (kinds.length) event.redactions = kinds;
+    append(event);
     try {
       fs.rmSync(cacheSlot(sessionId, filePath), { force: true });
     } catch {
@@ -199,19 +210,26 @@ function handlePostTool(payload, adapter) {
     }));
   } else if (kind === 'command') {
     const full = adapter.fields.stdout(response) + (adapter.fields.stderr(response) ? '\n' + adapter.fields.stderr(response) : '');
+    // Redact the whole output before anything cuts it. Cutting first would
+    // split a complete key at the 2000-char mark, and a key with no END line
+    // can only be removed by guessing where it stops.
+    const clean = redactString(full);
     const outputPath = full.length > 2000 ? writeOutputSidecar(sessionId, callId, full) : null;
     // Exit code from the response if present; otherwise, if the payload itself
     // signalled failure (top-level error / a failure hook), record a non-zero
     // exit rather than null — a known failure shouldn't read as "unknown".
     const code = adapter.fields.exitCode(response);
     const command = adapter.fields.command(input);
-    append(Object.assign({}, base, {
+    const run = Object.assign({}, base, {
       type: TYPES.COMMAND_RUN,
       command,
       exit_code: code === null && failed ? 1 : code,
-      stdout_excerpt: full.slice(0, 2000),
+      stdout_excerpt: clean.text.slice(0, 2000),
       output_path: outputPath,
-    }));
+    });
+    // append() cannot find these kinds again in already-redacted text.
+    if (clean.kinds.length) run.redactions = clean.kinds;
+    append(run);
     // A gh/git command's output is durable VCS/CI evidence (merge state, check
     // conclusions, HEAD). Derive typed events from the FULL output so merge and
     // CI state become first-class receipts, not lossy transcript prose. Only on
@@ -243,9 +261,10 @@ function handlePostTool(payload, adapter) {
     // database query has its proof in the returned rows, and recording only the
     // tool name and its input means that claim reads as unevidenced downstream.
     //
-    // OFF BY DEFAULT, AND DELIBERATELY SO. events.jsonl is plaintext, unencrypted
-    // and unredacted on disk (only rendered output goes through the redaction
-    // pass). Tool results are exactly the payloads most likely to carry other
+    // OFF BY DEFAULT, AND DELIBERATELY SO. events.jsonl is plaintext and
+    // unencrypted on disk; since 0.2.2 known secret formats are redacted before
+    // it is written, but personal data and unknown formats are not. Tool results
+    // are exactly the payloads most likely to carry other
     // people's personal data and live credentials — database rows, user records,
     // a platform's variable listing. Turning this on converts the event log into
     // a store of that data. That is a decision for the person whose machine it
@@ -259,9 +278,12 @@ function handlePostTool(payload, adapter) {
       } catch {
         text = ''; // circular or un-serialisable result — the tool call still counts
       }
-      // Bounded hard: enough to name what came back, never a bulk dump.
-      event.result_excerpt = String(text || '').slice(0, 2000);
+      // Bounded hard: enough to name what came back, never a bulk dump. Redacted
+      // whole before the cut, for the same reason as command output.
+      const clean = redactString(String(text || ''));
+      event.result_excerpt = clean.text.slice(0, 2000);
       event.result_bytes = String(text || '').length;
+      if (clean.kinds.length) event.redactions = clean.kinds;
     }
 
     append(Object.assign({}, base, event));

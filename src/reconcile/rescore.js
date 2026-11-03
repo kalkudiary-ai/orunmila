@@ -49,7 +49,7 @@ function newArchiveDir(home) {
   const pad = (n) => String(n).padStart(2, '0');
   const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
   const dir = path.join(archiveRoot(home), stamp);
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   return { dir, stamp };
 }
 
@@ -199,7 +199,7 @@ function rescoreAll({ home, dryRun = false, logger } = {}) {
       if (!dryRun) {
         // archive original
         const archDir = path.join(archive.dir, sessionId);
-        fs.mkdirSync(archDir, { recursive: true });
+        fs.mkdirSync(archDir, { recursive: true, mode: 0o700 });
         fs.writeFileSync(path.join(archDir, file), JSON.stringify(original, null, 2));
         // overwrite live
         fs.writeFileSync(livePath, JSON.stringify(merged, null, 2));

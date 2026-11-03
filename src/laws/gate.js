@@ -74,7 +74,7 @@ const DEFAULT_BLOCK_BUDGET = 2;
 /** Where the per-turn block counter lives. Orunmila's own state — see the loop-trap note. */
 function statePath(sessionId, turnId) {
   const dir = path.join(dataDir(), 'laws-state', String(sessionId || 'unknown'));
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   return path.join(dir, `${turnId || 't0'}.json`);
 }
 

@@ -30,6 +30,7 @@
 const path = require('path');
 const { append, TYPES } = require('../../store/eventlog');
 const { unifiedDiff } = require('../../reconcile/difftool');
+const { redactString } = require('../../store/secrets');
 const { createWalker } = require('./walker');
 const { createStore } = require('./hasher');
 const { effectiveIgnore, isIgnored } = require('./ignore');
@@ -56,11 +57,21 @@ function startSentinel(opts = {}) {
     // (Windows path.relative yields back-slashes): the reconciler's basename
     // match, the diff headers, and the HTML report all assume POSIX separators.
     const relPath = path.relative(root, absPath).split(/[\\/]/).join('/');
-    const diff = change.binary
-      ? `Binary file ${relPath} changed (${change.kind}).`
-      : unifiedDiff(change.before, change.after, relPath);
+    // Both sides are redacted whole before diffing, as in the hook layer. A
+    // hunk inside a key file shows key lines with neither BEGIN nor END, and
+    // nothing could recognise them once the diff had cut them out.
+    let diff;
+    let kinds = [];
+    if (change.binary) {
+      diff = `Binary file ${relPath} changed (${change.kind}).`;
+    } else {
+      const b = redactString(change.before);
+      const a = redactString(change.after);
+      diff = unifiedDiff(b.text, a.text, relPath);
+      kinds = [...new Set(b.kinds.concat(a.kinds))];
+    }
 
-    append({
+    const event = {
       session_id: null, // unknown from this process; correlated by time window
       turn_id: null,
       agent: 'fs-sentinel',
@@ -74,7 +85,9 @@ function startSentinel(opts = {}) {
       binary: !!change.binary,
       change_kind: change.kind,
       failed: false,
-    });
+    };
+    if (kinds.length) event.redactions = kinds;
+    append(event);
 
     if (opts.verbose) log(`[fs-sentinel] ${change.kind} ${relPath}`);
   }

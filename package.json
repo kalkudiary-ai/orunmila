@@ -56,6 +56,7 @@
     "coverage": "c8 node test/all.js",
     "accuracy": "node test/accuracy.js",
     "accuracy:gate": "node test/accuracy.js --gate 95",
+    "mutation:gate": "node scripts/mutation-gate.js",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -65,6 +66,6 @@
     "demo": "node bin/orunmila.js demo",
     "watch": "node bin/orunmila.js watch",
     "watch-fs": "node bin/orunmila.js watch-fs",
-    "prepublishOnly": "npm run lint && npm run accuracy:gate && npm run coverage"
+    "prepublishOnly": "npm run lint && npm run accuracy:gate && npm run coverage && npm run mutation:gate"
   }
 }

@@ -27,7 +27,7 @@ function sentinelWritesForTurn(hookEvents) {
 
 function reportPath(sessionId, turnId) {
   const dir = path.join(dataDir(), 'reports', sessionId);
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   return path.join(dir, `${turnId}.json`);
 }
 

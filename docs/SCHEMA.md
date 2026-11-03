@@ -185,7 +185,10 @@ The event log has no `schema_version` and is not yet fully specified here.
 - **`redactions`** (optional, on any event): a sorted list of the secret kinds
   removed from that event before it was written, for example
   `["anthropic_key", "bearer_token"]`. Present only when something was removed.
-  The removed text is replaced in place with `[REDACTED:<kind>]`. Kinds:
+  The removed text is replaced in place with `[REDACTED:<kind>]`. On a hook
+  `file_write`, a secret that was only in the file's before-state shows as
+  `[REDACTED:<kind>]` in the diff but is missing from `redactions`, except
+  `url_credentials`, which is found again in its own placeholder. Kinds:
   `private_key | aws_access_key | github_token | anthropic_key | openai_key |
   stripe_key | slack_token | google_api_key | npm_token | jwt | bearer_token |
   url_credentials | secret_assignment`.

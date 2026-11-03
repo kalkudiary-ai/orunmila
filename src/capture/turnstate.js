@@ -47,7 +47,7 @@ function legacy() {
 
 function statePath(sessionId) {
   const dir = path.join(dataDir(), 'cache', sessionId || 'unknown');
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   return path.join(dir, 'turn.json');
 }
 

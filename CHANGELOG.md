@@ -27,16 +27,27 @@ the next major release.
 
 ### Fixed
 
-- **Owner-only storage.** `~/.orunmila/` is now `0700` and the files Orunmila owns
-  are `0600`, on creation and, for existing installs, on the next hook run. A
-  custom `ORUNMILA_HOME` that already existed is not chmodded (it may be a shared
-  folder); the files Orunmila owns inside it are.
+- **Owner-only storage.** `~/.orunmila/` and every folder Orunmila creates in it
+  are now `0700`. The event log, the last-turn report, `log-state.json`,
+  command-output sidecars and before-snapshots are `0600`. `laws.json` is
+  written by `orunmila laws --init` with the default mode and made `0600` by the
+  next Orunmila command or hook run.
+  Reports, law state, the turn counter and archives keep the default file mode
+  (usually `0644`) and rely on their `0700` folders. For existing installs, the
+  data dir, its top-level folders, the event log, `laws.json`, the last-turn
+  report and `log-state.json` are tightened on the next hook run. A custom
+  `ORUNMILA_HOME` that already existed is not chmodded (it may be a shared
+  folder); those files inside it are.
 - **Secrets are redacted at capture.** Known secret formats (AWS, GitHub,
   Anthropic, OpenAI, Stripe, Slack, Google and npm keys; PEM private keys; JWTs;
   bearer tokens; credentials in URLs; upper-case `*_TOKEN=` / `*_PASSWORD=`-style
-  assignments) are replaced with `[REDACTED:<kind>]` before an event or a
-  command-output sidecar is written. Each event lists the kinds removed in a new
-  `redactions` field, never the values. Unknown formats can still get through.
+  assignments) are replaced with `[REDACTED:<kind>]` before an event, a
+  command-output sidecar or the before-snapshot of a file being edited is
+  written. Both witnesses, the hooks and the Filesystem Sentinel, redact the
+  whole text before they cut an excerpt or make a diff. Each event lists the
+  kinds removed in a new `redactions` field, never the values. Unknown formats
+  can still get through. What redaction misses is listed under "Known limits" in
+  `SECURITY.md`.
 - **The dashboard listens on `127.0.0.1` only.** `node bin/dashboard.js` used to
   listen on every network interface, which served your session list and reports
   to anyone on the same network. It also now escapes session ids in the page.
@@ -58,6 +69,9 @@ the next major release.
 - `SECURITY.md` no longer says orunmila makes no network calls of its own. Two
   developer tools ship in `bin/`: `bench.js` runs other agents and can call
   OpenRouter when you invoke it, and `dashboard.js` is a local web server.
+- Any command that opens the data dir, read-only ones such as `orunmila status`
+  included, now sets the permissions above as it starts, and makes your own
+  `laws.json` `0600`. The first 0.2.2 run also writes `log-state.json`.
 
 ## [0.2.1] — 2026-10-28
 

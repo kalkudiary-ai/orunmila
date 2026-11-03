@@ -28,10 +28,10 @@ the next major release.
 ### Fixed
 
 - **Owner-only storage.** `~/.orunmila/` and every folder Orunmila creates in it
-  are now `0700`. The event log, the last-turn report, `log-state.json`,
-  command-output sidecars and before-snapshots are `0600`. `laws.json` is
-  written by `orunmila laws --init` with the default mode and made `0600` by the
-  next Orunmila command or hook run.
+  are now `0700`. The event log, the last-turn report, `log-state.json`, the
+  `laws.json` that `orunmila laws --init` writes, command-output sidecars and
+  before-snapshots are `0600`. A project `.orunmila/laws.json` is repo config
+  and keeps the default mode.
   Reports, law state, the turn counter and archives keep the default file mode
   (usually `0644`) and rely on their `0700` folders. For existing installs, the
   data dir, its top-level folders, the event log, `laws.json`, the last-turn

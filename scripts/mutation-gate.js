@@ -40,7 +40,7 @@ const T = {
   newLog: 'a new log is created owner-only',
   tightenFiles: 'an existing world-readable log, laws.json',
   tightenDirs: 'existing world-readable data subfolders',
-  newFiles: 'every file a hook cycle creates in a fresh data dir',
+  newFiles: 'the event log, log state, last-turn report and command sidecar a hook cycle creates',
   defaultHome: 'the default ~/.orunmila of an existing install',
   warnOnce: 'a pre-0.2.2 log makes the Claude Code prompt hook warn',
   redact: 'orunmila log redact scrubs',
@@ -49,6 +49,8 @@ const T = {
   toolCut: 'a complete key across the tool-result excerpt cut',
   sentinelDiff: 'a Sentinel diff of an edit inside a key file',
   witness: 'the Witness column of the limits table',
+  prune: 'orunmila prune rewrites the log owner-only',
+  lawsInit: 'orunmila laws --init writes your laws.json owner-only',
 };
 
 const SNAPSHOT_WRITE = 'fs.writeFileSync(ensureCacheSlot(sessionId, filePath), redactString(before).text, { mode: 0o600 });';
@@ -147,6 +149,27 @@ const MUTANTS = [
     from: "(it was only in the file's before-state) | Glove |", to: "(it was only in the file's before-state) | Glove and Sentinel |", fails: [T.witness] },
   { id: 'M41 Sentinel drops kinds found only in the before-state', file: 'src/capture/fs-sentinel/index.js',
     from: 'kinds = [...new Set(b.kinds.concat(a.kinds))];', to: 'kinds = a.kinds;', fails: [T.witness] },
+  // Survivors of the fifth cold pass, each now killed by a named test.
+  { id: 'M42 log redact skips the last-turn report', file: 'src/store/legacy.js',
+    from: 'if (fs.existsSync(lastTurn)) scrub(lastTurn);', to: 'void 0;', fails: [T.redact] },
+  { id: 'M43 log delete skips the last-turn report', file: 'src/store/legacy.js',
+    from: "const CONTENT_FILES = ['events.jsonl', 'last-turn-report.txt'];", to: "const CONTENT_FILES = ['events.jsonl'];", fails: [T.remove] },
+  { id: 'M44 log redact and log delete skip laws-state/', file: 'src/store/legacy.js',
+    from: CONTENT_DIRS, to: CONTENT_DIRS.replace(", 'laws-state'", ''), fails: [T.redact, T.remove] },
+  { id: 'M45 secret_assignment drops the PRIVATE_KEY name', file: 'src/store/secrets.js',
+    from: 'SECRET|TOKEN|PASSWORD|PASSWD|API_KEY|APIKEY|PRIVATE_KEY|ACCESS_KEY', to: 'SECRET|TOKEN|PASSWORD|PASSWD|API_KEY|APIKEY|ACCESS_KEY', fails: [T.count] },
+  { id: 'M46 prune writes its temp file without mode 0600', file: 'src/store/eventlog.js',
+    from: "(survivors.length ? '\\n' : ''), { mode: FILE_MODE });", to: "(survivors.length ? '\\n' : ''));", fails: [T.prune] },
+  { id: 'M47 warned/ marker written without mode 0600', file: 'src/store/legacy.js',
+    from: "fs.writeFileSync(marker, '', { flag: 'wx', mode: FILE_MODE });", to: "fs.writeFileSync(marker, '', { flag: 'wx' });", fails: [T.warnOnce] },
+  // Survivor of the sixth cold pass.
+  { id: 'M49 log redact rewrites a stored file without mode 0600', file: 'src/store/legacy.js',
+    from: 'fs.writeFileSync(tmp, out, { mode: FILE_MODE });', to: 'fs.writeFileSync(tmp, out);', fails: [T.redact] },
+  // The NF35 fix: your laws.json is owner-only, a project laws file is not.
+  { id: 'M48 laws --init writes laws.json without mode 0600 (NF35)', file: 'bin/orunmila.js',
+    from: 'userFile ? { mode: 0o600 } : {}', to: '{}', fails: [T.lawsInit] },
+  { id: 'M50 laws --init makes a project laws file owner-only too', file: 'bin/orunmila.js',
+    from: 'userFile ? { mode: 0o600 } : {}', to: '{ mode: 0o600 }', fails: [T.lawsInit] },
 ];
 
 function copyRepo() {

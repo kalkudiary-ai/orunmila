@@ -795,7 +795,8 @@ function cmdLaws() {
   // to retune a canon law, and the patch-by-id form is the non-obvious part.
   if (args.includes('--init')) {
     const { lawPaths } = require('../src/laws/load');
-    const target = args.includes('--project') ? lawPaths({ root }).project : lawPaths({ root }).user;
+    const userFile = !args.includes('--project');
+    const target = userFile ? lawPaths({ root }).user : lawPaths({ root }).project;
     if (fs.existsSync(target)) {
       console.log(`${target} already exists — not overwriting it.`);
       console.log('Edit it directly, or see what is currently in force with: orunmila laws');
@@ -828,7 +829,10 @@ function cmdLaws() {
         },
         null,
         2
-      ) + '\n'
+      ) + '\n',
+      // Your own file lives in the data dir, which is owner-only since 0.2.2. A
+      // project file is repo config, so it keeps the default mode.
+      userFile ? { mode: 0o600 } : {}
     );
     console.log(`Wrote ${target}`);
     console.log('It ships with one patch and one disabled example — edit both, then run: orunmila laws');

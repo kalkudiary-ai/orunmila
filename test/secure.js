@@ -80,7 +80,7 @@ it('existing world-readable data subfolders are tightened to 0700', () => {
   rmrf(home);
 });
 
-it('every file a hook cycle creates in a fresh data dir is owner-only (0600)', () => {
+it('the event log, log state, last-turn report and command sidecar a hook cycle creates are owner-only (0600)', () => {
   const home = tmpHome();
   const env = { ORUNMILA_HOME: home };
   run(PROMPT, { input: promptPayload('s-files'), env });
@@ -293,7 +293,7 @@ it('a bare number is kept only under a count word; numeric keys, tokens and pass
     assert.strictEqual(r.text, s, `changed: ${s}`);
     assert.deepStrictEqual(r.kinds, []);
   }
-  for (const name of ['ACCESS_KEY', 'OTP_TOKEN', 'API_KEY', 'DB_PASSWORD', 'APP_SECRET', 'TOKEN_MAXWELL', 'MSG_TOKEN', 'IMAGE_TOKEN']) {
+  for (const name of ['ACCESS_KEY', 'PRIVATE_KEY', 'OTP_TOKEN', 'API_KEY', 'DB_PASSWORD', 'APP_SECRET', 'TOKEN_MAXWELL', 'MSG_TOKEN', 'IMAGE_TOKEN']) {
     assert.strictEqual(redactString(`${name}=123456789012`).text, `${name}=[REDACTED:secret_assignment]`, name);
   }
   assert.strictEqual(redactString('API_TOKEN=12345678abc').text, 'API_TOKEN=[REDACTED:secret_assignment]');
@@ -539,7 +539,7 @@ function promptPayload(sessionId) {
   return JSON.stringify({ session_id: sessionId, hook_event_name: 'UserPromptSubmit', prompt: 'hello' });
 }
 
-/** A data dir as 0.2.1 left it: unredacted log, sidecar, report, snapshot and archive, no log-state.json. */
+/** A data dir as 0.2.1 left it: unredacted log, sidecar, report, last-turn report, law state, snapshot and archive, no log-state.json. */
 function legacyHome() {
   const home = tmpHome();
   fs.writeFileSync(
@@ -552,6 +552,9 @@ function legacyHome() {
   fs.writeFileSync(path.join(home, 'output', 'old', 'c1.txt'), `token ${OLD_KEY}\n`);
   fs.mkdirSync(path.join(home, 'reports', 'old'), { recursive: true });
   fs.writeFileSync(path.join(home, 'reports', 'old', 't1.json'), JSON.stringify({ claims: [{ text: `used ${OLD_KEY}` }] }));
+  fs.writeFileSync(path.join(home, 'last-turn-report.txt'), `claim: used ${OLD_KEY}\n`);
+  fs.mkdirSync(path.join(home, 'laws-state', 'old'), { recursive: true });
+  fs.writeFileSync(path.join(home, 'laws-state', 'old', 't1.json'), JSON.stringify({ blocks: 1, claim: `used ${OLD_KEY}` }));
   fs.mkdirSync(path.join(home, 'cache', 'old'), { recursive: true });
   fs.writeFileSync(path.join(home, 'cache', 'old', 'f.before'), `GH=${OLD_KEY}\n`);
   fs.mkdirSync(path.join(home, 'archive', '20260101-000000', 'old'), { recursive: true });
@@ -587,6 +590,7 @@ it('a pre-0.2.2 log makes the Claude Code prompt hook warn once per session, wit
   assert.ok(w[0].systemMessage.includes('orunmila log redact'));
   assert.strictEqual(w[0].decision, undefined, 'the warning must never block');
   assert.strictEqual(modeOf(path.join(home, 'warned')), 0o700, 'warned/ mode');
+  assert.strictEqual(modeOf(path.join(home, 'warned', 's-a')), 0o600, 'warned/ marker mode');
   assert.strictEqual(warningsIn(run(PROMPT, { input: promptPayload('s-a'), env }).stdout).length, 0, 'second prompt, same session');
   assert.strictEqual(warningsIn(run(PROMPT, { input: promptPayload('s-b'), env }).stdout).length, 1, 'new session warns again');
   rmrf(home);
@@ -614,7 +618,9 @@ it('orunmila log redact scrubs the log, half-written lines, sidecars, reports, s
   run(CLI, { args: ['status'], env }); // first 0.2.2 run records the legacy state
   const r = run(CLI, { args: ['log', 'redact'], env });
   assert.strictEqual(r.status, 0, r.stderr);
-  for (const rel of ['events.jsonl', 'output/old/c1.txt', 'reports/old/t1.json', 'cache/old/f.before', 'archive/20260101-000000/old/t1.json']) {
+  // Checked now: any later Orunmila process would tighten it and hide a wrong mode.
+  assert.strictEqual(modeOf(path.join(home, 'last-turn-report.txt')), 0o600, 'a file log redact rewrote is not owner-only');
+  for (const rel of ['events.jsonl', 'output/old/c1.txt', 'reports/old/t1.json', 'last-turn-report.txt', 'laws-state/old/t1.json', 'cache/old/f.before', 'archive/20260101-000000/old/t1.json']) {
     const text = fs.readFileSync(path.join(home, rel), 'utf8');
     assert.ok(!text.includes(OLD_KEY), `${rel} still holds the key`);
   }
@@ -637,10 +643,37 @@ it('orunmila log delete lists and refuses without --yes, then deletes and keeps 
   assert.ok(fs.existsSync(path.join(home, 'events.jsonl')), 'nothing deleted without --yes');
   const r = run(CLI, { args: ['log', 'delete', '--yes'], env });
   assert.strictEqual(r.status, 0);
-  for (const rel of ['events.jsonl', 'output', 'reports', 'cache', 'archive']) assert.ok(!fs.existsSync(path.join(home, rel)), rel);
+  for (const rel of ['events.jsonl', 'last-turn-report.txt', 'output', 'reports', 'laws-state', 'cache', 'archive']) assert.ok(!fs.existsSync(path.join(home, rel)), rel);
   assert.ok(fs.existsSync(path.join(home, 'laws.json')));
   assert.ok(!run(CLI, { args: ['status'], env }).stdout.includes('written before 0.2.2'));
   rmrf(home);
+});
+
+it('orunmila prune rewrites the log owner-only (0600)', () => {
+  const home = tmpHome();
+  const ev = (sid) => JSON.stringify({ ts: '2026-01-01T00:00:00.000Z', session_id: sid, type: 'user_prompt', text: 'hi' });
+  fs.writeFileSync(path.join(home, 'events.jsonl'), ev('old') + '\n' + ev('new') + '\n');
+  const r = run(CLI, { args: ['prune', '--keep', '1'], env: { ORUNMILA_HOME: home } });
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.deepStrictEqual(readEvents(home).map((e) => e.session_id), ['new'], 'prune did not rewrite the log');
+  assert.strictEqual(modeOf(path.join(home, 'events.jsonl')), 0o600);
+  rmrf(home);
+});
+
+it('orunmila laws --init writes your laws.json owner-only (0600), and a project laws file with the default mode', () => {
+  const home = tmpHome();
+  const r = run(CLI, { args: ['laws', '--init'], env: { ORUNMILA_HOME: home } });
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.ok(r.stdout.includes('Wrote '), r.stdout);
+  assert.strictEqual(modeOf(path.join(home, 'laws.json')), 0o600);
+  // A project file is repo config: it gets whatever mode a new file gets here.
+  const proj = tmpDir();
+  fs.writeFileSync(path.join(proj, 'probe'), '');
+  const p = run(CLI, { args: ['laws', '--init', '--project', '--root', proj], env: { ORUNMILA_HOME: home } });
+  assert.strictEqual(p.status, 0, p.stderr);
+  assert.strictEqual(modeOf(path.join(proj, '.orunmila', 'laws.json')), modeOf(path.join(proj, 'probe')), 'project laws file mode');
+  rmrf(home);
+  rmrf(proj);
 });
 
 it('orunmila log with no subcommand prints usage and exits 1', () => {

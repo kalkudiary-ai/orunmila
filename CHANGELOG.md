@@ -66,6 +66,9 @@ the next major release.
 
 ### Changed
 
+- **Licence: Apache License 2.0.** 0.2.2 is the first release under Apache 2.0
+  (`LICENSE`, `NOTICE`), which adds an explicit patent grant. Versions 0.1.0,
+  0.2.0 and 0.2.1 were published under MIT and stay MIT.
 - `SECURITY.md` no longer says orunmila makes no network calls of its own. Two
   developer tools ship in `bin/`: `bench.js` runs other agents and can call
   OpenRouter when you invoke it, and `dashboard.js` is a local web server.

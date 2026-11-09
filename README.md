@@ -5,7 +5,7 @@
 [![CI](https://github.com/kalkudiary-ai/orunmila/actions/workflows/ci.yml/badge.svg)](https://github.com/kalkudiary-ai/orunmila/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/orunmila.svg)](https://www.npmjs.com/package/orunmila)
 [![node](https://img.shields.io/node/v/orunmila.svg)](https://www.npmjs.com/package/orunmila)
-[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![license: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 Agents narrate confidently regardless of what happened underneath. *"I added
 validation and tested it"* might mean exactly that, or a stub with a comment and
@@ -42,7 +42,7 @@ Summary: 1 verified, 0 partial, 1 phantom, 1 phantom-verification,
          0 unverifiable, 0 silently dropped, 0 undisclosed, 0 untracked writes
 ```
 
-100% free, MIT licensed, runs entirely on your machine. No telemetry, no
+100% free, Apache 2.0 licensed, runs entirely on your machine. No telemetry, no
 account, no API key required for the default mode.
 
 **One exception, stated up front because it is a privacy claim.** The `orunmila`
@@ -533,6 +533,9 @@ versions stored your log readable by other accounts on your computer and did not
 redact secrets. Details, and what the patch does not cover, in the
 [0.2.2 advisory](CHANGELOG.md#022--unreleased-security-patch).
 
+**0.2.2 is also the first release under the Apache License 2.0.** Versions 0.1.0,
+0.2.0 and 0.2.1 were published under MIT and stay MIT.
+
 Recent additions to The Diviner:
 
 - **Interactive HTML report.** `orunmila trail` now renders a six-tab session
@@ -768,4 +771,5 @@ against the *evidence*, not just recording the evidence.
 
 ## License
 
-MIT. Free, forever, no catch.
+Apache License 2.0 (`LICENSE`), copyright KALKU DIGITAL SOLUTIONS LIMITED (`NOTICE`). Free,
+forever, no catch. Versions up to 0.2.1 were released under MIT and stay MIT.

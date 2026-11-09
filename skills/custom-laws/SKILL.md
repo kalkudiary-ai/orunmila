@@ -1,7 +1,7 @@
 ---
 name: custom-laws
 description: Use when a team wants an AI coding agent held to THEIR rules, not just generic ones - "enforce our codebase conventions on the agent", "write custom laws", "make the agent follow our deployment rules", "stop the agent suggesting the wrong vendor", "encode our review standards", "our agent keeps making the same mistake", "team-specific agent guardrails". Writes an orunmila laws pack for a team's own rules and wires it into the Closeout Gate.
-license: MIT
+license: Apache-2.0
 ---
 
 # Hold an agent to your team's own rules

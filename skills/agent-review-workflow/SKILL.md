@@ -1,7 +1,7 @@
 ---
 name: agent-review-workflow
 description: Use when someone has to review work an AI coding agent produced and wants to know where to look first - "review this agent session", "what should I check in this PR the agent wrote", "where did the agent go wrong", "turn this session into a review checklist", "I don't trust this diff", "code review an agent's work", "what did the agent not tell me". Turns a finished orunmila session into a ranked reviewer checklist plus a fix-it prompt.
-license: MIT
+license: Apache-2.0
 ---
 
 # Turn a finished agent session into a review checklist

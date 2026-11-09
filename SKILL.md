@@ -1,7 +1,7 @@
 ---
 name: orunmila
 description: Use this skill when the user wants to audit, verify, or visualize what an AI coding agent actually did versus what it claimed - or wants the agent STOPPED from finishing on an unbacked claim. Triggers include "audit this session", "did you actually do that", "show me what changed vs what you said", "stain map", "dye trace my agent's changes", "set up a trust/verification layer", "stop my agent lying", "make the agent check its own work", "catch phantom completions", "undisclosed scope creep", or "silently dropped requirements" in agent-driven coding work.
-license: MIT
+license: Apache-2.0
 ---
 
 # Orunmila - claim-vs-reality verification for AI coding agents

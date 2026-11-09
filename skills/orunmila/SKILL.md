@@ -1,7 +1,7 @@
 ---
 name: orunmila
 description: Use when the user wants to know what an AI coding agent actually did versus what it claimed - "audit this session", "did you really do that", "show me what changed vs what you said", "stain map", "dye trace my agent", "verify my agent's work", "catch phantom completions", "find undisclosed changes", "did it silently drop anything". Installs orunmila, captures the session, and opens a claim-vs-reality report.
-license: MIT
+license: Apache-2.0
 ---
 
 # Audit what an agent actually did

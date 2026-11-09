@@ -1,7 +1,7 @@
 ---
 name: closeout-gate-setup
 description: Use when the user wants an AI coding agent STOPPED from finishing on a claim it cannot back up - "stop my agent lying", "make the agent check its own work", "don't let it say it's done when it isn't", "block unverified claims", "set up the closeout gate", "enforce evidence before the agent finishes", "my agent says tests pass when it never ran them". Installs orunmila's Closeout Gate, walks the six laws, and tunes block vs advise to the user's risk tolerance.
-license: MIT
+license: Apache-2.0
 ---
 
 # Stop an agent finishing on a claim it can't back up

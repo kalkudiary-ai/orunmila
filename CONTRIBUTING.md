@@ -78,4 +78,4 @@ most useful thing is the offending claim/prompt text and what you expected the
 verdict to be — that maps straight onto a fixture in `test/cases/`.
 
 By contributing, you agree your contributions are licensed under the project's
-MIT License.
+Apache License 2.0.

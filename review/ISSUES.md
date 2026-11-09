@@ -28,7 +28,7 @@ Severity legend: **P0** = a central claim of the tool is false until fixed ·
 | P1-2 | Filename matching is actually extension matching | P1 | **Closed** |
 | P1-3 | `undisclosed` flags everything when keywords are empty | P1 | **Closed** |
 | P1-4 | Claim extractor has low precision on conversational/markdown turns | P1 | **Closed** |
-| P1-5 | A pipe launders an exit code, so a green claim can hold a lying receipt | P1 | **Open** |
+| P1-5 | A pipe launders an exit code, so a green claim can hold a lying receipt | P1 | **Open** for the Stain Map; closed for the gate (re-checked 2026-11-10) |
 | P1-6 | A compound claim joined by "and" is graded as one unit, so a true half verifies a false half | P1 | **Closed** — found + fixed 2026-10-28 |
 | P1-7 | A double-extension basename (`login.test.js`) extracts as its tail (`test.js`) | P1 | **Closed** — found + fixed 2026-10-28 |
 | P1-8 | A weak phrase target stands in for a named file nothing touched | P1 | **Closed** — found + fixed 2026-10-28 |
@@ -461,7 +461,17 @@ claim is a verification claim, the receipt should be treated as *inconclusive*
 rather than passing — a distinct outcome, not a silent accept. Detecting
 `pipefail` in the same string is a cheap exemption.
 
-**Acceptance test** (fails today):
+**Status, re-checked 2026-11-10 by running both lenses on the code.** The gate
+half is closed: `hasUnguardedPipe` in `src/laws/evaluate.js` (already in 0.2.1)
+does not count an unguarded pipe as a passing run. It exempts any command whose
+text mentions `pipefail` or `PIPESTATUS`, even in a comment or ahead of an
+`echo`, which is a gap of its own. The Stain Map half is open:
+`src/reconcile/provenance.js` still scores "tests pass" behind
+`npm test | tail -5` (exit 0) as `verified`. The `; echo $?` workaround above is
+withdrawn: it makes the whole line exit 0, which both lenses count as a pass.
+Use `set -o pipefail`.
+
+**Acceptance test** (the first case still fails for the Stain Map):
 ```
 claim: "tests pass"   command: "npm test | tail -5"  exit: 0
 => NOT verified; receipt flagged as laundered/inconclusive

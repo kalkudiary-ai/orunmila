@@ -438,10 +438,10 @@ is in force and which layer each law came from.
 Map and the reports, not the refusal. And law findings are **heuristic: they read
 the agent's prose, not the facts.** They sit beside the evidence, never inside
 it, and never carry the same authority. A finding says "recheck this", not "you
-lied". One known hole worth knowing about: a pipe launders an exit code, so
-`npm test | tail` exits 0 with the suite on fire and satisfies
-`no-green-without-command` with a receipt that proves nothing
-([`review/ISSUES.md`](review/ISSUES.md) P1-5).
+lied". `no-green-without-command` reads phrasing: it can block an honest
+negative such as "I tested none of it.", and it accepts any command in the turn
+that did not fail, even one that tested nothing. It does not count an unguarded
+pipe (`npm test | tail`) as a passing run; `set -o pipefail` restores it.
 
 ## Supported agents
 
@@ -509,11 +509,11 @@ change how you should read a report:
   changed on this machine while I worked"*, never as authorship. This is the one
   open defect that produces a confidently wrong answer rather than a missing
   one, and it is architectural, not a patch.
-- **A pipe launders an exit code** (P1-5). `npm test | tail` exits 0 with the
-  suite on fire. Redirect and capture the status instead
-  (`npm test > out.txt 2>&1; echo $?`) or `set -o pipefail`. In `zsh`,
-  `${PIPESTATUS[0]}` is empty — the array is lowercase `${pipestatus[@]}` — so
-  the obvious portable-looking fix silently reads nothing.
+- **A pipe launders an exit code in the Stain Map** (P1-5). `npm test | tail`
+  exits 0 with the suite on fire, and the Stain Map still scores a "tests
+  pass" claim behind it as `verified`. The Closeout Gate does not count an
+  unguarded pipe as a pass. Use `set -o pipefail`; a trailing `; echo $?`
+  makes the whole line exit 0, and both lenses count that as a pass.
 - **`latestSessionId()` means "most recent event on this machine"** (P3-2), not
   "the session asking". Any wrapper that defaults to it will, on a multi-session
   machine, flip to whichever session most recently emitted an event.
@@ -531,7 +531,7 @@ habit it exists to break.
 **0.2.2 is a security patch: upgrade, then run `orunmila log redact`.** Earlier
 versions stored your log readable by other accounts on your computer and did not
 redact secrets. Details, and what the patch does not cover, in the
-[0.2.2 advisory](CHANGELOG.md#022--unreleased-security-patch).
+[0.2.2 advisory](CHANGELOG.md#022--2026-11-10-security-patch).
 
 **0.2.2 is also the first release under the Apache License 2.0.** Versions 0.1.0,
 0.2.0 and 0.2.1 were published under MIT and stay MIT.

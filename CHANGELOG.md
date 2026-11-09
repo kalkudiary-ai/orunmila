@@ -8,7 +8,7 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ## [Unreleased]
 
-## [0.2.2] — unreleased (security patch)
+## [0.2.2] — 2026-11-10 (security patch)
 
 ### Security advisory
 
@@ -51,6 +51,15 @@ the next major release.
 - **The dashboard listens on `127.0.0.1` only.** `node bin/dashboard.js` used to
   listen on every network interface, which served your session list and reports
   to anyone on the same network. It also now escapes session ids in the page.
+- **The blocking law sees the usual ways of claiming a pass (P0-3).**
+  `no-green-without-command` used to miss "Tests pass.", "All tests pass.",
+  "The test suite passes.", "I ran the tests and they pass." and "It works.".
+  It now judges them. It can also block an honest negative such as "I tested
+  none of it.".
+- **A passing run is no longer read as a failure (P0-5).** Claude Code does not
+  report exit codes, and the gate and the Stain Map treated a command with no
+  recorded exit code as failed. A "tests pass" claim backed by a real passing
+  run could be blocked by the gate, or scored as a phantom verification.
 
 ### Added
 
@@ -349,7 +358,8 @@ renders the result as a colored map of the codebase.
 - Zero runtime dependencies; no network calls by the tool itself; no account
   or API key. Everything stays local in `~/.orunmila/`.
 
-[Unreleased]: https://github.com/kalkudiary-ai/orunmila/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/kalkudiary-ai/orunmila/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/kalkudiary-ai/orunmila/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/kalkudiary-ai/orunmila/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/kalkudiary-ai/orunmila/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kalkudiary-ai/orunmila/releases/tag/v0.1.0

@@ -50,29 +50,28 @@ turn. Say this up front — do not install and let them discover it.
 
 | Law | What it catches | Default |
 |---|---|---|
-| `no-green-without-command` | a verification claim with no passing command in the turn (see the gap below) | **blocks** |
+| `no-green-without-command` | a verification claim with no passing command in the turn (see the limits below) | **blocks** |
 | `no-grep-as-basis` | a claim about a named file resting only on a pattern match | **blocks** |
 | `no-claim-without-receipt` | an assertion with nothing opened or run behind it | advises |
 | `no-absolute-without-enumeration` | "all" / "none" with no enumeration | advises |
 | `no-uncertainty-as-fact` | uncertainty smoothed over instead of flagged | advises |
 | `no-assumption-language` | building on an unnamed assumption | advises |
 
-**Tell the user about this gap before they rely on it.**
-`no-green-without-command` only judges sentences its assertion extractor
-recognises, and that extractor wants a copula. It fires on *"The build is
-green"* and *"Tests are passing"*. It does **not** fire on *"Tests pass."*,
-*"All tests pass."*, *"I ran the tests and they pass."*, *"I tested it and it
-works."* or *"It works."* — those are dropped before the law is consulted.
-Tracked as P0-3 in `review/ISSUES.md`. Setting expectations wrongly here is
-worse than the gap itself: someone who believes the gate catches "tests pass"
-will stop checking for it.
+**Tell the user about these limits before they rely on it.**
+`no-green-without-command` reads phrasing, not meaning. It catches *"Tests
+pass."*, *"All tests pass."*, *"I ran the tests and they pass."* and *"It
+works."*, but it can also block an honest negative such as *"I tested none of
+it."* or *"Nothing was tested."*. It accepts any command in the turn that did
+not fail, even one that tested nothing. Setting expectations wrongly here is
+worse than the limits themselves: someone who believes a turn the gate let
+through was tested will stop checking for it.
 
 ## Tuning block vs advise
 
 The defaults are set on measurement, not taste, and it is worth explaining why
-before changing them. Across 194 real sessions the evidentiary laws fire on 18%
-of claimed turns, and only `no-green-without-command` proved precise enough to
-be worth stopping a turn over: 8 firings in 1,174 turns, every one genuine.
+before changing them. On real sessions only `no-green-without-command` proved
+precise enough to be worth stopping a turn over. The current figures are in the
+README, under "Why only two block".
 
 The asymmetry drives everything: a false advisory costs the agent a sentence of
 attention, a false block costs the whole session — and an agent that learns the
@@ -117,13 +116,11 @@ npx orunmila laws           # what's in force, and which layer each law came fro
 - **Law findings are heuristic — they read the agent's prose, not the facts.**
   They sit beside the evidence, never inside it. A finding says "recheck this",
   not "you lied".
-- **One real hole, tell them plainly:** a pipe launders an exit code.
-  `npm test | tail` exits 0 with the suite on fire, which satisfies
-  `no-green-without-command` with a receipt that proves nothing. The fix is to
-  redirect and capture the status (`npm test > out.txt 2>&1; echo $?`) or use
-  `set -o pipefail`. In `zsh`, `${PIPESTATUS[0]}` is empty — the array is
-  lowercase `${pipestatus[@]}` — so the obvious portable-looking fix reads
-  nothing at all. Tracked as P1-5 in `review/ISSUES.md`.
+- **Pipes hide exit codes.** `npm test | tail` exits 0 with the suite on fire,
+  so the gate does not count an unguarded pipe as a passing run. Tell them to
+  use `set -o pipefail` when they pipe a test run, and not to end a command
+  with `; echo $?`: the whole line then exits 0, and the gate counts that as a
+  pass.
 
 ## If the user wants rules specific to their codebase
 

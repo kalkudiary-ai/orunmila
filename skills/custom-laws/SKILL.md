@@ -85,10 +85,8 @@ finds the gate obstructive switches it off — at which point it enforces nothin
 at all.
 
 This is measured in the shipped canon, and the same logic applies to theirs:
-across 194 sessions the evidence laws fire on 18% of claimed turns, but only one
-proved precise enough to block on — 8 firings in 1,174 turns, every one genuine.
-Four laws stayed advisory **because the measurement said so**, not out of
-caution.
+on real sessions only one evidence law proved precise enough to block on. Four
+laws stayed advisory **because the measurement said so**, not out of caution.
 
 Default to `warn`. Earn `block`.
 

@@ -8,7 +8,7 @@ license: Apache-2.0
 
 Orunmila captures every file write (with a real diff), every command (with its
 exit code), and every tool call — then reconciles the agent's own account of
-what it did against that evidence. Free, MIT, runs entirely locally, no API key.
+what it did against that evidence. Free, Apache 2.0, runs entirely locally, no API key.
 
 ## What the user gets
 

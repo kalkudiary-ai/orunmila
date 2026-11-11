@@ -33,7 +33,8 @@ command-output sidecars (`~/.orunmila/output/`) contain the content of your
 session — file diffs, command output, prompts. Treat that directory as you would
 your shell history.
 
-Since 0.2.2 that directory is readable by your account only, and known secret
+Since 0.2.2 that directory is readable by your account only (not on Windows; see
+"Known limits"), and known secret
 formats are redacted before anything is written (see the 0.2.2 advisory in
 `CHANGELOG.md`). Two limits: redaction cannot recognise every unknown secret
 format, and the agent runs as your own user, so it can read and change these
@@ -61,6 +62,7 @@ complete key itself.
 | A secret the edit removed (it was only in the file's before-state) | Glove | The diff shows `[REDACTED:<kind>]`, but `redactions` does not list that kind, except `url_credentials`, which is found again in its own placeholder. |
 | A bare number under a count word: COUNT, LIMIT, MAX, MIN, SIZE, LEN, LENGTH, TTL, TIMEOUT, AGE, SECONDS, MS, DAYS | Glove and Sentinel | Kept, even beside a secret word (`SECRET_MIN=12345678`, `MS_PASSWORD=12345678`). A number under any other secret-style name is removed. |
 | Per-session folders created before 0.2.2 | Storage | Keep their mode, inside a parent that is now `0700`. Reports, law state, the turn counter and archives are written with the default file mode, relying on those folders; sidecars and before-snapshots are `0600`. |
+| Windows | Storage | File modes do not apply, so the owner-only settings above have no effect: the data dir is only as private as the folder it sits in. |
 
 ## Reporting a vulnerability
 

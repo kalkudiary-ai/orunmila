@@ -22,6 +22,20 @@ function modeOf(p) {
   return fs.statSync(p).mode & 0o777;
 }
 
+// Windows has no POSIX file modes: stat reports 0666 whatever chmod did, so the
+// owner-only checks cannot pass or fail there. They are skipped and counted out
+// loud (the last test prints the count); every other assertion still runs.
+const POSIX_MODES = process.platform !== 'win32';
+let modeChecksSkipped = 0;
+
+function assertMode(p, expected, message) {
+  if (!POSIX_MODES) {
+    modeChecksSkipped++;
+    return;
+  }
+  assert.strictEqual(modeOf(p), expected, message);
+}
+
 function bashPayload(sessionId, command, stdout) {
   return JSON.stringify({
     session_id: sessionId,
@@ -47,7 +61,7 @@ it('a new log is created owner-only (0600)', () => {
   const home = tmpHome();
   const r = run(POST, { input: bashPayload('s-perm', 'ls', 'a\nb'), env: { ORUNMILA_HOME: home } });
   assert.strictEqual(r.status, 0);
-  assert.strictEqual(modeOf(path.join(home, 'events.jsonl')), 0o600);
+  assertMode(path.join(home, 'events.jsonl'), 0o600);
   rmrf(home);
 });
 
@@ -64,7 +78,7 @@ it('an existing world-readable log, laws.json, last-turn report and log state ar
     fs.chmodSync(path.join(home, name), 0o644);
   }
   run(POST, { input: bashPayload('s-perm2', 'ls', 'x'), env: { ORUNMILA_HOME: home } });
-  for (const name of Object.keys(files)) assert.strictEqual(modeOf(path.join(home, name)), 0o600, name);
+  for (const name of Object.keys(files)) assertMode(path.join(home, name), 0o600, name);
   rmrf(home);
 });
 
@@ -76,7 +90,7 @@ it('existing world-readable data subfolders are tightened to 0700', () => {
     fs.chmodSync(path.join(home, d), 0o755);
   }
   run(POST, { input: bashPayload('s-perm3', 'ls', 'x'), env: { ORUNMILA_HOME: home } });
-  for (const d of dirs) assert.strictEqual(modeOf(path.join(home, d)), 0o700, d);
+  for (const d of dirs) assertMode(path.join(home, d), 0o700, d);
   rmrf(home);
 });
 
@@ -85,13 +99,13 @@ it('the event log, log state, last-turn report and command sidecar a hook cycle 
   const env = { ORUNMILA_HOME: home };
   run(PROMPT, { input: promptPayload('s-files'), env });
   // Checked now: any later hook process would tighten it and hide a wrong mode.
-  assert.strictEqual(modeOf(path.join(home, 'log-state.json')), 0o600, 'log-state.json after the first hook');
+  assertMode(path.join(home, 'log-state.json'), 0o600, 'log-state.json after the first hook');
   run(POST, { input: bashPayload('s-files', 'ls', 'y'.repeat(2500)), env });
   run('src/capture/claude-code/stop.js', { input: JSON.stringify({ session_id: 's-files', claim: 'done' }), env });
   const [cmd] = readEvents(home).filter((e) => e.type === 'command_run');
   for (const p of [path.join(home, 'events.jsonl'), path.join(home, 'log-state.json'), path.join(home, 'last-turn-report.txt'), cmd.output_path]) {
     assert.ok(fs.existsSync(p), `${path.relative(home, p)} was not created`);
-    assert.strictEqual(modeOf(p), 0o600, path.relative(home, p));
+    assertMode(p, 0o600, path.relative(home, p));
   }
   rmrf(home);
 });
@@ -102,9 +116,10 @@ it('the default ~/.orunmila of an existing install is tightened to 0700', () => 
   fs.mkdirSync(data);
   fs.chmodSync(data, 0o755);
   // An empty ORUNMILA_HOME means "not set", so the data dir is $HOME/.orunmila.
-  run(POST, { input: bashPayload('s-default', 'ls', 'x'), env: { ORUNMILA_HOME: '', HOME: fakeHome } });
+  // os.homedir() reads HOME on POSIX and USERPROFILE on Windows.
+  run(POST, { input: bashPayload('s-default', 'ls', 'x'), env: { ORUNMILA_HOME: '', HOME: fakeHome, USERPROFILE: fakeHome } });
   assert.ok(fs.existsSync(path.join(data, 'events.jsonl')), 'the hook did not use $HOME/.orunmila');
-  assert.strictEqual(modeOf(data), 0o700);
+  assertMode(data, 0o700);
   rmrf(fakeHome);
 });
 
@@ -112,7 +127,7 @@ it('a data dir Orunmila creates itself is 0700', () => {
   const parent = tmpDir();
   const home = path.join(parent, 'fresh-home');
   run(POST, { input: bashPayload('s-perm4', 'ls', 'x'), env: { ORUNMILA_HOME: home } });
-  assert.strictEqual(modeOf(home), 0o700);
+  assertMode(home, 0o700);
   rmrf(parent);
 });
 
@@ -120,8 +135,8 @@ it('a pre-existing custom ORUNMILA_HOME is not chmodded (it may be shared)', () 
   const home = tmpHome();
   fs.chmodSync(home, 0o755);
   run(POST, { input: bashPayload('s-perm5', 'ls', 'x'), env: { ORUNMILA_HOME: home } });
-  assert.strictEqual(modeOf(home), 0o755);
-  assert.strictEqual(modeOf(path.join(home, 'events.jsonl')), 0o600);
+  assertMode(home, 0o755);
+  assertMode(path.join(home, 'events.jsonl'), 0o600);
   rmrf(home);
 });
 
@@ -327,7 +342,7 @@ it('a command containing an API key never reaches the log, excerpt or sidecar', 
   assert.ok(ev.output_path, 'long output should go to a sidecar');
   const side = fs.readFileSync(ev.output_path, 'utf8');
   assert.ok(!side.includes(key), 'key leaked into the sidecar');
-  assert.strictEqual(modeOf(ev.output_path), 0o600);
+  assertMode(ev.output_path, 0o600);
   rmrf(home);
 });
 
@@ -411,7 +426,7 @@ it('a file holding a secret is redacted in its before-snapshot, and the diff sho
   assert.strictEqual(run(PRE, { input: payload('PreToolUse'), env }).status, 0);
   const slot = path.join(home, 'cache', 's-snap', encodeURIComponent(file) + '.before');
   assert.ok(!fs.readFileSync(slot, 'utf8').includes(key), 'key leaked into the before-snapshot');
-  assert.strictEqual(modeOf(slot), 0o600, 'before-snapshot mode');
+  assertMode(slot, 0o600, 'before-snapshot mode');
   fs.writeFileSync(file, `GH=${key}\nmode=new\n`);
   assert.strictEqual(run(POST, { input: payload('PostToolUse'), env }).status, 0);
   const ev = readEvents(home).find((e) => e.type === 'file_write');
@@ -494,7 +509,7 @@ it('each of the seven places that creates a folder under the data dir creates it
   // responsible, so undoing any one of the seven modes fails here by name.
   const created = (rel, by) => {
     assert.ok(fs.existsSync(path.join(home, rel)), `${rel} was not created by ${by}`);
-    assert.strictEqual(modeOf(path.join(home, rel)), 0o700, `${rel}, created by ${by}, is not owner-only`);
+    assertMode(path.join(home, rel), 0o700, `${rel}, created by ${by}, is not owner-only`);
   };
   // handlePreTool never touches turnstate, so in a session whose first hook is
   // PreToolUse it is ensureCacheSlot that creates cache/<sid>.
@@ -523,8 +538,12 @@ it('each of the seven places that creates a folder under the data dir creates it
       }
     }
   })(home);
-  const open = dirs.filter((d) => modeOf(d) !== 0o700).map((d) => `${path.relative(home, d)} ${modeOf(d).toString(8)}`);
-  assert.deepStrictEqual(open, [], `not owner-only: ${open.join(', ')}`);
+  if (POSIX_MODES) {
+    const open = dirs.filter((d) => modeOf(d) !== 0o700).map((d) => `${path.relative(home, d)} ${modeOf(d).toString(8)}`);
+    assert.deepStrictEqual(open, [], `not owner-only: ${open.join(', ')}`);
+  } else {
+    modeChecksSkipped++;
+  }
   rmrf(home);
   rmrf(work);
 });
@@ -589,8 +608,8 @@ it('a pre-0.2.2 log makes the Claude Code prompt hook warn once per session, wit
   assert.strictEqual(w.length, 1);
   assert.ok(w[0].systemMessage.includes('orunmila log redact'));
   assert.strictEqual(w[0].decision, undefined, 'the warning must never block');
-  assert.strictEqual(modeOf(path.join(home, 'warned')), 0o700, 'warned/ mode');
-  assert.strictEqual(modeOf(path.join(home, 'warned', 's-a')), 0o600, 'warned/ marker mode');
+  assertMode(path.join(home, 'warned'), 0o700, 'warned/ mode');
+  assertMode(path.join(home, 'warned', 's-a'), 0o600, 'warned/ marker mode');
   assert.strictEqual(warningsIn(run(PROMPT, { input: promptPayload('s-a'), env }).stdout).length, 0, 'second prompt, same session');
   assert.strictEqual(warningsIn(run(PROMPT, { input: promptPayload('s-b'), env }).stdout).length, 1, 'new session warns again');
   rmrf(home);
@@ -619,7 +638,7 @@ it('orunmila log redact scrubs the log, half-written lines, sidecars, reports, s
   const r = run(CLI, { args: ['log', 'redact'], env });
   assert.strictEqual(r.status, 0, r.stderr);
   // Checked now: any later Orunmila process would tighten it and hide a wrong mode.
-  assert.strictEqual(modeOf(path.join(home, 'last-turn-report.txt')), 0o600, 'a file log redact rewrote is not owner-only');
+  assertMode(path.join(home, 'last-turn-report.txt'), 0o600, 'a file log redact rewrote is not owner-only');
   for (const rel of ['events.jsonl', 'output/old/c1.txt', 'reports/old/t1.json', 'last-turn-report.txt', 'laws-state/old/t1.json', 'cache/old/f.before', 'archive/20260101-000000/old/t1.json']) {
     const text = fs.readFileSync(path.join(home, rel), 'utf8');
     assert.ok(!text.includes(OLD_KEY), `${rel} still holds the key`);
@@ -627,7 +646,7 @@ it('orunmila log redact scrubs the log, half-written lines, sidecars, reports, s
   const lines = fs.readFileSync(path.join(home, 'events.jsonl'), 'utf8').split('\n').filter(Boolean);
   assert.strictEqual(lines.length, 2, 'no event line lost');
   assert.deepStrictEqual(JSON.parse(lines[0]).redactions, ['github_token']);
-  assert.strictEqual(modeOf(path.join(home, 'events.jsonl')), 0o600);
+  assertMode(path.join(home, 'events.jsonl'), 0o600);
   assert.ok(!run(CLI, { args: ['status'], env }).stdout.includes('written before 0.2.2'));
   assert.strictEqual(warningsIn(run(PROMPT, { input: promptPayload('s-d'), env }).stdout).length, 0);
   rmrf(home);
@@ -656,7 +675,7 @@ it('orunmila prune rewrites the log owner-only (0600)', () => {
   const r = run(CLI, { args: ['prune', '--keep', '1'], env: { ORUNMILA_HOME: home } });
   assert.strictEqual(r.status, 0, r.stderr);
   assert.deepStrictEqual(readEvents(home).map((e) => e.session_id), ['new'], 'prune did not rewrite the log');
-  assert.strictEqual(modeOf(path.join(home, 'events.jsonl')), 0o600);
+  assertMode(path.join(home, 'events.jsonl'), 0o600);
   rmrf(home);
 });
 
@@ -665,7 +684,7 @@ it('orunmila laws --init writes your laws.json owner-only (0600), and a project 
   const r = run(CLI, { args: ['laws', '--init'], env: { ORUNMILA_HOME: home } });
   assert.strictEqual(r.status, 0, r.stderr);
   assert.ok(r.stdout.includes('Wrote '), r.stdout);
-  assert.strictEqual(modeOf(path.join(home, 'laws.json')), 0o600);
+  assertMode(path.join(home, 'laws.json'), 0o600);
   // A project file is repo config: it gets whatever mode a new file gets here.
   const proj = tmpDir();
   fs.writeFileSync(path.join(proj, 'probe'), '');
@@ -711,7 +730,11 @@ function externalIPv4() {
 
 it('the dashboard answers on 127.0.0.1 and refuses connections on the network address', async () => {
   const home = tmpHome();
-  const hostile = '<img src=x onerror=alert(1)>';
+  // The id must be a folder name under reports/, and Windows forbids < and > in
+  // one, so there the id carries the characters Windows allows that still need
+  // escaping.
+  const hostile = POSIX_MODES ? '<img src=x onerror=alert(1)>' : "x&y' onmouseover='alert(1)";
+  const escaped = POSIX_MODES ? '&lt;img src=x' : 'x&amp;y&#39; onmouseover=&#39;alert(1)';
   fs.writeFileSync(
     path.join(home, 'events.jsonl'),
     JSON.stringify({ ts: new Date().toISOString(), session_id: hostile, agent: 'claude-code', type: 'user_prompt', text: 'hi' }) + '\n'
@@ -736,7 +759,7 @@ it('the dashboard answers on 127.0.0.1 and refuses connections on the network ad
     });
     assert.strictEqual((await get('127.0.0.1', port)).status, 200);
     const page = await get('127.0.0.1', port, '/');
-    assert.ok(page.body.includes('&lt;img src=x'), 'session id should appear, escaped');
+    assert.ok(page.body.includes(escaped), 'session id should appear, escaped');
     assert.ok(!page.body.includes(hostile), 'a session id reached the page as live HTML');
     const ext = externalIPv4();
     if (ext) {
@@ -749,6 +772,11 @@ it('the dashboard answers on 127.0.0.1 and refuses connections on the network ad
     child.kill();
     rmrf(home);
   }
+});
+
+it('file-mode checks run on POSIX and are skipped, counted, on Windows', () => {
+  if (POSIX_MODES) assert.strictEqual(modeChecksSkipped, 0);
+  else console.log(`      (Windows has no POSIX file modes: ${modeChecksSkipped} owner-only checks skipped)`);
 });
 
 runAll('secure (0.2.2: permissions + redaction + legacy log + dashboard)');

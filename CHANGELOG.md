@@ -23,7 +23,9 @@ saw a credential, rotate it: redaction recognises known formats only.
 **What 0.2.2 does not do.** It protects your log from *other accounts* on your
 computer. It does not protect it from the agent itself, which runs as your own
 user and can still read and change these files. Separating the two is planned for
-the next major release.
+the next major release. On Windows, file modes do not apply: the owner-only
+settings below have no effect there, so the log is only as private as the folder
+it sits in.
 
 ### Fixed
 

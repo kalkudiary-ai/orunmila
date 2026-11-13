@@ -40,6 +40,10 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ### Added
 
+- **`orunmila laws --check` counts what the live gate did** in the session:
+  turns checked, turns skipped (no confirmed final text, or a repeat of the
+  last claim) and turns blocked, read from the gate's own records (`live_gate`
+  in `--json`). Skips were recorded before, but nothing showed them.
 - **A labelled sentence corpus for both claim readers**, in the repository
   (`test/cases/laws/green-corpus.json`, 48 sentences; not in the npm package).
   The test suite fails if the gate or the Stain Map reads any of them

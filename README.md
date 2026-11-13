@@ -348,6 +348,10 @@ orunmila laws                                      # what it would enforce, befo
 orunmila laws --check --session <id>                # replay the laws over a past session, read-only
 ```
 
+`laws --check` also prints what the live gate actually did in that session, from
+its own records: turns checked, turns skipped (no confirmed final text, or the
+same claim as the turn before) and turns blocked.
+
 Installing it **reads every law out loud** — which can stop your turn, which
 only advise, and the file to edit to change any of it. A rule that can interrupt
 your work should never be something you discover by being interrupted.

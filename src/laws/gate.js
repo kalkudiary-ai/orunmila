@@ -127,6 +127,44 @@ function previousTurnId(turnId) {
   return n > 1 ? `t${n - 1}` : null;
 }
 
+/**
+ * What the live gate did in one session, read from its own per-turn records:
+ * turns it judged, turns it declined to judge, and turns it blocked. `laws
+ * --check` replays the laws over the log and cannot see a skip; this is the
+ * record of what actually ran, so skips are counted rather than silent.
+ * `recorded` is false when the gate left no record for the session at all.
+ */
+function liveGateCounts(sessionId) {
+  const counts = { recorded: false, checked: 0, skipped: 0, skipped_unconfirmed: 0, skipped_repeat: 0, blocked: 0, unreadable: 0 };
+  const dir = path.join(dataDir(), 'laws-state', String(sessionId || 'unknown'));
+  let names;
+  try {
+    names = fs.readdirSync(dir);
+  } catch {
+    return counts;
+  }
+  counts.recorded = true;
+  // Turn records only: tN.json. The pN.json files are the per-prompt budget.
+  for (const name of names.filter((n) => /^t\d+\.json$/.test(n))) {
+    let s;
+    try {
+      s = JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8'));
+    } catch {
+      counts.unreadable++;
+      continue;
+    }
+    if (s.skipped_unconfirmed_claim || s.skipped_stale_claim) {
+      counts.skipped++;
+      if (s.skipped_unconfirmed_claim) counts.skipped_unconfirmed++;
+      else counts.skipped_repeat++;
+    } else if (s.claim_fp) {
+      counts.checked++;
+      if (s.blocks > 0) counts.blocked++;
+    }
+  }
+  return counts;
+}
+
 function blockBudget() {
   const raw = parseInt(process.env.ORUNMILA_LAW_BLOCK_BUDGET || '', 10);
   return Number.isInteger(raw) && raw >= 0 ? raw : DEFAULT_BLOCK_BUDGET;
@@ -281,4 +319,4 @@ function runGate(payload, adapter, { root } = {}) {
   }
 }
 
-module.exports = { runGate, decideForTurn, renderFindings, statePath, blockBudget, DEFAULT_BLOCK_BUDGET };
+module.exports = { runGate, decideForTurn, renderFindings, statePath, liveGateCounts, blockBudget, DEFAULT_BLOCK_BUDGET };

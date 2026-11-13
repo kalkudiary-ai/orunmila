@@ -898,6 +898,11 @@ function cmdLaws() {
     }
   }
 
+  // The replay above cannot see what the live gate declined to judge; its own
+  // per-turn records can (brief Step 5: skips are counted and reported).
+  const live = require('../src/laws/gate').liveGateCounts(sessionId);
+  out.live_gate = live;
+
   if (args.includes('--json')) {
     process.stdout.write(JSON.stringify(out, null, 2) + '\n');
     return;
@@ -915,6 +920,12 @@ function cmdLaws() {
     console.log('');
   }
   console.log(`${flagged} turn(s) raised a finding; ${blocked} would block.`);
+  console.log(
+    `Live gate: ${live.checked} turn(s) checked, ${live.skipped} skipped ` +
+      `(${live.skipped_unconfirmed} with no confirmed text, ${live.skipped_repeat} repeating the last claim), ${live.blocked} blocked.` +
+      (live.recorded ? '' : ' The gate left no record for this session.') +
+      (live.unreadable ? ` ${live.unreadable} record(s) could not be read.` : '')
+  );
   console.log(dim('Findings are heuristic — they read prose, not facts. They sit beside the glove, never inside it.'));
 }
 

@@ -1024,6 +1024,10 @@ function hookSequence(sid) {
     run(`src/capture/claude-code/${script}`, { input: JSON.stringify(Object.assign({ session_id: sid }, payload)), env, cwd: root });
   let n = 0;
   return {
+    home,
+    root,
+    env,
+    send,
     prompt: (text) => send('user-prompt-submit.js', { prompt: text }),
     // Varied text each time, so the P0-4 repeat skip never decides the outcome.
     stop() {
@@ -1135,6 +1139,52 @@ it('test 40: another agent\'s Stop still reads the transcript (its payloads are 
   assert.strictEqual(r.claim.text, GREEN_LIE.claimText, 'cursor keeps the transcript claim it had before');
   assert.strictEqual(r.claim.claim_unconfirmed, undefined);
   r.done();
+});
+
+// --- skips are counted and reported (brief Step 5) ---------------------------
+// laws --check replays the laws over the log; it cannot see what the live gate
+// declined to judge. The gate's own per-turn records can, and test 41's skip
+// rate is read from them.
+
+const lawsCheck = (h, sid, extra = []) =>
+  run('bin/orunmila.js', { args: ['laws', '--check', '--session', sid, ...extra], env: h.env, cwd: h.root });
+
+it('laws --check counts what the live gate did: turns checked, skipped and blocked', () => {
+  const h = hookSequence('count-a');
+  h.prompt('fix debit.ts');
+  h.stop(); // blocked
+  h.stop(); // blocked
+  h.stop(); // checked; the budget is spent, so not blocked
+  h.send('stop.js', {});
+  h.send('law-gate.js', {}); // no final text: skipped
+  for (let i = 0; i < 2; i++) {
+    h.send('stop.js', { claim: CLEAN_FINAL });
+    h.send('law-gate.js', { claim: CLEAN_FINAL }); // checked, then skipped as a repeat (P0-4)
+  }
+  const res = lawsCheck(h, 'count-a');
+  assert.strictEqual(res.status, 0, res.stderr);
+  assert.ok(
+    res.stdout.includes('Live gate: 4 turn(s) checked, 2 skipped (1 with no confirmed text, 1 repeating the last claim), 2 blocked.'),
+    res.stdout
+  );
+  const json = JSON.parse(lawsCheck(h, 'count-a', ['--json']).stdout);
+  assert.deepStrictEqual(
+    json.live_gate,
+    { recorded: true, checked: 4, skipped: 2, skipped_unconfirmed: 1, skipped_repeat: 1, blocked: 2, unreadable: 0 }
+  );
+  h.done();
+});
+
+it('laws --check prints zero skips as 0, and says when the gate left no record', () => {
+  const h = hookSequence('count-b');
+  h.prompt('fix debit.ts');
+  h.stop(); // blocked
+  const res = lawsCheck(h, 'count-b');
+  assert.ok(res.stdout.includes('Live gate: 1 turn(s) checked, 0 skipped (0 with no confirmed text, 0 repeating the last claim), 1 blocked.'), res.stdout);
+  const none = lawsCheck(h, 'count-none');
+  assert.ok(none.stdout.includes('Live gate: 0 turn(s) checked, 0 skipped'), none.stdout);
+  assert.ok(none.stdout.includes('The gate left no record for this session.'), none.stdout);
+  h.done();
 });
 
 runAll('laws (layers 4 + 5)');

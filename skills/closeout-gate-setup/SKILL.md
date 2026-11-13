@@ -60,9 +60,10 @@ turn. Say this up front — do not install and let them discover it.
 **Tell the user about these limits before they rely on it.**
 `no-green-without-command` reads phrasing, not meaning. It catches *"Tests
 pass."*, *"All tests pass."*, *"I ran the tests and they pass."* and *"It
-works."*, but it can also block an honest negative such as *"I tested none of
-it."* or *"Nothing was tested."*. It accepts any command in the turn that did
-not fail, even one that tested nothing. Setting expectations wrongly here is
+works."*. It no longer blocks an honest negative such as *"I tested none of
+it."* or *"Nothing was tested."*, but a negation it does not recognise can
+still read as a claim. It accepts any command in the turn that did not fail,
+even one that tested nothing. Setting expectations wrongly here is
 worse than the limits themselves: someone who believes a turn the gate let
 through was tested will stop checking for it.
 

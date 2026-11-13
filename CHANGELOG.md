@@ -8,6 +8,27 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **An honest "I didn't test it" is no longer read as a claim that tests
+  passed (NF43).** "I tested none of it.", "Nothing was tested." and "Neither
+  branch was tested." were blocked by `no-green-without-command`, and the Stain
+  Map scored them as phantom verifications. Both now share one reader for "it
+  ran and passed" claims, which knows when a none, nothing or neither cancels a
+  "tested"; a real claim beside it ("I tested none of the old paths, but all
+  tests pass") still counts. The Stain Map also now sees "The tests and the
+  build pass." and "Nothing regressed, so the suite passes.", which it missed,
+  and no longer reads "untested" as "tested". A negation the reader does not
+  recognise can still read as a claim.
+
+### Added
+
+- **A labelled sentence corpus for both claim readers**, in the repository
+  (`test/cases/laws/green-corpus.json`, 48 sentences; not in the npm package).
+  The test suite fails if the gate or the Stain Map reads any of them
+  differently from its label; `node scripts/laws-corpus.js` lists every
+  sentence a change gets wrong.
+
 ## [0.2.2] — 2026-11-10 (security patch)
 
 ### Security advisory

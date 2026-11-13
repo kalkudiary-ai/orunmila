@@ -438,10 +438,12 @@ is in force and which layer each law came from.
 Map and the reports, not the refusal. And law findings are **heuristic: they read
 the agent's prose, not the facts.** They sit beside the evidence, never inside
 it, and never carry the same authority. A finding says "recheck this", not "you
-lied". `no-green-without-command` reads phrasing: it can block an honest
-negative such as "I tested none of it.", and it accepts any command in the turn
-that did not fail, even one that tested nothing. It does not count an unguarded
-pipe (`npm test | tail`) as a passing run; `set -o pipefail` restores it.
+lied". `no-green-without-command` reads phrasing, not meaning. It no
+longer blocks an honest negative such as "I tested none of it." or "Nothing was
+tested.", but a negation it does not recognise can still read as a claim. It
+accepts any command in the turn that did not fail, even one that tested
+nothing. It does not count an unguarded pipe (`npm test | tail`) as a passing
+run; `set -o pipefail` restores it.
 
 ## Supported agents
 

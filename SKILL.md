@@ -125,9 +125,10 @@ engine stops enforcing, it never stops the agent.
 
 - The gate is **`claude-code` only**. Other agents get the Stain Map.
 - **`no-green-without-command` reads phrasing, not meaning.** It catches "Tests
-  pass.", "All tests pass." and "It works.", but it can also block an honest
-  negative such as "I tested none of it." or "Nothing was tested.". It accepts
-  any command in the turn that did not fail, even one that tested nothing.
+  pass.", "All tests pass." and "It works.". It no longer blocks an honest
+  negative such as "I tested none of it." or "Nothing was tested.", but a
+  negation it does not recognise can still read as a claim. It accepts any
+  command in the turn that did not fail, even one that tested nothing.
 - Law findings are **heuristic: they read prose, not facts.** A finding says
   "recheck this", not "you lied".
 - `exit 0` is not "correct" - it means a command ran and passed, not that it

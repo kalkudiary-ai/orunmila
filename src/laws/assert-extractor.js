@@ -21,14 +21,22 @@
  * present-tense, anchored to a code target, and graded against whether the turn
  * holds a receipt that could possibly support it.
  *
- * The small filter regexes below are duplicated from claim-extractor rather than
- * imported. That is on purpose. The reconciler is the settled layer; coupling it
- * to a newer, noisier one so they must change together would make every future
- * law tweak a change to the part of orunmila that is already trusted.
+ * The small speech-act filter regexes below are duplicated from claim-extractor
+ * rather than imported. That is on purpose. The reconciler is the settled layer;
+ * coupling it to a newer, noisier one so they must change together would make
+ * every future law tweak a change to the part of orunmila that is already trusted.
+ *
+ * The one exception is the "it ran and passed" reader, which both layers now
+ * share (src/reconcile/verification-claim.js). Two copies of it drifted: the
+ * reconciler never learned the negation rules this one had, so an honest "Nothing
+ * was tested." read as a claim of testing in one layer and not the other (NF43).
+ * What makes sharing it safe is test/claim-corpus.js, which holds both readers to
+ * one labelled corpus, so a change that breaks either one fails the suite.
  */
 
 const { extractTargets } = require('../reconcile/task-extractor');
 const { sanitize } = require('../reconcile/sanitize');
+const { findExecutionClaims, maskQuoted, VERIFICATION_RE } = require('../reconcile/verification-claim');
 
 // Verbs that, in the present tense with a code subject, state how the system IS.
 // NOTE on the missing auxiliaries: 'have' and 'had' were here and were removed
@@ -90,115 +98,8 @@ const HEDGE_RE = new RegExp(
   'i'
 );
 
-/**
- * EXECUTION-flavoured verification only.
- *
- * "verified", "confirmed" and "validated" used to be here and were removed after
- * the first real-session measurement. They are satisfiable by READING: a claim
- * like "erasure verified covered — userErasure.ts:221 deletes loans" was being
- * rejected for having no passing command behind it, on a turn holding 77 full
- * read receipts. Reading the code IS the verification for a claim about what the
- * code says; demanding a command there is simply the wrong bar.
- *
- * What remains is the class of claim only an EXECUTION can settle — the suite
- * ran, the build compiled, the linter passed. For those, a green sentence with
- * no exit-zero command behind it is exactly the phantom verification the whole
- * project was built to catch.
- */
-/**
- * ── On adjacency, the bug this list actually had (P0-3, fixed 2026-10-28) ───
- *
- * This was a flat list of ADJACENT word pairs: `tests pass`, `build is green`,
- * `suite is green`. Adjacency is the wrong model for English. "The test suite
- * passes", "Tests are passing" and "I ran the tests and they pass" are the same
- * claim with a word sitting in the gap, and not one of them matched — which is
- * why the flagship blocking law never saw the commonest way an agent claims a
- * pass. Two of those phrasings had even been recorded in the issue tracker as
- * CAUGHT, on the strength of the law's own title rather than a run.
- *
- * So subject and predicate are enumerated separately, with at most two words
- * allowed between them. The cap is what keeps a subject and a predicate from
- * different clauses ("the tests I still owe you will land once the parser is
- * green") out of range, and the disqualifiers below carry the rest of the load.
- */
-const VERIF_SUBJECT = String.raw`(?:tests?|test suite|suite|specs?|build|rebuild|lint(?:er)?|eslint|typecheck|tsc|types|ci|pipeline|smoke|coverage|gate|everything|it|they)`;
-// `work` and `working` are deliberately ABSENT, and that is a measured
-// decision rather than an oversight. Run against this tool's own 111-session
-// corpus, a bare `work` matched the NOUN — "the coverage work that made them
-// invisible", "none of it is work you asked for" — and `working` matched
-// "it's inside Kalku's working tree", helped along by the apostrophe masking
-// that turns `it's ... Kalku's` into `it` + gap + `working`. Only the inflected
-// verb forms survive. "working correctly" is kept as its own phrase below.
-const VERIF_PREDICATE = String.raw`(?:pass(?:es|ed|ing)?|green|works|worked|succeed(?:s|ed)?|successful|clean|compiles?|compiled)`;
-
-const VERIFICATION_RE = new RegExp(
-  [
-    String.raw`\btested\b`,
-    String.raw`\b${VERIF_SUBJECT}(?:\s+\w+){0,2}\s+${VERIF_PREDICATE}\b`,
-    String.raw`\b(?:all|everything)\s+(?:green|passing|passes)\b`,
-    // "no errors" / "zero errors" were here and were removed on measurement:
-    // they matched claims about PRODUCTION, not about a run — "there have been
-    // zero errors in the actual last 24h" is settled by a query, not by a
-    // command exiting zero, and demanding one there is the wrong bar.
-    String.raw`\bbuilds? success(?:ful|fully)?\b`,
-    String.raw`\bsmoke(?:d|s)? (?:clean|green|fine)\b`,
-    String.raw`\bworking correctly\b`,
-  ].join('|'),
-  'i'
-);
-
-/**
- * A verification WORD is not a verification CLAIM.
- *
- * Measured over 194 real sessions, this was the dominant false positive by a
- * wide margin — around 16 of every 19 firings of the green law. The word
- * "tested" was matching in sentences that assert the OPPOSITE, or that use it
- * as an adjective, or that quote it while discussing verification itself:
- *
- *   "capture hooks exist for one agent; Cursor/Aider aren't tested"   negation
- *   "branch coverage was low because the new branches weren't tested" negation
- *   "the multiplier logic is unit-tested"                             hyphenated
- *   "empty ⇒ open by the tested logic"                                adjectival
- *   "the verification verb is in a future frame (should work)"        quoting
- *
- * Every one of those is an agent being careful, and flagging them punishes
- * precisely the behaviour the law exists to encourage. A negated or attributive
- * use is disqualified before the claim is ever graded.
- */
-const VERIFICATION_DISQUALIFIER_RE = new RegExp(
-  [
-    // "not / never / isn't / aren't / weren't ... tested|passing|works|green"
-    String.raw`\b(?:not|never|no|without|isn'?t|aren'?t|wasn'?t|weren'?t|don'?t|doesn'?t|didn'?t|cannot|can'?t|un)\b[^.!?]{0,24}?\b(?:tested|passing|passes|pass|green|works|compiles)\b`,
-    // hyphenated adjective: "unit-tested", "battle-tested", "well-tested"
-    String.raw`\w-tested\b`,
-    // attributive: "the tested logic", "a tested path"
-    String.raw`\b(?:the|a|an|that|this|those|these|its|their)\s+tested\b`,
-    // future / hypothetical framing: "should work", "will pass", "let's see if it works"
-    String.raw`\b(?:should|would|will|might|may|could|hope|expect|see if|check if|to be)\b[^.!?]{0,24}?\b(?:work|works|pass|passes|passing|green|compile|compiles)\b`,
-    // INTENT, not report — work still to do: "we need to make the tests pass",
-    // "the goal is to get the suite green". Allowing a gap between subject and
-    // predicate brought this entire family into range for the first time, so it
-    // has to be disqualified explicitly or the law starts flagging plans.
-    String.raw`\b(?:need|needs|needed|want|wants|wanted|have|has|had|try|tries|trying|aim|aims|plan|plans|planning|supposed|intend|intends|going)\s+to\b[^.!?]{0,30}?\b(?:pass|passes|passing|work|works|green|compile|compiles|clean|tested)\b`,
-    String.raw`\b(?:to get|to make|to keep|to have|so that|in order to|before|until|after|once)\b[^.!?]{0,30}?\b(?:pass|passes|passing|work|works|green|compile|compiles|clean)\b`,
-    // REPORTED speech. What someone else claimed is not this turn's claim —
-    // "the handover says the tests pass" is a description of a document.
-    String.raw`\b(?:says?|said|claims?|claimed|asserts?|asserted|states?|stated|reports?|reported|insists?|per|according to|documented as|recorded as)\b[^.!?]{0,30}?\b(?:pass|passes|passing|works?|green|tested|compiles?)\b`,
-    // MECHANISM, not outcome: "this is how it works", "whether the suite passes
-    // is the open question". An interrogative or relative frame ahead of the
-    // predicate means the sentence explains or asks, it does not certify.
-    String.raw`\b(?:how|why|what|where|when|whether|which)\b[^.!?]{0,20}?\b(?:works?|pass|passes|passing|green|compiles?)\b`,
-    // ARGUMENT-passing, the other sense of the word entirely: "I re-ran it with
-    // `--repo` passed explicitly", "the flag passed to the adapter", "I passed
-    // it as clean". `in` is deliberately not in this list, because "all tests
-    // passed in CI" is a genuine claim and must still fire.
-    String.raw`\bpass(?:ed|es|ing)?\s+(?:to|into|through|as|explicitly|it|along|down)\b`,
-    // A printed VERDICT is output being described, not a claim of green:
-    // "check 1 wasn't user-scoped so it prints PASS".
-    String.raw`\b(?:prints?|printed|outputs?|shows?|showed|logs?|reports?|returns?|echoes|echoed)\s+(?:\w+\s+){0,2}(?:pass|fail|green)\b`,
-  ].join('|'),
-  'i'
-);
+// The "it ran and passed" reader (VERIFICATION_RE and its disqualifiers) lives in
+// src/reconcile/verification-claim.js, shared with the reconciler (see header).
 
 // --- speech-act filters (see header note on the deliberate duplication) ------
 
@@ -221,24 +122,8 @@ function splitSentences(text) {
     .filter(Boolean);
 }
 
-// Mask quoted/backticked spans so a word being DISCUSSED is not read as a word
-// being USED. Without this, a turn that explains a law trips that same law —
-// which would make the whole layer unusable in exactly the conversations where
-// it matters most.
-function maskQuoted(s) {
-  return s
-    .replace(/```[\s\S]*?```/g, (m) => ' '.repeat(m.length))
-    .replace(/`[^`]*`/g, (m) => ' '.repeat(m.length))
-    .replace(/"[^"]*"/g, (m) => ' '.repeat(m.length))
-    .replace(/'[^']*'/g, (m) => ' '.repeat(m.length))
-    // Markdown emphasis is how an agent quotes a phrase it is DISCUSSING when
-    // backticks would be too code-like: "the verb is in a future frame (*should
-    // work*, *let's see if it works*)". Measured against real sessions, that
-    // exact sentence — from a turn analysing verification detection — was the
-    // last surviving false positive of the green law. Emphasis is quotation.
-    .replace(/\*\*[^*]+\*\*/g, (m) => ' '.repeat(m.length))
-    .replace(/\*[^*\n]+\*/g, (m) => ' '.repeat(m.length));
-}
+// maskQuoted is shared too (src/reconcile/verification-claim.js), and re-exported
+// below for evaluate.js.
 
 /**
  * Is this sentence an assertion about how the system IS?
@@ -249,9 +134,8 @@ function maskQuoted(s) {
  * spinning against a rule it cannot satisfy.
  */
 function isVerificationClaim(sentence) {
+  if (!findExecutionClaims(sentence).length) return false;
   const masked = maskQuoted(sentence);
-  if (!VERIFICATION_RE.test(masked)) return false;
-  if (VERIFICATION_DISQUALIFIER_RE.test(masked)) return false;
   // A hedge is the agent being careful, and the green law has no hedge check of
   // its own. Flagging "the tests probably pass" would punish exactly the
   // caution the layer exists to encourage, so a hedged sentence never reaches

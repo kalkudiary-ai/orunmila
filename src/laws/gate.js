@@ -99,32 +99,17 @@ function writeState(sessionId, turnId, state) {
 }
 
 /**
- * A short, stable fingerprint of a turn's claim text.
+ * A short, stable fingerprint of a turn's claim text, kept in the turn's record
+ * as the mark that the gate judged that turn (liveGateCounts counts it).
  *
- * Why this exists (P0-4). runGate used to take its claim from
- * lastAssistantText(transcript_path); it now reads only the Stop payload (N10,
- * below). When Stop fires before the host has
- * flushed THIS turn's final assistant message, that call returns the PREVIOUS
- * turn's message, and the gate then judges text the agent did not write in the
- * turn being judged. Measured in a real session: two consecutive turns captured
- * byte-identical claim text, and the gate re-flagged a sentence the agent had
- * already retracted.
- *
- * That lands on the blocking path, which is the worst place for it: an agent
- * that withdraws an unbacked claim gets blocked again on the stale text, the
- * block budget is spent on a phantom, and the gate then stands down
- * for the rest of the turn — so a stale finding can silence a real one.
+ * It once also drove the P0-4 repeat skip: a claim byte-identical to the
+ * previous turn's was not judged, because with the claim read from the
+ * transcript that meant the transcript had not caught up. The claim now comes
+ * from the Stop payload (N10), so a repeat is a real restatement and is judged
+ * like any claim; the block budget is what stops a loop (O, 2026-11-13).
  */
 function claimFingerprint(text) {
   return require('crypto').createHash('sha256').update(String(text)).digest('hex').slice(0, 16);
-}
-
-/** 't11' -> 't10'. Null for the first turn, or an id we don't recognise. */
-function previousTurnId(turnId) {
-  const m = /^t(\d+)$/.exec(String(turnId || ''));
-  if (!m) return null;
-  const n = Number(m[1]);
-  return n > 1 ? `t${n - 1}` : null;
 }
 
 /**
@@ -277,28 +262,7 @@ function runGate(payload, adapter, { root } = {}) {
     }
     if (!claimText.trim()) return null;
 
-    // P0-4: refuse to judge a claim we have already judged under the previous
-    // turn. Written for the transcript read, when byte-identical consecutive
-    // claims meant the transcript had not yet caught up when Stop fired. The
-    // claim now comes from the Stop payload (N10), so an identical claim is a
-    // real restatement; whether to keep this skip is an open decision (P0-4).
-    //
-    // The skip is recorded in the turn's state, and `laws --check` counts it as
-    // a repeat.
-    const fingerprint = claimFingerprint(claimText);
-    const prevTurn = previousTurnId(turn);
-    if (prevTurn) {
-      const prevState = readState(sessionId, prevTurn);
-      if (prevState && prevState.claim_fp && prevState.claim_fp === fingerprint) {
-        const own = readState(sessionId, turn);
-        writeState(sessionId, turn, Object.assign({}, own, {
-          claim_fp: fingerprint,
-          skipped_stale_claim: true,
-        }));
-        return null;
-      }
-    }
-    writeState(sessionId, turn, Object.assign({}, readState(sessionId, turn), { claim_fp: fingerprint }));
+    writeState(sessionId, turn, Object.assign({}, readState(sessionId, turn), { claim_fp: claimFingerprint(claimText) }));
 
     const turnEvents = readTurn(sessionId, turn);
     const promptEvent = turnEvents.find((e) => e.type === 'user_prompt');

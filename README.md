@@ -349,8 +349,9 @@ orunmila laws --check --session <id>                # replay the laws over a pas
 ```
 
 `laws --check` also prints what the live gate actually did in that session, from
-its own records: turns checked, turns skipped (no confirmed final text, or the
-same claim as the turn before) and turns blocked.
+its own records: turns checked, turns skipped (no confirmed final text; records
+written before the repeat skip was removed can also show a repeated claim) and
+turns blocked.
 
 Installing it **reads every law out loud** — which can stop your turn, which
 only advise, and the file to edit to change any of it. A rule that can interrupt

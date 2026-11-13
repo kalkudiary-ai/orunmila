@@ -943,7 +943,10 @@ function nextTurn(sid) {
   return turnstate.advanceIfClosed(sid);
 }
 
-it('P0-4: an identical claim on the next turn is not judged again', () => {
+// P0-4's repeat skip is removed (O, 2026-11-13). The claim now comes from the
+// Stop payload, so an identical claim on the next turn is a real restatement,
+// and the block budget, not the skip, is what stops a loop.
+it('P0-4: an identical claim on the next turn is judged again', () => {
   tmpHome();
   const root = tmpDir();
   const sid = 'p04-a';
@@ -951,24 +954,11 @@ it('P0-4: an identical claim on the next turn is not judged again', () => {
   const first = runGate({ session_id: sid, claim: GREEN_LIE.claimText }, getAdapter('claude-code'), { root });
   assert.ok(first && first.decision === 'block', 'precondition: this claim blocks on its own turn');
 
-  nextTurn(sid);
-  const second = runGate({ session_id: sid, claim: GREEN_LIE.claimText }, getAdapter('claude-code'), { root });
-  assert.strictEqual(second, null, 'the same text one turn later is stale, not a new claim');
-  rmrf(root);
-});
-
-it('P0-4: the skip is recorded, so it is measurable rather than silent', () => {
-  tmpHome();
-  const root = tmpDir();
-  const sid = 'p04-b';
-  runGate({ session_id: sid, claim: GREEN_LIE.claimText }, getAdapter('claude-code'), { root });
   const turn = nextTurn(sid);
-  runGate({ session_id: sid, claim: GREEN_LIE.claimText }, getAdapter('claude-code'), { root });
-
-  const statePath = path.join(process.env.ORUNMILA_HOME, 'laws-state', sid, `t${turn}.json`);
-  const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
-  assert.strictEqual(state.skipped_stale_claim, true, 'declining to judge must leave a trace');
-  assert.ok(state.claim_fp, 'and the fingerprint it declined on');
+  const second = runGate({ session_id: sid, claim: GREEN_LIE.claimText }, getAdapter('claude-code'), { root });
+  assert.ok(second && second.decision === 'block', 'restating the claim unchanged does not get it past the gate');
+  const state = JSON.parse(fs.readFileSync(path.join(process.env.ORUNMILA_HOME, 'laws-state', sid, `t${turn}.json`), 'utf8'));
+  assert.strictEqual(state.skipped_stale_claim, undefined, 'and no repeat skip is recorded');
   rmrf(root);
 });
 
@@ -1054,6 +1044,19 @@ it('gate hook: the block budget holds across Stop re-fires when no new prompt ar
   for (const out of outs.slice(DEFAULT_BLOCK_BUDGET)) {
     assert.ok(standsDown(out), 'past the budget it stands down and says so: ' + JSON.stringify(out));
   }
+  h.done();
+});
+
+it('gate hook: a claim restated unchanged after a block is blocked again until the budget is spent', () => {
+  const h = hookSequence('budget-c');
+  h.prompt('fix debit.ts');
+  const outs = [1, 2, 3].map(() => {
+    h.send('stop.js', { claim: GREEN_LIE.claimText });
+    const res = h.send('law-gate.js', { claim: GREEN_LIE.claimText });
+    return res.stdout.trim() ? JSON.parse(res.stdout) : null;
+  });
+  assert.deepStrictEqual(outs.map(isBlock), [true, true, false], 'blocked twice, then the budget is spent');
+  assert.ok(standsDown(outs[2]), 'and it says it stood down: ' + JSON.stringify(outs[2]));
   h.done();
 });
 
@@ -1159,18 +1162,18 @@ it('laws --check counts what the live gate did: turns checked, skipped and block
   h.send('law-gate.js', {}); // no final text: skipped
   for (let i = 0; i < 2; i++) {
     h.send('stop.js', { claim: CLEAN_FINAL });
-    h.send('law-gate.js', { claim: CLEAN_FINAL }); // checked, then skipped as a repeat (P0-4)
+    h.send('law-gate.js', { claim: CLEAN_FINAL }); // checked both times: a repeat is judged again
   }
   const res = lawsCheck(h, 'count-a');
   assert.strictEqual(res.status, 0, res.stderr);
   assert.ok(
-    res.stdout.includes('Live gate: 4 turn(s) checked, 2 skipped (1 with no confirmed text, 1 repeating the last claim), 2 blocked.'),
+    res.stdout.includes('Live gate: 5 turn(s) checked, 1 skipped (1 with no confirmed text, 0 repeating the last claim), 2 blocked.'),
     res.stdout
   );
   const json = JSON.parse(lawsCheck(h, 'count-a', ['--json']).stdout);
   assert.deepStrictEqual(
     json.live_gate,
-    { recorded: true, checked: 4, skipped: 2, skipped_unconfirmed: 1, skipped_repeat: 1, blocked: 2, unreadable: 0 }
+    { recorded: true, checked: 5, skipped: 1, skipped_unconfirmed: 1, skipped_repeat: 0, blocked: 2, unreadable: 0 }
   );
   h.done();
 });

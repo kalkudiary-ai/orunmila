@@ -38,12 +38,17 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   the skip, and the claim is recorded empty and marked `claim_unconfirmed`.
   Other agents still read the transcript: their Stop payloads have not been
   measured.
+- **A claim restated unchanged after a block is judged again (P0-4).** The gate
+  used to skip a claim identical to the previous turn's, because with the
+  transcript read that usually meant stale text. With the claim taken from the
+  Stop payload, a repeat is a real restatement, so it no longer gets past the
+  gate; the block budget is what stops a loop.
 
 ### Added
 
 - **`orunmila laws --check` counts what the live gate did** in the session:
-  turns checked, turns skipped (no confirmed final text, or a repeat of the
-  last claim) and turns blocked, read from the gate's own records (`live_gate`
+  turns checked, turns skipped (no confirmed final text; older records can
+  also show a repeated claim) and turns blocked, read from the gate's own records (`live_gate`
   in `--json`). Skips were recorded before, but nothing showed them.
 - **A labelled sentence corpus for both claim readers**, in the repository
   (`test/cases/laws/green-corpus.json`, 48 sentences; not in the npm package).

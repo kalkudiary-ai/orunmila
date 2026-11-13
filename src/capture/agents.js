@@ -83,6 +83,9 @@ const defaultFields = {
   subAgentId: (p) => p.agent_id || p.agentId || p.sub_agent_id || null,
   subAgentType: (p) => p.agent_type || p.agentType || p.sub_agent_type || null,
   prompt: (p) => p.prompt || p.user_prompt || p.message || p.text || '',
+  // Whether a prompt is a message from the user, as opposed to one the host
+  // wrote itself. Only a user's message refills the gate's block budget (NF54).
+  promptFromHuman: () => true,
   // The turn's final text as the Stop payload itself carries it: Claude Code's
   // `last_assistant_message`, or `claim` / `response` where a host passes the
   // text. '' when the host says the turn ended with no text; null when the
@@ -136,6 +139,14 @@ const REGISTRY = {
     // read for the claim: when Stop fires, the transcript can still end on an
     // earlier block of the turn (N10). Other agents' payloads are not measured.
     stopCarriesFinalText: true,
+    fields: {
+      // Claude Code also fires UserPromptSubmit for prompts it writes itself: a
+      // background task's notification and a sub-agent's hand-back, which open
+      // with `<task-notification>` and `<agent-message from=…>`. Its payload has
+      // no origin field (2.1.314); in one session the opening tag matched the
+      // transcript's origin.kind on 7 prompts of 7 (NF54).
+      promptFromHuman: (p) => !/^<(?:task-notification|agent-message)[\s>]/.test(String(p.prompt || '')),
+    },
   }),
 
   // Cursor — hooks land in .cursor; tool names differ (edit_file, read_file,

@@ -24,9 +24,12 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   The budget (two blocks by default) was counted per turn, and each answer the
   agent gives after a block opens a new turn, so it refilled on every Stop: a
   claim the agent reworded after each block was blocked every time (4 Stops of
-  4 in the new test). It is now counted per user message. The agent's answers
-  after a block share one budget, and the user's next message starts a fresh
-  one. The note the agent reads when the gate stands down is unchanged.
+  4 in the new test). It is now counted per message the user sends. The
+  agent's answers after a block share one budget, task notifications and
+  sub-agent hand-backs that Claude Code writes into the conversation do not
+  refill it, and the user's next message starts a fresh one. Until the prompt
+  hook has counted a message in the session, it is still counted per turn. The
+  note the agent reads when the gate stands down is unchanged.
 - **The gate and the claim record no longer take a stale message as the turn's
   claim (N10).** When Claude Code's Stop hook fires, the transcript can still
   end on an earlier message of the turn. Both read their claim from it, so the

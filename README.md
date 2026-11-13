@@ -412,14 +412,16 @@ off enforces nothing.
 
 ### The loop trap, and why a block budget exists
 
-A blocking Stop hook can pin an agent: blocked, responds, blocked again. The host
-does **not** tell a hook that it is re-firing because of its own previous block,
-so the protection has to be the gate's own. Every block counts against a budget
-for each user message (default 2; counted per turn instead when the prompt hook
-has not yet counted a message in the session). The agent's answer after a block is not a new
-message, so it cannot refill the budget; the user's next message does. Once
-spent, findings degrade to advice **and the exhaustion is recorded**. A gate that gives up silently is worse than no gate, because it
-looks like a pass.
+A blocking Stop hook can pin an agent: blocked, responds, blocked again. Claude
+Code sends `stop_hook_active` in a Stop payload, but the gate does not rely on
+it: the protection is its own. Every block counts against a budget for each
+message the user sends (default 2). The agent's answers after a block do not
+refill it, and neither do the task notifications and sub-agent hand-backs that
+Claude Code writes into the conversation; the user's next message does. Until
+the prompt hook has counted a message in the session, the budget is counted per
+turn instead, and each answer after a block opens a new turn and refills it.
+Once spent, findings degrade to advice **and the exhaustion is recorded**. A
+gate that gives up silently is worse than no gate, because it looks like a pass.
 
 ### Failure posture
 

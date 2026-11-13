@@ -94,7 +94,7 @@ function isFailure(payload, adapter, response) {
  */
 function handlePrompt(payload, adapter) {
   const sessionId = adapter.fields.sessionId(payload);
-  const promptTurn = `t${bumpTurn(sessionId)}`;
+  const promptTurn = `t${bumpTurn(sessionId, { countPrompt: adapter.fields.promptFromHuman(payload) })}`;
   append({
     session_id: sessionId,
     turn_id: promptTurn,

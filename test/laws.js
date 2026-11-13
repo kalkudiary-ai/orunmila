@@ -1070,6 +1070,25 @@ it('gate hook: a new user prompt gets a fresh block budget', () => {
   h.done();
 });
 
+// NF54: Claude Code also fires UserPromptSubmit for prompts it writes itself (a
+// background task's notification, a sub-agent's hand-back). Counted as
+// messages, they refilled the budget, so an agent could reset its own limit.
+const TASK_NOTE = '<task-notification>\n<task-id>abc123</task-id>\n<status>completed</status>\n</task-notification>';
+const HAND_BACK = '<agent-message from="abc123">\n[Subagent hand-back] The report follows:\n  done\n</agent-message>';
+
+it('gate hook: a task notification or a sub-agent hand-back does not refill the block budget (NF54)', () => {
+  const h = hookSequence('budget-d');
+  h.prompt('fix debit.ts');
+  for (let i = 0; i < DEFAULT_BLOCK_BUDGET; i++) assert.ok(isBlock(h.stop()), `block ${i + 1}`);
+  h.prompt(TASK_NOTE);
+  assert.ok(standsDown(h.stop()), 'a task notification is not a message from the user');
+  h.prompt(HAND_BACK);
+  assert.ok(standsDown(h.stop()), 'nor is a sub-agent hand-back');
+  h.prompt('Please look at the <task-notification> tag in the log.');
+  assert.ok(isBlock(h.stop()), 'a person\'s message that merely mentions the tag still counts');
+  h.done();
+});
+
 // --- test 40: the N10 race, on both witnesses' consumers --------------------
 // When Claude Code's Stop hook fires, the transcript can still end on an
 // earlier assistant block of the turn (5 of 5 probe runs, Phase 0 re-run). The

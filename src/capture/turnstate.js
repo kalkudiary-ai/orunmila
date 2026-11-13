@@ -120,12 +120,13 @@ function closeTurn(sessionId) {
  * Prompt phase. Under legacy this force-bumps. Under the fixed boundaries a
  * prompt only opens a new turn when the last one actually ended, so a message
  * sent mid-turn stays with the work it interrupted. Either way it is one more
- * prompt.
+ * prompt, unless the host wrote it (countPrompt false): a notification opens a
+ * turn like any prompt but is not a message from the user (NF54).
  */
-function bumpTurn(sessionId) {
+function bumpTurn(sessionId, { countPrompt = true } = {}) {
   const state = readState(sessionId);
   const turn = legacy() || state.closed ? state.turn + 1 : state.turn;
-  return writeState(sessionId, { turn, closed: false, prompt: state.prompt + 1 }).turn;
+  return writeState(sessionId, { turn, closed: false, prompt: state.prompt + (countPrompt ? 1 : 0) }).turn;
 }
 
 module.exports = { currentTurn, bumpTurn, turnId, promptId, writeTurnId, closeTurn, advanceIfClosed };

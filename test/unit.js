@@ -784,6 +784,16 @@ it('turnstate: promptId counts user prompts, and Stops and writes keep the count
   assert.strictEqual(turnstate.promptId('P'), 'p3');
 });
 
+it('turnstate: a prompt the host wrote opens a turn as before but is not counted as a message (NF54)', () => {
+  tmpHome();
+  turnstate.bumpTurn('Q');
+  turnstate.closeTurn('Q');
+  assert.strictEqual(turnstate.bumpTurn('Q', { countPrompt: false }), 2, 'a closed turn still advances');
+  assert.strictEqual(turnstate.promptId('Q'), 'p1', 'but the message count does not move');
+  turnstate.bumpTurn('Q');
+  assert.strictEqual(turnstate.promptId('Q'), 'p2', 'a person\'s message still counts');
+});
+
 // --- reconcile/difftool -----------------------------------------------------
 
 it('difftool: unifiedDiff shows added lines; substanceStats separates logic from comments', () => {

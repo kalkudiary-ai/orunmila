@@ -1007,4 +1007,60 @@ it('P0-4: recording the fingerprint does not clobber the block counter', () => {
   rmrf(root);
 });
 
+// --- the block budget across Stop re-fires ----------------------------------
+// Every Stop opens a new turn: the stop phase's own write advances a turn the
+// previous Stop closed (turnstate.js). A budget counted per turn restarted on
+// every re-fire after a block, so the loop trap stayed open: in the delta check
+// of b2b3274 one claim, re-sent with varied text, blocked 6 Stops of 6. These
+// drive the real hook scripts in the order the host runs them.
+
+const { DEFAULT_BLOCK_BUDGET } = require('../src/laws/gate');
+
+function hookSequence(sid) {
+  const home = tmpHome();
+  const root = tmpDir();
+  const env = { ORUNMILA_HOME: home, ORUNMILA_LAWS: '', ORUNMILA_LAW_BLOCK_BUDGET: '', ORUNMILA_TURN_BOUNDARIES: '' };
+  const send = (script, payload) =>
+    run(`src/capture/claude-code/${script}`, { input: JSON.stringify(Object.assign({ session_id: sid }, payload)), env, cwd: root });
+  let n = 0;
+  return {
+    prompt: (text) => send('user-prompt-submit.js', { prompt: text }),
+    // Varied text each time, so the P0-4 repeat skip never decides the outcome.
+    stop() {
+      const claim = `Full suite green, ${1463 + n++} tests pass, and debit.ts is correct.`;
+      send('stop.js', { claim });
+      const res = send('law-gate.js', { claim });
+      assert.strictEqual(res.status, 0, 'the gate hook always exits 0');
+      return res.stdout.trim() ? JSON.parse(res.stdout) : null;
+    },
+    done: () => { rmrf(root); rmrf(home); },
+  };
+}
+
+const isBlock = (out) => Boolean(out && out.decision === 'block');
+const standsDown = (out) =>
+  Boolean(out && out.hookSpecificOutput && /standing down/i.test(out.hookSpecificOutput.additionalContext));
+
+it('gate hook: the block budget holds across Stop re-fires when no new prompt arrives', () => {
+  const h = hookSequence('budget-a');
+  h.prompt('fix debit.ts');
+  const outs = [1, 2, 3, 4].map(() => h.stop());
+  const blocks = outs.filter(isBlock).length;
+  assert.strictEqual(blocks, DEFAULT_BLOCK_BUDGET, `${blocks} blocks in 4 Stops after one prompt; the budget is ${DEFAULT_BLOCK_BUDGET}`);
+  for (const out of outs.slice(DEFAULT_BLOCK_BUDGET)) {
+    assert.ok(standsDown(out), 'past the budget it stands down and says so: ' + JSON.stringify(out));
+  }
+  h.done();
+});
+
+it('gate hook: a new user prompt gets a fresh block budget', () => {
+  const h = hookSequence('budget-b');
+  h.prompt('fix debit.ts');
+  for (let i = 0; i < DEFAULT_BLOCK_BUDGET; i++) assert.ok(isBlock(h.stop()), `block ${i + 1} of the first prompt`);
+  assert.ok(standsDown(h.stop()), 'the first prompt\'s budget is spent');
+  h.prompt('now fix wallet.ts');
+  assert.ok(isBlock(h.stop()), 'a new prompt is judged with a fresh budget');
+  h.done();
+});
+
 runAll('laws (layers 4 + 5)');

@@ -764,6 +764,26 @@ it('turnstate: a state file with no turn field falls back to 1', () => {
   assert.strictEqual(turnstate.currentTurn('S'), 1);
 });
 
+it('turnstate: promptId counts user prompts, and Stops and writes keep the count', () => {
+  tmpHome();
+  assert.strictEqual(turnstate.promptId('P'), null, 'no prompt seen yet: no prompt id');
+  turnstate.bumpTurn('P');
+  assert.strictEqual(turnstate.promptId('P'), 'p1');
+  // A Stop then a write opens a new TURN; no new prompt arrived. This is the
+  // re-fire after a block, and it must not count as a prompt.
+  turnstate.closeTurn('P');
+  assert.strictEqual(turnstate.writeTurnId('P'), 't2');
+  assert.strictEqual(turnstate.promptId('P'), 'p1', 'a Stop and a write are not a prompt');
+  turnstate.closeTurn('P');
+  turnstate.bumpTurn('P');
+  assert.strictEqual(turnstate.turnId('P'), 't3');
+  assert.strictEqual(turnstate.promptId('P'), 'p2');
+  // A message sent mid-turn joins the open turn, but it is still a new prompt.
+  turnstate.bumpTurn('P');
+  assert.strictEqual(turnstate.turnId('P'), 't3');
+  assert.strictEqual(turnstate.promptId('P'), 'p3');
+});
+
 // --- reconcile/difftool -----------------------------------------------------
 
 it('difftool: unifiedDiff shows added lines; substanceStats separates logic from comments', () => {

@@ -108,7 +108,8 @@ npx orunmila laws           # what's in force, and which layer each law came fro
 
 - **The kill switch is `ORUNMILA_LAWS=off`** for one session. Make sure they know
   it before they need it.
-- **Blocks are budgeted** — two per turn by default. Once spent, findings degrade
+- **Blocks are budgeted** — two per user message by default; the agent's answer
+  after a block does not refill the budget. Once spent, findings degrade
   to advice and the exhaustion is recorded, so the agent cannot be pinned in a
   blocked-respond-blocked loop. A gate that gives up silently would look like a
   pass, so it says so instead.

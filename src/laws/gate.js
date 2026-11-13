@@ -51,9 +51,13 @@
  * A blocking Stop hook can pin an agent: blocked, responds, blocked again. The
  * host does NOT tell a hook that it is re-firing because of its own previous
  * block, so the protection has to be orunmila's own. Every block is counted
- * against a per-turn budget; once spent, findings degrade to advice and the
- * exhaustion is RECORDED. A gate that gives up silently is worse than no gate,
- * because it looks like a pass.
+ * against a budget per USER PROMPT; once spent, findings degrade to advice and
+ * the exhaustion is RECORDED. A gate that gives up silently is worse than no
+ * gate, because it looks like a pass.
+ *
+ * Per prompt, not per turn: each re-fire after a block opens a turn of its own
+ * (capture/turnstate.js), so a per-turn budget restarted on every Stop and the
+ * trap stayed open. Only a caller with no prompt count falls back to the turn.
  *
  * ── Failure posture ────────────────────────────────────────────────────────
  *
@@ -171,7 +175,7 @@ function renderFindings(findings, { blocking }) {
  * null when there is nothing to say — the overwhelmingly common case, and the
  * one that must cost nothing.
  */
-function decideForTurn({ sessionId, turnId, claimText, promptText, turnEvents, root }) {
+function decideForTurn({ sessionId, turnId, promptId, claimText, promptText, turnEvents, root }) {
   const { laws } = loadLaws({ root });
   const active = activeLaws(laws);
   if (!active.length) return null;
@@ -181,12 +185,16 @@ function decideForTurn({ sessionId, turnId, claimText, promptText, turnEvents, r
 
   const state = readState(sessionId, turnId);
   const budget = blockBudget();
+  // The budget is spent per prompt (see the loop-trap note); the turn's own
+  // file still records the blocks made in that turn.
+  const spent = promptId ? readState(sessionId, promptId).blocks : state.blocks;
 
-  if (res.blocking.length && state.blocks < budget) {
+  if (res.blocking.length && spent < budget) {
     writeState(sessionId, turnId, Object.assign({}, state, {
       blocks: state.blocks + 1,
       law_ids: (state.law_ids || []).concat(res.blocking.map((f) => f.law_id)),
     }));
+    if (promptId) writeState(sessionId, promptId, { blocks: spent + 1 });
     return {
       decision: 'block',
       reason: renderFindings(res.blocking, { blocking: true }),
@@ -195,11 +203,11 @@ function decideForTurn({ sessionId, turnId, claimText, promptText, turnEvents, r
 
   // Either nothing blocking, or the budget is spent. If it IS spent, say so out
   // loud in the advisory rather than letting a silenced law read as a pass.
-  const exhausted = res.blocking.length > 0 && state.blocks >= budget;
+  const exhausted = res.blocking.length > 0 && spent >= budget;
   let text = renderFindings(res.findings, { blocking: false });
   if (exhausted) {
     text =
-      `orunmila — the law gate has already stopped this turn ${state.blocks} time(s) and is standing down to avoid trapping you. ` +
+      `orunmila — the law gate has already stopped this turn ${spent} time(s) and is standing down to avoid trapping you. ` +
       `The finding below is UNRESOLVED, not forgiven; it will be visible at close-out.\n\n` +
       text;
   }
@@ -216,7 +224,7 @@ function runGate(payload, adapter, { root, transcript } = {}) {
     if (String(process.env.ORUNMILA_LAWS || '').toLowerCase() === 'off') return null;
 
     const sessionId = adapter.fields.sessionId(payload);
-    const { turnId } = require('../capture/turnstate');
+    const { turnId, promptId } = require('../capture/turnstate');
     const turn = turnId(sessionId);
 
     const reader = transcript || adapter.transcript || require('../capture/transcript');
@@ -254,6 +262,7 @@ function runGate(payload, adapter, { root, transcript } = {}) {
     return decideForTurn({
       sessionId,
       turnId: turn,
+      promptId: promptId(sessionId),
       claimText: String(claimText),
       promptText: promptEvent ? String(promptEvent.text || '') : '',
       turnEvents,

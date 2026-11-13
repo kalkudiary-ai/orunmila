@@ -99,8 +99,8 @@ Default to `warn`. Earn `block`.
   blocks anyone's work.
 - **`ORUNMILA_LAWS=off`** disables the gate for one session. Tell them before
   they need it.
-- **Blocks are budgeted** — two per turn, then findings degrade to advice and the
-  exhaustion is recorded.
+- **Blocks are budgeted** — two per user message, then findings degrade to advice
+  and the exhaustion is recorded.
 - **Laws belong in version control.** A rule that lives on one laptop is back to
   being tribal knowledge.
 - **Re-measure after a model change.** A law tuned against one model's phrasing

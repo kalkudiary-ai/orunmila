@@ -116,8 +116,9 @@ unguarded pipe as a passing run. Use `set -o pipefail` when you pipe a test
 run. Do not end the command with `; echo $?`: the whole line then exits 0, and
 the gate counts that as a pass.
 
-**Blocks are budgeted.** Two per turn by default; once spent, findings degrade
-to advice and the exhaustion is recorded, so the agent cannot be pinned in a
+**Blocks are budgeted.** Two per user message by default; the agent's answer
+after a block does not refill the budget. Once spent, findings degrade to advice
+and the exhaustion is recorded, so the agent cannot be pinned in a
 blocked-respond-blocked loop. Any internal error exits 0 silently: a broken law
 engine stops enforcing, it never stops the agent.
 

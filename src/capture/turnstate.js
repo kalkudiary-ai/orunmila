@@ -35,6 +35,12 @@
  * splitting the claim away from the work that earned it.
  *
  * Set ORUNMILA_TURN_BOUNDARIES=legacy to restore the old behaviour.
+ *
+ * The state also counts user PROMPTS, separately from turns. A Stop that the
+ * law gate blocked is followed by a re-fire with no prompt, and lazy advance
+ * gives that re-fire a turn of its own, so the turn counter cannot tell "the
+ * user spoke again" from "the agent answered again". The gate's block budget
+ * needs exactly that distinction (laws/gate.js, the loop trap).
  */
 
 const fs = require('fs');
@@ -54,9 +60,9 @@ function statePath(sessionId) {
 function readState(sessionId) {
   try {
     const raw = JSON.parse(fs.readFileSync(statePath(sessionId), 'utf8'));
-    return { turn: raw.turn || 1, closed: raw.closed === true };
+    return { turn: raw.turn || 1, closed: raw.closed === true, prompt: raw.prompt || 0 };
   } catch {
-    return { turn: 1, closed: false };
+    return { turn: 1, closed: false, prompt: 0 };
   }
 }
 
@@ -79,6 +85,15 @@ function turnId(sessionId) {
 }
 
 /**
+ * 'p3' after the third user prompt of the session. Null before the first one,
+ * which is also what a state file written before this count existed reads as.
+ */
+function promptId(sessionId) {
+  const n = readState(sessionId).prompt;
+  return n > 0 ? `p${n}` : null;
+}
+
+/**
  * The id a WRITER should use. If the previous turn was closed by a stop, this
  * is where the new turn actually begins — on first evidence, not on a prompt
  * that may never come.
@@ -86,7 +101,7 @@ function turnId(sessionId) {
 function advanceIfClosed(sessionId) {
   const state = readState(sessionId);
   if (!state.closed) return state.turn;
-  return writeState(sessionId, { turn: state.turn + 1, closed: false }).turn;
+  return writeState(sessionId, { turn: state.turn + 1, closed: false, prompt: state.prompt }).turn;
 }
 
 function writeTurnId(sessionId) {
@@ -98,20 +113,19 @@ function writeTurnId(sessionId) {
 function closeTurn(sessionId) {
   if (legacy()) return currentTurn(sessionId);
   const state = readState(sessionId);
-  return writeState(sessionId, { turn: state.turn, closed: true }).turn;
+  return writeState(sessionId, { turn: state.turn, closed: true, prompt: state.prompt }).turn;
 }
 
 /**
  * Prompt phase. Under legacy this force-bumps. Under the fixed boundaries a
  * prompt only opens a new turn when the last one actually ended, so a message
- * sent mid-turn stays with the work it interrupted.
+ * sent mid-turn stays with the work it interrupted. Either way it is one more
+ * prompt.
  */
 function bumpTurn(sessionId) {
-  if (legacy()) {
-    const next = currentTurn(sessionId) + 1;
-    return writeState(sessionId, { turn: next, closed: false }).turn;
-  }
-  return advanceIfClosed(sessionId);
+  const state = readState(sessionId);
+  const turn = legacy() || state.closed ? state.turn + 1 : state.turn;
+  return writeState(sessionId, { turn, closed: false, prompt: state.prompt + 1 }).turn;
 }
 
-module.exports = { currentTurn, bumpTurn, turnId, writeTurnId, closeTurn, advanceIfClosed };
+module.exports = { currentTurn, bumpTurn, turnId, promptId, writeTurnId, closeTurn, advanceIfClosed };

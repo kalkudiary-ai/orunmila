@@ -409,9 +409,10 @@ off enforces nothing.
 
 A blocking Stop hook can pin an agent: blocked, responds, blocked again. The host
 does **not** tell a hook that it is re-firing because of its own previous block,
-so the protection has to be the gate's own. Every block counts against a per-turn
-budget (default 2); once spent, findings degrade to advice **and the exhaustion
-is recorded**. A gate that gives up silently is worse than no gate, because it
+so the protection has to be the gate's own. Every block counts against a budget
+for each user message (default 2). The agent's answer after a block is not a new
+message, so it cannot refill the budget; the user's next message does. Once
+spent, findings degrade to advice **and the exhaustion is recorded**. A gate that gives up silently is worse than no gate, because it
 looks like a pass.
 
 ### Failure posture

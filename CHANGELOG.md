@@ -20,6 +20,13 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   build pass." and "Nothing regressed, so the suite passes.", which it missed,
   and no longer reads "untested" as "tested". A negation the reader does not
   recognise can still read as a claim.
+- **The Closeout Gate's block budget now lasts until the user's next message.**
+  The budget (two blocks by default) was counted per turn, and each answer the
+  agent gives after a block opens a new turn, so it refilled on every Stop: a
+  claim the agent reworded after each block was blocked every time (4 Stops of
+  4 in the new test). It is now counted per user message. The agent's answers
+  after a block share one budget, and the user's next message starts a fresh
+  one. The note the agent reads when the gate stands down is unchanged.
 
 ### Added
 

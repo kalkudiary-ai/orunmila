@@ -305,8 +305,8 @@ function handleStop(payload, adapter) {
   // NF23: the claim mark has the gate's N10 flaw unless it reads the same text.
   // An agent whose Stop payload carries the final text never has its claim
   // taken from the transcript, which can still end on an earlier block of the
-  // turn; with no text in any of those fields the mark records none and says it
-  // is unconfirmed (an empty final message is recorded as '' with no mark).
+  // turn; with no string value in any of those fields the mark records none and
+  // says it is unconfirmed (an empty final message is recorded '', unmarked).
   const claim = { session_id: sessionId, turn_id: turn, agent: adapter.id, type: TYPES.TURN_CLAIM };
   if (adapter.stopCarriesFinalText) {
     const finalText = adapter.fields.finalText(payload);

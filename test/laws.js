@@ -1019,7 +1019,7 @@ function hookSequence(sid) {
     env,
     send,
     prompt: (text) => send('user-prompt-submit.js', { prompt: text }),
-    // Varied text each time, so the P0-4 repeat skip never decides the outcome.
+    // Varied text each time: a reworded claim is what the budget is built for.
     stop() {
       const claim = `Full suite green, ${1463 + n++} tests pass, and debit.ts is correct.`;
       send('stop.js', { claim });
@@ -1086,7 +1086,20 @@ it('gate hook: a task notification or a sub-agent hand-back does not refill the 
   assert.ok(standsDown(h.stop()), 'nor is a sub-agent hand-back');
   h.prompt('Please look at the <task-notification> tag in the log.');
   assert.ok(isBlock(h.stop()), 'a person\'s message that merely mentions the tag still counts');
+  h.prompt('\n' + TASK_NOTE);
+  h.stop(); // the second block of this message's budget
+  assert.ok(standsDown(h.stop()), 'a host prompt with leading whitespace does not refill it either');
   h.done();
+});
+
+it('gate hook: before any message is counted, blocks share one budget instead of refilling every turn', () => {
+  const h = hookSequence('budget-e');
+  h.prompt(TASK_NOTE); // the session's first prompt is one the host wrote
+  assert.deepStrictEqual([h.stop(), h.stop(), h.stop()].map(isBlock), [true, true, false], 'after a host prompt');
+  const g = hookSequence('budget-f'); // no prompt hook has fired at all
+  assert.deepStrictEqual([g.stop(), g.stop(), g.stop()].map(isBlock), [true, true, false], 'with no prompt at all');
+  h.done();
+  g.done();
 });
 
 // --- test 40: the N10 race, on both witnesses' consumers --------------------

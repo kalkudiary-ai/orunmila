@@ -85,12 +85,15 @@ function turnId(sessionId) {
 }
 
 /**
- * 'p3' after the third user prompt of the session. Null before the first one,
- * which is also what a state file written before this count existed reads as.
+ * 'p3' after the third user message of the session. Before the first one, 'p0'
+ * if the session has a turn record at all, so a session whose first prompt was
+ * written by the host, or that began before this count existed, shares one
+ * budget rather than refilling it every turn. Null only with no turn record.
  */
 function promptId(sessionId) {
   const n = readState(sessionId).prompt;
-  return n > 0 ? `p${n}` : null;
+  if (n > 0) return `p${n}`;
+  return fs.existsSync(statePath(sessionId)) ? 'p0' : null;
 }
 
 /**

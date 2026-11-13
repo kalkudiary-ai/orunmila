@@ -27,18 +27,19 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   4 in the new test). It is now counted per message the user sends. The
   agent's answers after a block share one budget, task notifications and
   sub-agent hand-backs that Claude Code writes into the conversation do not
-  refill it, and the user's next message starts a fresh one. Until the prompt
-  hook has counted a message in the session, it is still counted per turn. The
-  note the agent reads when the gate stands down is unchanged.
+  refill it, and the user's next message starts a fresh one. Before the
+  session's first counted message, all blocks share one budget. The note the
+  agent reads when the gate stands down is unchanged.
 - **The gate and the claim record no longer take a stale message as the turn's
   claim (N10).** When Claude Code's Stop hook fires, the transcript can still
   end on an earlier message of the turn. Both read their claim from it, so the
   gate could block a turn on a sentence the agent had already replaced, and the
   Stain Map recorded that sentence as the turn's claim. For Claude Code both now
   take the claim from the Stop payload's `last_assistant_message`. If the
-  payload has no text in any of `last_assistant_message`, `claim` or
+  payload has no string value in any of `last_assistant_message`, `claim` or
   `response`, the gate does not judge the turn and records the skip, and the
-  claim is recorded empty and marked `claim_unconfirmed`.
+  claim is recorded empty and marked `claim_unconfirmed`. An empty final
+  message is not judged and leaves no such record.
   Other agents still read the transcript: their Stop payloads have not been
   measured.
 - **A claim restated unchanged after a block is judged again (P0-4).** The gate

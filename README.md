@@ -417,11 +417,12 @@ Code sends `stop_hook_active` in a Stop payload, but the gate does not rely on
 it: the protection is its own. Every block counts against a budget for each
 message the user sends (default 2). The agent's answers after a block do not
 refill it, and neither do the task notifications and sub-agent hand-backs that
-Claude Code writes into the conversation; the user's next message does. Until
-the prompt hook has counted a message in the session, the budget is counted per
-turn instead, and each answer after a block opens a new turn and refills it.
-Once spent, findings degrade to advice **and the exhaustion is recorded**. A
-gate that gives up silently is worse than no gate, because it looks like a pass.
+Claude Code writes into the conversation; the user's next message does. Before
+the session's first counted message (for example, its first prompt was a
+notification, or Orunmila was installed mid-session), all blocks share one
+budget. Once spent, findings degrade to advice **and the exhaustion is
+recorded**. A gate that gives up silently is worse than no gate, because it
+looks like a pass.
 
 ### Failure posture
 
@@ -432,10 +433,10 @@ engine is allowed to stop enforcing; it is never allowed to stop the agent.
 It also never judges text it cannot confirm is this turn's. The claim comes from
 the Stop payload's final message (`last_assistant_message`), never from the
 transcript, which can still end on an earlier message when the hook fires. A
-Stop whose payload has no text in any of `last_assistant_message`, `claim` or
-`response` is not judged, and the skip is recorded; an empty final message is
-not judged either. This fails open on purpose: a missed check is visible, a
-wrong block is harmful.
+Stop whose payload has no string value in any of `last_assistant_message`,
+`claim` or `response` is not judged, and the skip is recorded; an empty final
+message is not judged either, and leaves no record. This fails open on
+purpose: a missed check is visible, a wrong block is harmful.
 
 ### Making them yours
 

@@ -145,7 +145,7 @@ const REGISTRY = {
       // with `<task-notification>` and `<agent-message from=…>`. Its payload has
       // no origin field (2.1.314); in one session the opening tag matched the
       // transcript's origin.kind on 7 prompts of 7 (NF54).
-      promptFromHuman: (p) => !/^<(?:task-notification|agent-message)[\s>]/.test(String(p.prompt || '')),
+      promptFromHuman: (p) => !/^\s*<(?:task-notification|agent-message)[\s>]/.test(String(p.prompt || '')),
     },
   }),
 

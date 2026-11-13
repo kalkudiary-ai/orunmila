@@ -57,7 +57,8 @@
  *
  * Per prompt, not per turn: each re-fire after a block opens a turn of its own
  * (capture/turnstate.js), so a per-turn budget restarted on every Stop and the
- * trap stayed open. Only a caller with no prompt count falls back to the turn.
+ * trap stayed open. Before a session's first counted message all blocks share
+ * one budget ('p0'); only a session with no turn record falls back to the turn.
  *
  * ── Failure posture ────────────────────────────────────────────────────────
  *
@@ -253,9 +254,10 @@ function runGate(payload, adapter, { root } = {}) {
 
     // N10: the transcript is never read here. When Stop fires it can still end
     // on an earlier block of this turn, so its text cannot be confirmed as the
-    // turn's own. With no text in any of the payload's final-text fields the
-    // gate judges nothing and records the skip (an empty final message is not
-    // judged either): a missed check is visible, a wrong block is harmful.
+    // turn's own. With no string value in any of the payload's final-text
+    // fields the gate judges nothing and records the skip (an empty final
+    // message is not judged either, and not recorded): a missed check is
+    // visible, a wrong block is harmful.
     const claimText = adapter.fields.finalText(payload);
     if (claimText === null) {
       writeState(sessionId, turn, Object.assign({}, readState(sessionId, turn), { skipped_unconfirmed_claim: true }));

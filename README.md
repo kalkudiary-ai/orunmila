@@ -414,7 +414,8 @@ off enforces nothing.
 A blocking Stop hook can pin an agent: blocked, responds, blocked again. The host
 does **not** tell a hook that it is re-firing because of its own previous block,
 so the protection has to be the gate's own. Every block counts against a budget
-for each user message (default 2). The agent's answer after a block is not a new
+for each user message (default 2; counted per turn instead when the prompt hook
+has not yet counted a message in the session). The agent's answer after a block is not a new
 message, so it cannot refill the budget; the user's next message does. Once
 spent, findings degrade to advice **and the exhaustion is recorded**. A gate that gives up silently is worse than no gate, because it
 looks like a pass.
@@ -428,7 +429,8 @@ engine is allowed to stop enforcing; it is never allowed to stop the agent.
 It also never judges text it cannot confirm is this turn's. The claim comes from
 the Stop payload's final message (`last_assistant_message`), never from the
 transcript, which can still end on an earlier message when the hook fires. A
-Stop with no final text in its payload is not judged, and the skip is recorded.
+Stop whose payload has none of `last_assistant_message`, `claim` or `response`
+is not judged, and the skip is recorded.
 This fails open on purpose: a missed check is visible, a wrong block is harmful.
 
 ### Making them yours

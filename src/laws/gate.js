@@ -112,7 +112,7 @@ function writeState(sessionId, turnId, state) {
  *
  * That lands on the blocking path, which is the worst place for it: an agent
  * that withdraws an unbacked claim gets blocked again on the stale text, the
- * per-turn block budget is spent on a phantom, and the gate then stands down
+ * block budget is spent on a phantom, and the gate then stands down
  * for the rest of the turn — so a stale finding can silence a real one.
  */
 function claimFingerprint(text) {
@@ -278,14 +278,13 @@ function runGate(payload, adapter, { root } = {}) {
     if (!claimText.trim()) return null;
 
     // P0-4: refuse to judge a claim we have already judged under the previous
-    // turn. Byte-identical consecutive claims mean the transcript had not yet
-    // caught up when Stop fired — the agent has not said anything new, so there
-    // is nothing honest to judge. Judging it anyway re-flags findings that were
-    // already acted on.
+    // turn. Written for the transcript read, when byte-identical consecutive
+    // claims meant the transcript had not yet caught up when Stop fired. The
+    // claim now comes from the Stop payload (N10), so an identical claim is a
+    // real restatement; whether to keep this skip is an open decision (P0-4).
     //
-    // This declines to act on absent data; it does not silence a finding. The
-    // skip is recorded in the turn's state so `laws --check` and any firing-rate
-    // measurement can see it rather than counting the same claim twice.
+    // The skip is recorded in the turn's state, and `laws --check` counts it as
+    // a repeat.
     const fingerprint = claimFingerprint(claimText);
     const prevTurn = previousTurnId(turn);
     if (prevTurn) {

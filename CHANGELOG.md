@@ -33,7 +33,8 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   gate could block a turn on a sentence the agent had already replaced, and the
   Stain Map recorded that sentence as the turn's claim. For Claude Code both now
   take the claim from the Stop payload's `last_assistant_message`. If the
-  payload carries no final text, the gate does not judge the turn and records
+  payload carries none of `last_assistant_message`, `claim` or `response`, the
+  gate does not judge the turn and records
   the skip, and the claim is recorded empty and marked `claim_unconfirmed`.
   Other agents still read the transcript: their Stop payloads have not been
   measured.

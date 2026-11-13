@@ -101,8 +101,9 @@ function writeState(sessionId, turnId, state) {
 /**
  * A short, stable fingerprint of a turn's claim text.
  *
- * Why this exists (P0-4). runGate takes its claim from
- * lastAssistantText(transcript_path). When Stop fires before the host has
+ * Why this exists (P0-4). runGate used to take its claim from
+ * lastAssistantText(transcript_path); it now reads only the Stop payload (N10,
+ * below). When Stop fires before the host has
  * flushed THIS turn's final assistant message, that call returns the PREVIOUS
  * turn's message, and the gate then judges text the agent did not write in the
  * turn being judged. Measured in a real session: two consecutive turns captured
@@ -219,7 +220,7 @@ function decideForTurn({ sessionId, turnId, promptId, claimText, promptText, tur
  * stdout, and always exits 0 — a non-zero exit from THIS script would itself
  * block the agent, which is the one thing it must never do by accident.
  */
-function runGate(payload, adapter, { root, transcript } = {}) {
+function runGate(payload, adapter, { root } = {}) {
   try {
     if (String(process.env.ORUNMILA_LAWS || '').toLowerCase() === 'off') return null;
 
@@ -227,10 +228,16 @@ function runGate(payload, adapter, { root, transcript } = {}) {
     const { turnId, promptId } = require('../capture/turnstate');
     const turn = turnId(sessionId);
 
-    const reader = transcript || adapter.transcript || require('../capture/transcript');
-    const claimText =
-      payload.claim || payload.response || reader.lastAssistantText(adapter.fields.transcriptPath(payload)) || '';
-    if (!String(claimText).trim()) return null;
+    // N10: the transcript is never read here. When Stop fires it can still end
+    // on an earlier block of this turn, so its text cannot be confirmed as the
+    // turn's own. With no final text in the payload the gate judges nothing and
+    // records the skip: a missed check is visible, a wrong block is harmful.
+    const claimText = adapter.fields.finalText(payload);
+    if (claimText === null) {
+      writeState(sessionId, turn, Object.assign({}, readState(sessionId, turn), { skipped_unconfirmed_claim: true }));
+      return null;
+    }
+    if (!claimText.trim()) return null;
 
     // P0-4: refuse to judge a claim we have already judged under the previous
     // turn. Byte-identical consecutive claims mean the transcript had not yet

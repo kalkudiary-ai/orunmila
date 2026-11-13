@@ -1063,4 +1063,78 @@ it('gate hook: a new user prompt gets a fresh block budget', () => {
   h.done();
 });
 
+// --- test 40: the N10 race, on both witnesses' consumers --------------------
+// When Claude Code's Stop hook fires, the transcript can still end on an
+// earlier assistant block of the turn (5 of 5 probe runs, Phase 0 re-run). The
+// Stop payload's last_assistant_message is the turn's final text. Neither the
+// gate nor the Glove's claim mark may take the stale transcript text (N10,
+// NF23); with no final text in the payload, both record the skip.
+
+const CLEAN_FINAL = 'I read src/wallet/debit.ts and it debits the annual wallet first.';
+
+/** A Claude Code transcript whose newest assistant block is `text`. */
+function transcriptWith(dir, text) {
+  const file = path.join(dir, 'transcript.jsonl');
+  const line = { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text }] } };
+  fs.writeFileSync(file, JSON.stringify(line) + '\n');
+  return file;
+}
+
+/** One Stop through the real hooks: capture, then the gate. */
+function stopThroughHooks(payload, { agent = 'claude-code' } = {}) {
+  const home = tmpHome();
+  const root = tmpDir();
+  const env = { ORUNMILA_HOME: home, ORUNMILA_LAWS: '', ORUNMILA_LAW_BLOCK_BUDGET: '', ORUNMILA_TURN_BOUNDARIES: '' };
+  const input = JSON.stringify(Object.assign({ transcript_path: transcriptWith(root, GREEN_LIE.claimText) }, payload));
+  const capture = agent === 'claude-code'
+    ? run('src/capture/claude-code/stop.js', { input, env, cwd: root })
+    : run('src/capture/connector.js', { input, env, cwd: root, args: [agent, 'stop'] });
+  assert.strictEqual(capture.status, 0);
+  const gate = agent === 'claude-code' ? run('src/capture/claude-code/law-gate.js', { input, env, cwd: root }) : null;
+  if (gate) assert.strictEqual(gate.status, 0, 'the gate hook always exits 0');
+  const events = fs.readFileSync(path.join(home, 'events.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  const lawState = (turn) => {
+    const p = path.join(home, 'laws-state', payload.session_id, `${turn}.json`);
+    return fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : null;
+  };
+  return {
+    gate: gate && gate.stdout.trim() ? JSON.parse(gate.stdout) : null,
+    claim: events.find((e) => e.type === 'turn_claim'),
+    lawState,
+    done: () => { rmrf(root); rmrf(home); },
+  };
+}
+
+it('test 40: in the N10 race neither the gate nor the Glove\'s claim mark takes the stale transcript text', () => {
+  const r = stopThroughHooks({ session_id: 't40-a', last_assistant_message: CLEAN_FINAL });
+  assert.ok(!isBlock(r.gate), 'the stale green claim must not be judged: ' + JSON.stringify(r.gate));
+  assert.ok(!JSON.stringify(r.gate || {}).includes('1463 tests pass'), 'nothing the gate says quotes the stale block');
+  assert.strictEqual(r.claim.text, CLEAN_FINAL, 'the Glove records the final text, not the stale block');
+  r.done();
+});
+
+it('test 40: with no final text in the Stop payload, neither judges the transcript and both record the skip', () => {
+  const r = stopThroughHooks({ session_id: 't40-b' });
+  assert.strictEqual(r.gate, null, 'transcript text alone cannot be confirmed as this turn\'s');
+  assert.strictEqual((r.lawState('t1') || {}).skipped_unconfirmed_claim, true, 'the gate leaves a trace of the skip');
+  assert.strictEqual(r.claim.text, '', 'the Glove records no claim text');
+  assert.strictEqual(r.claim.claim_unconfirmed, true, 'and marks the claim unconfirmed, so the skip is countable');
+  r.done();
+});
+
+it('test 40: an unraced turn is still judged on its final text', () => {
+  const r = stopThroughHooks({ session_id: 't40-c', last_assistant_message: GREEN_LIE.claimText });
+  assert.ok(isBlock(r.gate), 'the turn really ended on an unbacked green claim: ' + JSON.stringify(r.gate));
+  assert.strictEqual(r.claim.text, GREEN_LIE.claimText);
+  assert.strictEqual(r.claim.claim_unconfirmed, undefined, 'a confirmed claim carries no skip mark');
+  r.done();
+});
+
+it('test 40: another agent\'s Stop still reads the transcript (its payloads are not measured)', () => {
+  const r = stopThroughHooks({ session_id: 't40-d' }, { agent: 'cursor' });
+  assert.strictEqual(r.claim.text, GREEN_LIE.claimText, 'cursor keeps the transcript claim it had before');
+  assert.strictEqual(r.claim.claim_unconfirmed, undefined);
+  r.done();
+});
+
 runAll('laws (layers 4 + 5)');

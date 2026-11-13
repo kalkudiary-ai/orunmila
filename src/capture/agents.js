@@ -83,6 +83,15 @@ const defaultFields = {
   subAgentId: (p) => p.agent_id || p.agentId || p.sub_agent_id || null,
   subAgentType: (p) => p.agent_type || p.agentType || p.sub_agent_type || null,
   prompt: (p) => p.prompt || p.user_prompt || p.message || p.text || '',
+  // The turn's final text as the Stop payload itself carries it: Claude Code's
+  // `last_assistant_message`, or `claim` / `response` where a host passes the
+  // text. '' when the host says the turn ended with no text; null when the
+  // payload carries none of them, so the text cannot be confirmed (N10).
+  finalText: (p) => {
+    const given = [p.claim, p.response, p.last_assistant_message].filter((v) => typeof v === 'string');
+    if (!given.length) return null;
+    return given.find((v) => v.trim()) || '';
+  },
   transcriptPath: (p) => p.transcript_path || p.transcriptPath || p.transcript || null,
   filePath: (input) => input.file_path || input.path || input.filePath || input.target_file || null,
   command: (input) => input.command || input.cmd || input.script || '',
@@ -123,6 +132,10 @@ const REGISTRY = {
     },
     // preTool matcher: which tools should be snapshotted before they run.
     preToolMatcher: 'Write|Edit|MultiEdit',
+    // Its Stop payload carries the turn's final text, so the transcript is never
+    // read for the claim: when Stop fires, the transcript can still end on an
+    // earlier block of the turn (N10). Other agents' payloads are not measured.
+    stopCarriesFinalText: true,
   }),
 
   // Cursor — hooks land in .cursor; tool names differ (edit_file, read_file,

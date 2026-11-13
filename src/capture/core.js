@@ -302,9 +302,19 @@ function handleStop(payload, adapter) {
   const transcriptPath = adapter.fields.transcriptPath(payload);
   const transcript = adapter.transcript || defaultTranscript;
 
-  const claimText = payload.claim || payload.response || transcript.lastAssistantText(transcriptPath);
-
-  append({ session_id: sessionId, turn_id: turn, agent: adapter.id, type: TYPES.TURN_CLAIM, text: claimText });
+  // NF23: the claim mark has the gate's N10 flaw unless it reads the same text.
+  // An agent whose Stop payload carries the final text never has its claim
+  // taken from the transcript, which can still end on an earlier block of the
+  // turn; with no final text the mark records none and says it is unconfirmed.
+  const claim = { session_id: sessionId, turn_id: turn, agent: adapter.id, type: TYPES.TURN_CLAIM };
+  if (adapter.stopCarriesFinalText) {
+    const finalText = adapter.fields.finalText(payload);
+    claim.text = finalText === null ? '' : finalText;
+    if (finalText === null) claim.claim_unconfirmed = true;
+  } else {
+    claim.text = payload.claim || payload.response || transcript.lastAssistantText(transcriptPath);
+  }
+  append(claim);
 
   const existingPrompt = readTurn(sessionId, turn).find((e) => e.type === TYPES.USER_PROMPT);
   if (!existingPrompt) {

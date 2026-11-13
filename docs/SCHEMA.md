@@ -196,3 +196,9 @@ The event log has no `schema_version` and is not yet fully specified here.
   `{ schema_version: 1, first_seen_at, legacy_unredacted, redacted_at?, deleted_at? }`.
   `legacy_unredacted` is true when 0.2.2 first found a log written by an earlier
   version, and stays true until `orunmila log redact` or `orunmila log delete --yes`.
+
+## Event log: fields added since 0.2.2 (unreleased)
+
+- **`claim_unconfirmed`** (optional, on a Claude Code `turn_claim`): `true` when
+  the Stop payload carried no final text. `text` is then `''`, never the
+  transcript's last message, which can be an earlier message of the turn (N10).

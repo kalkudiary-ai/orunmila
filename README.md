@@ -421,6 +421,12 @@ It runs on every turn of every session, so it must never hang, never throw, and
 never lose you your work. **Any error at all exits 0 silently.** A broken law
 engine is allowed to stop enforcing; it is never allowed to stop the agent.
 
+It also never judges text it cannot confirm is this turn's. The claim comes from
+the Stop payload's final message (`last_assistant_message`), never from the
+transcript, which can still end on an earlier message when the hook fires. A
+Stop with no final text in its payload is not judged, and the skip is recorded.
+This fails open on purpose: a missed check is visible, a wrong block is harmful.
+
 ### Making them yours
 
 ```bash
@@ -687,7 +693,9 @@ behind anything. (Not yet wired up in this v0 - see Roadmap.)
   tries several known shapes and falls back rather than throwing. If claim
   extraction comes back empty on your agent, run `orunmila debug-transcript`
   and adjust the extractors (or ship the agent its own transcript module on
-  its adapter).
+  its adapter). Claude Code's claim is the exception: it comes from the Stop
+  payload's `last_assistant_message`, because the transcript can still end on
+  an earlier message when the Stop hook fires.
 - Claim/subtask extraction is regex/keyword heuristics, not NLP. It's tuned
   to catch obvious phantom/dropped/undisclosed patterns, not to perfectly
   parse every sentence. Sharpening this without adding paid API calls is

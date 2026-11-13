@@ -48,9 +48,9 @@
  *
  * ── The loop trap ──────────────────────────────────────────────────────────
  *
- * A blocking Stop hook can pin an agent: blocked, responds, blocked again. The
- * host does NOT tell a hook that it is re-firing because of its own previous
- * block, so the protection has to be orunmila's own. Every block is counted
+ * A blocking Stop hook can pin an agent: blocked, responds, blocked again.
+ * Claude Code sends `stop_hook_active` in a Stop payload, but the gate does not
+ * rely on it: the protection is orunmila's own. Every block is counted
  * against a budget per USER PROMPT; once spent, findings degrade to advice and
  * the exhaustion is RECORDED. A gate that gives up silently is worse than no
  * gate, because it looks like a pass.
@@ -253,8 +253,9 @@ function runGate(payload, adapter, { root } = {}) {
 
     // N10: the transcript is never read here. When Stop fires it can still end
     // on an earlier block of this turn, so its text cannot be confirmed as the
-    // turn's own. With no final text in the payload the gate judges nothing and
-    // records the skip: a missed check is visible, a wrong block is harmful.
+    // turn's own. With no text in any of the payload's final-text fields the
+    // gate judges nothing and records the skip (an empty final message is not
+    // judged either): a missed check is visible, a wrong block is harmful.
     const claimText = adapter.fields.finalText(payload);
     if (claimText === null) {
       writeState(sessionId, turn, Object.assign({}, readState(sessionId, turn), { skipped_unconfirmed_claim: true }));

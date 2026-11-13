@@ -432,9 +432,10 @@ engine is allowed to stop enforcing; it is never allowed to stop the agent.
 It also never judges text it cannot confirm is this turn's. The claim comes from
 the Stop payload's final message (`last_assistant_message`), never from the
 transcript, which can still end on an earlier message when the hook fires. A
-Stop whose payload has none of `last_assistant_message`, `claim` or `response`
-is not judged, and the skip is recorded.
-This fails open on purpose: a missed check is visible, a wrong block is harmful.
+Stop whose payload has no text in any of `last_assistant_message`, `claim` or
+`response` is not judged, and the skip is recorded; an empty final message is
+not judged either. This fails open on purpose: a missed check is visible, a
+wrong block is harmful.
 
 ### Making them yours
 

@@ -200,6 +200,6 @@ The event log has no `schema_version` and is not yet fully specified here.
 ## Event log: fields added since 0.2.2 (unreleased)
 
 - **`claim_unconfirmed`** (optional, on a Claude Code `turn_claim`): `true` when
-  the Stop payload carried none of `last_assistant_message`, `claim` or
-  `response`. `text` is then `''`, never the
-  transcript's last message, which can be an earlier message of the turn (N10).
+  the Stop payload carried no text in any of `last_assistant_message`, `claim`
+  or `response`. `text` is then `''`, never the transcript's last message,
+  which can be an earlier message of the turn (N10).

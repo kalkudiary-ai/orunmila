@@ -88,4 +88,12 @@ function proofOfPass(turnEvents) {
   return { proven: by !== null, by, runs };
 }
 
-module.exports = { proofOfPass, verdict, PIPEFAIL_STEP };
+/**
+ * The switch: ORUNMILA_STRICT_PROOF=1 and nothing else. On, the gate's green
+ * law and the Stain Map take only a proof of pass. Off, both judge as before.
+ */
+function strictProofEnabled() {
+  return process.env.ORUNMILA_STRICT_PROOF === '1';
+}
+
+module.exports = { proofOfPass, verdict, strictProofEnabled, PIPEFAIL_STEP };

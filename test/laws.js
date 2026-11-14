@@ -1586,4 +1586,27 @@ it('strict proof: laws --check replays with the same switch as the gate', () => 
   h.done();
 });
 
+// --- strict proof in the Stain Map (plan slice 4.3), same switch -------------
+
+const { reconcileTurn } = require('../src/reconcile/matcher');
+const verdictOf = (turnEvents, opts = {}) => {
+  const [c] = reconcileTurn(Object.assign({ promptText: 'go', claimText: 'Tests pass.', turnEvents }, opts)).claims;
+  return `${c.outcome} ${c.provenance} ${c.causeHints.join(',')}`.trim();
+};
+
+it('strict proof, Stain Map: a run that proves nothing is not a receipt, and says so', () => {
+  const masked = [ran('npm test; echo $?')];
+  assert.strictEqual(verdictOf(masked, { strictProof: false }), 'verified receipt_matches');
+  assert.strictEqual(verdictOf(masked, { strictProof: true }), 'phantom_verification not_sent run-proves-nothing');
+  assert.strictEqual(verdictOf([ran('npm test')], { strictProof: true }), 'verified receipt_matches');
+  assert.strictEqual(verdictOf([ran('npm test', 1)], { strictProof: true }), 'phantom_verification disregarded_failure error-in-context');
+  assert.strictEqual(verdictOf([ran('ls')], { strictProof: true }), 'phantom_verification not_sent no-verification-attempted');
+});
+
+it('strict proof, Stain Map: reconcileTurn reads the switch when the caller does not pass it', () => {
+  const masked = [ran('npm test; echo $?')];
+  assert.strictEqual(withEnv({ ORUNMILA_STRICT_PROOF: undefined }, () => verdictOf(masked)), 'verified receipt_matches');
+  assert.strictEqual(withEnv({ ORUNMILA_STRICT_PROOF: '1' }, () => verdictOf(masked)), 'phantom_verification not_sent run-proves-nothing');
+});
+
 runAll('laws (layers 4 + 5)');

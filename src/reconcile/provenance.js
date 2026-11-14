@@ -36,6 +36,7 @@
  */
 
 const { basename } = require('./task-extractor');
+const { proofOfPass } = require('../laws/proof');
 
 const TEST_LIKE = /\b(test|tests|jest|pytest|mocha|vitest|rspec|lint|eslint|tsc|build|compile|cargo|go test|mvn|gradle)\b/i;
 
@@ -196,6 +197,26 @@ function classify(claim, turnEvents, opts = {}) {
   const detached = !!opts.evidenceDetached;
   const resolvePr = vcsPrResolution(claim);
   const resolveCi = vcsCiResolution(claim);
+
+  if (claim.verificationClaim && opts.strictProof) {
+    // Strict proof (switch on, plan slice 4): only a test run whose status
+    // means what it says is a receipt (laws/proof.js). Runs that prove
+    // nothing are named as such, never read as "nothing was attempted".
+    const proof = proofOfPass(turnEvents);
+    const runEvents = (pick) => turnEvents.filter((e) => e.type === 'command_run' && proof.runs.some((r) => pick(r) && r.command === e.command));
+    if (proof.proven) return { provenance: 'receipt_matches', causeHints: [], evidence: runEvents((r) => r.command === proof.by) };
+    if (proof.runs.some((r) => r.verdict === 'failed')) {
+      return { provenance: 'disregarded_failure', causeHints: ['error-in-context'], evidence: runEvents((r) => r.verdict === 'failed') };
+    }
+    if (!proof.runs.length) {
+      const ci = resolveCi(turnEvents);
+      if (ci) return ci;
+      const pr = resolvePr(turnEvents);
+      if (pr) return pr;
+    }
+    if (detached) return { provenance: 'unverifiable', causeHints: ['evidence-detached'], evidence: [] };
+    return { provenance: 'not_sent', causeHints: [proof.runs.length ? 'run-proves-nothing' : 'no-verification-attempted'], evidence: [] };
+  }
 
   if (claim.verificationClaim) {
     const testCommands = turnEvents.filter(isTestLikeCommand);

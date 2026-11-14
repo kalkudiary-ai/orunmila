@@ -31,6 +31,7 @@ const { extractSubtasks, basename } = require('./task-extractor');
 const { extractClaims } = require('./claim-extractor');
 const { substanceStats } = require('./difftool');
 const provenance = require('./provenance');
+const { strictProofEnabled } = require('../laws/proof');
 
 const SUBSTANCE_RATIO_FLOOR = 0.5; // below this share of real-logic lines -> scaffolding-only
 const TRIVIAL_BODY = /^\s*(?:return\s*(?:null|undefined|none|true|false|\{\}|\[\]|''|"")?\s*;?|pass|\{\}|;|todo|fixme)\s*$/i;
@@ -219,7 +220,10 @@ function hasCaptureEvidence(events) {
   return (events || []).some((e) => CAPTURE_EVIDENCE_TYPES.has(e.type));
 }
 
-function reconcileTurn({ promptText, claimText, turnEvents, sessionTargets, evidenceDetached = false }) {
+// strictProof: only a proof of pass licenses a "tests pass" claim (laws/proof.js).
+// It defaults to the ORUNMILA_STRICT_PROOF switch, so every view of the Stain
+// Map judges the same way the gate does.
+function reconcileTurn({ promptText, claimText, turnEvents, sessionTargets, evidenceDetached = false, strictProof = strictProofEnabled() }) {
   const subtasks = extractSubtasks(promptText);
   const claims = extractClaims(claimText);
 
@@ -230,7 +234,7 @@ function reconcileTurn({ promptText, claimText, turnEvents, sessionTargets, evid
   const untrackedPaths = new Set(untracked.map((e) => String(e.path)));
 
   const claimResults = claims.map((claim) => {
-    const prov = provenance.classify(claim, turnEvents, { evidenceDetached });
+    const prov = provenance.classify(claim, turnEvents, { evidenceDetached, strictProof });
     return {
       claim,
       provenance: prov.provenance,

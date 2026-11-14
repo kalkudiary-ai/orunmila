@@ -74,6 +74,8 @@ const { dataDir, readTurn, readBetween } = require('../store/eventlog');
 const { loadLaws, activeLaws } = require('./load');
 const { evaluateTurn } = require('./evaluate');
 const { factsLine } = require('./facts');
+// Strict proof (ORUNMILA_STRICT_PROOF=1): a green claim needs a proof of pass.
+const { strictProofEnabled } = require('./proof');
 
 const DEFAULT_BLOCK_BUDGET = 2;
 const FACTS_HEAD = 'orunmila facts (from the records, not your prose): ';
@@ -164,15 +166,6 @@ function blockBudget() {
  */
 function factsLineEnabled() {
   return process.env.ORUNMILA_FACTS_LINE === '1';
-}
-
-/**
- * Strict proof is opt-in too: ORUNMILA_STRICT_PROOF=1 and nothing else. On,
- * a green claim needs a proof of pass (proof.js), not just a command that did
- * not fail. Off, the gate judges exactly as before.
- */
-function strictProofEnabled() {
-  return process.env.ORUNMILA_STRICT_PROOF === '1';
 }
 
 /**

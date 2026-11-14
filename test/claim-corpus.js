@@ -22,9 +22,9 @@ const rows = runCorpus({ src: ROOT, corpus, paths: ['law', 'reconcile'] });
 const row = (p) => rows.find((r) => r.path === p);
 const list = (r) => r.wrong.map((w) => `\n        expected ${w.expect}: ${w.text}`).join('');
 
-it('the corpus keeps at least 48 sentences, covering green, mixed and negated', () => {
-  assert.ok(corpus.cases.length >= 48,`only ${corpus.cases.length} sentences in ${path.relative(ROOT, DEFAULT_CORPUS)}`);
-  for (const kind of ['green', 'mixed', 'negated']) {
+it('the corpus keeps at least 51 sentences, covering green, mixed, negated and quoted', () => {
+  assert.ok(corpus.cases.length >= 51,`only ${corpus.cases.length} sentences in ${path.relative(ROOT, DEFAULT_CORPUS)}`);
+  for (const kind of ['green', 'mixed', 'negated', 'quoted']) {
     assert.ok(corpus.cases.some((c) => c.kind === kind), `no "${kind}" sentence left`);
   }
 });

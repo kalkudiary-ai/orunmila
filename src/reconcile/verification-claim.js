@@ -14,16 +14,23 @@
  * so a change here that breaks either one fails the suite.
  */
 
+const { SQUOTE_RE } = require('./task-extractor');
+
 // Mask quoted/backticked spans so a word being DISCUSSED is not read as a word
 // being USED. Without this, a turn that explains a law trips that same law —
 // which would make the whole layer unusable in exactly the conversations where
 // it matters most.
+//
+// Single quotes use the target extractor's pattern, so an apostrophe inside a
+// word (it's, isn't) is not a quote mark here either. Pairing them hid the
+// claim in "That's done, and the suite passes now that it's merged." and
+// exposed the quoted one in "the template's line reads 'the tests pass'".
 function maskQuoted(s) {
   return s
     .replace(/```[\s\S]*?```/g, (m) => ' '.repeat(m.length))
     .replace(/`[^`]*`/g, (m) => ' '.repeat(m.length))
     .replace(/"[^"]*"/g, (m) => ' '.repeat(m.length))
-    .replace(/'[^']*'/g, (m) => ' '.repeat(m.length))
+    .replace(SQUOTE_RE, (m) => ' '.repeat(m.length))
     // Markdown emphasis is how an agent quotes a phrase it is DISCUSSING when
     // backticks would be too code-like: "the verb is in a future frame (*should
     // work*, *let's see if it works*)". Measured against real sessions, that

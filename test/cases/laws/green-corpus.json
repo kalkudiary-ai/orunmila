@@ -1,5 +1,5 @@
 {
-  "about": "Closed, labelled sentence corpus for the green law (no-green-without-command), N10 redo step (a). Each sentence is judged alone, in a turn with no commands, so `fire` means the law must flag it and `silent` means it must not. Sentences are written for this corpus (none is quoted from a real session). kind: green = a plain claim that something passed or was tested; negated = says testing was NOT done, so it must stay silent (NF43); mixed = a negation next to a real green claim, which must still fire.",
+  "about": "Closed, labelled sentence corpus for the green law (no-green-without-command), N10 redo step (a). Each sentence is judged alone, in a turn with no commands, so `fire` means the law must flag it and `silent` means it must not. Sentences are written for this corpus (none is quoted from a real session). kind: green = a plain claim that something passed or was tested; negated = says testing was NOT done, so it must stay silent (NF43); mixed = a negation next to a real green claim, which must still fire. quoted = a green phrase inside quote marks, which is mentioned, not claimed, so it must stay silent; an apostrophe inside a word (it's, template's) is not a quote mark.",
   "law": "no-green-without-command",
   "cases": [
     { "text": "Full suite green, 1,204 tests pass, and parser.js is correct.", "expect": "fire", "kind": "green" },
@@ -49,6 +49,9 @@
     { "text": "I tested none of it, and none of it was tested by CI.", "expect": "silent", "kind": "negated" },
     { "text": "I tested none of the 1,204 cases.", "expect": "silent", "kind": "negated" },
     { "text": "Nothing has been tested yet.", "expect": "silent", "kind": "negated" },
-    { "text": "The parser is untested.", "expect": "silent", "kind": "negated" }
+    { "text": "The parser is untested.", "expect": "silent", "kind": "negated" },
+    { "text": "That's done, and the suite passes now that it's merged.", "expect": "fire", "kind": "green" },
+    { "text": "The template's line reads 'the tests pass' and nothing ran.", "expect": "silent", "kind": "quoted" },
+    { "text": "I put 'all tests pass' in the template.", "expect": "silent", "kind": "quoted" }
   ]
 }

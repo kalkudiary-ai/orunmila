@@ -82,13 +82,28 @@ function isTestFile(p) {
   return TEST_DIR.test(s) || TEST_NAME.test(s);
 }
 
+function inside(p, root) {
+  return path.isAbsolute(p) && p.startsWith(root + path.sep);
+}
+
+/** "none", or a count with the test files named. */
+function changedFiles(files) {
+  if (!files.length) return 'none';
+  const tests = files.filter(isTestFile);
+  return `${files.length} (test files: ${tests.length ? tests.join(', ') : 'none'})`;
+}
+
 /**
- * The facts line for one turn's records (the Glove's events, as readTurn
- * returns them). `root` shows paths inside it relative to it.
+ * The facts line for one turn: the Glove's events, as readTurn returns them,
+ * and the Sentinel's writes in the turn's window. Each witness's record is
+ * shown on its own (brief line 197); a Sentinel write outside `root` belongs
+ * to another watched folder and is not counted. `sentinelWrites: null` means
+ * the Sentinel's record was not read, and the line says so. `root` also shows
+ * paths inside it relative to it.
  */
-function factsLine(turnEvents, { root } = {}) {
+function factsLine(turnEvents, { root, sentinelWrites = [] } = {}) {
   const runs = [];
-  const files = [];
+  const gloveFiles = [];
   for (const e of turnEvents || []) {
     if (!e || typeof e !== 'object') continue;
     if (e.type === 'command_run' && typeof e.command === 'string' && isTestRun(e.command)) {
@@ -96,19 +111,24 @@ function factsLine(turnEvents, { root } = {}) {
       runs.push(`${command} (${status(e)}${isPiped(e.command) ? ', piped' : ''})`);
     } else if (e.type === 'file_write' && e.path) {
       const p = shown(e.path, root);
-      if (!files.includes(p)) files.push(p);
+      if (!gloveFiles.includes(p)) gloveFiles.push(p);
     }
+  }
+  const diskFiles = [];
+  for (const e of sentinelWrites || []) {
+    if (!e || e.type !== 'file_write' || typeof e.path !== 'string') continue;
+    if (root && !inside(e.path, root)) continue;
+    const p = shown(e.path, root);
+    if (!diskFiles.includes(p)) diskFiles.push(p);
   }
 
   let testRuns = runs.length ? runs.slice(0, MAX_RUNS).join('; ') : 'none';
   if (runs.length > MAX_RUNS) testRuns += `; and ${runs.length - MAX_RUNS} more`;
 
-  let changed = 'none';
-  if (files.length) {
-    const tests = files.filter(isTestFile);
-    changed = `${files.length} (test files: ${tests.length ? tests.join(', ') : 'none'})`;
-  }
-  return `Test runs this turn: ${testRuns}. Files changed this turn: ${changed}.`;
+  return (
+    `Test runs this turn: ${testRuns}. Sentinel: no record, commands are seen by the Glove only. ` +
+    `Files changed this turn, Glove: ${changedFiles(gloveFiles)}; Sentinel: ${sentinelWrites === null ? 'not read' : changedFiles(diskFiles)}.`
+  );
 }
 
 module.exports = { factsLine, isTestRun, isTestFile, RUNNERS };

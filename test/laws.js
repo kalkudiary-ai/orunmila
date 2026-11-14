@@ -1279,6 +1279,9 @@ it('facts line off: the gate prints exactly what it printed at 4ab0595', () => {
 // is not an input, so "all green on my end" cannot change what the line says.
 
 const { factsLine } = require('../src/laws/facts');
+// Brief line 197: never one witness alone. Commands have only the Glove's record.
+const GLOVE_ONLY = ' Sentinel: no record, commands are seen by the Glove only. ';
+const NO_FILES = GLOVE_ONLY + 'Files changed this turn, Glove: none; Sentinel: none.';
 const cmd = (command, exit_code, extra = {}) => Object.assign({ type: 'command_run', agent: 'claude-code', command, exit_code, failed: exit_code !== 0 && exit_code !== null }, extra);
 
 it('facts: a turn that ran no tests says so, whatever the agent claims', () => {
@@ -1288,7 +1291,7 @@ it('facts: a turn that ran no tests says so, whatever the agent claims', () => {
     cmd('echo "16 passing"', 0),
   ]);
   assert.ok(line.includes('Test runs this turn: none.'), line);
-  assert.strictEqual(factsLine([]), 'Test runs this turn: none. Files changed this turn: none.');
+  assert.strictEqual(factsLine([]), 'Test runs this turn: none.' + NO_FILES);
 });
 
 it('facts: each test run is listed with the exit status the record holds', () => {
@@ -1298,7 +1301,7 @@ it('facts: each test run is listed with the exit status the record holds', () =>
     cmd('npx jest', null, { failed: true }),                      // failed, code unknown
     cmd('pytest -q', null, { agent: 'cursor', failed: false }),   // another agent: null means unknown
   ]);
-  assert.strictEqual(line, 'Test runs this turn: npm test (pass); npm test (fail, exit 1); npx jest (fail); pytest -q (status unknown). Files changed this turn: none.');
+  assert.strictEqual(line, 'Test runs this turn: npm test (pass); npm test (fail, exit 1); npx jest (fail); pytest -q (status unknown).' + NO_FILES);
 });
 
 it('facts: a piped run is marked piped; lookalikes are not test runs; a runner after cd or an env prefix is', () => {
@@ -1312,7 +1315,7 @@ it('facts: a piped run is marked piped; lookalikes are not test runs; a runner a
     cmd('CI=1 node --test test/', 0),
     cmd('echo "a | npm test"', 0),
   ]);
-  assert.strictEqual(line, 'Test runs this turn: npm test | tail -5 (pass, piped); cd ../other && npm test (pass); CI=1 node --test test/ (pass). Files changed this turn: none.');
+  assert.strictEqual(line, 'Test runs this turn: npm test | tail -5 (pass, piped); cd ../other && npm test (pass); CI=1 node --test test/ (pass).' + NO_FILES);
 });
 
 it('facts: files changed are counted once each, test files named, paths inside the root shown relative', () => {
@@ -1325,7 +1328,24 @@ it('facts: files changed are counted once each, test files named, paths inside t
     write('/elsewhere/test_x.py'),
     write('/repo/src/contest.js'),
   ], { root: '/repo' });
-  assert.strictEqual(line, 'Test runs this turn: none. Files changed this turn: 5 (test files: test/laws.js, src/b.test.ts, /elsewhere/test_x.py).');
+  assert.strictEqual(line, 'Test runs this turn: none.' + GLOVE_ONLY + 'Files changed this turn, Glove: 5 (test files: test/laws.js, src/b.test.ts, /elsewhere/test_x.py); Sentinel: none.');
+});
+
+it('facts: the Sentinel\'s writes inside the project are counted beside the Glove\'s, each witness on its own', () => {
+  const disk = (p, extra = {}) => Object.assign({ type: 'file_write', source: 'fs-sentinel', session_id: null, path: p }, extra);
+  const line = factsLine([{ type: 'file_write', path: '/repo/src/a.js' }], {
+    root: '/repo',
+    sentinelWrites: [
+      disk('/repo/src/a.js'),
+      disk('/repo/src/a.js'),
+      disk('/repo/test/b.test.js'),
+      disk('/other-project/src/c.js'),
+      disk('/repo-two/test/d.test.js'),
+      { type: 'file_read', source: 'fs-sentinel', path: '/repo/src/e.js' },
+      null,
+    ],
+  });
+  assert.strictEqual(line, 'Test runs this turn: none.' + GLOVE_ONLY + 'Files changed this turn, Glove: 1 (test files: none); Sentinel: 2 (test files: test/b.test.js).');
 });
 
 // With the switch on, the facts line comes first and the gate's own text follows
@@ -1359,7 +1379,8 @@ it('facts line on: it comes first, and everything after it is what the gate prin
       return;
     }
     judged++;
-    const facts = FACTS_HEAD + factsLine(s.events);
+    // A turn with no Glove event gives the Sentinel no window: "not read".
+    const facts = FACTS_HEAD + factsLine(s.events, { sentinelWrites: s.events.length ? [] : null });
     if (before === null) assert.deepStrictEqual(out, stopOut(facts), `${s.name}: a turn with no findings gets the facts line alone`);
     else if (before.decision) assert.deepStrictEqual(out, { decision: 'block', reason: `${facts}\n\n${before.reason}` }, s.name);
     else assert.deepStrictEqual(out, stopOut(`${facts}\n\n${before.hookSpecificOutput.additionalContext}`), s.name);
@@ -1370,12 +1391,42 @@ it('facts line on: it comes first, and everything after it is what the gate prin
 it('facts line on: the line is the turn\'s own records, not the claim', () => {
   const seen = {};
   goldenWithFacts((s, p, out) => { if (out) seen[s.name] = (out.reason || out.hookSpecificOutput.additionalContext).split('\n')[0]; });
-  assert.strictEqual(seen['a green claim after a failed run'], `${FACTS_HEAD}Test runs this turn: npm test (fail, exit 1). Files changed this turn: none.`);
-  assert.strictEqual(seen['a warn-only finding'], `${FACTS_HEAD}Test runs this turn: none. Files changed this turn: none.`);
+  assert.strictEqual(seen['a green claim after a failed run'], `${FACTS_HEAD}Test runs this turn: npm test (fail, exit 1).${NO_FILES}`);
+  assert.strictEqual(
+    seen['a warn-only finding'],
+    `${FACTS_HEAD}Test runs this turn: none.${GLOVE_ONLY}Files changed this turn, Glove: none; Sentinel: not read.`,
+    'no Glove event in the turn, so no window to read the Sentinel in'
+  );
   assert.strictEqual(
     seen['a turn that wrote a test file and ran the suite'],
-    `${FACTS_HEAD}Test runs this turn: npm test (pass). Files changed this turn: 1 (test files: /repo/test/x.test.js).`
+    `${FACTS_HEAD}Test runs this turn: npm test (pass).${GLOVE_ONLY}Files changed this turn, Glove: 1 (test files: /repo/test/x.test.js); Sentinel: none.`
   );
+});
+
+it('facts line on: the gate reads the Sentinel\'s writes in the turn\'s window, inside the project only', () => {
+  const { append } = require('../src/store/eventlog');
+  const clean = Object.fromEntries(GATE_ENV.map((k) => [k, undefined]));
+  withEnv(Object.assign(clean, { ORUNMILA_FACTS_LINE: '1' }), () => {
+    const home = tmpHome();
+    const root = tmpDir();
+    const sid = 'facts-sentinel';
+    const disk = (rel, extra = {}) =>
+      append(Object.assign({ session_id: null, turn_id: null, agent: 'fs-sentinel', source: 'fs-sentinel', type: 'file_write', path: path.join(root, rel) }, extra));
+    disk('src/before-the-turn.js', { ts: '2000-01-01T00:00:00.000Z' });
+    append({ session_id: sid, turn_id: 't1', agent: 'claude-code', type: 'file_write', path: path.join(root, 'src/g.js') });
+    append({ session_id: sid, turn_id: 't1', agent: 'claude-code', type: 'file_write', path: path.join(root, 'src/glove-only.js') });
+    disk('src/g.js');
+    disk('test/s.test.js');
+    append({ session_id: null, turn_id: null, agent: 'fs-sentinel', source: 'fs-sentinel', type: 'file_write', path: path.join(root + '-elsewhere', 'x.js') });
+    const out = runGate({ session_id: sid, claim: 'I changed src/g.js.' }, getAdapter('claude-code'), { root });
+    const first = (out.reason || out.hookSpecificOutput.additionalContext).split('\n')[0];
+    assert.strictEqual(
+      first,
+      `${FACTS_HEAD}Test runs this turn: none.${GLOVE_ONLY}Files changed this turn, Glove: 2 (test files: none); Sentinel: 2 (test files: test/s.test.js).`
+    );
+    rmrf(root);
+    rmrf(home);
+  });
 });
 
 it('facts: more than five test runs are summarised; a malformed record does not throw', () => {
@@ -1383,7 +1434,7 @@ it('facts: more than five test runs are summarised; a malformed record does not 
   const line = factsLine(runs.concat([{ type: 'command_run' }, { type: 'file_write' }, null, 'junk']));
   assert.ok(line.startsWith('Test runs this turn: npm test -- 1 (pass); '), line);
   assert.ok(line.includes('npm test -- 5 (pass); and 2 more.'), line);
-  assert.ok(line.endsWith('Files changed this turn: none.'), line);
+  assert.ok(line.endsWith(NO_FILES), line);
 });
 
 runAll('laws (layers 4 + 5)');

@@ -70,7 +70,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { dataDir, readTurn } = require('../store/eventlog');
+const { dataDir, readTurn, readBetween } = require('../store/eventlog');
 const { loadLaws, activeLaws } = require('./load');
 const { evaluateTurn } = require('./evaluate');
 const { factsLine } = require('./facts');
@@ -166,6 +166,24 @@ function factsLineEnabled() {
   return process.env.ORUNMILA_FACTS_LINE === '1';
 }
 
+/**
+ * The Sentinel's writes since the turn's first Glove event, for the facts
+ * line. The Sentinel knows no sessions or turns, so a write belongs to the turn
+ * by time, as in the reconciler; its window here runs to now, because the gate
+ * runs at the turn's end. Null when the turn has no Glove event to start the
+ * window from, or the read fails: the line then says the Sentinel was not
+ * read, rather than that it saw nothing.
+ */
+function sentinelWritesSince(turnEvents) {
+  try {
+    const stamps = turnEvents.map((e) => e.ts).filter(Boolean).sort();
+    if (!stamps.length) return null;
+    return readBetween(stamps[0], null).filter((e) => e.source === 'fs-sentinel' && e.type === 'file_write');
+  } catch {
+    return null;
+  }
+}
+
 /** Render findings as the text the agent actually reads. Terse: it costs context. */
 function renderFindings(findings, { blocking }) {
   const lines = [];
@@ -210,13 +228,13 @@ function renderFindings(findings, { blocking }) {
  * null when there is nothing to say — the overwhelmingly common case, and the
  * one that must cost nothing.
  */
-function decideForTurn({ sessionId, turnId, promptId, claimText, promptText, turnEvents, root }) {
+function decideForTurn({ sessionId, turnId, promptId, claimText, promptText, turnEvents, sentinelWrites = [], root }) {
   // With the switch on, the facts line comes first, ahead of any finding, and
   // stands alone on a turn with none. Everything after it is unchanged, and a
   // fault in the facts line drops the line, never a finding.
   let facts = null;
   try {
-    if (factsLineEnabled()) facts = FACTS_HEAD + factsLine(turnEvents, { root });
+    if (factsLineEnabled()) facts = FACTS_HEAD + factsLine(turnEvents, { root, sentinelWrites });
   } catch {
     facts = null;
   }
@@ -299,6 +317,7 @@ function runGate(payload, adapter, { root } = {}) {
       claimText: String(claimText),
       promptText: promptEvent ? String(promptEvent.text || '') : '',
       turnEvents,
+      sentinelWrites: factsLineEnabled() ? sentinelWritesSince(turnEvents) : [],
       root: root || process.cwd(),
     });
   } catch {

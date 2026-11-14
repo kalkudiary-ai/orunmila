@@ -466,12 +466,46 @@ orunmila facts (from the records, not your prose): Test runs this turn: npm test
 - The text after the line is exactly what the gate prints without it. With the
   switch unset, or set to anything but `1`, the gate's output is unchanged.
 
+### What counts as proof
+
+**By default**, `no-green-without-command` takes any command in the turn that
+did not fail as the receipt for a green claim, even one that tested nothing
+(`ls`, `npm test || true`). The one exception is an unguarded pipe
+(`npm test | tail`), whose exit status is the last stage's.
+
+**With `ORUNMILA_STRICT_PROOF=1`** (off by default, and not yet recommended),
+the gate and the Stain Map take only a test run that proves a pass:
+
+- a test-runner step, recognised by name (the list in the facts line above);
+- whose recorded status is a pass (for Claude Code, a run with no exit code
+  that nothing flagged as failed);
+- with nothing after it on the line that decides the line's status
+  (`; echo $?` and `|| true` do; `&&` does not), and no `||` before it;
+- not piped, unless `set -o pipefail` is an earlier step on the same line (the
+  word in a comment or a `PIPESTATUS` echo does not count);
+- with no failed test run after it in the turn.
+
+A finding then lists the runs that proved nothing. On the recorded sessions of
+the one machine it was measured on (one user's work), the switch took the
+claimed turns that would block from 17 to 81. Most of the 64 new blocks were
+claims settled another way (CI, a smoke run, a type check), runs whose exit the
+agent read from `; echo $?`, or sentences that are not green claims at all.
+That is why it is off.
+
+**The sentence corpus is a regression check, not a security level.**
+`test/cases/laws/green-corpus.json` holds both claim readers to labels on the
+sentences found so far, so a change cannot quietly make them worse there.
+Passing it says nothing about sentences nobody has written down: an agent can
+always word a claim the readers do not see. The facts line is the part that
+does not depend on wording.
+
 ### Making them yours
 
 ```bash
 orunmila laws --init           # scaffold your own laws file
 ORUNMILA_LAWS=off              # disable the gate for one session
 ORUNMILA_FACTS_LINE=1          # print the facts line above the gate's findings
+ORUNMILA_STRICT_PROOF=1        # only a test run that proves a pass counts (not yet recommended)
 ```
 
 Retune a law without restating it — `{ "id": "no-grep-as-basis", "severity": "warn" }`

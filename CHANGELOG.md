@@ -75,6 +75,14 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   watcher), with test files named. It reads no prose. The findings below it
   are unchanged, and with the switch off the gate prints exactly what it
   printed before.
+- **Strict proof, off by default (`ORUNMILA_STRICT_PROOF=1`), not yet
+  recommended.** The green law and the Stain Map then take only a test run that
+  proves a pass: a runner step whose recorded status is a pass, with nothing
+  after it deciding the line's status (`; echo $?`, `|| true`), and no pipe
+  after it unless `set -o pipefail` came first on the line. `laws --check`
+  reads the same switch. Measured on one machine's recorded sessions it added
+  64 blocks, most of them false, so it stays off; README, "What counts as
+  proof".
 - **`orunmila laws --check` counts what the live gate did** in the session:
   turns checked, turns skipped (no confirmed final text; older records can
   also show a repeated claim) and turns blocked, read from the gate's own

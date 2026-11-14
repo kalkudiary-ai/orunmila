@@ -116,6 +116,13 @@ unguarded pipe as a passing run. Use `set -o pipefail` when you pipe a test
 run. Do not end the command with `; echo $?`: the whole line then exits 0, and
 the gate counts that as a pass.
 
+**What counts as proof.** By default, any command in the turn that did not fail
+backs a green claim, except an unguarded pipe. With `ORUNMILA_STRICT_PROOF=1`
+(off by default, not yet recommended) only a test-runner step whose recorded
+status is a pass counts, with nothing after it deciding the line's status and
+no pipe after it unless `set -o pipefail` came first. The README's "What counts
+as proof" has the runner list and the measured cost.
+
 **Blocks are budgeted.** Two per user message by default; the agent's answer
 after a block does not refill the budget. Once spent, findings degrade to advice
 and the exhaustion is recorded, so the agent cannot be pinned in a
@@ -132,6 +139,9 @@ engine stops enforcing, it never stops the agent.
   command in the turn that did not fail, even one that tested nothing.
 - Law findings are **heuristic: they read prose, not facts.** A finding says
   "recheck this", not "you lied".
+- The labelled sentence corpus is **a regression check, not a security level**:
+  it shows a change did not make the readers worse on sentences already found,
+  and says nothing about a claim worded some new way.
 - `exit 0` is not "correct" - it means a command ran and passed, not that it
   tested the right thing.
 - Lineage (read -> write) is a **turn-scoped heuristic**, stamped `inferred`, not

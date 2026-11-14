@@ -10,6 +10,23 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ### Fixed
 
+- **An apostrophe inside a word is no longer read as a quote mark (NF31).**
+  The gate, the Stain Map and the reader that finds a sentence's targets
+  paired the apostrophes of two contractions ("isn't … haven't") as a quoted
+  span. That hid the words between them, so "That's done, and the suite passes
+  now that it's merged." made no claim, and it turned them into a target the
+  receipt law asked a receipt for. All three now share one rule: a single
+  quote opens only after a non-letter and closes only before one. Some
+  sentences the old rule hid are now judged, so advisories can appear where
+  there were none. On the recorded sessions these changes were measured on,
+  no turn gained a block, and one false block (the "while it works" sentence
+  below) is gone.
+- **More honest sentences stay silent, and two real claims are no longer
+  missed.** "Nothing got tested." is read like "Nothing was tested.", and a
+  "while" frame ("My review follows while it works.") describes a mechanism,
+  as "how" and "whether" already did; the Stain Map applies that frame too.
+  "Nothing broke, yet the code was tested." and "Nothing regressed, as the
+  parser was tested end to end." are claims again.
 - **An honest "I didn't test it" is no longer read as a claim that tests
   passed (NF43).** "I tested none of it.", "Nothing was tested." and "Neither
   branch was tested." were blocked by `no-green-without-command`, and the Stain

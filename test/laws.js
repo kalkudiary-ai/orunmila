@@ -1459,4 +1459,19 @@ it('targets: a real single-quoted span is still a literal, an apostrophe inside 
   assert.deepStrictEqual(literals("The template's line reads 'the tests pass' and nothing ran."), ['the tests pass']);
 });
 
+// The reconciler's own mask (claim-extractor.js) reads the words the shared
+// reader does not cover ("verified", "works", the action verbs); it paired
+// apostrophes the same way, hiding them between two contractions.
+const { extractClaims } = require('../src/reconcile/claim-extractor');
+
+it('reconciler: words between two contractions are read, not masked as a quote', () => {
+  const [claim] = extractClaims("That's verified now that it's merged.");
+  assert.ok(claim, 'the sentence is a claim');
+  assert.deepStrictEqual(claim.verificationWords, ['verified']);
+});
+
+it('reconciler: a word inside real single quotes is still only mentioned', () => {
+  assert.deepStrictEqual(extractClaims("The template's status line reads 'verified' for now."), []);
+});
+
 runAll('laws (layers 4 + 5)');

@@ -28,7 +28,7 @@
  * a phantom.
  */
 
-const { extractTargets } = require('./task-extractor');
+const { extractTargets, SQUOTE_RE } = require('./task-extractor');
 const { sanitize } = require('./sanitize');
 const { findExecutionClaims } = require('./verification-claim');
 
@@ -174,12 +174,14 @@ function containsAny(lowerText, list) {
 // Mask quoted spans (``…``, "…", '…') so action/verification verb scans
 // don't trigger on verbs being MENTIONED rather than USED.
 // We replace each quoted region with same-length whitespace so offsets stay
-// stable for any downstream code that cares.
+// stable for any downstream code that cares. Single quotes use the target
+// extractor's pattern: an apostrophe inside a word (it's) is not a quote mark,
+// so "That's verified now that it's merged." keeps its "verified" (NF31).
 function maskQuoted(s) {
   return s
     .replace(/`([^`]*)`/g, (m) => ' '.repeat(m.length))
     .replace(/"([^"]*)"/g, (m) => ' '.repeat(m.length))
-    .replace(/'([^']*)'/g, (m) => ' '.repeat(m.length));
+    .replace(SQUOTE_RE, (m) => ' '.repeat(m.length));
 }
 
 // Returns the speech-act gate decision: true means "this sentence is a

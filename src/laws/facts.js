@@ -49,10 +49,13 @@ function unquoted(command) {
   return command.replace(/"[^"]*"/g, '""').replace(/'[^']*'/g, "''");
 }
 
+/** Is this one part of a command line (no separators in it) a test runner? */
+function isRunnerStep(part) {
+  return RUNNERS.some((re) => re.test(part.trim().replace(ENV_PREFIX, '')));
+}
+
 function isTestRun(command) {
-  return unquoted(command)
-    .split(SEPARATORS)
-    .some((part) => RUNNERS.some((re) => re.test(part.trim().replace(ENV_PREFIX, ''))));
+  return unquoted(command).split(SEPARATORS).some(isRunnerStep);
 }
 
 function isPiped(command) {
@@ -131,4 +134,4 @@ function factsLine(turnEvents, { root, sentinelWrites = [] } = {}) {
   );
 }
 
-module.exports = { factsLine, isTestRun, isTestFile, RUNNERS };
+module.exports = { factsLine, isTestRun, isRunnerStep, isTestFile, status, unquoted, RUNNERS };

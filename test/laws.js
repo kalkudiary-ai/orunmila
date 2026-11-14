@@ -1474,4 +1474,63 @@ it('reconciler: a word inside real single quotes is still only mentioned', () =>
   assert.deepStrictEqual(extractClaims("The template's status line reads 'verified' for now."), []);
 });
 
+// --- strict proof (plan slice 4.1): which test runs prove a pass ------------
+// The green law takes any command that did not fail as proof (NF40): `ls`,
+// `npm test || true`, a failed run followed by `echo ok`. proofOfPass reads
+// only test runs, and only those whose recorded status means what it says.
+
+const { proofOfPass } = require('../src/laws/proof');
+const ran = (command, exit_code = 0, extra = {}) =>
+  Object.assign({ type: 'command_run', agent: 'claude-code', command, exit_code, failed: exit_code !== 0 && exit_code !== null }, extra);
+const proves = (...events) => proofOfPass(events).proven;
+
+it('proof: the plan\'s probe commands prove nothing', () => {
+  for (const events of [
+    [ran('echo ok')],
+    [ran('ls')],
+    [ran('git status')],
+    [ran('npm test || true')],
+    [ran('npm test; true')],
+    [ran('echo "16 passing"')],
+    [ran('npm test', 1), ran('echo ok')],
+    [ran('echo test')],
+    [ran('ls test/')],
+    [ran('mkdir tests')],
+    [ran('npm run build')],
+  ]) {
+    assert.strictEqual(proves(...events), false, events.map((e) => e.command).join(' / '));
+  }
+  assert.strictEqual(proves(ran('cd ../other && npm test')), true, 'a run in another folder still proves until item 10');
+});
+
+it('proof: masking, pipes and pipefail are read from the line, not from a word on it (NF52)', () => {
+  assert.strictEqual(proves(ran('npm test')), true);
+  assert.strictEqual(proves(ran('npm test', null)), true, 'Claude Code: no code and not failed is a pass');
+  assert.strictEqual(proves(ran('npm test && echo done')), true, '&& runs the next step only after a pass');
+  assert.strictEqual(proves(ran('CI=1 npm test')), true);
+  assert.strictEqual(proves(ran('echo x | npm test')), true, 'the runner is the last stage, so the status is its own');
+  assert.strictEqual(proves(ran('set -o pipefail; npm test | tail -5')), true);
+  assert.strictEqual(proves(ran('set -euo pipefail && npm test | tail')), true);
+  assert.strictEqual(proves(ran('npm test > out.txt; echo $?')), false, 'the line exits with echo\'s status');
+  assert.strictEqual(proves(ran('npm test;')), true, 'nothing after the ; decides anything');
+  assert.strictEqual(proves(ran('npm test\n')), true, 'nor after a trailing new line');
+  assert.strictEqual(proves(ran('npm test | tail -5')), false);
+  assert.strictEqual(proves(ran('npm test | tail -5; echo ${PIPESTATUS[0]}')), false);
+  assert.strictEqual(proves(ran('npm test | tail -5 # pipefail')), false);
+  assert.strictEqual(proves(ran('echo "set -o pipefail"; npm test | tail -5')), false, 'quoted, it sets nothing');
+  assert.strictEqual(proves(ran('npm test | tail -5; set -o pipefail')), false, 'set after the pipe is too late');
+  assert.strictEqual(proves(ran('false || npm test')), false, 'after ||, the runner may never have run');
+  assert.strictEqual(proves(ran('pytest', null, { agent: 'cursor', failed: false })), false, 'another agent: no code is unknown');
+});
+
+it('proof: a failed run with no later proving run is not proof, and the result names its runs', () => {
+  assert.strictEqual(proves(ran('npm test'), ran('npm test', 1)), false, 'the last run failed');
+  assert.strictEqual(proves(ran('npm test', 1), ran('npm test')), true, 'fixed, then run again');
+  assert.strictEqual(proves(ran('npm test', 1), ran('npm test || true')), false, 'a masked run after a failure fixes nothing');
+  const r = proofOfPass([ran('npm test', 1), ran('npm test | tail -5'), ran('ls'), ran('npm test && echo done')]);
+  assert.deepStrictEqual(r.runs.map((x) => x.verdict), ['failed', 'piped', 'proof']);
+  assert.strictEqual(r.by, 'npm test && echo done');
+  assert.deepStrictEqual(proofOfPass([null, 'junk', { type: 'command_run' }]), { proven: false, by: null, runs: [] });
+});
+
 runAll('laws (layers 4 + 5)');

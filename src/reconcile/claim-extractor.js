@@ -116,7 +116,7 @@ const EXTERNAL_SUBJECT_RE = new RegExp(
 // structure, not claims.
 const HEADING_RE = /^\s*#{1,6}\s+/;
 
-function splitSentences(text) {
+function splitSentences(text, opts) {
   const sentences = text
     .split(/(?<=[.!?])\s+(?=[A-Z0-9`*-])|\n+/)
     .map((s) => s.trim())
@@ -124,7 +124,7 @@ function splitSentences(text) {
 
   const result = [];
   for (const s of sentences) {
-    result.push(...splitCompoundClaims(s));
+    result.push(...splitCompoundClaims(s, opts));
   }
   return result;
 }
@@ -147,22 +147,22 @@ function splitSentences(text) {
 // retries to the client") keeps its sibling.
 const PLAIN_AND_RE = /,?\s+and\s+/i;
 
-function splitOnPlainAnd(part) {
+function splitOnPlainAnd(part, opts) {
   const halves = part.split(PLAIN_AND_RE);
   if (halves.length < 2) return [part];
   // Every half must be independently assertive, or the sentence stays whole.
-  if (!halves.every((h) => h.trim() && isAssertiveAboutWork(h))) return [part];
+  if (!halves.every((h) => h.trim() && isAssertiveAboutWork(h, opts))) return [part];
   return halves;
 }
 
-function splitCompoundClaims(sentence) {
+function splitCompoundClaims(sentence, opts) {
   const parts = [];
   const semiParts = sentence.split(/\s*;\s+/);
   for (const part of semiParts) {
     // Explicit sequencing connectors split unconditionally — they are only ever
     // used between two complete actions.
     const subParts = part.split(/,?\s+(?:and\s+then|and\s+also|then\s+also)\s+/i);
-    for (const sub of subParts) parts.push(...splitOnPlainAnd(sub));
+    for (const sub of subParts) parts.push(...splitOnPlainAnd(sub, opts));
   }
   return parts.map((p) => p.trim()).filter(Boolean);
 }
@@ -175,9 +175,15 @@ function containsAny(lowerText, list) {
 // is how it works." and "My review follows while it works." are not read as
 // claims of verification. Only that frame: the other disqualifiers were
 // measured to drop real claims of a check here ("all confirmed ... per").
-function verificationWordsIn(sentence, lowerMasked) {
+// With strict proof on (ORUNMILA_STRICT_PROOF=1, plan slice 4.4) these four are
+// left to the shared reader, which needs a subject and knows the negations, so
+// "Nothing works yet." is not read as a claim that something works.
+const SHARED_READER_WORDS = ['works', 'working', 'passing', 'compiles'];
+
+function verificationWordsIn(sentence, lowerMasked, { strictProof = false } = {}) {
   if (MECHANISM_FRAME_RE.test(maskForReader(sentence))) return [];
-  return containsAny(lowerMasked, VERIFICATION_WORDS);
+  const words = strictProof ? VERIFICATION_WORDS.filter((w) => !SHARED_READER_WORDS.includes(w)) : VERIFICATION_WORDS;
+  return containsAny(lowerMasked, words);
 }
 
 // Mask quoted spans (``…``, "…", '…') so action/verification verb scans
@@ -196,7 +202,7 @@ function maskQuoted(s) {
 // Returns the speech-act gate decision: true means "this sentence is a
 // candidate claim of completed work". A return of false means we drop it
 // before any classification — no phantom, no anything.
-function isAssertiveAboutWork(sentence) {
+function isAssertiveAboutWork(sentence, opts = {}) {
   const trimmed = sentence.trim();
   if (!trimmed) return false;
 
@@ -217,14 +223,14 @@ function isAssertiveAboutWork(sentence) {
   // verb that isn't sitting in a conditional clause. We accept them here so the
   // matcher can grade them; the conservative filter is on action verbs.
   const masked = maskQuoted(trimmed.toLowerCase());
-  if (verificationWordsIn(trimmed, masked).length || findExecutionClaims(trimmed).length) return true;
+  if (verificationWordsIn(trimmed, masked, opts).length || findExecutionClaims(trimmed).length) return true;
 
   // Action claims need an assertive anchor (first-person past-tense, passive,
   // bullet-led participle, or a "done:" headline).
   return ASSERTIVE_ANCHOR_RE.test(trimmed);
 }
 
-function extractClaims(claimText) {
+function extractClaims(claimText, opts = {}) {
   if (!claimText || !claimText.trim()) return [];
 
   // Strip wrapper tags, code fences, table rows, runner stdout *before*
@@ -233,16 +239,16 @@ function extractClaims(claimText) {
   const cleaned = sanitize(claimText);
   if (!cleaned.trim()) return [];
 
-  const claims = splitSentences(cleaned)
+  const claims = splitSentences(cleaned, opts)
     .map((sentence, i) => {
-      if (!isAssertiveAboutWork(sentence)) return null;
+      if (!isAssertiveAboutWork(sentence, opts)) return null;
 
       // Verbs/verifications must be detected on the QUOTED-MASKED form so
       // a verb mentioned inside backticks/quotes doesn't trigger.
       const lowerMasked = maskQuoted(sentence.toLowerCase());
       const verbs = containsAny(lowerMasked, ACTION_VERBS);
       const hedges = containsAny(lowerMasked, HEDGE_WORDS);
-      const verifications = [...new Set(verificationWordsIn(sentence, lowerMasked).concat(findExecutionClaims(sentence)))];
+      const verifications = [...new Set(verificationWordsIn(sentence, lowerMasked, opts).concat(findExecutionClaims(sentence)))];
 
       // Targets are still extracted from the full sentence (including quoted
       // spans) because filenames in backticks are how the agent names what

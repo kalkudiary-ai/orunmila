@@ -15,7 +15,8 @@
  *              from: `fire` = a claim graded phantom_verification; `silent` =
  *              no claim graded phantom or phantom_verification
  *
- * Each sentence is judged alone, in a turn with no commands. Only the shipped
+ * Each sentence is judged alone, in a turn with no commands, with strict proof
+ * off unless the case says "strict": true (plan slice 4.4). Only the shipped
  * canon is loaded: ORUNMILA_HOME and the project root point at an empty folder,
  * and the run stops if any other law file is found, so a personal laws.json
  * cannot change the result.
@@ -68,9 +69,10 @@ function judges(src, lawId, empty) {
   if (law.length !== 1) throw new Error(`law "${lawId}" not found in ${src}`);
 
   return {
-    law: (text) => evaluateTurn({ claimText: text, promptText: 'go', turnEvents: [], laws: law }).findings.length > 0,
-    reconcile: (text, expect) => {
-      const outcomes = reconcileTurn({ promptText: 'go', claimText: text, turnEvents: [] }).claims.map((c) => c.outcome);
+    law: (text, expect, strict) =>
+      evaluateTurn({ claimText: text, promptText: 'go', turnEvents: [], laws: law, strictProof: !!strict }).findings.length > 0,
+    reconcile: (text, expect, strict) => {
+      const outcomes = reconcileTurn({ promptText: 'go', claimText: text, turnEvents: [], strictProof: !!strict }).claims.map((c) => c.outcome);
       if (expect === 'fire') return outcomes.includes('phantom_verification');
       // Read back as "fires" so the caller compares against the label the same way.
       return outcomes.includes('phantom_verification') || outcomes.includes('phantom');
@@ -91,7 +93,7 @@ function runCorpus({ src, corpus, paths }) {
     return paths.map((p) => {
       const row = { path: p, wrong: [], total: corpus.cases.length, byKind: {} };
       for (const c of corpus.cases) {
-        const fires = j[p](c.text, c.expect);
+        const fires = j[p](c.text, c.expect, c.strict);
         const kind = (row.byKind[c.kind || 'none'] = row.byKind[c.kind || 'none'] || { total: 0, wrong: 0 });
         kind.total++;
         if (fires !== (c.expect === 'fire')) {

@@ -1609,4 +1609,18 @@ it('strict proof, Stain Map: reconcileTurn reads the switch when the caller does
   assert.strictEqual(withEnv({ ORUNMILA_STRICT_PROOF: '1' }, () => verdictOf(masked)), 'phantom_verification not_sent run-proves-nothing');
 });
 
+// --- strict proof: the Stain Map leaves works/working/passing/compiles to the
+// shared reader (plan slice 4.4). Its own list matched them as substrings, so
+// "Nothing works yet." read as a claim that something works.
+
+it('strict proof, reader: the four words are read by the shared reader, not as substrings', () => {
+  const words = (text, strictProof) => (extractClaims(text, { strictProof })[0] || { verificationWords: [] }).verificationWords;
+  assert.deepStrictEqual(words('Nothing works yet.', false), ['works'], 'off: as before');
+  assert.deepStrictEqual(words('Nothing works yet.', true), [], 'on: no subject says it works');
+  assert.deepStrictEqual(words('It is working correctly now.', true), ['working correctly']);
+  assert.deepStrictEqual(words('The build compiles.', true), ['build compiles']);
+  assert.deepStrictEqual(words('I verified the parser.', true), ['verified'], 'verified, confirmed and validated stay');
+  assert.deepStrictEqual(extractClaims('Nothing works yet in parser.js.', { strictProof: true }), [], 'with a target, not a claim either');
+});
+
 runAll('laws (layers 4 + 5)');

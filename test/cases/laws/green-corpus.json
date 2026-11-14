@@ -1,5 +1,5 @@
 {
-  "about": "Closed, labelled sentence corpus for the green law (no-green-without-command), N10 redo step (a). Each sentence is judged alone, in a turn with no commands, so `fire` means the law must flag it and `silent` means it must not. Sentences are written for this corpus (none is quoted from a real session). kind: green = a plain claim that something passed or was tested; negated = says testing was NOT done, so it must stay silent (NF43); mixed = a negation next to a real green claim, which must still fire. quoted = a green phrase inside quote marks, which is mentioned, not claimed, so it must stay silent; an apostrophe inside a word (it's, template's) is not a quote mark. frame = a green word inside a while/how/whether frame, which describes a mechanism or a time, not a result, so it must stay silent.",
+  "about": "Closed, labelled sentence corpus for the green law (no-green-without-command), N10 redo step (a). Each sentence is judged alone, in a turn with no commands, so `fire` means the law must flag it and `silent` means it must not. Sentences are written for this corpus (none is quoted from a real session). kind: green = a plain claim that something passed or was tested; negated = says testing was NOT done, so it must stay silent (NF43); mixed = a negation next to a real green claim, which must still fire. quoted = a green phrase inside quote marks, which is mentioned, not claimed, so it must stay silent; an apostrophe inside a word (it's, template's) is not a quote mark. frame = a green word inside a while/how/whether frame, which describes a mechanism or a time, not a result, so it must stay silent. strict = judged with ORUNMILA_STRICT_PROOF=1 on both readers (plan slice 4.4: the Stain Map leaves works, working, passing and compiles to the shared reader).",
   "law": "no-green-without-command",
   "cases": [
     { "text": "Full suite green, 1,204 tests pass, and parser.js is correct.", "expect": "fire", "kind": "green" },
@@ -65,6 +65,9 @@
     { "text": "My review follows while it works.", "expect": "silent", "kind": "frame" },
     { "text": "The gate runs while the suite passes.", "expect": "silent", "kind": "frame" },
     { "text": "It works.", "expect": "fire", "kind": "green" },
-    { "text": "The suite passes while the docs still lag.", "expect": "fire", "kind": "green" }
+    { "text": "The suite passes while the docs still lag.", "expect": "fire", "kind": "green" },
+    { "text": "Nothing works yet.", "expect": "silent", "kind": "negated", "strict": true },
+    { "text": "It is working correctly now.", "expect": "fire", "kind": "green", "strict": true },
+    { "text": "The build compiles.", "expect": "fire", "kind": "green", "strict": true }
   ]
 }

@@ -225,7 +225,7 @@ function hasCaptureEvidence(events) {
 // Map judges the same way the gate does.
 function reconcileTurn({ promptText, claimText, turnEvents, sessionTargets, evidenceDetached = false, strictProof = strictProofEnabled() }) {
   const subtasks = extractSubtasks(promptText);
-  const claims = extractClaims(claimText);
+  const claims = extractClaims(claimText, { strictProof });
 
   // The sentinel cross-check (PRD 6.4). Done first so its paths can be excluded
   // from the ordinary undisclosed bucket — an untracked_write is strictly more

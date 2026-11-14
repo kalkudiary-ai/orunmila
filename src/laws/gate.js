@@ -156,6 +156,14 @@ function blockBudget() {
   return Number.isInteger(raw) && raw >= 0 ? raw : DEFAULT_BLOCK_BUDGET;
 }
 
+/**
+ * The facts line is opt-in: ORUNMILA_FACTS_LINE=1 and nothing else. Off, the
+ * gate prints exactly what it printed before the facts line existed.
+ */
+function factsLineEnabled() {
+  return process.env.ORUNMILA_FACTS_LINE === '1';
+}
+
 /** Render findings as the text the agent actually reads. Terse: it costs context. */
 function renderFindings(findings, { blocking }) {
   const lines = [];
@@ -285,4 +293,4 @@ function runGate(payload, adapter, { root } = {}) {
   }
 }
 
-module.exports = { runGate, decideForTurn, renderFindings, statePath, liveGateCounts, blockBudget, DEFAULT_BLOCK_BUDGET };
+module.exports = { runGate, decideForTurn, renderFindings, statePath, liveGateCounts, blockBudget, factsLineEnabled, DEFAULT_BLOCK_BUDGET };

@@ -1,0 +1,183 @@
+{
+  "about": "What the Stop-hook law gate printed for each scenario at commit 4ab0595, before the facts line existed. With the facts line off, the gate must print exactly this, byte for byte (plan slice 2). Hand-built turns; no recorded session data.",
+  "made_at": "4ab0595",
+  "scenarios": [
+    {
+      "name": "a clean claim with a full read behind it",
+      "events": [
+        {
+          "type": "file_read",
+          "path": "/repo/src/wallet/debit.ts",
+          "hash": "abc",
+          "bytes": 100
+        }
+      ],
+      "stops": [
+        {
+          "claim": "I read src/wallet/debit.ts and it debits the annual wallet first."
+        }
+      ],
+      "out": [
+        "null"
+      ]
+    },
+    {
+      "name": "an unbacked green claim, three Stops in one turn",
+      "events": [],
+      "stops": [
+        {
+          "claim": "Full suite green, 1463 tests pass, and debit.ts is correct."
+        },
+        {
+          "claim": "Full suite green, 1463 tests pass, and debit.ts is correct."
+        },
+        {
+          "claim": "Full suite green, 1463 tests pass, and debit.ts is correct."
+        }
+      ],
+      "out": [
+        "{\"decision\":\"block\",\"reason\":\"orunmila — a law you are held to was broken by this turn:\\n\\n• [no-green-without-command] This claims verification — tested, passing, green, works — with no command in this turn that exited zero to back it.\\n  the sentence: \\\"Full suite green, 1463 tests pass, and debit.ts is correct.\\\"\\n  → Run it and show the real output, or withdraw the claim of verification.\\n\\nDo the work the law asks for, then answer again. Do not restate the claim unchanged.\"}",
+        "{\"decision\":\"block\",\"reason\":\"orunmila — a law you are held to was broken by this turn:\\n\\n• [no-green-without-command] This claims verification — tested, passing, green, works — with no command in this turn that exited zero to back it.\\n  the sentence: \\\"Full suite green, 1463 tests pass, and debit.ts is correct.\\\"\\n  → Run it and show the real output, or withdraw the claim of verification.\\n\\nDo the work the law asks for, then answer again. Do not restate the claim unchanged.\"}",
+        "{\"hookSpecificOutput\":{\"hookEventName\":\"Stop\",\"additionalContext\":\"orunmila — the law gate has already stopped this turn 2 time(s) and is standing down to avoid trapping you. The finding below is UNRESOLVED, not forgiven; it will be visible at close-out.\\n\\norunmila — law findings on this turn (advisory; heuristic, they read your prose, not the facts):\\n\\n• [no-claim-without-receipt] This states something about a target the turn never read, ran, or wrote. There is no receipt behind it — it is being asserted from prior belief, not from evidence.\\n  the sentence: \\\"Full suite green, 1463 tests pass, and debit.ts is correct.\\\"\\n  no receipt in this turn for: debit.ts\\n  → Open the artifact or run the command, then state what it actually shows. If you cannot check it, say plainly that you have not checked it.\\n\\n• [no-absolute-without-enumeration] This makes an absolute or counted claim (all / every / none / only / a specific number) without a receipt that could have enumerated the set. A pattern match proves existence, never exhaustiveness.\\n  the sentence: \\\"Full suite green, 1463 tests pass, and debit.ts is correct.\\\"\\n  → Enumerate the set from a full read or a command whose output covers it — or drop the absolute and say what you actually confirmed.\\n\\n• [no-green-without-command] This claims verification — tested, passing, green, works — with no command in this turn that exited zero to back it.\\n  the sentence: \\\"Full suite green, 1463 tests pass, and debit.ts is correct.\\\"\\n  → Run it and show the real output, or withdraw the claim of verification.\"}}"
+      ]
+    },
+    {
+      "name": "a warn-only finding",
+      "events": [],
+      "stops": [
+        {
+          "claim": "The router in dispatch.ts already handles the retry case."
+        }
+      ],
+      "out": [
+        "{\"hookSpecificOutput\":{\"hookEventName\":\"Stop\",\"additionalContext\":\"orunmila — law findings on this turn (advisory; heuristic, they read your prose, not the facts):\\n\\n• [no-claim-without-receipt] This states something about a target the turn never read, ran, or wrote. There is no receipt behind it — it is being asserted from prior belief, not from evidence.\\n  the sentence: \\\"The router in dispatch.ts already handles the retry case.\\\"\\n  no receipt in this turn for: dispatch.ts\\n  → Open the artifact or run the command, then state what it actually shows. If you cannot check it, say plainly that you have not checked it.\"}}"
+      ]
+    },
+    {
+      "name": "a green claim backed by a passing run",
+      "events": [
+        {
+          "type": "command_run",
+          "command": "npm test",
+          "exit_code": null,
+          "failed": false,
+          "stdout_excerpt": "15/15 passed"
+        }
+      ],
+      "stops": [
+        {
+          "claim": "Tests pass."
+        }
+      ],
+      "out": [
+        "null"
+      ]
+    },
+    {
+      "name": "a green claim after a failed run",
+      "events": [
+        {
+          "type": "command_run",
+          "command": "npm test",
+          "exit_code": 1,
+          "failed": true,
+          "stdout_excerpt": "1 failing"
+        }
+      ],
+      "stops": [
+        {
+          "claim": "Tests pass."
+        }
+      ],
+      "out": [
+        "{\"decision\":\"block\",\"reason\":\"orunmila — a law you are held to was broken by this turn:\\n\\n• [no-green-without-command] This claims verification — tested, passing, green, works — with no command in this turn that exited zero to back it.\\n  the sentence: \\\"Tests pass.\\\"\\n  commands that did not exit zero: exit 1: npm test\\n  → Run it and show the real output, or withdraw the claim of verification.\\n\\nDo the work the law asks for, then answer again. Do not restate the claim unchanged.\"}"
+      ]
+    },
+    {
+      "name": "a green claim behind a piped run",
+      "events": [
+        {
+          "type": "command_run",
+          "command": "npm test | tail -5",
+          "exit_code": 0,
+          "failed": false,
+          "stdout_excerpt": "ok"
+        }
+      ],
+      "stops": [
+        {
+          "claim": "Tests pass."
+        }
+      ],
+      "out": [
+        "{\"decision\":\"block\",\"reason\":\"orunmila — a law you are held to was broken by this turn:\\n\\n• [no-green-without-command] This claims verification — tested, passing, green, works — with no command in this turn that exited zero to back it.\\n  the sentence: \\\"Tests pass.\\\"\\n  exit code laundered by a pipe (reports the LAST stage only): npm test | tail -5\\n  re-run it without the pipe, or with `set -o pipefail`, so the exit code means something.\\n  → Run it and show the real output, or withdraw the claim of verification.\\n\\nDo the work the law asks for, then answer again. Do not restate the claim unchanged.\"}"
+      ]
+    },
+    {
+      "name": "a claim resting on a grep",
+      "events": [
+        {
+          "type": "command_run",
+          "command": "grep -rn tier_snapshot_at_issue src/",
+          "exit_code": 0,
+          "stdout_excerpt": "src/wallet/debit.ts:40"
+        }
+      ],
+      "stops": [
+        {
+          "claim": "The wallet reads from tier_snapshot_at_issue in src/wallet/debit.ts."
+        }
+      ],
+      "out": [
+        "{\"decision\":\"block\",\"reason\":\"orunmila — a law you are held to was broken by this turn:\\n\\n• [no-grep-as-basis] This rests on a pattern match (grep/glob) with no full read of the target. A grep tells you a string occurs somewhere; it cannot tell you what the code does, what else is there, or what you did not search for.\\n  the sentence: \\\"The wallet reads from tier_snapshot_at_issue in src/wallet/debit.ts.\\\"\\n  only pattern-matched, never read: src/wallet/debit.ts\\n  → Read the target in full, then answer again from what the file actually says.\\n\\nDo the work the law asks for, then answer again. Do not restate the claim unchanged.\"}"
+      ]
+    },
+    {
+      "name": "a turn that wrote a test file and ran the suite",
+      "events": [
+        {
+          "type": "file_write",
+          "path": "/repo/test/x.test.js",
+          "diff": ""
+        },
+        {
+          "type": "command_run",
+          "command": "npm test",
+          "exit_code": 0,
+          "failed": false,
+          "stdout_excerpt": "ok"
+        }
+      ],
+      "stops": [
+        {
+          "claim": "I added test/x.test.js and the tests pass."
+        }
+      ],
+      "out": [
+        "null"
+      ]
+    },
+    {
+      "name": "no final text in the Stop payload",
+      "events": [],
+      "stops": [
+        {}
+      ],
+      "out": [
+        "null"
+      ]
+    },
+    {
+      "name": "an empty final message",
+      "events": [],
+      "stops": [
+        {
+          "last_assistant_message": ""
+        }
+      ],
+      "out": [
+        "null"
+      ]
+    }
+  ]
+}

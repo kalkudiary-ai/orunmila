@@ -1222,4 +1222,57 @@ it('laws --check prints zero skips as 0, and says when the gate left no record',
   h.done();
 });
 
+// --- the facts line (plan slice 2), off by default ---------------------------
+// Until it is measured, the facts line is opt-in, and with it off the gate must
+// print exactly what it printed before the facts line existed. The golden file
+// holds that output, recorded at 4ab0595 from hand-built turns.
+
+const { factsLineEnabled } = require('../src/laws/gate');
+const GATE_ENV = ['ORUNMILA_FACTS_LINE', 'ORUNMILA_LAWS', 'ORUNMILA_LAW_BLOCK_BUDGET', 'ORUNMILA_TURN_BOUNDARIES'];
+
+/** Run fn with these env values (undefined = unset), then put the old ones back. */
+function withEnv(values, fn) {
+  const prev = {};
+  for (const k of Object.keys(values)) {
+    prev[k] = process.env[k];
+    if (values[k] === undefined) delete process.env[k];
+    else process.env[k] = values[k];
+  }
+  try {
+    return fn();
+  } finally {
+    for (const k of Object.keys(prev)) {
+      if (prev[k] === undefined) delete process.env[k];
+      else process.env[k] = prev[k];
+    }
+  }
+}
+
+it('facts line flag: on only when ORUNMILA_FACTS_LINE is exactly 1', () => {
+  for (const [value, on] of [[undefined, false], ['', false], ['0', false], ['on', false], ['true', false], [' 1', false], ['1', true]]) {
+    assert.strictEqual(withEnv({ ORUNMILA_FACTS_LINE: value }, factsLineEnabled), on, `ORUNMILA_FACTS_LINE=${JSON.stringify(value)}`);
+  }
+});
+
+it('facts line off: the gate prints exactly what it printed at 4ab0595', () => {
+  const { append } = require('../src/store/eventlog');
+  const golden = JSON.parse(fs.readFileSync(path.join(__dirname, 'cases', 'laws', 'gate-output-golden.json'), 'utf8'));
+  assert.strictEqual(golden.scenarios.length, 10);
+  for (const flag of [undefined, '', '0', 'on']) {
+    const clean = Object.fromEntries(GATE_ENV.map((k) => [k, undefined]));
+    withEnv(Object.assign(clean, { ORUNMILA_FACTS_LINE: flag }), () => {
+      golden.scenarios.forEach((s, i) => {
+        const home = tmpHome();
+        const root = tmpDir();
+        const sid = `golden-${i}`;
+        for (const e of s.events) append(Object.assign({ session_id: sid, turn_id: 't1' }, e));
+        const out = s.stops.map((p) => JSON.stringify(runGate(Object.assign({ session_id: sid }, p), getAdapter('claude-code'), { root })));
+        assert.deepStrictEqual(out, s.out, `${s.name}, ORUNMILA_FACTS_LINE=${JSON.stringify(flag)}`);
+        rmrf(root);
+        rmrf(home);
+      });
+    });
+  }
+});
+
 runAll('laws (layers 4 + 5)');

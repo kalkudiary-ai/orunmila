@@ -438,11 +438,40 @@ Stop whose payload has no string value in any of `last_assistant_message`,
 message is not judged either, and leaves no record. This fails open on
 purpose: a missed check is visible, a wrong block is harmful.
 
+### The facts line (off by default)
+
+With `ORUNMILA_FACTS_LINE=1`, the gate puts one line of facts from the turn's
+records above its findings, and prints it alone on a judged turn with no
+findings. It reads no prose, so a claim worded past every law still sits next
+to what the records show:
+
+```
+orunmila facts (from the records, not your prose): Test runs this turn: npm test (pass). Sentinel: no record, commands are seen by the Glove only. Files changed this turn, Glove: 2 (test files: test/laws.js); Sentinel: 2 (test files: test/laws.js).
+```
+
+- **Test runs** are recognised by the runner's name, in any part of the command
+  line: `npm`, `pnpm`, `yarn` or `bun` `test` (or `run test…`), `npm t`,
+  `node --test`, `node test/…`, `jest`, `vitest`, `mocha`, `pytest`, `go test`
+  and `cargo test`. A test script under another name (`npm run coverage`, say)
+  is not recognised, and the line says `none`. Each run shows the exit status
+  the record holds. For Claude Code, a run with no exit code that nothing
+  flagged as failed is a pass; `piped` marks a line whose status is its last
+  stage's.
+- **Files changed** are shown for each witness on its own: the Glove (the
+  agent's hooks) and the Sentinel (`watch-fs`, the disk watcher), from the
+  turn's first recorded event until the gate runs, inside the project folder
+  only. `Sentinel: none` means it recorded no change then, which is also what a
+  Sentinel that is not running shows. `not read` means the turn had no recorded
+  event to start from.
+- The text after the line is exactly what the gate prints without it. With the
+  switch unset, or set to anything but `1`, the gate's output is unchanged.
+
 ### Making them yours
 
 ```bash
 orunmila laws --init           # scaffold your own laws file
 ORUNMILA_LAWS=off              # disable the gate for one session
+ORUNMILA_FACTS_LINE=1          # print the facts line above the gate's findings
 ```
 
 Retune a law without restating it — `{ "id": "no-grep-as-basis", "severity": "warn" }`

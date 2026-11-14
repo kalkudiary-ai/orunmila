@@ -50,6 +50,14 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ### Added
 
+- **A facts line for the Closeout Gate, off by default
+  (`ORUNMILA_FACTS_LINE=1`).** It puts one line from the turn's records above
+  the gate's findings, and prints it alone on a judged turn with none: the
+  test runs the turn made, with the exit status each record holds, and the
+  files changed as each witness saw them (the agent's hooks and the disk
+  watcher), with test files named. It reads no prose. The findings below it
+  are unchanged, and with the switch off the gate prints exactly what it
+  printed before.
 - **`orunmila laws --check` counts what the live gate did** in the session:
   turns checked, turns skipped (no confirmed final text; older records can
   also show a repeated claim) and turns blocked, read from the gate's own

@@ -57,6 +57,9 @@
     { "text": "Nothing regressed, as the parser was tested end to end.", "expect": "fire", "kind": "green" },
     { "text": "Nothing, as far as I know, was tested.", "expect": "silent", "kind": "negated" },
     { "text": "Nothing, as I said, was tested.", "expect": "silent", "kind": "negated" },
-    { "text": "Nothing was tested yet.", "expect": "silent", "kind": "negated" }
+    { "text": "Nothing was tested yet.", "expect": "silent", "kind": "negated" },
+    { "text": "Nothing got tested.", "expect": "silent", "kind": "negated" },
+    { "text": "None of it got tested on Windows.", "expect": "silent", "kind": "negated" },
+    { "text": "The parser got tested end to end.", "expect": "fire", "kind": "green" }
   ]
 }

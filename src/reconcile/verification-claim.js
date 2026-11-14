@@ -173,7 +173,8 @@ const OBJECT_NEGATED_RE = new RegExp(
   String.raw`^[\s,:]*(?:(?:well|really|honestly|actually|so far)[\s,]+)?${NEG_QUANT}\b(?!\s+(?:but|except|other than|besides)\b)`,
   'i'
 );
-const PASSIVE_AUX_RE = /\b(?:was|were|is|are|been|be)\s+(?:(?:yet|ever|actually|really|properly|fully)\s+)?$/i;
+// "got tested" is the same passive as "was tested": "Nothing got tested."
+const PASSIVE_AUX_RE = /\b(?:was|were|is|are|been|be|got|gets|get|getting)\s+(?:(?:yet|ever|actually|really|properly|fully)\s+)?$/i;
 const NEG_QUANT_RE = new RegExp(String.raw`\b${NEG_QUANT}\b`, 'gi');
 // "as" ends the reach only before a noun subject ("as the parser was tested"):
 // before a pronoun it is usually an aside ("Nothing, as I said, was tested").

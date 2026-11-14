@@ -60,6 +60,7 @@
     { "text": "Nothing was tested yet.", "expect": "silent", "kind": "negated" },
     { "text": "Nothing got tested.", "expect": "silent", "kind": "negated" },
     { "text": "None of it got tested on Windows.", "expect": "silent", "kind": "negated" },
-    { "text": "The parser got tested end to end.", "expect": "fire", "kind": "green" }
+    { "text": "The parser got tested end to end.", "expect": "fire", "kind": "green" },
+    { "text": "Nothing was properly tested.", "expect": "silent", "kind": "negated" }
   ]
 }

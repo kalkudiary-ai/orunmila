@@ -462,7 +462,7 @@ orunmila facts (from the records, not your prose): Test runs this turn: npm test
   turn's first recorded event until the gate runs, inside the project folder
   only. `Sentinel: none` means it recorded no change then, which is also what a
   Sentinel that is not running shows. `not read` means the turn had no recorded
-  event to start from.
+  event to start from, or the log could not be read.
 - The text after the line is exactly what the gate prints without it. With the
   switch unset, or set to anything but `1`, the gate's output is unchanged.
 
@@ -474,13 +474,15 @@ did not fail as the receipt for a green claim, even one that tested nothing
 (`npm test | tail`), whose exit status is the last stage's.
 
 **With `ORUNMILA_STRICT_PROOF=1`** (off by default, and not yet recommended),
-the gate and the Stain Map take only a test run that proves a pass:
+the gate and the Stain Map take only a test run that proves a pass (in a turn
+that ran no test at all, the Stain Map still accepts recorded CI or pull-request
+state):
 
 - a test-runner step, recognised by name (the list in the facts line above);
 - whose recorded status is a pass (for Claude Code, a run with no exit code
   that nothing flagged as failed);
 - with nothing after it on the line that decides the line's status
-  (`; echo $?` and `|| true` do; `&&` does not), and no `||` before it;
+  (`; echo $?` and `|| true` do; `&&` does not), and no `||` directly before it;
 - not piped, unless `set -o pipefail` is an earlier step on the same line (the
   word in a comment or a `PIPESTATUS` echo does not count);
 - with no failed test run after it in the turn.

@@ -1275,4 +1275,65 @@ it('facts line off: the gate prints exactly what it printed at 4ab0595', () => {
   }
 });
 
+// The facts themselves: computed from the turn's records only. The agent's prose
+// is not an input, so "all green on my end" cannot change what the line says.
+
+const { factsLine } = require('../src/laws/facts');
+const cmd = (command, exit_code, extra = {}) => Object.assign({ type: 'command_run', agent: 'claude-code', command, exit_code, failed: exit_code !== 0 && exit_code !== null }, extra);
+
+it('facts: a turn that ran no tests says so, whatever the agent claims', () => {
+  const line = factsLine([
+    { type: 'file_read', path: '/repo/src/x.js', hash: 'abc' },
+    cmd('ls', 0),
+    cmd('echo "16 passing"', 0),
+  ]);
+  assert.ok(line.includes('Test runs this turn: none.'), line);
+  assert.strictEqual(factsLine([]), 'Test runs this turn: none. Files changed this turn: none.');
+});
+
+it('facts: each test run is listed with the exit status the record holds', () => {
+  const line = factsLine([
+    cmd('npm test', null),                                        // Claude Code: null means pass
+    cmd('npm test', 1),
+    cmd('npx jest', null, { failed: true }),                      // failed, code unknown
+    cmd('pytest -q', null, { agent: 'cursor', failed: false }),   // another agent: null means unknown
+  ]);
+  assert.strictEqual(line, 'Test runs this turn: npm test (pass); npm test (fail, exit 1); npx jest (fail); pytest -q (status unknown). Files changed this turn: none.');
+});
+
+it('facts: a piped run is marked piped; lookalikes are not test runs; a runner after cd or an env prefix is', () => {
+  const line = factsLine([
+    cmd('npm test | tail -5', 0),
+    cmd('echo test', 0),
+    cmd('ls test/', 0),
+    cmd('mkdir tests', 0),
+    cmd('npm run build', 0),
+    cmd('cd ../other && npm test', 0),
+    cmd('CI=1 node --test test/', 0),
+    cmd('echo "a | npm test"', 0),
+  ]);
+  assert.strictEqual(line, 'Test runs this turn: npm test | tail -5 (pass, piped); cd ../other && npm test (pass); CI=1 node --test test/ (pass). Files changed this turn: none.');
+});
+
+it('facts: files changed are counted once each, test files named, paths inside the root shown relative', () => {
+  const write = (p) => ({ type: 'file_write', path: p, diff: '' });
+  const line = factsLine([
+    write('/repo/src/a.js'),
+    write('/repo/src/a.js'),
+    write('/repo/test/laws.js'),
+    write('/repo/src/b.test.ts'),
+    write('/elsewhere/test_x.py'),
+    write('/repo/src/contest.js'),
+  ], { root: '/repo' });
+  assert.strictEqual(line, 'Test runs this turn: none. Files changed this turn: 5 (test files: test/laws.js, src/b.test.ts, /elsewhere/test_x.py).');
+});
+
+it('facts: more than five test runs are summarised; a malformed record does not throw', () => {
+  const runs = [1, 2, 3, 4, 5, 6, 7].map((n) => cmd(`npm test -- ${n}`, 0));
+  const line = factsLine(runs.concat([{ type: 'command_run' }, { type: 'file_write' }, null, 'junk']));
+  assert.ok(line.startsWith('Test runs this turn: npm test -- 1 (pass); '), line);
+  assert.ok(line.includes('npm test -- 5 (pass); and 2 more.'), line);
+  assert.ok(line.endsWith('Files changed this turn: none.'), line);
+});
+
 runAll('laws (layers 4 + 5)');

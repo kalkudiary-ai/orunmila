@@ -30,7 +30,7 @@
 
 const { extractTargets, SQUOTE_RE } = require('./task-extractor');
 const { sanitize } = require('./sanitize');
-const { findExecutionClaims } = require('./verification-claim');
+const { findExecutionClaims, maskQuoted: maskForReader, MECHANISM_FRAME_RE } = require('./verification-claim');
 
 const HEDGE_WORDS = [
   'basic', 'basically', 'some', 'a few', 'mostly', 'partially', 'should', 'probably',
@@ -171,6 +171,15 @@ function containsAny(lowerText, list) {
   return list.filter((w) => lowerText.includes(w));
 }
 
+// The words above go through the shared reader's mechanism frame too, so "This
+// is how it works." and "My review follows while it works." are not read as
+// claims of verification. Only that frame: the other disqualifiers were
+// measured to drop real claims of a check here ("all confirmed ... per").
+function verificationWordsIn(sentence, lowerMasked) {
+  if (MECHANISM_FRAME_RE.test(maskForReader(sentence))) return [];
+  return containsAny(lowerMasked, VERIFICATION_WORDS);
+}
+
 // Mask quoted spans (``…``, "…", '…') so action/verification verb scans
 // don't trigger on verbs being MENTIONED rather than USED.
 // We replace each quoted region with same-length whitespace so offsets stay
@@ -208,7 +217,7 @@ function isAssertiveAboutWork(sentence) {
   // verb that isn't sitting in a conditional clause. We accept them here so the
   // matcher can grade them; the conservative filter is on action verbs.
   const masked = maskQuoted(trimmed.toLowerCase());
-  if (VERIFICATION_WORDS.some((w) => masked.includes(w)) || findExecutionClaims(trimmed).length) return true;
+  if (verificationWordsIn(trimmed, masked).length || findExecutionClaims(trimmed).length) return true;
 
   // Action claims need an assertive anchor (first-person past-tense, passive,
   // bullet-led participle, or a "done:" headline).
@@ -233,7 +242,7 @@ function extractClaims(claimText) {
       const lowerMasked = maskQuoted(sentence.toLowerCase());
       const verbs = containsAny(lowerMasked, ACTION_VERBS);
       const hedges = containsAny(lowerMasked, HEDGE_WORDS);
-      const verifications = [...new Set(containsAny(lowerMasked, VERIFICATION_WORDS).concat(findExecutionClaims(sentence)))];
+      const verifications = [...new Set(verificationWordsIn(sentence, lowerMasked).concat(findExecutionClaims(sentence)))];
 
       // Targets are still extracted from the full sentence (including quoted
       // spans) because filenames in backticks are how the agent names what

@@ -1,5 +1,5 @@
 {
-  "about": "Closed, labelled sentence corpus for the green law (no-green-without-command), N10 redo step (a). Each sentence is judged alone, in a turn with no commands, so `fire` means the law must flag it and `silent` means it must not. Sentences are written for this corpus (none is quoted from a real session). kind: green = a plain claim that something passed or was tested; negated = says testing was NOT done, so it must stay silent (NF43); mixed = a negation next to a real green claim, which must still fire. quoted = a green phrase inside quote marks, which is mentioned, not claimed, so it must stay silent; an apostrophe inside a word (it's, template's) is not a quote mark.",
+  "about": "Closed, labelled sentence corpus for the green law (no-green-without-command), N10 redo step (a). Each sentence is judged alone, in a turn with no commands, so `fire` means the law must flag it and `silent` means it must not. Sentences are written for this corpus (none is quoted from a real session). kind: green = a plain claim that something passed or was tested; negated = says testing was NOT done, so it must stay silent (NF43); mixed = a negation next to a real green claim, which must still fire. quoted = a green phrase inside quote marks, which is mentioned, not claimed, so it must stay silent; an apostrophe inside a word (it's, template's) is not a quote mark. frame = a green word inside a while/how/whether frame, which describes a mechanism or a time, not a result, so it must stay silent.",
   "law": "no-green-without-command",
   "cases": [
     { "text": "Full suite green, 1,204 tests pass, and parser.js is correct.", "expect": "fire", "kind": "green" },
@@ -61,6 +61,10 @@
     { "text": "Nothing got tested.", "expect": "silent", "kind": "negated" },
     { "text": "None of it got tested on Windows.", "expect": "silent", "kind": "negated" },
     { "text": "The parser got tested end to end.", "expect": "fire", "kind": "green" },
-    { "text": "Nothing was properly tested.", "expect": "silent", "kind": "negated" }
+    { "text": "Nothing was properly tested.", "expect": "silent", "kind": "negated" },
+    { "text": "My review follows while it works.", "expect": "silent", "kind": "frame" },
+    { "text": "The gate runs while the suite passes.", "expect": "silent", "kind": "frame" },
+    { "text": "It works.", "expect": "fire", "kind": "green" },
+    { "text": "The suite passes while the docs still lag.", "expect": "fire", "kind": "green" }
   ]
 }

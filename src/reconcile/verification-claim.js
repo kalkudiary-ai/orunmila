@@ -115,6 +115,15 @@ const VERIFICATION_RE = new RegExp(
  * precisely the behaviour the law exists to encourage. A negated or attributive
  * use is disqualified before the claim is ever graded.
  */
+// MECHANISM, not outcome: "this is how it works", "whether the suite passes is
+// the open question". An interrogative or relative frame ahead of the predicate
+// means the sentence explains or asks, it does not certify. "while" frames a
+// time or a mechanism the same way: "My review follows while it works." A
+// sentence whose green words all come before the frame is still a claim; one
+// after it silences the whole sentence. Exported for the reconciler's own words.
+const MECHANISM_FRAME = String.raw`\b(?:how|why|what|where|when|whether|which|while)\b[^.!?]{0,20}?\b(?:works?|pass|passes|passing|green|compiles?)\b`;
+const MECHANISM_FRAME_RE = new RegExp(MECHANISM_FRAME, 'i');
+
 const VERIFICATION_DISQUALIFIER_RE = new RegExp(
   [
     // "not / never / isn't / aren't / weren't ... tested|passing|works|green"
@@ -134,10 +143,8 @@ const VERIFICATION_DISQUALIFIER_RE = new RegExp(
     // REPORTED speech. What someone else claimed is not this turn's claim —
     // "the handover says the tests pass" is a description of a document.
     String.raw`\b(?:says?|said|claims?|claimed|asserts?|asserted|states?|stated|reports?|reported|insists?|per|according to|documented as|recorded as)\b[^.!?]{0,30}?\b(?:pass|passes|passing|works?|green|tested|compiles?)\b`,
-    // MECHANISM, not outcome: "this is how it works", "whether the suite passes
-    // is the open question". An interrogative or relative frame ahead of the
-    // predicate means the sentence explains or asks, it does not certify.
-    String.raw`\b(?:how|why|what|where|when|whether|which)\b[^.!?]{0,20}?\b(?:works?|pass|passes|passing|green|compiles?)\b`,
+    // MECHANISM, not outcome (see MECHANISM_FRAME above).
+    MECHANISM_FRAME,
     // ARGUMENT-passing, the other sense of the word entirely: "I re-ran it with
     // `--repo` passed explicitly", "the flag passed to the adapter", "I passed
     // it as clean". `in` is deliberately not in this list, because "all tests
@@ -213,4 +220,4 @@ function findExecutionClaims(sentence) {
   return found;
 }
 
-module.exports = { findExecutionClaims, maskQuoted, VERIFICATION_RE, VERIFICATION_DISQUALIFIER_RE };
+module.exports = { findExecutionClaims, maskQuoted, VERIFICATION_RE, VERIFICATION_DISQUALIFIER_RE, MECHANISM_FRAME_RE };

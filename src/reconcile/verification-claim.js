@@ -175,8 +175,10 @@ const OBJECT_NEGATED_RE = new RegExp(
 );
 const PASSIVE_AUX_RE = /\b(?:was|were|is|are|been|be)\s+(?:(?:yet|ever|actually|really|properly|fully)\s+)?$/i;
 const NEG_QUANT_RE = new RegExp(String.raw`\b${NEG_QUANT}\b`, 'gi');
+// "as" ends the reach only before a noun subject ("as the parser was tested"):
+// before a pronoun it is usually an aside ("Nothing, as I said, was tested").
 const NEW_SUBJECT_RE =
-  /(?:,|\b)\s*(?:and|but|so|since|because|while|although|though)\s+(?:the|a|an|this|that|these|those|it|they|everything|everyone|all|my|our|its|their|we|i)\b/i;
+  /(?:,|\b)\s*(?:(?:and|but|so|since|because|while|although|though|yet)\s+(?:the|a|an|this|that|these|those|it|they|everything|everyone|all|my|our|its|their|we|i)|as\s+(?:the|a|an|this|that|these|those|my|our|its|their))\b/i;
 
 function testedIsNegated(masked, index) {
   if (OBJECT_NEGATED_RE.test(masked.slice(index + 'tested'.length))) return true;

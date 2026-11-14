@@ -52,6 +52,11 @@
     { "text": "The parser is untested.", "expect": "silent", "kind": "negated" },
     { "text": "That's done, and the suite passes now that it's merged.", "expect": "fire", "kind": "green" },
     { "text": "The template's line reads 'the tests pass' and nothing ran.", "expect": "silent", "kind": "quoted" },
-    { "text": "I put 'all tests pass' in the template.", "expect": "silent", "kind": "quoted" }
+    { "text": "I put 'all tests pass' in the template.", "expect": "silent", "kind": "quoted" },
+    { "text": "Nothing broke, yet the code was tested.", "expect": "fire", "kind": "green" },
+    { "text": "Nothing regressed, as the parser was tested end to end.", "expect": "fire", "kind": "green" },
+    { "text": "Nothing, as far as I know, was tested.", "expect": "silent", "kind": "negated" },
+    { "text": "Nothing, as I said, was tested.", "expect": "silent", "kind": "negated" },
+    { "text": "Nothing was tested yet.", "expect": "silent", "kind": "negated" }
   ]
 }

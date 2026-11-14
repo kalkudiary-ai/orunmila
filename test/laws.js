@@ -1228,7 +1228,7 @@ it('laws --check prints zero skips as 0, and says when the gate left no record',
 // holds that output, recorded at 4ab0595 from hand-built turns.
 
 const { factsLineEnabled } = require('../src/laws/gate');
-const GATE_ENV = ['ORUNMILA_FACTS_LINE', 'ORUNMILA_LAWS', 'ORUNMILA_LAW_BLOCK_BUDGET', 'ORUNMILA_TURN_BOUNDARIES'];
+const GATE_ENV = ['ORUNMILA_FACTS_LINE', 'ORUNMILA_STRICT_PROOF', 'ORUNMILA_LAWS', 'ORUNMILA_LAW_BLOCK_BUDGET', 'ORUNMILA_TURN_BOUNDARIES'];
 
 /** Run fn with these env values (undefined = unset), then put the old ones back. */
 function withEnv(values, fn) {
@@ -1254,13 +1254,13 @@ it('facts line flag: on only when ORUNMILA_FACTS_LINE is exactly 1', () => {
   }
 });
 
-it('facts line off: the gate prints exactly what it printed at 4ab0595', () => {
+it('facts line and strict proof off: the gate prints exactly what it printed at 4ab0595', () => {
   const { append } = require('../src/store/eventlog');
   const golden = JSON.parse(fs.readFileSync(path.join(__dirname, 'cases', 'laws', 'gate-output-golden.json'), 'utf8'));
   assert.strictEqual(golden.scenarios.length, 10);
   for (const flag of [undefined, '', '0', 'on']) {
     const clean = Object.fromEntries(GATE_ENV.map((k) => [k, undefined]));
-    withEnv(Object.assign(clean, { ORUNMILA_FACTS_LINE: flag }), () => {
+    withEnv(Object.assign(clean, { ORUNMILA_FACTS_LINE: flag, ORUNMILA_STRICT_PROOF: flag }), () => {
       golden.scenarios.forEach((s, i) => {
         const home = tmpHome();
         const root = tmpDir();
@@ -1531,6 +1531,59 @@ it('proof: a failed run with no later proving run is not proof, and the result n
   assert.deepStrictEqual(r.runs.map((x) => x.verdict), ['failed', 'piped', 'proof']);
   assert.strictEqual(r.by, 'npm test && echo done');
   assert.deepStrictEqual(proofOfPass([null, 'junk', { type: 'command_run' }]), { proven: false, by: null, runs: [] });
+});
+
+// --- strict proof wired into the gate (plan slice 4.2), switch off by default
+
+const { strictProofEnabled } = require('../src/laws/gate');
+
+it('strict proof switch: on only when ORUNMILA_STRICT_PROOF is exactly 1', () => {
+  for (const [value, on] of [[undefined, false], ['', false], ['0', false], ['on', false], ['1', true]]) {
+    assert.strictEqual(withEnv({ ORUNMILA_STRICT_PROOF: value }, strictProofEnabled), on, `ORUNMILA_STRICT_PROOF=${JSON.stringify(value)}`);
+  }
+});
+
+it('strict proof: the green law takes only a proof of pass, and says which runs did not prove one', () => {
+  const masked = [ran('npm test; echo $?')];
+  const loose = evaluateTurn({ claimText: 'Tests pass.', turnEvents: masked, laws: GREEN_LAW() });
+  assert.deepStrictEqual(loose.findings, [], 'today any passing command is the receipt');
+  const strict = evaluateTurn({ claimText: 'Tests pass.', turnEvents: masked, laws: GREEN_LAW(), strictProof: true });
+  assert.strictEqual(strict.blocking.length, 1, 'strictly, a masked run proves nothing');
+  assert.deepStrictEqual(strict.findings[0].evidence.test_runs, ['masked: npm test; echo $?']);
+  const proven = evaluateTurn({ claimText: 'Tests pass.', turnEvents: [ran('npm test')], laws: GREEN_LAW(), strictProof: true });
+  assert.deepStrictEqual(proven.findings, [], 'a proof of pass licenses the claim');
+});
+
+it('strict proof: through the gate the switch decides, and the reason lists the runs', () => {
+  const { append } = require('../src/store/eventlog');
+  const clean = Object.fromEntries(GATE_ENV.map((k) => [k, undefined]));
+  for (const flag of [undefined, '1']) {
+    withEnv(Object.assign({}, clean, { ORUNMILA_STRICT_PROOF: flag }), () => {
+      const home = tmpHome();
+      const root = tmpDir();
+      append({ session_id: 'strict-g', turn_id: 't1', type: 'command_run', agent: 'claude-code', command: 'npm test | tail -5', exit_code: 0, failed: false });
+      append({ session_id: 'strict-g', turn_id: 't1', type: 'command_run', agent: 'claude-code', command: 'set -o pipefail; npm test | tail -5', exit_code: 1, failed: true });
+      const out = runGate({ session_id: 'strict-g', claim: 'Tests pass.' }, getAdapter('claude-code'), { root });
+      assert.strictEqual(out.decision, 'block', `blocks either way: the last run failed (switch ${flag})`);
+      if (flag) assert.ok(out.reason.includes('  test runs that prove no pass: piped: npm test | tail -5 | failed: set -o pipefail; npm test | tail -5'), out.reason);
+      else assert.ok(!out.reason.includes('test runs that prove no pass'), 'off, the reason is as before');
+      rmrf(root);
+      rmrf(home);
+    });
+  }
+});
+
+it('strict proof: laws --check replays with the same switch as the gate', () => {
+  const h = hookSequence('strict-c');
+  h.prompt('fix debit.ts');
+  h.send('post-tool-use.js', { tool_name: 'Bash', tool_input: { command: 'npm test; echo $?' }, tool_response: { stdout: 'ok' } });
+  h.send('stop.js', { claim: 'Tests pass.' });
+  const off = run('bin/orunmila.js', { args: ['laws', '--check', '--session', 'strict-c', '--json'], env: h.env, cwd: h.root });
+  const on = run('bin/orunmila.js', { args: ['laws', '--check', '--session', 'strict-c', '--json'], env: Object.assign({}, h.env, { ORUNMILA_STRICT_PROOF: '1' }), cwd: h.root });
+  const blocking = (res) => JSON.parse(res.stdout).turns.flatMap((t) => t.findings).filter((f) => f.severity === 'block').map((f) => f.law_id);
+  assert.deepStrictEqual(blocking(off), [], 'off: the masked run is a passing command');
+  assert.deepStrictEqual(blocking(on), ['no-green-without-command'], 'on: it proves nothing');
+  h.done();
 });
 
 runAll('laws (layers 4 + 5)');

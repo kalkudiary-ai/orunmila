@@ -44,6 +44,7 @@
 const { extractAssertions } = require('./assert-extractor');
 const { maskQuoted } = require('./assert-extractor');
 const { basename } = require('../reconcile/task-extractor');
+const { proofOfPass } = require('./proof');
 const HOME_DIR = require('os').homedir().toLowerCase();
 
 // Shell invocations that are pattern matches wearing a command's clothes.
@@ -378,8 +379,20 @@ const RULES = {
     return { hedged: true };
   },
 
-  verification_without_command(assertion, receipts) {
+  verification_without_command(assertion, receipts, ctx = {}) {
     if (!assertion.verification) return null;
+    // Strict proof (switch on, plan slice 4): only a test run whose status
+    // means what it says licenses the claim, and the finding lists the runs
+    // that did not, so the agent can see why its run did not count.
+    if (ctx.proof) {
+      if (ctx.proof.proven) return null;
+      return {
+        passing_commands: receipts.passingCommands.length,
+        failed_commands: receipts.failedCommands.map((c) => `exit ${c.exit_code}: ${c.command}`),
+        exit_code_laundered_by_pipe: receipts.unreliableCommands.map((c) => c.command),
+        test_runs: ctx.proof.runs.filter((r) => r.verdict !== 'proof').map((r) => `${r.verdict}: ${r.command}`),
+      };
+    }
     if (receipts.passingCommands.length) return null;
     return {
       passing_commands: 0,
@@ -436,11 +449,14 @@ function lexicalHits(law, { claimText, promptText, turnEvents }) {
  * @param {string}   input.promptText  the instruction that opened the turn
  * @param {object[]} input.turnEvents  every captured event in the turn
  * @param {object[]} input.laws        the resolved, active law set
+ * @param {boolean}  input.strictProof only a proof of pass (proof.js) licenses
+ *                                     a green claim; the caller reads the switch
  * @returns {{ findings: object[], blocking: object[], assertions: object[] }}
  */
-function evaluateTurn({ claimText = '', promptText = '', turnEvents = [], laws = [] } = {}) {
+function evaluateTurn({ claimText = '', promptText = '', turnEvents = [], laws = [], strictProof = false } = {}) {
   const receipts = buildReceipts(turnEvents);
   const assertions = extractAssertions(claimText);
+  const proof = strictProof ? proofOfPass(turnEvents) : null;
   const findings = [];
 
   for (const law of laws) {
@@ -456,7 +472,7 @@ function evaluateTurn({ claimText = '', promptText = '', turnEvents = [], laws =
     const rule = RULES[law.rule];
     if (!rule) continue; // schema validation already rejected unknown rules
     for (const assertion of assertions) {
-      const detail = rule(assertion, receipts, { laws });
+      const detail = rule(assertion, receipts, { laws, proof });
       if (detail) findings.push(finding(law, assertion, detail));
     }
   }

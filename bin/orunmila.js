@@ -866,6 +866,8 @@ function cmdLaws() {
 
   // --check: replay the laws over a real session.
   const { evaluateTurn } = require('../src/laws/evaluate');
+  // The same switch the live gate reads, so a replay judges as the gate did.
+  const strictProof = require('../src/laws/gate').strictProofEnabled();
   const sessionId = flag('session', eventlog.latestSessionId());
   if (!sessionId) return console.log('No sessions captured yet.');
   const events = eventlog.readSession(sessionId);
@@ -890,6 +892,7 @@ function cmdLaws() {
       promptText: prompt && prompt.text ? String(prompt.text) : '',
       turnEvents,
       laws: active,
+      strictProof,
     });
     if (!res.findings.length) continue;
     flagged++;

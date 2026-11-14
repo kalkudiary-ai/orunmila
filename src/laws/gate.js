@@ -167,6 +167,15 @@ function factsLineEnabled() {
 }
 
 /**
+ * Strict proof is opt-in too: ORUNMILA_STRICT_PROOF=1 and nothing else. On,
+ * a green claim needs a proof of pass (proof.js), not just a command that did
+ * not fail. Off, the gate judges exactly as before.
+ */
+function strictProofEnabled() {
+  return process.env.ORUNMILA_STRICT_PROOF === '1';
+}
+
+/**
  * The Sentinel's writes since the turn's first Glove event, for the facts
  * line. The Sentinel knows no sessions or turns, so a write belongs to the turn
  * by time, as in the reconciler; its window here runs to now, because the gate
@@ -212,6 +221,10 @@ function renderFindings(findings, { blocking }) {
     if (ev.failed_commands && ev.failed_commands.length) {
       lines.push(`  commands that did not exit zero: ${ev.failed_commands.slice(0, 3).join(' | ')}`);
     }
+    // Only strict proof sets this field, so with its switch off the text is unchanged.
+    if (ev.test_runs && ev.test_runs.length) {
+      lines.push(`  test runs that prove no pass: ${ev.test_runs.slice(0, 3).join(' | ')}`);
+    }
     if (f.remedy) lines.push(`  → ${f.remedy}`);
   }
   if (blocking) {
@@ -245,7 +258,7 @@ function decideForTurn({ sessionId, turnId, promptId, claimText, promptText, tur
   const active = activeLaws(laws);
   if (!active.length) return factsOnly;
 
-  const res = evaluateTurn({ claimText, promptText, turnEvents, laws: active });
+  const res = evaluateTurn({ claimText, promptText, turnEvents, laws: active, strictProof: strictProofEnabled() });
   if (!res.findings.length) return factsOnly;
 
   const state = readState(sessionId, turnId);
@@ -326,4 +339,4 @@ function runGate(payload, adapter, { root } = {}) {
   }
 }
 
-module.exports = { runGate, decideForTurn, renderFindings, statePath, liveGateCounts, blockBudget, factsLineEnabled, DEFAULT_BLOCK_BUDGET };
+module.exports = { runGate, decideForTurn, renderFindings, statePath, liveGateCounts, blockBudget, factsLineEnabled, strictProofEnabled, DEFAULT_BLOCK_BUDGET };

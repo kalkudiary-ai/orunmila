@@ -112,7 +112,14 @@ function extractSubtasks(promptText) {
 const PATH_RE = /(?:[\w./-]*\/)?[\w-]+(?:\.[\w-]+)*\.(?:js|ts|jsx|tsx|py|rb|go|rs|java|json|md|yml|yaml|css|html|sql|sh|toml)\b/gi;
 const CODESPAN_RE = /`([^`]+)`/g;
 const DQUOTE_RE = /"([^"]+)"/g;
-const SQUOTE_RE = /'([^']+)'/g;
+// A single quote is a quote mark only where a quote can open or close: not
+// after a letter or digit when it opens, not before one when it closes. An
+// apostrophe inside a word (it's, isn't, the agent's) used to pair with the
+// next one, so the text between two contractions became a literal target
+// ("t updated, and I haven", NF31). An apostrophe inside a quoted span ('it's
+// fine') stays inside it. The claim readers mask quoted spans with this same
+// pattern (verification-claim.js, claim-extractor.js), so the three agree.
+const SQUOTE_RE = /(?<![\p{L}\p{N}])'((?:[^']|'(?=[\p{L}\p{N}]))+)'(?![\p{L}\p{N}])/gu;
 const CAMEL_RE = /\b[a-z]+(?:[A-Z][a-z0-9]*)+\b/g;
 const PASCAL_RE = /\b[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]*)+\b/g;
 const SNAKE_RE = /\b[a-z0-9]+(?:_[a-z0-9]+)+\b/g;
@@ -199,4 +206,4 @@ function extractKeywords(text) {
   return extractTargets(text).map((t) => t.value);
 }
 
-module.exports = { extractSubtasks, extractTargets, extractKeywords, basename };
+module.exports = { extractSubtasks, extractTargets, extractKeywords, basename, SQUOTE_RE };

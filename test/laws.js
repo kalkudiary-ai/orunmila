@@ -1437,4 +1437,26 @@ it('facts: more than five test runs are summarised; a malformed record does not 
   assert.ok(line.endsWith(NO_FILES), line);
 });
 
+// --- the reader: an apostrophe inside a word is not a quote mark (NF31) ------
+// "isn't ... haven't" paired as a quoted span, so the text between two
+// contractions became a literal target ("t updated, and I haven") and the
+// receipt law asked for a receipt for it.
+
+const { extractTargets } = require('../src/reconcile/task-extractor');
+const literals = (s) => extractTargets(s).filter((t) => t.kind === 'literal').map((t) => t.raw);
+
+it('targets: an apostrophe inside a word opens no quoted span, so no junk literal is extracted (NF31)', () => {
+  assert.deepStrictEqual(literals("This machine's copy of that file is owned by the agent's account."), []);
+  assert.deepStrictEqual(literals("The done-ledger isn't updated, and I haven't run it."), []);
+  assert.deepStrictEqual(literals("That's 2 problems caused by this round, and it's fine."), []);
+  assert.deepStrictEqual(literals("The users' sessions and the agents' turns are counted."), []);
+  assert.deepStrictEqual(literals("Read the 'agent's notes first."), [], 'a quote never closed does not close on an apostrophe');
+});
+
+it('targets: a real single-quoted span is still a literal, an apostrophe inside it included', () => {
+  assert.deepStrictEqual(literals("Set the 'retry limit' flag."), ['retry limit']);
+  assert.deepStrictEqual(literals("The message now reads 'it's fine' everywhere."), ["it's fine"]);
+  assert.deepStrictEqual(literals("The template's line reads 'the tests pass' and nothing ran."), ['the tests pass']);
+});
+
 runAll('laws (layers 4 + 5)');

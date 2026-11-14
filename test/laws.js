@@ -1328,6 +1328,56 @@ it('facts: files changed are counted once each, test files named, paths inside t
   assert.strictEqual(line, 'Test runs this turn: none. Files changed this turn: 5 (test files: test/laws.js, src/b.test.ts, /elsewhere/test_x.py).');
 });
 
+// With the switch on, the facts line comes first and the gate's own text follows
+// it word for word: every golden output, prefixed and nothing else changed.
+const FACTS_HEAD = 'orunmila facts (from the records, not your prose): ';
+const stopOut = (text) => ({ hookSpecificOutput: { hookEventName: 'Stop', additionalContext: text } });
+
+function goldenWithFacts(check) {
+  const { append } = require('../src/store/eventlog');
+  const golden = JSON.parse(fs.readFileSync(path.join(__dirname, 'cases', 'laws', 'gate-output-golden.json'), 'utf8'));
+  const clean = Object.fromEntries(GATE_ENV.map((k) => [k, undefined]));
+  withEnv(Object.assign(clean, { ORUNMILA_FACTS_LINE: '1' }), () => {
+    golden.scenarios.forEach((s, i) => {
+      const home = tmpHome();
+      const root = tmpDir();
+      const sid = `facts-on-${i}`;
+      for (const e of s.events) append(Object.assign({ session_id: sid, turn_id: 't1' }, e));
+      s.stops.forEach((p, j) => check(s, p, runGate(Object.assign({ session_id: sid }, p), getAdapter('claude-code'), { root }), JSON.parse(s.out[j])));
+      rmrf(root);
+      rmrf(home);
+    });
+  });
+}
+
+it('facts line on: it comes first, and everything after it is what the gate printed without it, word for word', () => {
+  let judged = 0;
+  goldenWithFacts((s, p, out, before) => {
+    const text = getAdapter('claude-code').fields.finalText(p);
+    if (!text || !text.trim()) {
+      assert.strictEqual(out, null, `${s.name}: a turn the gate does not judge gets no facts line either`);
+      return;
+    }
+    judged++;
+    const facts = FACTS_HEAD + factsLine(s.events);
+    if (before === null) assert.deepStrictEqual(out, stopOut(facts), `${s.name}: a turn with no findings gets the facts line alone`);
+    else if (before.decision) assert.deepStrictEqual(out, { decision: 'block', reason: `${facts}\n\n${before.reason}` }, s.name);
+    else assert.deepStrictEqual(out, stopOut(`${facts}\n\n${before.hookSpecificOutput.additionalContext}`), s.name);
+  });
+  assert.strictEqual(judged, 10, 'every judged Stop of the golden scenarios was checked');
+});
+
+it('facts line on: the line is the turn\'s own records, not the claim', () => {
+  const seen = {};
+  goldenWithFacts((s, p, out) => { if (out) seen[s.name] = (out.reason || out.hookSpecificOutput.additionalContext).split('\n')[0]; });
+  assert.strictEqual(seen['a green claim after a failed run'], `${FACTS_HEAD}Test runs this turn: npm test (fail, exit 1). Files changed this turn: none.`);
+  assert.strictEqual(seen['a warn-only finding'], `${FACTS_HEAD}Test runs this turn: none. Files changed this turn: none.`);
+  assert.strictEqual(
+    seen['a turn that wrote a test file and ran the suite'],
+    `${FACTS_HEAD}Test runs this turn: npm test (pass). Files changed this turn: 1 (test files: /repo/test/x.test.js).`
+  );
+});
+
 it('facts: more than five test runs are summarised; a malformed record does not throw', () => {
   const runs = [1, 2, 3, 4, 5, 6, 7].map((n) => cmd(`npm test -- ${n}`, 0));
   const line = factsLine(runs.concat([{ type: 'command_run' }, { type: 'file_write' }, null, 'junk']));

@@ -73,8 +73,10 @@ const path = require('path');
 const { dataDir, readTurn } = require('../store/eventlog');
 const { loadLaws, activeLaws } = require('./load');
 const { evaluateTurn } = require('./evaluate');
+const { factsLine } = require('./facts');
 
 const DEFAULT_BLOCK_BUDGET = 2;
+const FACTS_HEAD = 'orunmila facts (from the records, not your prose): ';
 
 /** Where the per-turn block counter lives. Orunmila's own state — see the loop-trap note. */
 function statePath(sessionId, turnId) {
@@ -209,12 +211,24 @@ function renderFindings(findings, { blocking }) {
  * one that must cost nothing.
  */
 function decideForTurn({ sessionId, turnId, promptId, claimText, promptText, turnEvents, root }) {
+  // With the switch on, the facts line comes first, ahead of any finding, and
+  // stands alone on a turn with none. Everything after it is unchanged, and a
+  // fault in the facts line drops the line, never a finding.
+  let facts = null;
+  try {
+    if (factsLineEnabled()) facts = FACTS_HEAD + factsLine(turnEvents, { root });
+  } catch {
+    facts = null;
+  }
+  const withFacts = (text) => (facts ? `${facts}\n\n${text}` : text);
+  const factsOnly = facts ? { hookSpecificOutput: { hookEventName: 'Stop', additionalContext: facts } } : null;
+
   const { laws } = loadLaws({ root });
   const active = activeLaws(laws);
-  if (!active.length) return null;
+  if (!active.length) return factsOnly;
 
   const res = evaluateTurn({ claimText, promptText, turnEvents, laws: active });
-  if (!res.findings.length) return null;
+  if (!res.findings.length) return factsOnly;
 
   const state = readState(sessionId, turnId);
   const budget = blockBudget();
@@ -230,7 +244,7 @@ function decideForTurn({ sessionId, turnId, promptId, claimText, promptText, tur
     if (promptId) writeState(sessionId, promptId, { blocks: spent + 1 });
     return {
       decision: 'block',
-      reason: renderFindings(res.blocking, { blocking: true }),
+      reason: withFacts(renderFindings(res.blocking, { blocking: true })),
     };
   }
 
@@ -244,7 +258,7 @@ function decideForTurn({ sessionId, turnId, promptId, claimText, promptText, tur
       `The finding below is UNRESOLVED, not forgiven; it will be visible at close-out.\n\n` +
       text;
   }
-  return { hookSpecificOutput: { hookEventName: 'Stop', additionalContext: text } };
+  return { hookSpecificOutput: { hookEventName: 'Stop', additionalContext: withFacts(text) } };
 }
 
 /**

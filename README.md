@@ -352,7 +352,9 @@ orunmila laws --check --session <id>                # replay the laws over a pas
 its own records: turns checked, turns skipped (no confirmed final text; records
 written before the repeat skip was removed can also show a repeated claim) and
 turns blocked. It then counts the claimed turns the gate holds no record of their
-own for: the gate never ran on them, or a later Stop overwrote their record.
+own for: the gate never ran on them, or a later Stop overwrote their record. A
+claim whose text the log redacted (a secret in it) no longer matches its record,
+so it counts there too.
 
 Installing it **reads every law out loud** — which can stop your turn, which
 only advise, and the file to edit to change any of it. A rule that can interrupt

@@ -27,9 +27,9 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   inside other words ("unverified", "workstream") and ignored a negation, so
   "Not verified this pass" was graded as a claim that something was verified.
   Each word now counts only as a whole word, and "not", "never", "haven't" and
-  the like just before "verified", "confirmed" or "validated" cancel it. On the
-  recorded sessions this was measured on, 89 such sentences stopped being
-  graded as claims, and no claim was added or changed outcome.
+  the like just before "verified", "confirmed" or "validated" cancel it. Over
+  one machine's recorded sessions (1,097 claimed turns), 88 such sentences
+  stopped being graded as claims, and no claim was added or changed outcome.
 - **An apostrophe inside a word is no longer read as a quote mark (NF31).**
   The gate, the Stain Map and the reader that finds a sentence's targets
   paired the apostrophes of two contractions ("isn't … haven't") as a quoted
@@ -114,7 +114,8 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   records (`live_gate` in `--json`). Skips were recorded before, but nothing
   showed them. It also counts the claimed turns the gate holds no record of
   their own for (`unrecorded`): the gate never ran on them, or a later Stop
-  overwrote their record.
+  overwrote their record. A claim whose text the log redacted (a secret in it)
+  no longer matches its record, so it counts here too.
 - **A labelled sentence corpus for both claim readers**, in the repository
   (`test/cases/laws/green-corpus.json`, 48 sentences; not in the npm package).
   The test suite fails if the gate or the Stain Map reads any of them

@@ -180,10 +180,29 @@ function containsAny(lowerText, list) {
 // "Nothing works yet." is not read as a claim that something works.
 const SHARED_READER_WORDS = ['works', 'working', 'passing', 'compiles'];
 
+// NF57: each word counts only as a whole word ("unverified" is not "verified",
+// "frameworks" is not "works"), and the words the shared reader never takes are
+// cancelled by a negation just before them ("not verified", "hasn't been
+// confirmed"). Only that one occurrence: the sentence-wide disqualifiers drop
+// real claims of a check here (see above).
+const NEGATED_BEFORE_RE = /(?:\b(?:not|never|no|nothing|none)|n't)\s+(?:(?:yet|been|be|fully|really|actually|properly|independently)\s+){0,2}$/;
+
+function wordsIn(lowerMasked, words) {
+  return words.filter((w) => {
+    for (let at = lowerMasked.indexOf(w); at !== -1; at = lowerMasked.indexOf(w, at + 1)) {
+      const whole = !/[a-z0-9]/.test(lowerMasked[at - 1] || '') && !/[a-z0-9]/.test(lowerMasked[at + w.length] || '');
+      if (!whole) continue;
+      if (!SHARED_READER_WORDS.includes(w) && NEGATED_BEFORE_RE.test(lowerMasked.slice(0, at))) continue;
+      return true;
+    }
+    return false;
+  });
+}
+
 function verificationWordsIn(sentence, lowerMasked, { strictProof = false } = {}) {
   if (MECHANISM_FRAME_RE.test(maskForReader(sentence))) return [];
   const words = strictProof ? VERIFICATION_WORDS.filter((w) => !SHARED_READER_WORDS.includes(w)) : VERIFICATION_WORDS;
-  return containsAny(lowerMasked, words);
+  return wordsIn(lowerMasked, words);
 }
 
 // Mask quoted spans (``…``, "…", '…') so action/verification verb scans

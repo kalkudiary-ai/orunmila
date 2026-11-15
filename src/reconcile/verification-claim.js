@@ -188,9 +188,16 @@ const NEG_QUANT_RE = new RegExp(String.raw`\b${NEG_QUANT}\b`, 'gi');
 const NEW_SUBJECT_RE =
   /(?:,|\b)\s*(?:(?:and|but|so|since|because|while|although|though|yet)\s+(?:the|a|an|this|that|these|those|it|they|everything|everyone|all|my|our|its|their|we|i)|as\s+(?:the|a|an|this|that|these|those|my|our|its|their))\b/i;
 
+// NF61: "haven't", "hasn't" and "hadn't" right before a "tested" ("I haven't
+// tested it", "The parser hasn't been tested") cancel that one occurrence, as the
+// negative quantifiers do. The sentence-wide "not" list is not used for them, so a
+// real claim beside them still counts ("I haven't tested the UI, but all tests pass").
+const PERFECT_NEGATED_RE = /\b(?:have|has|had)n'?t\s+(?:(?:been|yet|ever|really|actually|properly|fully)\s+){0,2}$/i;
+
 function testedIsNegated(masked, index) {
   if (OBJECT_NEGATED_RE.test(masked.slice(index + 'tested'.length))) return true;
   const before = masked.slice(0, index);
+  if (PERFECT_NEGATED_RE.test(before)) return true;
   const aux = PASSIVE_AUX_RE.exec(before);
   if (!aux) return false;
   const clause = before.slice(0, aux.index);

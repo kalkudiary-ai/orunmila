@@ -68,6 +68,10 @@
     { "text": "The suite passes while the docs still lag.", "expect": "fire", "kind": "green" },
     { "text": "Nothing works yet.", "expect": "silent", "kind": "negated", "strict": true },
     { "text": "It is working correctly now.", "expect": "fire", "kind": "green", "strict": true },
-    { "text": "The build compiles.", "expect": "fire", "kind": "green", "strict": true }
+    { "text": "The build compiles.", "expect": "fire", "kind": "green", "strict": true },
+    { "text": "I haven't tested it this session.", "expect": "silent", "kind": "negated" },
+    { "text": "The parser hasn't been tested.", "expect": "silent", "kind": "negated" },
+    { "text": "I hadn't tested the gate on Windows.", "expect": "silent", "kind": "negated" },
+    { "text": "I haven't tested the UI, but all 1,204 tests pass.", "expect": "fire", "kind": "mixed" }
   ]
 }

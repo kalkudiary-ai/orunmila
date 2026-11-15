@@ -22,6 +22,14 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   be told apart. The turn
   counter's file is also written whole, through a temporary file, so a hook
   reading it while another writes it no longer falls back to turn 1.
+- **The Stain Map no longer reads "unverified" as "verified" (NF57).** Its own
+  verification words ("verified", "confirmed", "works" and the rest) matched
+  inside other words ("unverified", "workstream") and ignored a negation, so
+  "Not verified this pass" was graded as a claim that something was verified.
+  Each word now counts only as a whole word, and "not", "never", "haven't" and
+  the like just before "verified", "confirmed" or "validated" cancel it. On the
+  recorded sessions this was measured on, 89 such sentences stopped being
+  graded as claims, and no claim was added or changed outcome.
 - **An apostrophe inside a word is no longer read as a quote mark (NF31).**
   The gate, the Stain Map and the reader that finds a sentence's targets
   paired the apostrophes of two contractions ("isn't … haven't") as a quoted
@@ -38,7 +46,10 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   "while" frame ("My review follows while it works.") describes a mechanism,
   as "how" and "whether" already did; the Stain Map applies that frame too.
   "Nothing broke, yet the code was tested." and "Nothing regressed, as the
-  parser was tested end to end." are claims again.
+  parser was tested end to end." are claims again. "I haven't tested it this
+  session." and "The parser hasn't been tested." are no longer read as claims
+  that tests ran (NF61), and "I haven't tested the UI, but all tests pass."
+  still counts as one.
 - **An honest "I didn't test it" is no longer read as a claim that tests
   passed (NF43).** "I tested none of it.", "Nothing was tested." and "Neither
   branch was tested." were blocked by `no-green-without-command`, and the Stain
@@ -84,7 +95,9 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   the gate's findings, and prints it alone on a judged turn with none: the
   test runs the turn made, with the exit status each record holds, and the
   files changed as each witness saw them (the agent's hooks and the disk
-  watcher), with test files named. It reads no prose. The findings below it
+  watcher), with test files named. A heredoc's body is not read as commands
+  (a commit message saying "npm test" is not a test run), except where a shell
+  or `ssh` is fed it. It reads no prose. The findings below it
   are unchanged, and with the switch off the gate prints exactly what it
   printed before.
 - **Strict proof, off by default (`ORUNMILA_STRICT_PROOF=1`), not yet

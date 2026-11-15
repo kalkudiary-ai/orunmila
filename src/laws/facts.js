@@ -44,9 +44,24 @@ const TEST_NAME = /(?:\.(?:test|spec)\.[^/]+|(?:^|\/)test_[^/]+\.py|_test\.(?:py
 const MAX_RUNS = 5;
 const MAX_COMMAND = 80;
 
-/** Quoted spans blanked out, so a `|` or `;` inside an argument splits nothing. */
+// A heredoc's body, from the line after `<<DELIM` through the closing DELIM line.
+// It is the command's input, not more command line: a commit message saying
+// "npm test 17/17" is not a test run (NF59). An unclosed heredoc is left as it is.
+const HEREDOC_BODY = /((?<!<)<<(?!<)-?[ \t]*(['"]?)([A-Za-z_]\w*)\2[^\n]*)\n(?:[^\n]*\n)*?[ \t]*\3[ \t]*(?=\n|$)/g;
+// Except where a shell or ssh is the command fed the heredoc: it runs the body,
+// so there the body is the command (`bash <<EOF`, `ssh host <<EOF`).
+const SHELL_FED = /(?:^|[;&|(\n])\s*(?:[A-Za-z_]\w*=\S*\s+)*(?:bash|sh|zsh|dash|ksh|ssh)\b[^;&|(\n]*$/;
+
+/**
+ * Heredoc bodies dropped, then quoted spans blanked out, so a `|` or `;` inside
+ * an argument splits nothing. Bodies go first: a quoted delimiter ('EOF') would
+ * otherwise be blanked, and an apostrophe in the body paired with a later one.
+ */
 function unquoted(command) {
-  return command.replace(/"[^"]*"/g, '""').replace(/'[^']*'/g, "''");
+  return command
+    .replace(HEREDOC_BODY, (body, opener, quote, delim, at, line) => (SHELL_FED.test(line.slice(0, at)) ? body : opener))
+    .replace(/"[^"]*"/g, '""')
+    .replace(/'[^']*'/g, "''");
 }
 
 /** Is this one part of a command line (no separators in it) a test runner? */

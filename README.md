@@ -466,7 +466,9 @@ orunmila facts (from the records, not your prose): Test runs this turn: npm test
   is not recognised, and the line says `none`. Each run shows the exit status
   the record holds. For Claude Code, a run with no exit code that nothing
   flagged as failed is a pass; `piped` marks a line whose status is its last
-  stage's.
+  stage's. A heredoc's body (a commit message, a file being written) is input,
+  not more command line, so a runner's name in it is not a test run, except
+  where a shell or `ssh` is fed the heredoc and runs it.
 - **Files changed** are shown for each witness on its own: the Glove (the
   agent's hooks) and the Sentinel (`watch-fs`, the disk watcher), from the
   turn's first recorded event until the gate runs, inside the project folder

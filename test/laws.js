@@ -1404,6 +1404,21 @@ it('facts: a piped run is marked piped; lookalikes are not test runs; a runner a
   assert.strictEqual(line, 'Test runs this turn: npm test | tail -5 (pass, piped); cd ../other && npm test (pass); CI=1 node --test test/ (pass).' + NO_FILES);
 });
 
+// NF59: a heredoc's body is the command's input, so a commit message line that
+// starts "npm test" is not a test run; a runner after the closing line still is.
+it('facts: a heredoc body is not a command step (NF59)', () => {
+  const commit = "git commit -F - <<'EOF'\nfix: the gate\n\nnpm test 17/17 suites\nEOF";
+  assert.strictEqual(factsLine([cmd(commit, 0)]), 'Test runs this turn: none.' + NO_FILES);
+  const after = 'cat <<EOF > notes.txt\nnpm test ran\nEOF\nnpm test';
+  const opener = 'npm test <<-"END"\n\tinput\n\tEND';
+  assert.strictEqual(factsLine([cmd(after, 0), cmd(opener, 0)]), `Test runs this turn: ${after} (pass); ${opener} (pass).` + NO_FILES);
+  // A shell fed a heredoc runs its body, so there the body is the command.
+  const shell = "bash <<'EOF'\nnpm test\nEOF";
+  const remote = 'cd app && ssh ci-box <<EOF\nnpm test\nEOF';
+  assert.strictEqual(factsLine([cmd(shell, 0), cmd(remote, 0)]), `Test runs this turn: ${shell} (pass); ${remote} (pass).` + NO_FILES);
+  assert.strictEqual(factsLine([cmd("cat > gates.sh <<'EOF'\nnpm test\nEOF", 0)]), 'Test runs this turn: none.' + NO_FILES, 'writing a script runs nothing');
+});
+
 it('facts: files changed are counted once each, test files named, paths inside the root shown relative', () => {
   const write = (p) => ({ type: 'file_write', path: p, diff: '' });
   const line = factsLine([
@@ -1556,6 +1571,25 @@ it('reconciler: words between two contractions are read, not masked as a quote',
   assert.deepStrictEqual(claim.verificationWords, ['verified']);
 });
 
+// NF57: the reconciler's own words matched as substrings and ignored negation,
+// so "unverified" counted as "verified" and "Not verified this pass" as a claim.
+const verWords = (text) => (extractClaims(text)[0] || { verificationWords: [] }).verificationWords;
+
+it('reconciler: its own verification words match whole words, and a "not" before one cancels it (NF57)', () => {
+  assert.deepStrictEqual(verWords('The parser change is unverified.'), []);
+  assert.deepStrictEqual(verWords('Not verified this pass: I ran no test suite.'), []);
+  assert.deepStrictEqual(verWords('It has not yet been confirmed.'), []);
+  assert.deepStrictEqual(verWords("The fix wasn't validated on Windows."), []);
+  assert.deepStrictEqual(verWords('The frameworks load in order.'), [], 'a word inside another word is not that word');
+});
+
+it('reconciler: a real claim of a check still counts (NF57 guards)', () => {
+  assert.deepStrictEqual(verWords('I verified the parser.'), ['verified']);
+  assert.deepStrictEqual(verWords('All three fixes confirmed per the log.'), ['confirmed']);
+  assert.deepStrictEqual(verWords('Verified: the gate blocks it.'), ['verified']);
+  assert.deepStrictEqual(verWords('Nothing works yet.'), ['works'], 'switch off, the four shared words read as before');
+});
+
 it('reconciler: a word inside real single quotes is still only mentioned', () => {
   assert.deepStrictEqual(extractClaims("The template's status line reads 'verified' for now."), []);
 });
@@ -1607,6 +1641,13 @@ it('proof: masking, pipes and pipefail are read from the line, not from a word o
   assert.strictEqual(proves(ran('npm test | tail -5; set -o pipefail')), false, 'set after the pipe is too late');
   assert.strictEqual(proves(ran('false || npm test')), false, 'after ||, the runner may never have run');
   assert.strictEqual(proves(ran('pytest', null, { agent: 'cursor', failed: false })), false, 'another agent: no code is unknown');
+});
+
+it('proof: a heredoc body is not a test run, and a runner after the heredoc still proves (NF59)', () => {
+  const r = proofOfPass([ran("git commit -F - <<'EOF'\nnpm test 17/17\nEOF")]);
+  assert.deepStrictEqual(r.runs, [], 'a commit message is not a run');
+  assert.strictEqual(proves(ran('cat <<EOF > f\nit\'s a note\nEOF\nnpm test')), true, 'the runner after the closing line is the last step');
+  assert.strictEqual(proves(ran('cat <<EOF > f\nnote\nEOF\nnpm test; echo $?')), false, 'and is still read for masking');
 });
 
 it('proof: a failed run with no later proving run is not proof, and the result names its runs', () => {

@@ -117,7 +117,7 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   overwrote their record. A claim whose text the log redacted (a secret in it)
   no longer matches its record, so it counts here too.
 - **A labelled sentence corpus for both claim readers**, in the repository
-  (`test/cases/laws/green-corpus.json`, 48 sentences; not in the npm package).
+  (`test/cases/laws/green-corpus.json`, 71 sentences; not in the npm package).
   The test suite fails if the gate or the Stain Map reads any of them
   differently from its label; `node scripts/laws-corpus.js` lists every
   sentence a change gets wrong.

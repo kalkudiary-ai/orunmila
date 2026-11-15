@@ -10,6 +10,18 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ### Fixed
 
+- **A Stop with nothing before it is judged on its own turn (NF62).** Claude
+  Code may run the gate before the capture hook, or both at once. On a Stop
+  with no prompt or tool call before it, the gate read the turn counter before
+  capture advanced it, so it judged the new claim against the previous turn's
+  records (a green claim could be cleared by the previous turn's test run) and
+  overwrote that turn's record. In one recorded session, 3 of 20 claimed turns
+  were judged this way. The gate now finds its turn from the counter and the
+  Stop's own final text, whichever hook runs first; when the gate runs first,
+  two Stops in a row with the same text and nothing between them still cannot
+  be told apart. The turn
+  counter's file is also written whole, through a temporary file, so a hook
+  reading it while another writes it no longer falls back to turn 1.
 - **An apostrophe inside a word is no longer read as a quote mark (NF31).**
   The gate, the Stain Map and the reader that finds a sentence's targets
   paired the apostrophes of two contractions ("isn't … haven't") as a quoted
@@ -87,7 +99,9 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   turns checked, turns skipped (no confirmed final text; older records can
   also show a repeated claim) and turns blocked, read from the gate's own
   records (`live_gate` in `--json`). Skips were recorded before, but nothing
-  showed them.
+  showed them. It also counts the claimed turns the gate holds no record of
+  their own for (`unrecorded`): the gate never ran on them, or a later Stop
+  overwrote their record.
 - **A labelled sentence corpus for both claim readers**, in the repository
   (`test/cases/laws/green-corpus.json`, 48 sentences; not in the npm package).
   The test suite fails if the gate or the Stain Map reads any of them

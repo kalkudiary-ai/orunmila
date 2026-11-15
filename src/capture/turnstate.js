@@ -24,11 +24,12 @@
  *      events, and a receipt is structurally impossible in those.
  *
  * The fix is LAZY ADVANCE, not a bump on Stop. Stop marks the turn CLOSED;
- * the counter moves on the next WRITE. That ordering matters: several Stop
- * hooks run in sequence (capture, then the law gate), and a hook that read the
- * counter after an eager bump would be handed a brand-new empty turn and would
- * silently judge nothing. Closing instead of bumping keeps every reader in the
- * Stop cascade pointed at the turn that just ended.
+ * the counter moves on the next WRITE. That ordering matters: two Stop hooks
+ * run (capture and the law gate), and a hook that read the counter after an
+ * eager bump would be handed a brand-new empty turn and would silently judge
+ * nothing. Closing instead of bumping keeps every reader in the Stop cascade
+ * pointed at the turn that just ended. The host may run the two in either order
+ * or at once, so the gate finds its turn with stopTurnId (NF62).
  *
  * A prompt no longer force-bumps either; it advances only if the turn is
  * closed. So a mid-turn message joins the turn already in flight rather than
@@ -60,17 +61,29 @@ function statePath(sessionId) {
 function readState(sessionId) {
   try {
     const raw = JSON.parse(fs.readFileSync(statePath(sessionId), 'utf8'));
-    return { turn: raw.turn || 1, closed: raw.closed === true, prompt: raw.prompt || 0 };
+    return { turn: raw.turn || 1, closed: raw.closed === true, prompt: raw.prompt || 0, stop: typeof raw.stop === 'string' ? raw.stop : null };
   } catch {
-    return { turn: 1, closed: false, prompt: 0 };
+    return { turn: 1, closed: false, prompt: 0, stop: null };
   }
 }
 
+// Whole or not at all: the two Stop hooks can run at once (NF62), and a read
+// during a plain write finds the file empty and falls back to turn 1 (NF63).
+// So the state goes to a temp file first, then is renamed over turn.json.
 function writeState(sessionId, state) {
+  let tmp = null;
   try {
-    fs.writeFileSync(statePath(sessionId), JSON.stringify(state));
+    const target = statePath(sessionId);
+    tmp = `${target}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(state));
+    fs.renameSync(tmp, target);
   } catch {
     /* capture must never block the agent over its own bookkeeping */
+    try {
+      if (tmp) fs.rmSync(tmp, { force: true });
+    } catch {
+      /* best effort */
+    }
   }
   return state;
 }
@@ -112,11 +125,43 @@ function writeTurnId(sessionId) {
   return `t${advanceIfClosed(sessionId)}`;
 }
 
-/** Stop phase: the turn is over. Do NOT advance here — see the header. */
-function closeTurn(sessionId) {
+/**
+ * Stop phase: the turn is over. Do NOT advance here — see the header. `stop` is
+ * the closing Stop's stopKey, so the law gate can tell whether capture has run
+ * for the Stop it is judging.
+ */
+function closeTurn(sessionId, { stop = null } = {}) {
   if (legacy()) return currentTurn(sessionId);
   const state = readState(sessionId);
-  return writeState(sessionId, { turn: state.turn, closed: true, prompt: state.prompt }).turn;
+  const next = { turn: state.turn, closed: true, prompt: state.prompt };
+  if (stop) next.stop = stop;
+  return writeState(sessionId, next).turn;
+}
+
+/**
+ * A Stop's mark: a fingerprint of the final text its payload carries, or of
+ * its absence. Both Stop hooks get the same payload, so both compute the same key.
+ */
+function stopKey(finalText) {
+  const text = finalText === null || finalText === undefined ? '\u0000no final text' : String(finalText);
+  return require('crypto').createHash('sha256').update(text).digest('hex').slice(0, 16);
+}
+
+/**
+ * The id the LAW GATE should use, whichever Stop hook runs first (NF62). The
+ * host may run them in parallel, and on a Stop with no prompt or tool call
+ * before it the counter still points at the previous turn, closed, until
+ * capture advances it. A turn in flight, or one this Stop already closed, is the
+ * gate's turn; a turn an earlier Stop closed means the next one, where capture
+ * puts this claim. When the gate runs first, two Stops in a row with
+ * byte-identical text and nothing between them cannot be told apart, and it
+ * then takes the earlier turn.
+ */
+function stopTurnId(sessionId, key) {
+  if (legacy()) return turnId(sessionId);
+  const state = readState(sessionId);
+  if (!state.closed || state.stop === key) return `t${state.turn}`;
+  return `t${state.turn + 1}`;
 }
 
 /**
@@ -132,4 +177,4 @@ function bumpTurn(sessionId, { countPrompt = true } = {}) {
   return writeState(sessionId, { turn, closed: false, prompt: state.prompt + (countPrompt ? 1 : 0) }).turn;
 }
 
-module.exports = { currentTurn, bumpTurn, turnId, promptId, writeTurnId, closeTurn, advanceIfClosed };
+module.exports = { currentTurn, bumpTurn, turnId, promptId, writeTurnId, closeTurn, advanceIfClosed, stopKey, stopTurnId };

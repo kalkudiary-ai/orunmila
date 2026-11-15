@@ -123,17 +123,24 @@ function claimFingerprint(text) {
  * --check` replays the laws over the log and cannot see a skip; this is the
  * record of what actually ran, so skips are counted rather than silent.
  * `recorded` is false when the gate left no record for the session at all.
+ *
+ * Given the session's claim marks, `unrecorded` counts the claimed turns whose
+ * record does not carry their claim's fingerprint: no record at all, or one a
+ * later Stop overwrote (NF62). Test 41 reads it beside the skips. A claim whose
+ * text the log redacted no longer matches, so it counts here too.
  */
-function liveGateCounts(sessionId) {
+function liveGateCounts(sessionId, { claims = null } = {}) {
   const counts = { recorded: false, checked: 0, skipped: 0, skipped_unconfirmed: 0, skipped_repeat: 0, blocked: 0, unreadable: 0 };
+  const records = {};
+  if (claims) counts.unrecorded = 0;
   const dir = path.join(dataDir(), 'laws-state', String(sessionId || 'unknown'));
   let names;
   try {
     names = fs.readdirSync(dir);
+    counts.recorded = true;
   } catch {
-    return counts;
+    names = [];
   }
-  counts.recorded = true;
   // Turn records only: tN.json. The pN.json files are the per-prompt budget.
   for (const name of names.filter((n) => /^t\d+\.json$/.test(n))) {
     let s;
@@ -143,6 +150,7 @@ function liveGateCounts(sessionId) {
       counts.unreadable++;
       continue;
     }
+    records[name.slice(0, -5)] = s;
     if (s.skipped_unconfirmed_claim || s.skipped_stale_claim) {
       counts.skipped++;
       if (s.skipped_unconfirmed_claim) counts.skipped_unconfirmed++;
@@ -150,6 +158,18 @@ function liveGateCounts(sessionId) {
     } else if (s.claim_fp) {
       counts.checked++;
       if (s.blocks > 0) counts.blocked++;
+    }
+  }
+  if (claims) {
+    const byTurn = new Map();
+    for (const c of claims) {
+      // An unconfirmed claim is recorded with text '' (NF23), so this drops it too.
+      if (!c || !c.turn_id || typeof c.text !== 'string' || !c.text.trim()) continue;
+      if (!byTurn.has(c.turn_id)) byTurn.set(c.turn_id, []);
+      byTurn.get(c.turn_id).push(claimFingerprint(c.text));
+    }
+    for (const [turn, fps] of byTurn) {
+      if (!records[turn] || !fps.includes(records[turn].claim_fp)) counts.unrecorded++;
     }
   }
   return counts;
@@ -295,8 +315,7 @@ function runGate(payload, adapter, { root } = {}) {
     if (String(process.env.ORUNMILA_LAWS || '').toLowerCase() === 'off') return null;
 
     const sessionId = adapter.fields.sessionId(payload);
-    const { turnId, promptId } = require('../capture/turnstate');
-    const turn = turnId(sessionId);
+    const { stopKey, stopTurnId, promptId } = require('../capture/turnstate');
 
     // N10: the transcript is never read here. When Stop fires it can still end
     // on an earlier block of this turn, so its text cannot be confirmed as the
@@ -305,6 +324,9 @@ function runGate(payload, adapter, { root } = {}) {
     // message is not judged either, and not recorded): a missed check is
     // visible, a wrong block is harmful.
     const claimText = adapter.fields.finalText(payload);
+    // NF62: capture may not have run yet for this Stop, so the turn is found
+    // from the counter and this Stop's key, not from the counter alone.
+    const turn = stopTurnId(sessionId, stopKey(claimText));
     if (claimText === null) {
       writeState(sessionId, turn, Object.assign({}, readState(sessionId, turn), { skipped_unconfirmed_claim: true }));
       return null;

@@ -21,7 +21,7 @@ const { unifiedDiff } = require('../reconcile/difftool');
 const { sha256 } = require('./fs-sentinel/hasher');
 const { redactString } = require('../store/secrets');
 const legacy = require('../store/legacy');
-const { bumpTurn, writeTurnId, closeTurn } = require('./turnstate');
+const { bumpTurn, writeTurnId, closeTurn, stopKey } = require('./turnstate');
 const { reconcileAndPersist } = require('../reconcile');
 const { renderTurn } = require('../render/terminal');
 const { deriveVcsEvents } = require('./vcs-evidence');
@@ -332,13 +332,13 @@ function handleStop(payload, adapter) {
 
   const report = reconcileAndPersist(sessionId, turn);
 
-  // Mark the turn finished WITHOUT advancing the counter. Several Stop hooks run
-  // in sequence — capture first, the law gate last — and the gate resolves its
-  // turn by reading this state. An eager bump here would hand it a brand-new
-  // empty turn, and it would judge nothing while appearing to work. The counter
-  // moves on the next write instead, so a continuation with no user prompt still
-  // gets a turn of its own rather than folding into this one.
-  closeTurn(sessionId);
+  // Mark the turn finished WITHOUT advancing the counter. The law gate is a
+  // second Stop hook, run before or after this one (NF62), and it resolves its
+  // turn by reading this state and the Stop's key. An eager bump here would hand
+  // it a brand-new empty turn, and it would judge nothing while appearing to
+  // work. The counter moves on the next write instead, so a continuation with no
+  // user prompt still gets a turn of its own rather than folding into this one.
+  closeTurn(sessionId, { stop: stopKey(adapter.fields.finalText(payload)) });
 
   return renderTurn(report);
 }

@@ -1176,6 +1176,73 @@ it('test 40: another agent\'s Stop still reads the transcript (its payloads are 
   r.done();
 });
 
+// --- NF62: the Stop hooks' order ----------------------------------------------
+// Claude Code may run the two Stop hooks in parallel (NF8). On a Stop with no
+// prompt or tool call before it, the turn counter still points at the previous
+// turn, closed, until stop.js advances it. A gate that ran first judged the new
+// claim against that turn's records and overwrote its record: in session
+// dc5716d4, t6's record held t7's claim, t10's t11's and t12's t13's.
+
+it('NF62: a Stop with nothing before it is judged as its own turn, whichever Stop hook runs first', () => {
+  const fp = (text) => require('crypto').createHash('sha256').update(text).digest('hex').slice(0, 16);
+  const A = 'Tests pass.';
+  const B = GREEN_LIE.claimText;
+  for (const order of [['law-gate.js', 'stop.js'], ['stop.js', 'law-gate.js']]) {
+    const sid = `nf62-${order[0]}`;
+    const h = hookSequence(sid);
+    h.prompt('fix debit.ts');
+    h.send('post-tool-use.js', { tool_name: 'Bash', tool_input: { command: 'npm test' }, tool_response: { stdout: '17/17 passed', exit_code: 0 } });
+    // Both Stops run in the order under test: A ends a turn in flight, B follows with nothing between.
+    const stopInOrder = (text) => {
+      const outs = {};
+      for (const script of order) outs[script] = h.send(script, { last_assistant_message: text });
+      return outs['law-gate.js'].stdout.trim() ? JSON.parse(outs['law-gate.js'].stdout) : null;
+    };
+    assert.strictEqual(stopInOrder(A), null, 'precondition: A is backed by its own run');
+    const gate = stopInOrder(B);
+    const record = (turn) => {
+      const p = path.join(h.home, 'laws-state', sid, `${turn}.json`);
+      return fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : {};
+    };
+    const events = fs.readFileSync(path.join(h.home, 'events.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+    const ran = order.join(' then ');
+    assert.deepStrictEqual(events.filter((e) => e.type === 'turn_claim').map((e) => e.turn_id), ['t1', 't2'], `${ran}: capture puts B in t2`);
+    assert.strictEqual(record('t1').claim_fp, fp(A), `${ran}: A's record keeps A's claim`);
+    assert.strictEqual(record('t2').claim_fp, fp(B), `${ran}: B has a record of its own`);
+    assert.ok(isBlock(gate), `${ran}: B ran nothing, so its green claim is judged on its own records and blocks: ` + JSON.stringify(gate));
+    h.done();
+  }
+});
+
+// NF63: with the two Stop hooks at once, one can read turn.json while the other
+// writes it. A plain write truncates the file first, and a read in that window
+// finds it empty and falls back to turn 1.
+it('NF63: a hook reading turn.json while another writes it never sees a broken file', () => {
+  const home = tmpHome();
+  const sid = 'nf63';
+  const target = path.join(home, 'cache', sid, 'turn.json');
+  turnstate.bumpTurn(sid);
+  nextTurn(sid); // now on t2
+  const realWrite = fs.writeFileSync;
+  const seen = [];
+  fs.writeFileSync = function (file, ...rest) {
+    if (path.resolve(String(file)) === target) realWrite.call(fs, file, ''); // what a plain write does first
+    seen.push(turnstate.turnId(sid)); // another hook reads, mid-write
+    return realWrite.call(fs, file, ...rest);
+  };
+  try {
+    turnstate.closeTurn(sid, { stop: turnstate.stopKey('done') });
+    turnstate.advanceIfClosed(sid);
+    turnstate.bumpTurn(sid);
+  } finally {
+    fs.writeFileSync = realWrite;
+  }
+  assert.ok(seen.length >= 3, 'each write was watched');
+  assert.deepStrictEqual(seen, ['t2', 't2', 't3'], 'every read made during a write saw the last whole state');
+  assert.strictEqual(turnstate.turnId(sid), 't3');
+  rmrf(home);
+});
+
 // --- skips are counted and reported (brief Step 5) ---------------------------
 // laws --check replays the laws over the log; it cannot see what the live gate
 // declined to judge. The gate's own per-turn records can, and test 41's skip
@@ -1205,7 +1272,7 @@ it('laws --check counts what the live gate did: turns checked, skipped and block
   const json = JSON.parse(lawsCheck(h, 'count-a', ['--json']).stdout);
   assert.deepStrictEqual(
     json.live_gate,
-    { recorded: true, checked: 5, skipped: 1, skipped_unconfirmed: 1, skipped_repeat: 0, blocked: 2, unreadable: 0 }
+    { recorded: true, checked: 5, skipped: 1, skipped_unconfirmed: 1, skipped_repeat: 0, blocked: 2, unreadable: 0, unrecorded: 0 }
   );
   h.done();
 });
@@ -1215,10 +1282,29 @@ it('laws --check prints zero skips as 0, and says when the gate left no record',
   h.prompt('fix debit.ts');
   h.stop(); // blocked
   const res = lawsCheck(h, 'count-b');
-  assert.ok(res.stdout.includes('Live gate: 1 turn(s) checked, 0 skipped (0 with no confirmed text, 0 repeating the last claim), 1 blocked.'), res.stdout);
+  assert.ok(
+    res.stdout.includes('Live gate: 1 turn(s) checked, 0 skipped (0 with no confirmed text, 0 repeating the last claim), 1 blocked. 0 claimed turn(s) have no gate record of their own.'),
+    res.stdout
+  );
   const none = lawsCheck(h, 'count-none');
   assert.ok(none.stdout.includes('Live gate: 0 turn(s) checked, 0 skipped'), none.stdout);
   assert.ok(none.stdout.includes('The gate left no record for this session.'), none.stdout);
+  h.done();
+});
+
+// NF62 left turns with no record, and overwrote others, and the counts above
+// could not see either: test 41's skip rate is read with this count beside them.
+it('laws --check counts claimed turns the gate holds no record of, an overwritten record included (NF62)', () => {
+  const h = hookSequence('count-c');
+  h.prompt('fix debit.ts');
+  h.stop(); // t1: judged and recorded
+  h.send('stop.js', { claim: CLEAN_FINAL }); // t2: captured, but the gate never ran
+  h.stop(); // t3: judged and recorded
+  const rec = path.join(h.home, 'laws-state', 'count-c', 't3.json');
+  fs.writeFileSync(rec, JSON.stringify(Object.assign(JSON.parse(fs.readFileSync(rec, 'utf8')), { claim_fp: '0000000000000000' })));
+  const res = lawsCheck(h, 'count-c');
+  assert.ok(res.stdout.includes(' 2 blocked. 2 claimed turn(s) have no gate record of their own.'), res.stdout);
+  assert.strictEqual(JSON.parse(lawsCheck(h, 'count-c', ['--json']).stdout).live_gate.unrecorded, 2);
   h.done();
 });
 

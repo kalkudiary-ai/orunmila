@@ -351,7 +351,8 @@ orunmila laws --check --session <id>                # replay the laws over a pas
 `laws --check` also prints what the live gate actually did in that session, from
 its own records: turns checked, turns skipped (no confirmed final text; records
 written before the repeat skip was removed can also show a repeated claim) and
-turns blocked.
+turns blocked. It then counts the claimed turns the gate holds no record of their
+own for: the gate never ran on them, or a later Stop overwrote their record.
 
 Installing it **reads every law out loud** — which can stop your turn, which
 only advise, and the file to edit to change any of it. A rule that can interrupt
@@ -437,6 +438,15 @@ Stop whose payload has no string value in any of `last_assistant_message`,
 `claim` or `response` is not judged, and the skip is recorded; an empty final
 message is not judged either, and leaves no record. This fails open on
 purpose: a missed check is visible, a wrong block is harmful.
+
+Claude Code may run the gate before the capture hook, or both at once. On a
+Stop with no prompt or tool call before it, the gate used to read the turn
+counter before capture advanced it, so it judged the claim against the previous
+turn's records. It now finds its turn from the counter and its own Stop's final
+text, whichever hook runs first. One case is left: when the gate runs first on
+the second of two Stops in a row with the same text and nothing between them, it
+cannot tell them apart, and `laws --check` counts that turn as having no record
+of its own.
 
 ### The facts line (off by default)
 

@@ -903,7 +903,9 @@ function cmdLaws() {
 
   // The replay above cannot see what the live gate declined to judge; its own
   // per-turn records can (brief Step 5: skips are counted and reported).
-  const live = require('../src/laws/gate').liveGateCounts(sessionId);
+  const live = require('../src/laws/gate').liveGateCounts(sessionId, {
+    claims: events.filter((e) => e.type === eventlog.TYPES.TURN_CLAIM),
+  });
   out.live_gate = live;
 
   if (args.includes('--json')) {
@@ -926,6 +928,7 @@ function cmdLaws() {
   console.log(
     `Live gate: ${live.checked} turn(s) checked, ${live.skipped} skipped ` +
       `(${live.skipped_unconfirmed} with no confirmed text, ${live.skipped_repeat} repeating the last claim), ${live.blocked} blocked.` +
+      ` ${live.unrecorded} claimed turn(s) have no gate record of their own.` +
       (live.recorded ? '' : ' The gate left no record for this session.') +
       (live.unreadable ? ` ${live.unreadable} record(s) could not be read.` : '')
   );

@@ -115,6 +115,30 @@ function sleep(ms) {
   return new Promise((res) => setTimeout(res, ms));
 }
 
+// Live tests wait for an event up to a deadline instead of sleeping once past
+// the debounce (P2-6): under full-suite load delivery can lag, and a test that
+// is slow under load beats one that is wrong under load. A real miss still
+// fails, at the deadline.
+const DEADLINE_MS = 5000;
+
+async function waitFor(cond) {
+  const end = Date.now() + DEADLINE_MS;
+  while (!cond() && Date.now() < end) await sleep(25);
+  return cond();
+}
+
+// An absence cannot be polled for. Write a marker file after the action, wait
+// for the marker's event (the Sentinel has handled everything before it), then
+// wait the same grace the fixed sleep gave, so a late wrong event is still seen.
+// Returns false when the marker never landed: the caller asserts it inside its
+// own test, so a dead Sentinel fails that test instead of aborting the suite.
+async function settle(root, eventlog) {
+  fs.writeFileSync(path.join(root, 'settle-marker.txt'), String(Date.now()));
+  const seen = await waitFor(() => sentinelWrites(eventlog, 'settle-marker.txt').length >= 1);
+  await sleep(400);
+  return seen;
+}
+
 async function withSentinel(run) {
   // Isolated home so we never touch the developer's real event log.
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'orunmila-home-'));
@@ -147,7 +171,7 @@ async function runLive() {
   // T1: a brand-new file appears -> sentinel logs a fs-sentinel file_write.
   await withSentinel(async ({ root, eventlog }) => {
     fs.writeFileSync(path.join(root, 'tracked.txt'), 'hello\n');
-    await sleep(400);
+    await waitFor(() => sentinelWrites(eventlog, 'tracked.txt').length >= 1);
     const writes = sentinelWrites(eventlog, 'tracked.txt');
     ok('T1 live: new file write is captured by the sentinel', () => {
       assert.ok(writes.length >= 1, 'expected a sentinel file_write for tracked.txt');
@@ -159,13 +183,16 @@ async function runLive() {
   await withSentinel(async ({ root, eventlog }) => {
     const f = path.join(root, 'same.txt');
     fs.writeFileSync(f, 'constant\n');
-    await sleep(400); // first write IS a change -> 1 event
+    // first write IS a change -> 1 event; count only once it has landed
+    await waitFor(() => sentinelWrites(eventlog, 'same.txt').length >= 1);
     const before = sentinelWrites(eventlog, 'same.txt').length;
     // touch: rewrite identical bytes (mtime bumps, content does not)
     fs.writeFileSync(f, 'constant\n');
-    await sleep(400);
+    const settled = await settle(root, eventlog);
     const after = sentinelWrites(eventlog, 'same.txt').length;
     ok('T2 live: touch-without-modify produces NO new event (hash unchanged)', () => {
+      assert.ok(settled, 'the Sentinel never recorded the settle marker');
+      assert.strictEqual(before, 1, `the first write must emit once (before=${before})`);
       assert.strictEqual(after, before, `identical rewrite must not emit (before=${before}, after=${after})`);
     });
   });
@@ -176,7 +203,7 @@ async function runLive() {
     fs.mkdirSync(sub);
     await sleep(300); // let the walker attach to the new dir
     fs.writeFileSync(path.join(sub, 'inside.txt'), 'deep\n');
-    await sleep(400);
+    await waitFor(() => sentinelWrites(eventlog, 'inside.txt').length >= 1);
     const writes = sentinelWrites(eventlog, 'inside.txt');
     ok('T4 live: file in a runtime-created subdir is captured (watcher auto-attached)', () => {
       assert.ok(writes.length >= 1, 'expected sentinel to watch the new subdir and catch the write');
@@ -189,9 +216,10 @@ async function runLive() {
     fs.mkdirSync(nm, { recursive: true });
     await sleep(300);
     fs.writeFileSync(path.join(nm, 'index.js'), 'module.exports = 1;\n');
-    await sleep(400);
+    const settled = await settle(root, eventlog);
     const writes = sentinelWrites(eventlog, 'index.js');
     ok('T5 live: write inside node_modules is ignored (no event)', () => {
+      assert.ok(settled, 'the Sentinel never recorded the settle marker');
       assert.strictEqual(writes.length, 0, 'default-ignored node_modules must not be watched');
     });
   });

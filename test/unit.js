@@ -606,6 +606,14 @@ it('hasher: looksBinary flags NUL bytes; snapshot drops content for binary', () 
 
 // --- fs-sentinel/walker: real fs.watch path ---------------------------------
 
+// Real fs.watch delivery can lag under full-suite load (NF5, P2-6): wait up to
+// a deadline rather than a fixed number of short sleeps. A real miss still fails.
+const WATCH_DEADLINE_MS = 5000;
+async function waitUntil(cond) {
+  const end = Date.now() + WATCH_DEADLINE_MS;
+  while (!cond() && Date.now() < end) await sleep(25);
+}
+
 it('walker: start() seeds existing files and reports new writes via onPath', (/* sync */) => {
   const dir = tmpDir();
   fs.mkdirSync(path.join(dir, 'sub'));
@@ -667,7 +675,7 @@ it('walker: a real write into a watched dir reaches onPath via the fs.watch call
   walker.start();
   // Drive a real change and await real fs.watch delivery (handle() path).
   fs.writeFileSync(path.join(dir, 'new.js'), 'hello');
-  for (let i = 0; i < 20 && !seen.some((p) => p.endsWith('new.js')); i++) await sleep(40);
+  await waitUntil(() => seen.some((p) => p.endsWith('new.js')));
   walker.close();
   assert.ok(seen.some((p) => p.endsWith('new.js')), 'real write delivered to onPath');
   rmrf(dir);
@@ -689,8 +697,9 @@ it('walker: a new subdirectory with a file inside gets a watcher and the file is
   const sub = path.join(dir, 'fresh');
   fs.mkdirSync(sub);
   fs.writeFileSync(path.join(sub, 'inner.js'), 'x');
-  for (let i = 0; i < 25 && !seen.some((p) => p.endsWith('inner.js')); i++) await sleep(40);
+  await waitUntil(() => seen.some((p) => p.endsWith('inner.js')));
   walker.close();
+  assert.ok(seen.some((p) => p.endsWith('inner.js')), 'the file inside the new subdirectory was reported');
   assert.ok(walker.watcherCount() === 0, 'closed cleanly');
   rmrf(dir);
 });

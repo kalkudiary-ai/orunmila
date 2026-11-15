@@ -124,4 +124,30 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-module.exports = { assert, fs, os, path, ROOT, tmpHome, tmpDir, rmrf, run, runUntil, sleep, it, runAll };
+/**
+ * Wait until a watcher on `dir` is really delivering events, before a test's
+ * real write (NF65, P2-6). fs.watch can return before the OS delivers events:
+ * on macOS a write made at once was measured lost, never late, so no deadline
+ * brings it back. Writes probe files into `dir`, a new name every `everyMs`
+ * (one name would keep resetting the Sentinel's per-path debounce), until
+ * `isSeen(probePath)` holds for one of them. Returns true when seen, false at
+ * `deadlineMs`; the caller asserts it, so a dead watcher fails its own test.
+ */
+async function awaitWatching(dir, isSeen, { everyMs = 250, deadlineMs = 5000 } = {}) {
+  const end = Date.now() + deadlineMs;
+  const probes = [];
+  const seenOne = () => probes.some((p) => isSeen(p));
+  while (Date.now() < end) {
+    const probe = path.join(dir, `.watch-probe-${probes.length}`);
+    probes.push(probe);
+    fs.writeFileSync(probe, String(probes.length));
+    const next = Math.min(end, Date.now() + everyMs);
+    while (Date.now() < next) {
+      if (seenOne()) return true;
+      await sleep(5);
+    }
+  }
+  return seenOne();
+}
+
+module.exports = { assert, fs, os, path, ROOT, tmpHome, tmpDir, rmrf, run, runUntil, sleep, awaitWatching, it, runAll };

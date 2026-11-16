@@ -412,6 +412,22 @@ const MUTANTS = [
   { id: 'E9 a failed write recorded as modified', file: 'src/opon/intake/adapters/events-v0.js', test: 'test/adapter-events-v0.js',
     from: "return e.failed ? 'ended' : kind;", to: 'return kind;',
     fails: ['a hook write: modified'] },
+  // Track B, built unwired: the intake engine (src/opon/intake/engine.js).
+  { id: 'B1 ticks while busy', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: 'if (BigInt(now.mono) - s.last < quiet) continue;', to: 'if (false) continue;',
+    fails: ['test 53: a busy session', 'test 53: a session idle for 10 minutes'] },
+  { id: 'B2 a mark does not reset the silence', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: 'if (r.ok) s.last = BigInt(now.mono);', to: "if (r.ok && m.says === 'tick') s.last = BigInt(now.mono);",
+    fails: ['silence is measured from the last mark written', 'test 53: a busy session'] },
+  { id: 'B3 an arrival stamp not noted as one', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: "m.detail = { ...m.detail, stamped_by: 'intake' };", to: 'void 0;',
+    fails: ['a mark with no mono_ns is stamped with the intake clock'] },
+  { id: 'B4 a tick stamped with the last write, not now', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: 'mono_ns: now.mono,', to: 'mono_ns: String(s.last),',
+    fails: ['a tick is a process mark'] },
+  { id: "B5 the caller's mark changed in place", file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: 'const m = JSON.parse(JSON.stringify(input));', to: 'const m = input;',
+    fails: ["a session the intake has not seen gets no tick; the caller's mark object is not changed"] },
 ];
 
 function copyRepo(root) {

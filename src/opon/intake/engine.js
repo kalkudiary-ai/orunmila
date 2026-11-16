@@ -11,11 +11,22 @@
  *     openLog(sessionId)  the session's log ({ append }), opened on its first mark
  *     clock()             { mono: '<decimal ns>', wall: '<ISO time>' }, the intake's
  *                         own time of arrival
- *   intake.receive(mark)  routes the mark to its session's log, by its
+ *   intake.receive(mark, { channel, pid })
+ *                         routes the mark to its session's log, by its
  *                         session_id; a mark with no mono_ns is stamped with the
  *                         arrival time and says so (detail.stamped_by, line 238).
+ *                         Glove marks (source hook or agent_claim) carry
+ *                         detail.channel, `http` or `command` (decision I-3). The
+ *                         first HTTP Glove payload with a pid pins the session to
+ *                         that process (NF49); a later one from another pid is
+ *                         written as a `tampered` mark (what: foreign_sender, both
+ *                         pids, the payload as text) and never as the session's
+ *                         own mark (decision I-2, test 82). Command-hook payloads
+ *                         never pin and are never refused by a pin: the agent can
+ *                         send them itself (NF48), which their label says.
  *                         Returns the log's answer, or { ok: false, reason } when
- *                         the mark names no session (nothing is written).
+ *                         the mark names no session (nothing is written) or came
+ *                         from the wrong process.
  *   intake.poll()         writes a `tick` (source process) to every session with
  *                         no mark written for tickMs (line 360: the heartbeat
  *                         ticks only while idle); returns how many it wrote
@@ -27,6 +38,9 @@
 
 const TICK_MS = 500;
 const NS_PER_MS = 1000000n;
+const GLOVE_SOURCES = ['hook', 'agent_claim']; // the Glove's marks: the agent's own hooks and its claim
+const CHANNELS = ['http', 'command']; // detail.channel (decision I-3)
+const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 function createIntake({ openLog, clock, tickMs = TICK_MS }) {
   const sessions = new Map(); // session id -> { log, last: bigint mono of the last mark written }
@@ -38,19 +52,51 @@ function createIntake({ openLog, clock, tickMs = TICK_MS }) {
     return r;
   }
 
-  function receive(input) {
+  /** A payload for a pinned session from another process: recorded as tampered, never as the session's mark (I-2). */
+  function foreign(s, id, m, pid, now) {
+    const t = {
+      schema_version: 1,
+      session_id: id,
+      source: 'process',
+      agent: null,
+      turn: null,
+      sub_agent: null,
+      observed_at: now.wall,
+      mono_ns: now.mono,
+      target: { kind: 'process' },
+      says: 'tampered',
+      detail: { what: 'foreign_sender', sender_pid: pid, pinned_pid: s.pin, received: JSON.stringify(m) },
+      cause_hint: null,
+    };
+    const r = write(s, t, now);
+    return {
+      ok: false,
+      reason: `a payload for session ${id} came from another process (pid ${pid}; the session is pinned to pid ${s.pin}): recorded as tampered, not as the session's mark`,
+      tampered: r.ok ? r.seq : null,
+    };
+  }
+
+  function receive(input, from = {}) {
     const m = JSON.parse(JSON.stringify(input));
     const id = m && m.session_id;
     if (typeof id !== 'string' || !id) return { ok: false, reason: 'the mark names no session, so it cannot be routed to a log' };
     const now = clock();
     let s = sessions.get(id);
     if (!s) {
-      s = { log: openLog(id), last: BigInt(now.mono) };
+      s = { log: openLog(id), last: BigInt(now.mono), pin: null };
       sessions.set(id, s);
     }
+    const glove = GLOVE_SOURCES.includes(m.source);
+    const pid = Number.isInteger(from.pid) ? from.pid : null;
+    if (glove && from.channel === 'http' && pid !== null) {
+      // Pinned at first contact (NF49): only HTTP payloads carry a sender the agent cannot choose.
+      if (s.pin === null) s.pin = pid;
+      else if (s.pin !== pid) return foreign(s, id, m, pid, now);
+    }
+    if (glove && CHANNELS.includes(from.channel) && isObject(m.detail)) m.detail = { ...m.detail, channel: from.channel };
     if (m.mono_ns === undefined) {
       m.mono_ns = now.mono;
-      if (m.detail && typeof m.detail === 'object' && !Array.isArray(m.detail)) m.detail = { ...m.detail, stamped_by: 'intake' };
+      if (isObject(m.detail)) m.detail = { ...m.detail, stamped_by: 'intake' };
     }
     return write(s, m, now);
   }

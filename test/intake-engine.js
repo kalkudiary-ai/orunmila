@@ -155,4 +155,67 @@ it(
   }),
 );
 
+// --- B1b: pinning and the wrong sender (test 82; decisions I-2, I-3) -----------------
+
+const HTTP = (pid) => ({ channel: 'http', pid });
+
+it(
+  'test 82: a payload for a pinned session from another process is a tampered mark (foreign_sender), never the session\'s own mark',
+  withIntake(({ intake, dir }) => {
+    assert.strictEqual(intake.receive(mark('hook_started'), HTTP(100)).ok, true);
+    assert.strictEqual(intake.receive(mark('hook_started'), HTTP(100)).ok, true);
+    const forged = { ...mark('hook_started'), cause_hint: 'toolu_forged' };
+    const r = intake.receive(forged, HTTP(200));
+    assert.strictEqual(r.ok, false);
+    assert.ok(/another process/.test(r.reason), r.reason);
+    const rows = rawLines(dir(SID)).slice(1);
+    assert.deepStrictEqual(rows.map((x) => x.says), ['started', 'started', 'tampered']);
+    const t = rows[2];
+    assert.deepStrictEqual([t.source, t.turn, t.target, t.detail.what, t.detail.sender_pid, t.detail.pinned_pid], ['process', null, { kind: 'process' }, 'foreign_sender', 200, 100]);
+    assert.ok(t.detail.received.includes('toolu_forged'), 'the payload is kept as evidence, as text');
+    assert.ok(!rows.some((x) => x.cause_hint === 'toolu_forged'), 'never written as a mark of the session');
+    assert.strictEqual(verifySessionLog(dir(SID)).ok, true);
+  }),
+);
+
+it(
+  'decision I-3: Glove marks say how they reached intake (detail.channel); a command-hook mark is never refused by the pin',
+  withIntake(({ intake, dir }) => {
+    intake.receive(mark('hook_started'), HTTP(100));
+    assert.strictEqual(intake.receive(mark('hook_started'), { channel: 'command', pid: 999 }).ok, true);
+    intake.receive(mark('claim'), HTTP(100));
+    const rows = rawLines(dir(SID)).slice(1);
+    assert.deepStrictEqual(rows.map((x) => x.detail.channel), ['http', 'command', 'http']);
+  }),
+);
+
+it(
+  'only Glove marks are labelled with a channel; a mark sent with no channel is not labelled, and nothing pins without a pid',
+  withIntake(({ intake, dir }) => {
+    const s = mark('sentinel_modified');
+    delete s.detail.diff_ref; // no file kept beside the log for it here
+    assert.strictEqual(intake.receive(s, HTTP(100)).ok, true);
+    intake.receive(mark('hook_started'));
+    intake.receive(mark('hook_started'), { channel: 'http' });
+    assert.strictEqual(intake.receive(mark('hook_started'), HTTP(300)).ok, true, 'the first payload with a pid pins');
+    assert.strictEqual(intake.receive(mark('hook_started'), HTTP(301)).ok, false);
+    const rows = rawLines(dir(SID)).slice(1);
+    assert.deepStrictEqual(rows.map((x) => x.detail.channel), [undefined, undefined, 'http', 'http', undefined]);
+  }),
+);
+
+it(
+  'pins are per session: one process may serve two sessions, and session B\'s pin does not refuse session A\'s sender',
+  withIntake(({ intake, dir }) => {
+    const other = (m) => ({ ...m, session_id: 'ses_test_0002' });
+    intake.receive(mark('hook_started'), HTTP(100));
+    intake.receive(other(mark('hook_started')), HTTP(500));
+    assert.strictEqual(intake.receive(mark('hook_started'), HTTP(100)).ok, true);
+    assert.strictEqual(intake.receive(other(mark('hook_started')), HTTP(500)).ok, true);
+    assert.strictEqual(intake.receive(other(mark('hook_started')), HTTP(100)).ok, false);
+    assert.strictEqual(rawLines(dir('ses_test_0002')).filter((x) => x.says === 'tampered').length, 1);
+    assert.strictEqual(rawLines(dir(SID)).filter((x) => x.says === 'tampered').length, 0);
+  }),
+);
+
 runAll('intake-engine');

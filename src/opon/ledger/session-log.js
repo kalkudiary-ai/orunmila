@@ -19,6 +19,8 @@
  * first (src/opon/intake/redact.js, slice A6), before anything is hashed or
  * written; `.env` values come in as `envValues`, held in memory only.
  * One writer per session log is assumed (one intake per machine, slice B1).
+ * createSessionLog makes a new folder; openSessionLog reopens one that
+ * verifies, for an intake that restarted (slice B1c, test 84).
  */
 
 const fs = require('fs');
@@ -65,10 +67,33 @@ function createSessionLog(dir, headerInput, { envValues = [] } = {}) {
   fs.writeFileSync(rawFile, line(header), { flag: 'wx', mode: 0o600 });
   const qHeader = seal({ schema_version: 1, record: 'quarantine_header', session_id: header.session_id, seq: 0 }, null);
   fs.writeFileSync(qFile, line(qHeader), { flag: 'wx', mode: 0o600 });
+  return writer(dir, { header, last: header, qLast: qHeader, counts: { marks: 0, quarantined: 0 }, envValues });
+}
 
-  let last = header;
-  let qLast = qHeader;
-  const counts = { marks: 0, quarantined: 0 };
+/**
+ * Reopen an existing session log, for an intake that restarted (test 84): both
+ * chains continue where they stopped. A log that does not verify (an edited or
+ * torn line, a broken quarantine log, a changed or missing kept file, no log)
+ * is refused with the verifier's words and nothing is written: a broken chain
+ * is never extended, and nothing in a session is ever edited (line 348).
+ * Known limit: the redaction kinds of a file kept before the reopen are not
+ * merged into a later mark that names it (they live only in memory).
+ */
+function openSessionLog(dir, { envValues = [] } = {}) {
+  const v = verifySession(dir);
+  if (!v.ok) throw new Error(`the session log in ${dir} cannot be reopened: ${v.words}`);
+  const lines = (f) => fs.readFileSync(path.join(dir, f), 'utf8').split('\n').slice(0, -1).map((l) => JSON.parse(l));
+  const raw = lines('raw.jsonl');
+  const q = lines('quarantine.jsonl');
+  const counts = { marks: raw.length - 1, quarantined: q.length - 1 };
+  return writer(dir, { header: raw[0], last: raw[raw.length - 1], qLast: q[q.length - 1], counts, envValues });
+}
+
+/** Appends to one session folder whose chains end at `last` (raw) and `qLast` (quarantine). */
+function writer(dir, { header, last, qLast, counts, envValues }) {
+  const rawFile = path.join(dir, 'raw.jsonl');
+  const qFile = path.join(dir, 'quarantine.jsonl');
+  const filesDir = path.join(dir, 'files');
 
   const keptKinds = new Map(); // ref -> redaction kinds of that kept file
 
@@ -143,10 +168,13 @@ function createSessionLog(dir, headerInput, { envValues = [] } = {}) {
     return { ok: true, seq: sealed.seq };
   }
 
-  return { append, keep, counts: () => ({ ...counts }) };
+  /** The raw log's last record: where an intake that restarts finds when it last wrote (test 84). */
+  const lastRecord = () => ({ seq: last.seq, mono_ns: last.mono_ns, observed_at: last.observed_at });
+
+  return { append, keep, counts: () => ({ ...counts }), last: lastRecord };
 }
 
 /** Check a session folder: the ledger uses src/verify for checking (brief v3 line 618). */
 const verifySessionLog = verifySession;
 
-module.exports = { createSessionLog, verifySessionLog };
+module.exports = { createSessionLog, openSessionLog, verifySessionLog };

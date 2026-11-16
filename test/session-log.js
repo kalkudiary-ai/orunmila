@@ -9,7 +9,7 @@
 
 const { assert, fs, path, tmpDir, rmrf, it, runAll } = require('./helpers');
 const crypto = require('crypto');
-const { createSessionLog, verifySessionLog } = require('../src/opon/ledger/session-log');
+const { createSessionLog, openSessionLog, verifySessionLog } = require('../src/opon/ledger/session-log');
 const { verifyText } = require('../src/verify/chain');
 
 const SPEC = JSON.parse(fs.readFileSync(path.join(__dirname, 'cases', 'spec', 'marks.json'), 'utf8'));
@@ -192,6 +192,92 @@ it(
     assert.strictEqual(v.ok, true, JSON.stringify(v));
     assert.deepStrictEqual(log.counts(), { marks: raw.length, quarantined: q.length });
   }),
+);
+
+// --- B1c: reopening a session log after the intake restarts (test 84's first half) ---
+
+it(
+  'a reopened session log continues both chains where they stopped, and its counts include what was already there',
+  withLog((log, dir) => {
+    log.append(mark('hook_started'));
+    log.append('{not json');
+    const again = openSessionLog(dir);
+    assert.deepStrictEqual(again.counts(), { marks: 1, quarantined: 1 });
+    assert.deepStrictEqual(again.append(mark('hook_read_range')), { ok: true, seq: 2 });
+    assert.strictEqual(again.append('[1]').quarantined, 2);
+    assert.deepStrictEqual(readLines(path.join(dir, 'raw.jsonl')).map((l) => l.seq), [0, 1, 2]);
+    assert.deepStrictEqual(readLines(path.join(dir, 'quarantine.jsonl')).map((l) => l.seq), [0, 1, 2]);
+    assert.deepStrictEqual(again.counts(), { marks: 2, quarantined: 2 });
+    const v = verifySessionLog(dir);
+    assert.strictEqual(v.ok, true, v.words);
+  }),
+);
+
+it(
+  'a reopened log still checks marks and redacts with the .env values it is given',
+  withLog((log, dir) => {
+    const again = openSessionLog(dir, { envValues: ['hunter2-not-a-real-value'] });
+    const m = mark('claim');
+    m.detail.text = 'set the token to hunter2-not-a-real-value';
+    assert.strictEqual(again.append(m).ok, true);
+    assert.strictEqual(again.append({ ...mark('hook_started'), seq: 9 }).ok, false, 'a source that sets seq is still quarantined');
+    assert.ok(!fs.readFileSync(path.join(dir, 'raw.jsonl'), 'utf8').includes('hunter2-not-a-real-value'));
+    assert.strictEqual(verifySessionLog(dir).ok, true);
+  }),
+);
+
+it(
+  'last() names the raw log\'s last record (seq, mono_ns, observed_at): the header before any mark, then the latest mark, and the same after a reopen',
+  withLog((log, dir) => {
+    const h = readLines(path.join(dir, 'raw.jsonl'))[0];
+    assert.deepStrictEqual(log.last(), { seq: 0, mono_ns: h.mono_ns, observed_at: h.observed_at });
+    const m = mark('hook_read_range');
+    log.append(m);
+    const want = { seq: 1, mono_ns: m.mono_ns, observed_at: m.observed_at };
+    assert.deepStrictEqual(log.last(), want);
+    log.append('{not json');
+    assert.deepStrictEqual(log.last(), want, 'a quarantined input does not move the raw log\'s last record');
+    assert.deepStrictEqual(openSessionLog(dir).last(), want);
+  }),
+);
+
+it(
+  'a log that does not verify is never reopened, and nothing is written: an edited line, a torn last line (a crash mid-write), a broken quarantine log, no log at all',
+  () => {
+    const base = tmpDir();
+    try {
+      const made = (name) => {
+        const dir = path.join(base, name);
+        createSessionLog(dir, header()).append(mark('hook_started'));
+        return dir;
+      };
+      const edit = (file, from, to) => {
+        const text = fs.readFileSync(file, 'utf8');
+        assert.ok(text.includes(from), `${from} in ${file}`);
+        fs.writeFileSync(file, text.replace(from, to));
+      };
+      const cases = [];
+      let dir = made('edited');
+      edit(path.join(dir, 'raw.jsonl'), '"says":"started"', '"says":"exited"');
+      cases.push([dir, /line 2 of the raw log/]);
+      dir = made('torn');
+      fs.appendFileSync(path.join(dir, 'raw.jsonl'), '{"schema_version":1,"sess');
+      cases.push([dir, /line 3 of the raw log/]);
+      dir = made('quarantine');
+      edit(path.join(dir, 'quarantine.jsonl'), 'quarantine_header', 'quarantine_headex');
+      cases.push([dir, /quarantine log/]);
+      cases.push([path.join(base, 'none'), /missing/]);
+      for (const [d, why] of cases) {
+        const files = ['raw.jsonl', 'quarantine.jsonl'].map((f) => path.join(d, f));
+        const before = files.map((f) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : null));
+        assert.throws(() => openSessionLog(d), (e) => /cannot be reopened/.test(e.message) && why.test(e.message), d);
+        assert.deepStrictEqual(files.map((f) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : null)), before, `${d} unchanged`);
+      }
+      assert.ok(!fs.existsSync(path.join(base, 'none')), 'no folder made for a log that is not there');
+    } finally {
+      rmrf(base);
+    }
+  },
 );
 
 runAll('session-log');

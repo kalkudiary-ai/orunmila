@@ -36,15 +36,13 @@ Unknown fields are allowed, because v1 may add fields. A reader ignores what it 
 A schema cannot hold every rule. These are checked elsewhere: `seq` strictly increasing, the hash
 chain and the exact bytes it hashes, redaction before hashing, and path normalisation.
 
-## Open points (for O)
+## Open points, decided by O on 2026-11-16 (brief v4)
 
 - **P1. `mono_ns` above 2^53.** JSON numbers are IEEE doubles, so integers are exact only up to
-  2^53. In nanoseconds that is about 104 days. A monotonic clock that counts from boot can pass it
-  on a machine that has run longer than that, and canonical serialisation (RFC 8785) would then hash
-  a rounded value. Possible fixes: a decimal string, or microseconds. This changes the brief's
-  format, so it is O's decision.
-- **P2. Writes outside the project.** The brief makes `target.path` repo-relative (path
-  normalisation), but the Glove also sees writes outside the project, such as a scratch folder. The
-  schema does not yet say how those are spelt; slice A7 proposes it.
-- **P3. Targets the brief does not shape.** `process` and `claim` targets have only `kind` so far.
-  A `renamed` mark has no slot for the old path.
+  2^53. In nanoseconds that is about 104 days of uptime. **Decided:** `mono_ns` is written as a
+  decimal string of the integer (brief v4 line 238), compared as a big integer. Slice S1b.
+- **P2. Writes outside the project.** **Decided:** the absolute real path, with
+  `target.outside: true` (brief v4 line 345; slice A7's proposal).
+- **P3. Targets the brief does not shape.** **Decided:** a `renamed` mark carries `detail.from`,
+  the old path (brief v4 line 265). `process` and `claim` targets keep only `kind` until the first
+  source that writes them (Track B) needs more.

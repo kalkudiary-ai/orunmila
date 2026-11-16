@@ -532,6 +532,103 @@
       "cause_hint": null,
       "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
       "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_tampered": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": {
+        "kind": "process"
+      },
+      "says": "tampered",
+      "detail": {
+        "what": "foreign_sender",
+        "pid": 4242
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "sentinel_renamed": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "sentinel",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": {
+        "kind": "file",
+        "path": "src/auth.ts"
+      },
+      "says": "renamed",
+      "detail": {
+        "from": "src/auth.ts.tmp",
+        "size": 4211,
+        "fingerprint": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_prompted_from_tool": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": {
+        "kind": "turn",
+        "id": "t3"
+      },
+      "says": "prompted",
+      "detail": {
+        "prompt": "<task-notification>done</task-notification>",
+        "from_human": false,
+        "channel": "http"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_write_outside": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": {
+        "kind": "file",
+        "path": "/private/tmp/scratch/a.js",
+        "outside": true
+      },
+      "says": "created",
+      "detail": {
+        "tool": "Write",
+        "exit_status": "pass",
+        "channel": "command",
+        "size": 10,
+        "fingerprint": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+      },
+      "cause_hint": "toolu_1",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
     }
   },
   "bad": [
@@ -1235,6 +1332,90 @@
       "error": {
         "path": "/detail/stamped_by",
         "keyword": "const"
+      }
+    },
+    {
+      "name": "tampered from a source other than process",
+      "from": "process_tampered",
+      "set": {
+        "/source": "sentinel"
+      },
+      "unset": [],
+      "error": {
+        "path": "/source",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "tampered without saying what",
+      "from": "process_tampered",
+      "set": {},
+      "unset": [
+        "/detail/what"
+      ],
+      "error": {
+        "path": "/detail/what",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "tampered what not on the list",
+      "from": "process_tampered",
+      "set": {
+        "/detail/what": "vibes"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/what",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "channel not http or command",
+      "from": "hook_prompted_from_tool",
+      "set": {
+        "/detail/channel": "smoke"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/channel",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "from_human not a boolean",
+      "from": "hook_prompted_from_tool",
+      "set": {
+        "/detail/from_human": "no"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/from_human",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "renamed without its old path",
+      "from": "sentinel_renamed",
+      "set": {},
+      "unset": [
+        "/detail/from"
+      ],
+      "error": {
+        "path": "/detail/from",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "outside not a boolean",
+      "from": "hook_write_outside",
+      "set": {
+        "/target/outside": "yes"
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/outside",
+        "keyword": "type"
       }
     }
   ]

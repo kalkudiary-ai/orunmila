@@ -92,7 +92,7 @@ for (const f of FORMATS) {
         const at = `${where}/${k}`;
         if (sub.$ref === undefined) {
           if (typeof sub.description !== 'string' || !sub.description) missing.push(`${at}: description`);
-          if (typeof sub.$comment !== 'string' || !(sub.$comment.startsWith('brief v3 line') || sub.$comment.startsWith('agent'))) {
+          if (typeof sub.$comment !== 'string' || !(sub.$comment.startsWith('brief v3 line') || sub.$comment.startsWith('brief v4 line') || sub.$comment.startsWith('agent'))) {
             missing.push(`${at}: $comment`);
           }
         }

@@ -69,9 +69,9 @@
       "$ref": "#/definitions/target"
     },
     "says": {
-      "description": "A fixed verb list: created, modified, deleted, renamed, started, exited, ended (a turn finished, or a tool call failed), prompted (a user prompt arrived), read, contacted, called, claimed, checked (the law gate checked a turn), fingerprinted (the Opon recorded a file's fingerprint), gap (a source lost or dropped events). Also tick (heartbeat).",
-      "$comment": "brief v3 line 245",
-      "enum": ["created", "modified", "deleted", "renamed", "started", "exited", "ended", "prompted", "read", "contacted", "called", "claimed", "checked", "fingerprinted", "gap", "tick"]
+      "description": "A fixed verb list: created, modified, deleted, renamed, started, exited, ended (a turn finished, or a tool call failed), prompted (a user prompt arrived), read, contacted, called, claimed, checked (the law gate checked a turn), fingerprinted (the Opon recorded a file's fingerprint), gap (a source lost or dropped events), tampered (source process: Orunmila's own logs, frozen configuration, code or the agent's hook settings changed during the session, or a payload arrived from a process other than the one pinned to the session). Also tick (heartbeat).",
+      "$comment": "brief v3 line 245; brief v4 line 245 adds tampered (decision I-1, 2026-11-16)",
+      "enum": ["created", "modified", "deleted", "renamed", "started", "exited", "ended", "prompted", "read", "contacted", "called", "claimed", "checked", "fingerprinted", "gap", "tampered", "tick"]
     },
     "detail": {
       "description": "Named detail slots (the spec gives each a schema).",
@@ -193,6 +193,16 @@
       "$comment": "brief v3 lines 259, 263: any other tool targets { kind: tool, name }; called carries tool_input",
       "if": { "required": ["says"], "properties": { "says": { "const": "called" } } },
       "then": { "properties": { "target": { "properties": { "kind": { "const": "tool" } } }, "detail": { "required": ["tool_input"] } } }
+    },
+    {
+      "$comment": "brief v4 line 245: a tampered mark has source process and says what was tampered with",
+      "if": { "required": ["says"], "properties": { "says": { "const": "tampered" } } },
+      "then": { "properties": { "source": { "const": "process" }, "detail": { "required": ["what"] } } }
+    },
+    {
+      "$comment": "brief v4 line 265: a renamed mark also carries from, the old path",
+      "if": { "required": ["says"], "properties": { "says": { "const": "renamed" } } },
+      "then": { "properties": { "detail": { "required": ["from"] } } }
     }
   ],
   "definitions": {
@@ -237,9 +247,14 @@
         },
         "path": {
           "description": "The file or folder. Normalise paths: convert to repo-relative, resolve symlinks, and normalise case on case-insensitive filesystems.",
-          "$comment": "brief v3 lines 226, 339. Not checked here: a write outside the project has no repo-relative form (open point P2 in spec/README.md); normalisation is slice A7.",
+          "$comment": "brief v3 lines 226, 339; brief v4 line 345: a path outside the project root is absolute, with outside: true. Normalisation is slice A7.",
           "type": "string",
           "minLength": 1
+        },
+        "outside": {
+          "description": "A path outside the project root keeps its absolute real path, with `target.outside: true`.",
+          "$comment": "brief v4 line 345 (open point P2, decided 2026-11-16)",
+          "type": "boolean"
         },
         "text": { "description": "A command targets `{ \"kind\": \"command\", \"text\": ... }`.", "$comment": "brief v3 line 259", "type": "string" },
         "id": { "description": "A turn, target `{ \"kind\": \"turn\", \"id\": ... }`.", "$comment": "brief v3 line 257", "type": "string", "minLength": 1 },
@@ -360,6 +375,27 @@
           "description": "If a source cannot stamp mono_ns, intake stamps arrival time and records that here.",
           "$comment": "brief v3 line 238",
           "const": "intake"
+        },
+        "what": {
+          "description": "On a tampered mark, what was tampered with: `hook_settings`, `frozen_config`, `log_location`, `orunmila_code` or `foreign_sender`.",
+          "$comment": "brief v4 line 245",
+          "enum": ["hook_settings", "frozen_config", "log_location", "orunmila_code", "foreign_sender"]
+        },
+        "channel": {
+          "description": "Glove marks: how the mark reached intake. `http` for HTTP hooks, whose sender intake pins to the session's process at first contact; `command` for a command hook, which the agent can forge until the separate-user setup (Phase 5).",
+          "$comment": "brief v4 line 247 (decision I-3, 2026-11-16)",
+          "enum": ["http", "command"]
+        },
+        "from": {
+          "description": "On a renamed mark, the old path, normalised like `target.path`.",
+          "$comment": "brief v4 line 265 (open point P3, decided 2026-11-16)",
+          "type": "string",
+          "minLength": 1
+        },
+        "from_human": {
+          "description": "On a prompted mark: false for a prompt the agent's tool wrote itself (a task notification, a sub-agent hand-back), which does not refill the gate's block budget.",
+          "$comment": "brief v4 line 276 (open question 2, decided 2026-11-16)",
+          "type": "boolean"
         },
         "redactions": {
           "description": "Noting the redaction: the kinds of secret replaced with [REDACTED:<kind>], never the values.",

@@ -48,8 +48,9 @@ it('the shape survives: order, timing, counts, sizes, exit statuses, null-means-
   assert.strictEqual(words.length, RAW[3].command.split(' ').length);
   assert.deepStrictEqual([words[0], words[2], words[3], words[5]], ['npm', '--', '--grep', '>'], 'program, flags and operators kept');
   assert.strictEqual(s[0].text.length, RAW[0].text.length, 'prompt length kept, content gone');
-  assert.strictEqual(s[5].input.limit, 0, 'numbers in tool input zeroed');
-  assert.strictEqual(typeof s[5].input.sql, 'string');
+  const vals = Object.values(s[5].input);
+  assert.deepStrictEqual(vals.map((v) => typeof v), ['string', 'number'], 'input shape kept (keys are placeholders)');
+  assert.strictEqual(vals[1], 0, 'numbers in tool input zeroed');
   assert.strictEqual(s[4].tool_name, 'WebFetch', 'a public tool name is kept');
 });
 
@@ -90,6 +91,25 @@ it('kept words come from public lists only: a private word in an extension or a 
   for (const p of ['alice', 'tenant', 'acmepay', 'deploytool']) assert.ok(!text.includes(p), p);
   assert.ok(s.events[0].command.includes(' --check -x '), 'common flags kept');
   assert.ok(!s.kept.has('acmepay') && !s.kept.has('alice'), 'nothing private in the kept vocabulary');
+});
+
+it('no raw word is kept by key or name: tool-input keys, unknown tool names, sub-agent types and redaction kinds outside public lists are replaced', () => {
+  const raw = [
+    { ...RAW[5], call_id: 'k1', input: { acme_payroll_key: 1, nested: [{ alice_var_name: 'v' }] } },
+    { ...RAW[5], call_id: 'k2', tool_name: 'AcmeInternalTool', input: {} },
+    { ...RAW[4], call_id: 'k3', tool_name: 'AcmeFetcher' },
+    { ...RAW[2], call_id: 'k4', sub_agent_id: 'ag1', sub_agent_type: 'acme-payroll-agent', redactions: ['acme_kind', 'github_token'] },
+    { ...RAW[5], call_id: 'k5', tool_name: 'WebSearch', input: {}, extra_obj: { aliceconfig: true } },
+    { ...RAW[2], call_id: 'k6', sub_agent_id: 'ag2', sub_agent_type: 'general-purpose' },
+  ];
+  const s = stripEvents(raw);
+  const text = JSON.stringify(s.events).toLowerCase();
+  for (const p of ['acme', 'alice', 'payroll', 'internaltool', 'fetcher', 'aliceconfig']) assert.ok(!text.includes(p), p);
+  for (const p of ['acme', 'alice', 'payroll']) assert.ok(![...s.kept].some((k) => k.includes(p)), `kept: ${p}`);
+  assert.strictEqual(s.events[4].tool_name, 'WebSearch', 'a public tool name is kept');
+  assert.strictEqual(s.events[5].sub_agent_type, 'general-purpose', 'a public sub-agent type is kept');
+  assert.ok(s.events[3].redactions.includes('github_token'), 'a known redaction kind is kept');
+  assert.strictEqual(Object.keys(s.events[0].input).length, 2, 'the shape of the input object is kept');
 });
 
 it('relevance at the mark level: the stripped events translate to the same marks, kinds and counts as the raw ones', () => {

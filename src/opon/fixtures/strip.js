@@ -45,8 +45,16 @@ const FLAGS = new Set(
     '--watch --grep --stat --oneline --format --no-verify --facts-only --with-gate --gate-only --include --keep --agent').split(' '),
 );
 const FLAG = /^--?[A-Za-z][A-Za-z0-9-]*$/;
+const TOOL_NAMES = new Set(
+  ('Bash Read Write Edit MultiEdit NotebookEdit Glob Grep LS WebFetch WebSearch TodoWrite Task Agent ToolSearch Skill ' +
+    'AskUserQuestion EnterPlanMode ExitPlanMode TaskStop Monitor SendMessage ListAgents Artifact SendUserFile SubagentHandback ' +
+    'KillShell BashOutput SlashCommand').split(' '),
+);
+const SUB_AGENT_TYPES = new Set(['general-purpose', 'Explore', 'Plan', 'web-fetch', 'claude-code-guide', 'statusline-setup', 'output-style-setup', 'fork', 'claude']);
+const { PATTERNS, PREFIXED } = require('../../store/secrets');
+const REDACTION_KINDS = new Set([...PATTERNS, ...PREFIXED].map(([kind]) => kind).concat('env_value'));
 const HEX = /^[0-9a-f]{40}$|^[0-9a-f]{64}$/;
-const KEEP_FIELDS = new Set(['ts', 'type', 'source', 'agent', 'turn_id', 'failed', 'exit_code', 'read_kind', 'change_kind', 'binary', 'bytes', 'result_bytes', 'channel', 'claim_unconfirmed', 'redactions', 'sub_agent_type']);
+const KEEP_FIELDS = new Set(['ts', 'type', 'source', 'agent', 'turn_id', 'failed', 'exit_code', 'read_kind', 'change_kind', 'binary', 'bytes', 'result_bytes', 'channel', 'claim_unconfirmed']);
 const ID_FIELDS = new Set(['session_id', 'call_id', 'sub_agent_id']);
 const PATH_FIELDS = new Set(['path', 'rel_path', 'output_path']);
 const HASH_FIELDS = new Set(['hash', 'hash_before', 'hash_after', 'head_sha', 'merged_sha']);
@@ -125,7 +133,7 @@ function stripEvents(events) {
     if (Array.isArray(v)) return v.map(stripValue);
     if (v && typeof v === 'object') {
       const o = {};
-      for (const [k, x] of Object.entries(v)) o[keep(k)] = stripValue(x);
+      for (const [k, x] of Object.entries(v)) o[ph('a', k)] = stripValue(x); // keys are raw data too: shape kept, names replaced
       return o;
     }
     return v;
@@ -134,7 +142,7 @@ function stripEvents(events) {
   const stripToolName = (n) => {
     const s = String(n);
     if (s.startsWith('mcp__')) return 'mcp__' + s.slice(5).split('__').map((p) => ph('a', p)).join('__');
-    return keep(s);
+    return TOOL_NAMES.has(s) ? keep(s) : ph('a', s);
   };
 
   const out = events.map((e) => {
@@ -152,6 +160,8 @@ function stripEvents(events) {
       else if (k === 'host') o[k] = ph('h', String(v));
       else if (k === 'target') o[k] = stripUrl(v);
       else if (k === 'tool_name') o[k] = stripToolName(v);
+      else if (k === 'sub_agent_type') o[k] = SUB_AGENT_TYPES.has(String(v)) ? keep(v) : ph('a', String(v));
+      else if (k === 'redactions' && Array.isArray(v)) o[k] = v.map((x) => (REDACTION_KINDS.has(x) ? keep(x) : ph('a', String(x))));
       else o[k] = stripValue(v);
     }
     return o;

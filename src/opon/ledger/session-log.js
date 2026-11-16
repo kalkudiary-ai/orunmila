@@ -24,8 +24,9 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { compile } = require('../../verify/schema');
-const { seal, verifyText } = require('../../verify/chain');
+const { seal } = require('../../verify/chain');
 const { canonicalize } = require('../../verify/canonical');
+const { verifySession } = require('../../verify/session');
 
 const SPEC = path.join(__dirname, '..', '..', '..', 'spec');
 const checkMark = compile(JSON.parse(fs.readFileSync(path.join(SPEC, 'mark.schema.json'), 'utf8')));
@@ -129,40 +130,7 @@ function createSessionLog(dir, headerInput) {
   return { append, keep, counts: () => ({ ...counts }) };
 }
 
-/** Check a session folder: both chains, and every kept file a mark refers to. */
-function verifySessionLog(dir) {
-  const read = (f) => {
-    try {
-      return fs.readFileSync(path.join(dir, f), 'utf8');
-    } catch {
-      return '';
-    }
-  };
-  const rawText = read('raw.jsonl');
-  const raw = verifyText(rawText);
-  const quarantine = verifyText(read('quarantine.jsonl'));
-  const files = { checked: 0, bad: [] };
-  for (const l of rawText.split('\n')) {
-    let rec;
-    try {
-      rec = JSON.parse(l);
-    } catch {
-      continue;
-    }
-    if (!isObject(rec)) continue;
-    for (const { ref } of refsOf(rec)) {
-      files.checked++;
-      let buf;
-      try {
-        buf = fs.readFileSync(path.join(dir, 'files', ref.slice(7)));
-      } catch {
-        files.bad.push({ ref, seq: rec.seq, problem: 'missing' });
-        continue;
-      }
-      if (`sha256:${sha256(buf)}` !== ref) files.bad.push({ ref, seq: rec.seq, problem: 'changed' });
-    }
-  }
-  return { ok: raw.ok && quarantine.ok && files.bad.length === 0, raw, quarantine, files };
-}
+/** Check a session folder: the ledger uses src/verify for checking (brief v3 line 618). */
+const verifySessionLog = verifySession;
 
 module.exports = { createSessionLog, verifySessionLog };

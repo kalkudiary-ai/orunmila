@@ -1041,6 +1041,25 @@ function cmdFeedbackImport() {
   }
 }
 
+/**
+ * `orunmila verify <session-folder> [--json]` — check a session log folder end
+ * to end (src/verify/session.js) and answer in plain words. Exit 0 intact,
+ * 1 broken, 2 usage. The folder format is Phase 1's; capture does not write it
+ * yet.
+ */
+function cmdVerify() {
+  const dir = args[1] && !args[1].startsWith('--') ? args[1] : null;
+  if (!dir) {
+    console.error('Usage: orunmila verify <session-folder> [--json]');
+    process.exit(2);
+  }
+  const { verifySession } = require('../src/verify/session');
+  const r = verifySession(path.resolve(dir));
+  if (args.includes('--json')) process.stdout.write(JSON.stringify(r, null, 2) + '\n');
+  else console.log(r.words);
+  process.exitCode = r.ok ? 0 : 1;
+}
+
 const COMMANDS = {
   install: cmdInstall,
   agents: cmdAgents,
@@ -1063,6 +1082,7 @@ const COMMANDS = {
   watch: cmdWatch,
   'watch-fs': cmdWatchFs,
   'debug-transcript': cmdDebugTranscript,
+  verify: cmdVerify,
 };
 
 if (!cmd || !COMMANDS[cmd]) {
@@ -1112,6 +1132,8 @@ Both lenses
   orunmila feedback [--session ID] [--include claim_text]   write sanitized accuracy cases to a local drop folder
   orunmila feedback-import [--dir path] [--force]  copy those cases into test/cases/precision/
   orunmila debug-transcript <path>                inspect why transcript parsing isn't matching your install
+  orunmila verify <session-folder> [--json]       check a session log folder's hash chains, records and kept files
+                                                  (the new per-session format; capture does not write it yet)
 
 Docs: README.md · known issues with status: review/ISSUES.md
 `);

@@ -331,15 +331,24 @@
           "$comment": "brief v3 line 242",
           "enum": ["passed", "warned", "blocked", "skipped"]
         },
-        "law": {
-          "description": "The law checked; null when the check was skipped.",
-          "$comment": "brief v3 line 242 (\"with the law and the quoted text\"); the field name is the agent's choice, LD15",
-          "type": ["string", "null"]
+        "findings": {
+          "description": "Each law the check found broken, with the quoted text it judged; empty when it passed or skipped.",
+          "$comment": "brief v3 line 242 (\"with the law and the quoted text\"), test 61 (\"laws and quoted text\"); the shape is the agent's choice, LD36",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["law", "severity", "quote"],
+            "properties": {
+              "law": { "description": "The law's id.", "$comment": "brief v3 line 242", "type": "string", "minLength": 1 },
+              "severity": { "description": "block or warn, as the law set it.", "$comment": "agent's choice, LD36", "enum": ["block", "warn"] },
+              "quote": { "description": "The sentence the law judged; null when the finding has none.", "$comment": "brief v3 line 242", "type": ["string", "null"] }
+            }
+          }
         },
-        "quote": {
-          "description": "The quoted text the law judged; null when there is none.",
-          "$comment": "brief v3 line 242; the field name is the agent's choice, LD15",
-          "type": ["string", "null"]
+        "reason": {
+          "description": "Why a check was skipped, for example: could not confirm the current turn.",
+          "$comment": "brief v3 lines 242, 575; agent's choice of name, LD36",
+          "type": "string"
         },
         "lost": {
           "description": "A gap mark names what was lost.",

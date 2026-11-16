@@ -435,8 +435,8 @@
       "says": "checked",
       "detail": {
         "result": "skipped",
-        "law": null,
-        "quote": null
+        "reason": "could not confirm the current turn",
+        "findings": []
       },
       "cause_hint": null,
       "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
@@ -459,8 +459,13 @@
       "says": "checked",
       "detail": {
         "result": "blocked",
-        "law": "no-green-without-command",
-        "quote": "All tests pass."
+        "findings": [
+          {
+            "law": "no-green-without-command",
+            "severity": "block",
+            "quote": "All tests pass."
+          }
+        ]
       },
       "cause_hint": null,
       "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
@@ -1146,6 +1151,30 @@
       "error": {
         "path": "/detail/result",
         "keyword": "required"
+      }
+    },
+    {
+      "name": "law gate finding without its law",
+      "from": "law_gate_blocked",
+      "set": {},
+      "unset": [
+        "/detail/findings/0/law"
+      ],
+      "error": {
+        "path": "/detail/findings/0/law",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "law gate finding severity not block or warn",
+      "from": "law_gate_blocked",
+      "set": {
+        "/detail/findings/0/severity": "error"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/findings/0/severity",
+        "keyword": "enum"
       }
     },
     {

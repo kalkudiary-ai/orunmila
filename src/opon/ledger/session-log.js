@@ -15,8 +15,9 @@
  * quarantined. A mark naming a diff_ref or output_ref that was not kept is
  * quarantined too, so no mark points at evidence that does not exist.
  *
- * Before this is wired, redaction at intake (slice A6) must run on every input
- * first: this module writes what it is given, quarantined text included.
+ * Every input, quarantined text included, and every kept text file is redacted
+ * first (src/opon/intake/redact.js, slice A6), before anything is hashed or
+ * written; `.env` values come in as `envValues`, held in memory only.
  * One writer per session log is assumed (one intake per machine, slice B1).
  */
 
@@ -27,6 +28,7 @@ const { compile } = require('../../verify/schema');
 const { seal } = require('../../verify/chain');
 const { canonicalize } = require('../../verify/canonical');
 const { verifySession } = require('../../verify/session');
+const { redactText, redactMark } = require('../intake/redact');
 
 const SPEC = path.join(__dirname, '..', '..', '..', 'spec');
 const checkMark = compile(JSON.parse(fs.readFileSync(path.join(SPEC, 'mark.schema.json'), 'utf8')));
@@ -46,7 +48,7 @@ function refsOf(rec) {
   return REF_SLOTS.filter((s) => typeof d[s] === 'string' && REF.test(d[s])).map((s) => ({ slot: s, ref: d[s] }));
 }
 
-function createSessionLog(dir, headerInput) {
+function createSessionLog(dir, headerInput, { envValues = [] } = {}) {
   const rawFile = path.join(dir, 'raw.jsonl');
   const qFile = path.join(dir, 'quarantine.jsonl');
   const filesDir = path.join(dir, 'files');
@@ -67,44 +69,57 @@ function createSessionLog(dir, headerInput) {
   let qLast = qHeader;
   const counts = { marks: 0, quarantined: 0 };
 
+  const keptKinds = new Map(); // ref -> redaction kinds of that kept file
+
+  /** Keep a file beside the log: text is redacted first (line 266); binary is kept as is. */
   function keep(content) {
-    const buf = Buffer.isBuffer(content) ? content : Buffer.from(String(content), 'utf8');
+    let buf = Buffer.isBuffer(content) ? content : Buffer.from(String(content), 'utf8');
+    const text = buf.toString('utf8');
+    let kinds = [];
+    if (Buffer.from(text, 'utf8').equals(buf)) {
+      const r = redactText(text, envValues);
+      buf = Buffer.from(r.text, 'utf8');
+      kinds = r.kinds;
+    }
     const hex = sha256(buf);
     const file = path.join(filesDir, hex);
     if (!fs.existsSync(file)) fs.writeFileSync(file, buf, { flag: 'wx', mode: 0o600 });
-    return `sha256:${hex}`;
+    const ref = `sha256:${hex}`;
+    if (kinds.length) keptKinds.set(ref, kinds);
+    return ref;
   }
 
-  function quarantine(received, reasons) {
-    const entry = seal(
-      { schema_version: 1, record: 'quarantined', session_id: header.session_id, seq: qLast.seq + 1, received_at: new Date().toISOString(), reasons, received },
-      qLast.hash,
-    );
-    fs.appendFileSync(qFile, line(entry));
-    qLast = entry;
+  function quarantine(received, reasons, redactions) {
+    const entry = { schema_version: 1, record: 'quarantined', session_id: header.session_id, seq: qLast.seq + 1, received_at: new Date().toISOString(), reasons, received };
+    if (redactions.length) entry.redactions = redactions;
+    const sealed = seal(entry, qLast.hash);
+    fs.appendFileSync(qFile, line(sealed));
+    qLast = sealed;
     counts.quarantined++;
-    return { ok: false, quarantined: entry.seq, reasons };
+    return { ok: false, quarantined: sealed.seq, reasons };
   }
 
   function append(input) {
-    let received;
+    // Redact first, before anything is hashed or written, quarantined text included (lines 248, 340).
+    let value;
     try {
-      received = typeof input === 'string' ? input : JSON.stringify(input);
-    } catch {
-      received = String(input);
-    }
-    if (typeof received !== 'string') received = String(input);
-    let m;
-    try {
-      m = JSON.parse(received);
+      value = typeof input === 'string' ? JSON.parse(input) : JSON.parse(JSON.stringify(input));
     } catch (e) {
-      return quarantine(received, [`not JSON: ${e.message}`]);
+      const r = redactText(typeof input === 'string' ? input : String(input), envValues);
+      return quarantine(r.text, [`not JSON: ${e.message}`], r.kinds);
     }
-    if (!isObject(m)) return quarantine(received, ['not a JSON object']);
+    const { mark: m, kinds: redactions } = redactMark(value, envValues);
+    const received = JSON.stringify(m);
+    const reject = (reasons) => quarantine(received, reasons, redactions);
+    if (!isObject(m)) return reject(['not a JSON object']);
     const reasons = [];
     for (const k of INTAKE_FIELDS) if (k in m) reasons.push(`the source sets ${k}, which intake assigns`);
     if (m.session_id !== header.session_id) reasons.push(`session_id ${JSON.stringify(m.session_id)} is not this session's`);
-    if (reasons.length) return quarantine(received, reasons);
+    if (reasons.length) return reject(reasons);
+    for (const { ref } of refsOf(m)) {
+      const k = keptKinds.get(ref);
+      if (k) m.detail.redactions = [...new Set([...(m.detail.redactions || []), ...k])].sort();
+    }
 
     if (m.mono_ns === undefined) {
       m.mono_ns = Number(process.hrtime.bigint());
@@ -114,13 +129,13 @@ function createSessionLog(dir, headerInput) {
     try {
       sealed = seal({ ...m, seq: last.seq + 1 }, last.hash);
     } catch (e) {
-      return quarantine(received, [`cannot be serialised canonically: ${e.message}`]);
+      return reject([`cannot be serialised canonically: ${e.message}`]);
     }
     reasons.push(...describe(checkMark(sealed)));
     for (const { slot, ref } of refsOf(sealed)) {
       if (!fs.existsSync(path.join(filesDir, ref.slice(7)))) reasons.push(`detail.${slot} ${ref} refers to a file not kept beside the log`);
     }
-    if (reasons.length) return quarantine(received, reasons);
+    if (reasons.length) return reject(reasons);
     fs.appendFileSync(rawFile, line(sealed));
     last = sealed;
     counts.marks++;

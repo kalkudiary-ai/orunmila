@@ -1,0 +1,249 @@
+{
+  "good": {
+    "header": {
+      "schema_version": 1,
+      "record": "session_header",
+      "session_id": "ses_test_0001",
+      "seq": 0,
+      "observed_at": "2026-11-16T08:59:59.000Z",
+      "mono_ns": 4900000000,
+      "orunmila": {
+        "version": "0.3.0",
+        "code_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "agent": {
+        "name": "claude-code",
+        "version": "2.1.0"
+      },
+      "os": {
+        "platform": "darwin",
+        "release": "25.2.0"
+      },
+      "accounts": {
+        "agent_user": "dev",
+        "orunmila_user": "dev"
+      },
+      "project_root": "/Users/dev/proj",
+      "config": {
+        "quiet_window_ms": 1500,
+        "ceiling_ms": 30000,
+        "lag_grace_ms": 3000,
+        "exclusions": [
+          "node_modules"
+        ],
+        "diff_size_limit_bytes": 10485760
+      },
+      "frozen": {
+        "rules": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "byproducts": null,
+        "ignore": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "law_packs": {
+          "canon": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        "hook_settings": {
+          ".claude/settings.local.json": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      },
+      "hooks_report": {
+        "before": [
+          "*"
+        ],
+        "after": [
+          "*"
+        ]
+      },
+      "prev_hash": null,
+      "hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    "header_hooks_partial": {
+      "schema_version": 1,
+      "record": "session_header",
+      "session_id": "ses_test_0001",
+      "seq": 0,
+      "observed_at": "2026-11-16T08:59:59.000Z",
+      "mono_ns": 4900000000,
+      "orunmila": {
+        "version": "0.3.0",
+        "code_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "agent": {
+        "name": "claude-code",
+        "version": "2.1.0"
+      },
+      "os": {
+        "platform": "darwin",
+        "release": "25.2.0"
+      },
+      "accounts": {
+        "agent_user": "dev",
+        "orunmila_user": "dev"
+      },
+      "project_root": "/Users/dev/proj",
+      "config": {
+        "quiet_window_ms": 1500,
+        "ceiling_ms": 30000,
+        "lag_grace_ms": 3000,
+        "exclusions": [
+          "node_modules"
+        ],
+        "diff_size_limit_bytes": 10485760
+      },
+      "frozen": {
+        "rules": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "byproducts": null,
+        "ignore": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "law_packs": {
+          "canon": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        "hook_settings": {
+          ".claude/settings.local.json": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      },
+      "hooks_report": {
+        "before": [
+          "Edit",
+          "Write"
+        ],
+        "after": [
+          "*"
+        ]
+      },
+      "prev_hash": null,
+      "hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    }
+  },
+  "bad": [
+    {
+      "name": "header seq not 0",
+      "from": "header",
+      "set": {
+        "/seq": 1
+      },
+      "unset": [],
+      "error": {
+        "path": "/seq",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "header with a previous hash",
+      "from": "header",
+      "set": {
+        "/prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "unset": [],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "record name wrong",
+      "from": "header",
+      "set": {
+        "/record": "mark"
+      },
+      "unset": [],
+      "error": {
+        "path": "/record",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "no law pack fingerprints",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/frozen/law_packs"
+      ],
+      "error": {
+        "path": "/frozen/law_packs",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "hook settings fingerprint malformed",
+      "from": "header",
+      "set": {
+        "/frozen/hook_settings/.claude~1settings.local.json": "abc"
+      },
+      "unset": [],
+      "error": {
+        "path": "/frozen/hook_settings/.claude~1settings.local.json",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "negative quiet window",
+      "from": "header",
+      "set": {
+        "/config/quiet_window_ms": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/quiet_window_ms",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "no diff size limit",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/config/diff_size_limit_bytes"
+      ],
+      "error": {
+        "path": "/config/diff_size_limit_bytes",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "project root not absolute",
+      "from": "header",
+      "set": {
+        "/project_root": "proj"
+      },
+      "unset": [],
+      "error": {
+        "path": "/project_root",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "no record of which tool calls the hooks report",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/hooks_report"
+      ],
+      "error": {
+        "path": "/hooks_report",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no accounts",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/accounts"
+      ],
+      "error": {
+        "path": "/accounts",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no Orunmila version",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/orunmila/version"
+      ],
+      "error": {
+        "path": "/orunmila/version",
+        "keyword": "required"
+      }
+    }
+  ]
+}

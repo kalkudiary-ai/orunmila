@@ -1,0 +1,146 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:orunmila:spec:v1:session-header",
+  "title": "Orunmila session header, schema version 1: DRAFT",
+  "description": "Every session's raw log begins with a header record, and the hash chain starts from it. It records everything needed to reproduce the session's results. Replay reads these values from the header, never from current settings.",
+  "$comment": "brief v3 line 282 lists what the header holds but names no fields: every field name here is the agent's choice (LD16). Draft from Phase 1 slice A1; built in slice A10. Unknown fields are allowed (line 209).",
+  "type": "object",
+  "required": ["schema_version", "record", "session_id", "seq", "observed_at", "mono_ns", "orunmila", "agent", "os", "accounts", "project_root", "config", "frozen", "hooks_report", "prev_hash", "hash"],
+  "properties": {
+    "schema_version": { "description": "All carry a `schema_version`.", "$comment": "brief v3 line 209", "const": 1 },
+    "record": {
+      "description": "Marks this line as the header, so a reader tells it from a mark without guessing.",
+      "$comment": "agent's choice, LD16",
+      "const": "session_header"
+    },
+    "session_id": { "description": "The session this log records.", "$comment": "brief v3 line 282", "type": "string", "minLength": 1 },
+    "seq": {
+      "description": "The header is the first record of the raw log; marks follow from seq 1.",
+      "$comment": "brief v3 lines 237, 282; 0 for the header is the agent's choice, LD10",
+      "const": 0
+    },
+    "observed_at": {
+      "description": "Wall-clock time the session started, for humans only.",
+      "$comment": "brief v3 line 238",
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$"
+    },
+    "mono_ns": { "description": "The monotonic clock at session start.", "$comment": "brief v3 line 238", "type": "integer", "minimum": 0 },
+    "orunmila": {
+      "description": "Orunmila's version.",
+      "$comment": "brief v3 line 282",
+      "type": "object",
+      "required": ["version"],
+      "properties": {
+        "version": { "description": "Orunmila's version.", "$comment": "brief v3 line 282", "type": "string", "minLength": 1 },
+        "code_fingerprint": {
+          "description": "A fingerprint of Orunmila's own code at session start; a change mid-session is a tampering mark.",
+          "$comment": "agent: ledger A3 and NF41, phase1-plan A10; not in brief line 282",
+          "$ref": "#/definitions/fingerprint"
+        }
+      }
+    },
+    "agent": {
+      "description": "The agent.",
+      "$comment": "brief v3 line 282",
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "description": "The agent, for example `claude-code`.", "$comment": "brief v3 line 282", "type": "string", "minLength": 1 },
+        "version": { "description": "The agent's version, null when unknown.", "$comment": "brief v3 line 282", "type": ["string", "null"] }
+      }
+    },
+    "os": {
+      "description": "The operating system.",
+      "$comment": "brief v3 line 282",
+      "type": "object",
+      "required": ["platform"],
+      "properties": {
+        "platform": { "description": "For example `darwin`, `linux`, `win32`.", "$comment": "brief v3 line 282", "type": "string", "minLength": 1 },
+        "release": { "description": "The operating system release.", "$comment": "brief v3 line 282", "type": "string" }
+      }
+    },
+    "accounts": {
+      "description": "User accounts: the agent's, and the one Orunmila's files belong to (the same account until the separate-user setup in Phase 5).",
+      "$comment": "brief v3 lines 282, 587",
+      "type": "object",
+      "required": ["agent_user", "orunmila_user"],
+      "properties": {
+        "agent_user": { "description": "The account the agent runs as.", "$comment": "brief v3 line 282", "type": "string", "minLength": 1 },
+        "orunmila_user": { "description": "The account that owns Orunmila's logs.", "$comment": "brief v3 lines 282, 342", "type": "string", "minLength": 1 }
+      }
+    },
+    "project_root": {
+      "description": "The session header records the project root, so a Glove mark and a sentinel mark for one file always join.",
+      "$comment": "brief v3 line 339. An absolute path (POSIX, or a Windows drive).",
+      "type": "string",
+      "pattern": "^(/|[A-Za-z]:[\\\\/])"
+    },
+    "config": {
+      "description": "Every configured value (quiet window, ceiling, lag grace, exclusions).",
+      "$comment": "brief v3 line 282; other configured values are allowed beside these",
+      "type": "object",
+      "required": ["quiet_window_ms", "ceiling_ms", "lag_grace_ms", "exclusions", "diff_size_limit_bytes"],
+      "properties": {
+        "quiet_window_ms": { "description": "The quiet window.", "$comment": "brief v3 line 282", "type": "integer", "minimum": 0 },
+        "ceiling_ms": { "description": "The ceiling.", "$comment": "brief v3 line 282", "type": "integer", "minimum": 0 },
+        "lag_grace_ms": { "description": "The lag grace.", "$comment": "brief v3 line 282", "type": "integer", "minimum": 0 },
+        "exclusions": { "description": "Exclusions.", "$comment": "brief v3 line 282", "type": "array", "items": { "type": "string" } },
+        "diff_size_limit_bytes": {
+          "description": "The size limit over which a diff is not kept (`no_diff: too_large`), a configured value recorded in the session header.",
+          "$comment": "brief v3 line 266",
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "frozen": {
+      "description": "The fingerprints of every frozen configuration file (rules, byproducts, ignore list, law packs, agent hook settings) as they were at session start. null when the file does not exist.",
+      "$comment": "brief v3 lines 282, 343",
+      "type": "object",
+      "required": ["rules", "byproducts", "ignore", "law_packs", "hook_settings"],
+      "properties": {
+        "rules": { "description": "`.orunmila/rules`.", "$comment": "brief v3 line 342", "$ref": "#/definitions/fingerprint" },
+        "byproducts": { "description": "`.orunmila/byproducts`.", "$comment": "brief v3 line 342", "$ref": "#/definitions/fingerprint" },
+        "ignore": { "description": "`.orunmila/ignore`.", "$comment": "brief v3 line 342", "$ref": "#/definitions/fingerprint" },
+        "law_packs": {
+          "description": "Every law pack in use (Orunmila's canon and any project law pack), by name.",
+          "$comment": "brief v3 line 343",
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/fingerprint" }
+        },
+        "hook_settings": {
+          "description": "The agent's own hook configuration files, by path. A change mid-session is recorded as a tampering mark; it cannot be held back (NF42, approved by O 2026-11-15).",
+          "$comment": "brief v3 line 343, as amended for hook settings by O's NF42 decision",
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/fingerprint" }
+        }
+      }
+    },
+    "hooks_report": {
+      "description": "Which tool calls the agent's hooks can report before and after they run. Where an agent cannot report before a tool runs, the session header says so.",
+      "$comment": "brief v3 lines 282, 337. Each list holds tool names, or \"*\" for every tool (agent's choice, LD16); an empty list means none.",
+      "type": "object",
+      "required": ["before", "after"],
+      "properties": {
+        "before": { "description": "Tools reported before they run.", "$comment": "brief v3 line 337", "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "after": { "description": "Tools reported after they run.", "$comment": "brief v3 line 337", "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "prev_hash": { "description": "The hash chain starts from the header, so it has no previous hash.", "$comment": "brief v3 line 282", "type": "null" },
+    "hash": {
+      "description": "The header's own hash; the first mark's prev_hash.",
+      "$comment": "brief v3 lines 247, 282",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "definitions": {
+    "fingerprint": {
+      "description": "Plain SHA-256, or keyed HMAC-SHA-256 for files on the redaction list; null when the file does not exist.",
+      "$comment": "brief v3 lines 249, 343",
+      "type": ["string", "null"],
+      "pattern": "^(sha256|hmac-sha256):[0-9a-f]{64}$"
+    }
+  }
+}

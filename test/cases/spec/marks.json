@@ -1,0 +1,1212 @@
+{
+  "good": {
+    "sentinel_modified": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "sentinel",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": {
+        "kind": "file",
+        "path": "src/auth.ts"
+      },
+      "says": "modified",
+      "detail": {
+        "size": 4211,
+        "fingerprint_before": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "fingerprint": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "lines_added": 3,
+        "lines_removed": 1,
+        "diff_ref": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "sentinel_modified_before_unknown": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "sentinel",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": {
+        "kind": "file",
+        "path": "src/auth.ts"
+      },
+      "says": "modified",
+      "detail": {
+        "size": 10,
+        "fingerprint_before": null,
+        "fingerprint": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "lines_added": null,
+        "lines_removed": null,
+        "no_diff": "binary"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_started": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": {
+        "kind": "command",
+        "text": "npm test"
+      },
+      "says": "started",
+      "detail": {
+        "tool": "Bash"
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_exited_fail": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": {
+        "kind": "command",
+        "text": "npm test"
+      },
+      "says": "exited",
+      "detail": {
+        "tool": "Bash",
+        "exit_status": "fail",
+        "output_excerpt": "FAIL  x",
+        "output_ref": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+        "redactions": [
+          "api_key"
+        ]
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_exited_known_code": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": {
+        "kind": "command",
+        "text": "npm test"
+      },
+      "says": "exited",
+      "detail": {
+        "tool": "Bash",
+        "exit_status": "fail",
+        "exit_code": 3
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_created_file": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": {
+        "kind": "file",
+        "path": "src/new.ts"
+      },
+      "says": "created",
+      "detail": {
+        "tool": "Write",
+        "exit_status": "pass",
+        "size": 12,
+        "fingerprint": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "lines_added": 1,
+        "lines_removed": 0,
+        "diff_ref": "sha256:8888888888888888888888888888888888888888888888888888888888888888"
+      },
+      "cause_hint": "toolu_02",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_read_range": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": {
+        "kind": "file",
+        "path": "src/auth.ts"
+      },
+      "says": "read",
+      "detail": {
+        "tool": "Read",
+        "exit_status": "pass",
+        "read_kind": "range",
+        "size": 4211,
+        "fingerprint": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_read_secret_keyed": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": {
+        "kind": "file",
+        "path": ".env"
+      },
+      "says": "read",
+      "detail": {
+        "tool": "Read",
+        "exit_status": "pass",
+        "read_kind": null,
+        "size": 80,
+        "fingerprint": "hmac-sha256:9999999999999999999999999999999999999999999999999999999999999999"
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_search": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": {
+        "kind": "dir",
+        "path": "."
+      },
+      "says": "read",
+      "detail": {
+        "tool": "Grep",
+        "exit_status": "pass",
+        "read_kind": "pattern",
+        "pattern": "validateToken"
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_web_search": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": {
+        "kind": "network",
+        "host": null,
+        "query": "json canonicalization"
+      },
+      "says": "contacted",
+      "detail": {
+        "tool": "WebSearch",
+        "exit_status": "pass"
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_fetch": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": {
+        "kind": "network",
+        "host": "example.com",
+        "url": "https://example.com/"
+      },
+      "says": "contacted",
+      "detail": {
+        "tool": "WebFetch",
+        "exit_status": "pass"
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_called": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": {
+        "kind": "tool",
+        "name": "mcp__x__y"
+      },
+      "says": "called",
+      "detail": {
+        "tool": "mcp__x__y",
+        "exit_status": "pass",
+        "tool_input": {
+          "q": 1
+        }
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_tool_failed": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": {
+        "kind": "tool",
+        "name": "mcp__x__y"
+      },
+      "says": "ended",
+      "detail": {
+        "tool": "mcp__x__y",
+        "exit_status": "fail"
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_in_sub_agent": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": {
+        "id": "agent_1",
+        "type": "general-purpose"
+      },
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": {
+        "kind": "command",
+        "text": "npm test"
+      },
+      "says": "started",
+      "detail": {
+        "tool": "Bash"
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_prompted": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": {
+        "kind": "turn",
+        "id": "t3"
+      },
+      "says": "prompted",
+      "detail": {
+        "prompt": "go"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_turn_ended": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": {
+        "kind": "turn",
+        "id": "t3"
+      },
+      "says": "ended",
+      "detail": {},
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "claim": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "agent_claim",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": {
+        "kind": "claim"
+      },
+      "says": "claimed",
+      "detail": {
+        "text": "All tests pass."
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "law_gate_skipped": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "law_gate",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": {
+        "kind": "turn",
+        "id": "t3"
+      },
+      "says": "checked",
+      "detail": {
+        "result": "skipped",
+        "law": null,
+        "quote": null
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "law_gate_blocked": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "law_gate",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": {
+        "kind": "turn",
+        "id": "t3"
+      },
+      "says": "checked",
+      "detail": {
+        "result": "blocked",
+        "law": "no-green-without-command",
+        "quote": "All tests pass."
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_exited": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": {
+        "kind": "process"
+      },
+      "says": "exited",
+      "detail": {
+        "exit_status": "unknown"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "tick": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": null,
+      "says": "tick",
+      "detail": {
+        "stamped_by": "intake"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "sentinel_gap": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "sentinel",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": 5000000000,
+      "target": {
+        "kind": "dir",
+        "path": "src"
+      },
+      "says": "gap",
+      "detail": {
+        "lost": "events under src: the watcher reported an overflow"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    }
+  },
+  "bad": [
+    {
+      "name": "schema version 2",
+      "from": "hook_started",
+      "set": {
+        "/schema_version": 2
+      },
+      "unset": [],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "seq 0 (marks start at 1; 0 is the header)",
+      "from": "hook_started",
+      "set": {
+        "/seq": 0
+      },
+      "unset": [],
+      "error": {
+        "path": "/seq",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "seq not an integer",
+      "from": "hook_started",
+      "set": {
+        "/seq": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/seq",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "unknown source",
+      "from": "hook_started",
+      "set": {
+        "/source": "cursor"
+      },
+      "unset": [],
+      "error": {
+        "path": "/source",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "verb not on the list",
+      "from": "hook_started",
+      "set": {
+        "/says": "edited"
+      },
+      "unset": [],
+      "error": {
+        "path": "/says",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "wall clock not ISO UTC",
+      "from": "hook_started",
+      "set": {
+        "/observed_at": "2026-11-16 09:00"
+      },
+      "unset": [],
+      "error": {
+        "path": "/observed_at",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "negative monotonic clock",
+      "from": "hook_started",
+      "set": {
+        "/mono_ns": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/mono_ns",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "no hash",
+      "from": "hook_started",
+      "set": {},
+      "unset": [
+        "/hash"
+      ],
+      "error": {
+        "path": "/hash",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "short hash",
+      "from": "hook_started",
+      "set": {
+        "/hash": "sha256:abc"
+      },
+      "unset": [],
+      "error": {
+        "path": "/hash",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "empty session id",
+      "from": "hook_started",
+      "set": {
+        "/session_id": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/session_id",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "Glove mark with no turn",
+      "from": "hook_started",
+      "set": {
+        "/turn": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/turn",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "Sentinel mark naming a turn",
+      "from": "sentinel_modified",
+      "set": {
+        "/turn": "t3"
+      },
+      "unset": [],
+      "error": {
+        "path": "/turn",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "law gate mark with no turn",
+      "from": "law_gate_skipped",
+      "set": {
+        "/turn": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/turn",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "sub-agent without its type",
+      "from": "hook_in_sub_agent",
+      "set": {},
+      "unset": [
+        "/sub_agent/type"
+      ],
+      "error": {
+        "path": "/sub_agent/type",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "Glove tool mark without its tool call id",
+      "from": "hook_started",
+      "set": {
+        "/cause_hint": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/cause_hint",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "Glove tool mark without the tool name",
+      "from": "hook_exited_fail",
+      "set": {},
+      "unset": [
+        "/detail/tool"
+      ],
+      "error": {
+        "path": "/detail/tool",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "command result without exit_status",
+      "from": "hook_exited_fail",
+      "set": {},
+      "unset": [
+        "/detail/exit_status"
+      ],
+      "error": {
+        "path": "/detail/exit_status",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "exited from a non-Glove source without exit_status",
+      "from": "process_exited",
+      "set": {},
+      "unset": [
+        "/detail/exit_status"
+      ],
+      "error": {
+        "path": "/detail/exit_status",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "exit_status not pass/fail/unknown",
+      "from": "hook_exited_fail",
+      "set": {
+        "/detail/exit_status": "ok"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/exit_status",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "Glove read outcome without exit_status",
+      "from": "hook_read_range",
+      "set": {},
+      "unset": [
+        "/detail/exit_status"
+      ],
+      "error": {
+        "path": "/detail/exit_status",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "exit_code on a mark that is not a command result",
+      "from": "hook_read_range",
+      "set": {
+        "/detail/exit_code": 0
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail",
+        "keyword": "not"
+      }
+    },
+    {
+      "name": "exit_code not an integer",
+      "from": "hook_exited_known_code",
+      "set": {
+        "/detail/exit_code": "fail"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/exit_code",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "output excerpt over 2,000 characters",
+      "from": "hook_exited_fail",
+      "set": {
+        "/detail/output_excerpt": {
+          "$repeat": "x",
+          "times": 2001
+        }
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/output_excerpt",
+        "keyword": "maxLength"
+      }
+    },
+    {
+      "name": "command result whose target is not a command",
+      "from": "hook_exited_fail",
+      "set": {
+        "/target": {
+          "kind": "file",
+          "path": "a"
+        }
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/kind",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "command target without its text",
+      "from": "hook_started",
+      "set": {},
+      "unset": [
+        "/target/text"
+      ],
+      "error": {
+        "path": "/target/text",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "a diff inside the raw log",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/diff": "+x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail",
+        "keyword": "not"
+      }
+    },
+    {
+      "name": "diff_ref and no_diff together",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/no_diff": "binary"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail",
+        "keyword": "not"
+      }
+    },
+    {
+      "name": "no_diff reason not on the list",
+      "from": "sentinel_modified_before_unknown",
+      "set": {
+        "/detail/no_diff": "empty"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/no_diff",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "created mark carrying fingerprint_before",
+      "from": "hook_created_file",
+      "set": {
+        "/detail/fingerprint_before": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail",
+        "keyword": "not"
+      }
+    },
+    {
+      "name": "line counts with the before-state unknown",
+      "from": "sentinel_modified_before_unknown",
+      "set": {
+        "/detail/lines_added": 3
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/lines_added",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "fingerprint not sha256 or hmac-sha256",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/fingerprint": "md5:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/fingerprint",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "negative size",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/size": -4
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/size",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "file change whose target is a command",
+      "from": "sentinel_modified",
+      "set": {
+        "/target": {
+          "kind": "command",
+          "text": "x"
+        }
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/kind",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "file target without a path",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/target/path"
+      ],
+      "error": {
+        "path": "/target/path",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "read without read_kind",
+      "from": "hook_read_range",
+      "set": {},
+      "unset": [
+        "/detail/read_kind"
+      ],
+      "error": {
+        "path": "/detail/read_kind",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "read_kind not on the list",
+      "from": "hook_read_range",
+      "set": {
+        "/detail/read_kind": "partial"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/read_kind",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "search without its pattern",
+      "from": "hook_search",
+      "set": {},
+      "unset": [
+        "/detail/pattern"
+      ],
+      "error": {
+        "path": "/detail/pattern",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "read whose target is a tool",
+      "from": "hook_read_range",
+      "set": {
+        "/target": {
+          "kind": "tool",
+          "name": "Read"
+        }
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/kind",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "network target without host",
+      "from": "hook_fetch",
+      "set": {},
+      "unset": [
+        "/target/host"
+      ],
+      "error": {
+        "path": "/target/host",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "contacted whose target is not network",
+      "from": "hook_fetch",
+      "set": {
+        "/target": {
+          "kind": "file",
+          "path": "a"
+        }
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/kind",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "called without tool_input",
+      "from": "hook_called",
+      "set": {},
+      "unset": [
+        "/detail/tool_input"
+      ],
+      "error": {
+        "path": "/detail/tool_input",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "tool target without a name",
+      "from": "hook_called",
+      "set": {},
+      "unset": [
+        "/target/name"
+      ],
+      "error": {
+        "path": "/target/name",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "target kind not on the list",
+      "from": "hook_called",
+      "set": {
+        "/target/kind": "url"
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/kind",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "prompt without its text",
+      "from": "hook_prompted",
+      "set": {},
+      "unset": [
+        "/detail/prompt"
+      ],
+      "error": {
+        "path": "/detail/prompt",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "turn target without an id",
+      "from": "hook_turn_ended",
+      "set": {},
+      "unset": [
+        "/target/id"
+      ],
+      "error": {
+        "path": "/target/id",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "claim without its text",
+      "from": "claim",
+      "set": {},
+      "unset": [
+        "/detail/text"
+      ],
+      "error": {
+        "path": "/detail/text",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "agent_claim saying something other than claimed",
+      "from": "claim",
+      "set": {
+        "/says": "modified"
+      },
+      "unset": [],
+      "error": {
+        "path": "/says",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "checked from a source other than the law gate",
+      "from": "law_gate_skipped",
+      "set": {
+        "/source": "hook",
+        "/cause_hint": "toolu_9",
+        "/detail/tool": "x",
+        "/detail/exit_status": "pass"
+      },
+      "unset": [],
+      "error": {
+        "path": "/source",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "law gate result not on the list",
+      "from": "law_gate_blocked",
+      "set": {
+        "/detail/result": "failed"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/result",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "law gate mark without a result",
+      "from": "law_gate_blocked",
+      "set": {},
+      "unset": [
+        "/detail/result"
+      ],
+      "error": {
+        "path": "/detail/result",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "tick from a source other than process",
+      "from": "tick",
+      "set": {
+        "/source": "sentinel"
+      },
+      "unset": [],
+      "error": {
+        "path": "/source",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "null target on a mark that is not tick or gap",
+      "from": "sentinel_modified",
+      "set": {
+        "/target": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/target",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "gap without naming what was lost",
+      "from": "sentinel_gap",
+      "set": {},
+      "unset": [
+        "/detail/lost"
+      ],
+      "error": {
+        "path": "/detail/lost",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "redactions not a list of kinds",
+      "from": "hook_exited_fail",
+      "set": {
+        "/detail/redactions": "api_key"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/redactions",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "stamped_by not intake",
+      "from": "tick",
+      "set": {
+        "/detail/stamped_by": "sentinel"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/stamped_by",
+        "keyword": "const"
+      }
+    }
+  ]
+}

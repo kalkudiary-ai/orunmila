@@ -1,0 +1,373 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:orunmila:spec:v1:mark",
+  "title": "Orunmila mark (raw observation), schema version 1: DRAFT",
+  "description": "Every source's output is turned into marks of this one shape by its adapter, and intake appends them to the session's raw log (JSON Lines, one mark per line, never edited). Sources never write to the log themselves.",
+  "$comment": "brief v3 lines 209-268. Draft from Phase 1 slice A1: nothing writes or reads this format yet. Unknown fields are allowed, because the brief lets v1 add fields without a version bump (line 209); a reader must ignore what it does not know. Rules the brief states but a schema cannot hold (seq strictly increasing, the hash chain, redaction before hashing) are checked elsewhere (A3a, A4, A5, A6).",
+  "type": "object",
+  "required": ["schema_version", "session_id", "seq", "source", "agent", "turn", "sub_agent", "observed_at", "mono_ns", "target", "says", "detail", "cause_hint", "prev_hash", "hash"],
+  "properties": {
+    "schema_version": {
+      "description": "All carry a `schema_version`. Once v1 ships, fields may be added but never renamed or removed without a version bump.",
+      "$comment": "brief v3 line 209",
+      "const": 1
+    },
+    "session_id": {
+      "description": "The session the mark belongs to. A sub-agent's work belongs to its session.",
+      "$comment": "brief v3 lines 218, 256 (the example's field; its format is not set by the brief)",
+      "type": "string",
+      "minLength": 1
+    },
+    "seq": {
+      "description": "One counter per session, assigned by the Opon's intake, strictly increasing. This is the true order of arrival.",
+      "$comment": "brief v3 line 237. Marks start at 1; 0 is the session header (agent's choice, LD10).",
+      "type": "integer",
+      "minimum": 1
+    },
+    "source": {
+      "description": "One of `agent_claim`, `hook`, `sentinel`, `git`, `process`, `law_gate`. New sources are added to this list by contract change.",
+      "$comment": "brief v3 line 243",
+      "enum": ["agent_claim", "hook", "sentinel", "git", "process", "law_gate"]
+    },
+    "agent": {
+      "description": "The agent whose session this is, for example `claude-code`; null when the source cannot know it.",
+      "$comment": "brief v3 line 221 (the example's field; null allowed is the agent's choice, LD11)",
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "turn": {
+      "description": "Every Glove mark, and every law-gate mark, names the agent's turn. Sources that know nothing of turns (sentinel, git, process) write `null`.",
+      "$comment": "brief v3 line 255",
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "sub_agent": {
+      "description": "`{ \"id\": ..., \"type\": ... }` when the action happened inside a sub-agent, otherwise `null`.",
+      "$comment": "brief v3 line 256",
+      "type": ["object", "null"],
+      "required": ["id", "type"],
+      "properties": {
+        "id": { "description": "The sub-agent's id.", "$comment": "brief v3 line 256", "type": "string", "minLength": 1 },
+        "type": { "description": "The sub-agent's type.", "$comment": "brief v3 line 256", "type": "string", "minLength": 1 }
+      }
+    },
+    "observed_at": {
+      "description": "`observed_at` is wall-clock time for humans only.",
+      "$comment": "brief v3 line 238. UTC ISO 8601 with a Z, as the example (line 224); the exact pattern is the agent's choice, LD12.",
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$"
+    },
+    "mono_ns": {
+      "description": "The system-wide monotonic clock (never goes backwards), stamped as close to the moment of observation as the source allows; if a source cannot stamp it, intake stamps arrival time and records that in `detail.stamped_by`. Use it for all timing maths.",
+      "$comment": "brief v3 line 238. Open point P1 in spec/README.md: a JSON number holds integers exactly only up to 2^53, about 104 days of nanoseconds.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "target": {
+      "description": "What the mark is about. `target.kind`: `file`, `dir`, `command`, `process`, `claim`, `turn`, `tool`, or `network`.",
+      "$comment": "brief v3 lines 244, 259",
+      "$ref": "#/definitions/target"
+    },
+    "says": {
+      "description": "A fixed verb list: created, modified, deleted, renamed, started, exited, ended (a turn finished, or a tool call failed), prompted (a user prompt arrived), read, contacted, called, claimed, checked (the law gate checked a turn), fingerprinted (the Opon recorded a file's fingerprint), gap (a source lost or dropped events). Also tick (heartbeat).",
+      "$comment": "brief v3 line 245",
+      "enum": ["created", "modified", "deleted", "renamed", "started", "exited", "ended", "prompted", "read", "contacted", "called", "claimed", "checked", "fingerprinted", "gap", "tick"]
+    },
+    "detail": {
+      "description": "Named detail slots (the spec gives each a schema).",
+      "$comment": "brief v3 line 260",
+      "$ref": "#/definitions/detail"
+    },
+    "cause_hint": {
+      "description": "Filled by sources that know their cause, for example a hook mark carries the tool call id. Sentinel marks usually leave it null.",
+      "$comment": "brief v3 line 246",
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "prev_hash": {
+      "description": "Each mark's hash covers its own content plus the previous mark's hash. The first mark's previous hash is the session header's.",
+      "$comment": "brief v3 lines 247, 282",
+      "$ref": "#/definitions/hash"
+    },
+    "hash": {
+      "description": "Content is serialised in one canonical form before hashing (RFC 8785 JSON Canonicalization, or an equally exact rule written into the spec), so anyone can recompute the same hash.",
+      "$comment": "brief v3 line 247. The exact bytes hashed are slice A3a.",
+      "$ref": "#/definitions/hash"
+    }
+  },
+  "allOf": [
+    {
+      "$comment": "brief v3 line 255: Glove and law-gate marks name the turn",
+      "if": { "required": ["source"], "properties": { "source": { "enum": ["hook", "agent_claim", "law_gate"] } } },
+      "then": { "properties": { "turn": { "type": "string" } } }
+    },
+    {
+      "$comment": "brief v3 line 255: sentinel, git and process write null",
+      "if": { "required": ["source"], "properties": { "source": { "enum": ["sentinel", "git", "process"] } } },
+      "then": { "properties": { "turn": { "type": "null" } } }
+    },
+    {
+      "$comment": "brief v3 line 253: agent_claim is the agent's closing claim",
+      "if": { "required": ["source"], "properties": { "source": { "const": "agent_claim" } } },
+      "then": { "properties": { "says": { "const": "claimed" } } }
+    },
+    {
+      "$comment": "brief v3 lines 257, 265: the claim stays a claimed mark, with its text",
+      "if": { "required": ["says"], "properties": { "says": { "const": "claimed" } } },
+      "then": { "properties": { "target": { "properties": { "kind": { "const": "claim" } } }, "detail": { "required": ["text"] } } }
+    },
+    {
+      "$comment": "brief v3 line 242: each check is a checked mark on the turn, with detail.result",
+      "if": { "required": ["source"], "properties": { "source": { "const": "law_gate" } } },
+      "then": { "properties": { "says": { "const": "checked" } } }
+    },
+    {
+      "$comment": "brief v3 lines 242, 245: checked means the law gate checked a turn",
+      "if": { "required": ["says"], "properties": { "says": { "const": "checked" } } },
+      "then": {
+        "properties": { "source": { "const": "law_gate" }, "target": { "properties": { "kind": { "const": "turn" } } }, "detail": { "required": ["result"] } }
+      }
+    },
+    {
+      "$comment": "brief v3 line 346: tick marks have source process",
+      "if": { "required": ["says"], "properties": { "says": { "const": "tick" } } },
+      "then": { "properties": { "source": { "const": "process" } } }
+    },
+    {
+      "$comment": "agent's choice, LD13: only tick and gap may have a null target",
+      "if": { "required": ["says"], "properties": { "says": { "enum": ["tick", "gap"] } } },
+      "else": { "properties": { "target": { "type": "object" } } }
+    },
+    {
+      "$comment": "brief v3 line 341: a gap mark names what was lost",
+      "if": { "required": ["says"], "properties": { "says": { "const": "gap" } } },
+      "then": { "properties": { "detail": { "required": ["lost"] } } }
+    },
+    {
+      "$comment": "brief v3 line 257: each user prompt is a prompted mark on the turn, with the text in detail.prompt",
+      "if": { "required": ["says"], "properties": { "says": { "const": "prompted" } } },
+      "then": { "properties": { "target": { "properties": { "kind": { "const": "turn" } } }, "detail": { "required": ["prompt"] } } }
+    },
+    {
+      "$comment": "brief v3 line 258: every tool call gives a started mark and one outcome mark, both with the tool call id in cause_hint and the tool's name in detail.tool",
+      "if": { "$ref": "#/definitions/glove_tool_mark" },
+      "then": { "properties": { "cause_hint": { "type": "string" }, "detail": { "required": ["tool"] } } }
+    },
+    {
+      "$comment": "brief v3 line 258: every outcome mark carries detail.exit_status",
+      "if": { "allOf": [{ "$ref": "#/definitions/glove_tool_mark" }, { "properties": { "says": { "not": { "const": "started" } } } }] },
+      "then": { "properties": { "detail": { "required": ["exit_status"] } } }
+    },
+    {
+      "$comment": "brief v3 line 240: exited marks always carry detail.exit_status",
+      "if": { "required": ["says"], "properties": { "says": { "const": "exited" } } },
+      "then": { "properties": { "detail": { "required": ["exit_status"] } } },
+      "else": { "properties": { "detail": { "not": { "required": ["exit_code"] } } } }
+    },
+    {
+      "$comment": "brief v3 line 259: a command targets { kind: command, text }",
+      "if": { "required": ["source", "says"], "properties": { "source": { "const": "hook" }, "says": { "const": "exited" } } },
+      "then": { "properties": { "target": { "properties": { "kind": { "const": "command" } } } } }
+    },
+    {
+      "$comment": "brief v3 lines 245, 264: file changes, the Glove's edit outcomes and the sentinel's marks alike",
+      "if": { "required": ["says"], "properties": { "says": { "enum": ["created", "modified", "deleted", "renamed"] } } },
+      "then": { "properties": { "target": { "properties": { "kind": { "enum": ["file", "dir"] } } } } }
+    },
+    {
+      "$comment": "brief v3 line 264: a created mark leaves fingerprint_before out",
+      "if": { "required": ["says"], "properties": { "says": { "const": "created" } } },
+      "then": { "properties": { "detail": { "not": { "required": ["fingerprint_before"] } } } }
+    },
+    {
+      "$comment": "brief v3 lines 259, 261: a read targets the file, or the folder searched",
+      "if": { "required": ["says"], "properties": { "says": { "const": "read" } } },
+      "then": { "properties": { "target": { "properties": { "kind": { "enum": ["file", "dir"] } } }, "detail": { "required": ["read_kind"] } } }
+    },
+    {
+      "$comment": "brief v3 line 259: a network contact targets { kind: network, host, url }",
+      "if": { "required": ["says"], "properties": { "says": { "const": "contacted" } } },
+      "then": { "properties": { "target": { "properties": { "kind": { "const": "network" } } } } }
+    },
+    {
+      "$comment": "brief v3 lines 259, 263: any other tool targets { kind: tool, name }; called carries tool_input",
+      "if": { "required": ["says"], "properties": { "says": { "const": "called" } } },
+      "then": { "properties": { "target": { "properties": { "kind": { "const": "tool" } } }, "detail": { "required": ["tool_input"] } } }
+    }
+  ],
+  "definitions": {
+    "hash": {
+      "description": "A chain hash: sha256 and 64 lowercase hex digits.",
+      "$comment": "brief v3 line 247; the prefix is the example's (lines 230-231)",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "fingerprint": {
+      "description": "A file or output fingerprint: plain SHA-256, or keyed HMAC-SHA-256 for files on the redaction list. null when unknown.",
+      "$comment": "brief v3 lines 228, 249. The hmac-sha256 prefix is the agent's choice, LD14.",
+      "type": ["string", "null"],
+      "pattern": "^(sha256|hmac-sha256):[0-9a-f]{64}$"
+    },
+    "count": {
+      "description": "A line count; null unless both states are known.",
+      "$comment": "brief v3 line 264",
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "glove_tool_mark": {
+      "$comment": "A Glove (source hook) mark about one tool call: started, an outcome verb, or ended on something other than a turn (brief v3 line 258).",
+      "required": ["source", "says"],
+      "allOf": [{ "properties": { "source": { "const": "hook" } } }],
+      "anyOf": [
+        { "properties": { "says": { "enum": ["started", "created", "modified", "deleted", "renamed", "exited", "read", "contacted", "called"] } } },
+        {
+          "required": ["target"],
+          "properties": { "says": { "const": "ended" }, "target": { "type": "object", "required": ["kind"], "properties": { "kind": { "not": { "const": "turn" } } } } }
+        }
+      ]
+    },
+    "target": {
+      "type": ["object", "null"],
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "description": "`file`, `dir`, `command`, `process`, `claim`, `turn`, `tool`, or `network`.",
+          "$comment": "brief v3 line 244",
+          "enum": ["file", "dir", "command", "process", "claim", "turn", "tool", "network"]
+        },
+        "path": {
+          "description": "The file or folder. Normalise paths: convert to repo-relative, resolve symlinks, and normalise case on case-insensitive filesystems.",
+          "$comment": "brief v3 lines 226, 339. Not checked here: a write outside the project has no repo-relative form (open point P2 in spec/README.md); normalisation is slice A7.",
+          "type": "string",
+          "minLength": 1
+        },
+        "text": { "description": "A command targets `{ \"kind\": \"command\", \"text\": ... }`.", "$comment": "brief v3 line 259", "type": "string" },
+        "id": { "description": "A turn, target `{ \"kind\": \"turn\", \"id\": ... }`.", "$comment": "brief v3 line 257", "type": "string", "minLength": 1 },
+        "name": { "description": "Any other tool targets `{ \"kind\": \"tool\", \"name\": ... }`.", "$comment": "brief v3 line 259", "type": "string", "minLength": 1 },
+        "host": {
+          "description": "A network contact targets `{ \"kind\": \"network\", \"host\": ..., \"url\": ... }`; for a web search `host` is `null`, because the agent's tool picks the hosts and Orunmila does not see them.",
+          "$comment": "brief v3 line 259",
+          "type": ["string", "null"]
+        },
+        "url": { "description": "The address contacted.", "$comment": "brief v3 line 259", "type": "string" },
+        "query": { "description": "For a web search, the query goes in `query`.", "$comment": "brief v3 line 259", "type": "string" }
+      },
+      "allOf": [
+        { "if": { "required": ["kind"], "properties": { "kind": { "enum": ["file", "dir"] } } }, "then": { "required": ["path"] } },
+        { "if": { "required": ["kind"], "properties": { "kind": { "const": "command" } } }, "then": { "required": ["text"] } },
+        { "if": { "required": ["kind"], "properties": { "kind": { "const": "turn" } } }, "then": { "required": ["id"] } },
+        { "if": { "required": ["kind"], "properties": { "kind": { "const": "tool" } } }, "then": { "required": ["name"] } },
+        { "if": { "required": ["kind"], "properties": { "kind": { "const": "network" } } }, "then": { "required": ["host"] } }
+      ]
+    },
+    "detail": {
+      "type": "object",
+      "properties": {
+        "tool": { "description": "The tool's name, on both marks of a tool call.", "$comment": "brief v3 line 258", "type": "string", "minLength": 1 },
+        "exit_status": {
+          "description": "`pass`, `fail` or `unknown`. Every outcome mark carries it.",
+          "$comment": "brief v3 lines 240, 258",
+          "enum": ["pass", "fail", "unknown"]
+        },
+        "exit_code": {
+          "description": "Only when it is truly known. Never invent a code. (Claude Code reports pass or fail only; exit 3 arrives as fail.) Only a command's outcome carries it.",
+          "$comment": "brief v3 lines 240, 258",
+          "type": "integer"
+        },
+        "output_excerpt": { "description": "The first 2,000 characters of output.", "$comment": "brief v3 line 262", "type": "string", "maxLength": 2000 },
+        "output_ref": {
+          "description": "When the output is longer, the fingerprint of the full output, which is kept beside the log.",
+          "$comment": "brief v3 lines 262, 266",
+          "$ref": "#/definitions/hash"
+        },
+        "vcs": {
+          "description": "Git state in a command's output, the agent's testimony: one entry for each record today's capture writes (a commit and branch, each pull request, each set of CI checks), with today's field names.",
+          "$comment": "brief v3 line 267. Entry shapes are today's capture records, not restated here.",
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "read_kind": {
+          "description": "`full` only when the adapter can show the tool returned the whole file, `range` when it returned only part, `pattern` when the agent only searched, `null` when the adapter cannot tell.",
+          "$comment": "brief v3 line 261 (open question 3)",
+          "type": ["string", "null"],
+          "enum": ["full", "range", "pattern", null]
+        },
+        "pattern": { "description": "The pattern, for a search.", "$comment": "brief v3 line 261", "type": "string" },
+        "size": { "description": "The file's size in bytes.", "$comment": "brief v3 lines 228, 261, 264", "type": "integer", "minimum": 0 },
+        "fingerprint": {
+          "description": "The file's fingerprint (for a read, of the whole file as it was when the hook ran; it does not prove what the agent saw).",
+          "$comment": "brief v3 lines 261, 264",
+          "$ref": "#/definitions/fingerprint"
+        },
+        "fingerprint_before": {
+          "description": "`null` when the before-state is unknown; a `created` mark leaves the field out.",
+          "$comment": "brief v3 line 264",
+          "$ref": "#/definitions/fingerprint"
+        },
+        "lines_added": { "description": "Never counted against an assumed-empty file.", "$comment": "brief v3 line 264", "$ref": "#/definitions/count" },
+        "lines_removed": { "description": "Never counted against an assumed-empty file.", "$comment": "brief v3 line 264", "$ref": "#/definitions/count" },
+        "diff_ref": {
+          "description": "The fingerprint of the diff, which is kept beside the log. Plain SHA-256 of the redacted copy.",
+          "$comment": "brief v3 lines 264, 266",
+          "$ref": "#/definitions/hash"
+        },
+        "no_diff": {
+          "description": "When there is no diff, says why: `binary`, or `too_large` (over the size limit recorded in the session header).",
+          "$comment": "brief v3 line 266",
+          "enum": ["binary", "too_large"]
+        },
+        "tool_input": { "description": "What a called tool was given.", "$comment": "brief v3 line 263" },
+        "tool_result_excerpt": { "description": "Only when the user switches result capture on.", "$comment": "brief v3 line 263", "type": "string" },
+        "tool_result_size": { "description": "Only when the user switches result capture on.", "$comment": "brief v3 line 263", "type": "integer", "minimum": 0 },
+        "text": { "description": "The claim.", "$comment": "brief v3 line 265", "type": "string" },
+        "prompt": { "description": "The user prompt's text.", "$comment": "brief v3 line 257", "type": "string" },
+        "result": {
+          "description": "`passed`, `warned`, `blocked` or `skipped`.",
+          "$comment": "brief v3 line 242",
+          "enum": ["passed", "warned", "blocked", "skipped"]
+        },
+        "law": {
+          "description": "The law checked; null when the check was skipped.",
+          "$comment": "brief v3 line 242 (\"with the law and the quoted text\"); the field name is the agent's choice, LD15",
+          "type": ["string", "null"]
+        },
+        "quote": {
+          "description": "The quoted text the law judged; null when there is none.",
+          "$comment": "brief v3 line 242; the field name is the agent's choice, LD15",
+          "type": ["string", "null"]
+        },
+        "lost": {
+          "description": "A gap mark names what was lost.",
+          "$comment": "brief v3 line 341; the field name is the agent's choice, LD15",
+          "type": "string",
+          "minLength": 1
+        },
+        "stamped_by": {
+          "description": "If a source cannot stamp mono_ns, intake stamps arrival time and records that here.",
+          "$comment": "brief v3 line 238",
+          "const": "intake"
+        },
+        "redactions": {
+          "description": "Noting the redaction: the kinds of secret replaced with [REDACTED:<kind>], never the values.",
+          "$comment": "brief v3 line 248; a list of kinds is the agent's choice, LD15",
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z0-9_]+$" }
+        }
+      },
+      "allOf": [
+        { "$comment": "brief v3 line 266: diffs stay out of the raw log", "not": { "required": ["diff"] } },
+        { "$comment": "brief v3 line 266: no_diff only when there is no diff", "not": { "required": ["diff_ref", "no_diff"] } },
+        {
+          "$comment": "brief v3 line 264: line counts are null unless both states are known",
+          "if": { "required": ["fingerprint_before"], "properties": { "fingerprint_before": { "type": "null" } } },
+          "then": { "properties": { "lines_added": { "type": "null" }, "lines_removed": { "type": "null" } } }
+        },
+        {
+          "$comment": "brief v3 line 261: pattern for a search",
+          "if": { "required": ["read_kind"], "properties": { "read_kind": { "const": "pattern" } } },
+          "then": { "required": ["pattern"] }
+        }
+      ]
+    }
+  }
+}

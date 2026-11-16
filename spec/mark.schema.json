@@ -263,7 +263,12 @@
     "detail": {
       "type": "object",
       "properties": {
-        "tool": { "description": "The tool's name, on both marks of a tool call.", "$comment": "brief v3 line 258", "type": "string", "minLength": 1 },
+        "tool": {
+          "description": "The tool's name, on both marks of a tool call; null when the source did not record it (today's write and read records name no tool).",
+          "$comment": "brief v3 lines 241, 258; null allowed is the agent's choice, LD33",
+          "type": ["string", "null"],
+          "minLength": 1
+        },
         "exit_status": {
           "description": "`pass`, `fail` or `unknown`. Every outcome mark carries it.",
           "$comment": "brief v3 lines 240, 258",

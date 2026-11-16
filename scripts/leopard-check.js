@@ -26,10 +26,14 @@
  * on another tree, so that run does not count.
  *
  *   node scripts/leopard-check.js --session <id> [--log <events.jsonl>]
- *        [--repo <dir>] [--json] [--gate]
+ *        [--repo <dir>] [--json] [--gate | --pending --test "<command>"]
  *
  * Exit 0 as a reporter. With --gate, exit 1 unless every Slice commit is fully
  * shown, and also when there is none (a gate over nothing is not a pass).
+ * With --pending, it judges the slice before its commit (O, 2026-11-16): the
+ * staged files, from the session's last Slice commit (or first record) to now,
+ * against the given Test: command; exit 0 only when fully shown, 1 otherwise,
+ * nothing staged included. Run it in its own call before the commit.
  * Exit 2 on a usage error or a session with no records.
  */
 
@@ -266,7 +270,7 @@ function judge(runs, want, roots, { red = false } = {}) {
   return null;
 }
 
-function check({ rows, session, repo }) {
+function check({ rows, session, repo, pending = null }) {
   const top = git(repo, ['rev-parse', '--show-toplevel']).trim();
   const roots = new Set([path.resolve(repo), top, fs.realpathSync(top)]);
   const rel = (p) => {
@@ -288,11 +292,8 @@ function check({ rows, session, repo }) {
     .filter((w) => w.rel !== null && w.t >= span.from)
     .sort((a, b) => a.t - b.t);
 
-  const commits = sliceCommits(repo, span.from, span.to);
-  const report = [];
-  let from = span.from;
-  for (const c of commits) {
-    const end = c.t + 999; // committer time has whole seconds
+  /** One slice's verdict over the window (from, end]: its files' writes, its Test: runs, the gates. */
+  const judgeSlice = (c, from, end) => {
     const inWindow = (t) => t > from && t <= end;
     const files = new Set(c.files);
     const mine = writes.filter((w) => files.has(w.rel) && inWindow(w.t));
@@ -300,8 +301,7 @@ function check({ rows, session, repo }) {
     const first = nonTest[0] || null;
     const last = mine.length ? mine[mine.length - 1] : null;
     const entry = {
-      sha: c.sha,
-      slice: c.slice,
+      ...(c.sha ? { sha: c.sha, slice: c.slice } : {}),
       test: c.test,
       files: c.files,
       writes: {
@@ -332,26 +332,49 @@ function check({ rows, session, repo }) {
     entry.gates = GATES.map((g) => ({ gate: g.gate, ...(judge(runsIn(after, end), g.argv, roots) || { status: 'not run' }) }));
     entry.shown =
       (entry.red.status === 'yes' || entry.red.status === 'n/a') && entry.green.status === 'yes' && entry.gates.every((g) => g.status === 'yes');
-    report.push(entry);
+    return entry;
+  };
+
+  const head = { session, records: own.length, span: { from: new Date(span.from).toISOString(), to: new Date(span.to).toISOString() }, limits: LIMITS };
+
+  if (pending) {
+    // The slice not yet committed: its staged files, from the session's last
+    // Slice commit (or its first record) to now.
+    const done = sliceCommits(repo, span.from, Date.now());
+    const from = done.length ? done[done.length - 1].t + 999 : span.from;
+    const staged = git(repo, ['diff', '--cached', '--name-only']).split('\n').filter(Boolean).sort();
+    if (!staged.length) return { ...head, pending: { test: pending.test, files: [], status: 'nothing staged', shown: false } };
+    return { ...head, pending: judgeSlice({ test: pending.test, files: staged }, from, Infinity) };
+  }
+
+  const commits = sliceCommits(repo, span.from, span.to);
+  const report = [];
+  let from = span.from;
+  for (const c of commits) {
+    const end = c.t + 999; // committer time has whole seconds
+    report.push(judgeSlice(c, from, end));
     from = end;
   }
-  return { session, records: own.length, span: { from: new Date(span.from).toISOString(), to: new Date(span.to).toISOString() }, limits: LIMITS, commits: report };
+  return { ...head, commits: report };
 }
 
 // --- CLI -----------------------------------------------------------------------
 
 function parseArgs(argv) {
-  const o = { json: false, gate: false };
+  const o = { json: false, gate: false, pending: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--json') o.json = true;
     else if (a === '--gate') o.gate = true;
-    else if (a === '--session' || a === '--log' || a === '--repo') {
+    else if (a === '--pending') o.pending = true;
+    else if (a === '--session' || a === '--log' || a === '--repo' || a === '--test') {
       if (i + 1 >= argv.length) return { error: `${a} needs a value` };
       o[a.slice(2)] = argv[++i];
     } else return { error: `unknown argument: ${a}` };
   }
   if (!o.session) return { error: '--session <id> is required' };
+  if (o.pending && !o.test) return { error: '--pending needs --test "<command>"' };
+  if (o.test && !o.pending) return { error: '--test is only for --pending' };
   return o;
 }
 
@@ -371,6 +394,22 @@ function text(r) {
   }
   const shown = r.commits.filter((c) => c.shown).length;
   out.push(`${r.commits.length} Slice commit(s), ${shown} fully shown.`);
+  return out.join('\n') + '\n';
+}
+
+function pendingText(r) {
+  const p = r.pending;
+  const fmt = (v) => (v.run ? `${v.status} (${v.run.ts}, ${v.run.failed ? 'failed' : 'passed'}, exit ${v.run.exit_code})` : v.status);
+  const out = [`leopard-check --pending: session ${r.session} (${r.records} records)`, r.limits, '', `Test: ${p.test}`];
+  if (p.status) out.push(`  ${p.status}`);
+  else {
+    out.push(`  staged: ${p.files.join(', ')}`);
+    out.push(`  writes: ${p.writes.count} rows` + (p.writes.last ? `; last ${p.writes.last.ts} (${p.writes.last.source}) ${p.writes.last.path}` : ''));
+    out.push(`  red before first write outside test/: ${fmt(p.red)}`);
+    out.push(`  green after last write: ${fmt(p.green)}`);
+    for (const g of p.gates) out.push(`  gate ${g.gate}: ${fmt(g)}`);
+  }
+  out.push(`  verdict: ${p.shown ? 'shown: commit' : 'not shown: do not commit'}`);
   return out.join('\n') + '\n';
 }
 
@@ -394,9 +433,10 @@ function main(argv) {
     process.stderr.write(`leopard-check: no records for session ${o.session} in ${logFile}\n`);
     return 2;
   }
-  const r = check({ rows: log.rows, session: o.session, repo });
+  const r = check({ rows: log.rows, session: o.session, repo, pending: o.pending ? { test: o.test } : null });
   r.unparsed_lines = log.bad;
-  process.stdout.write(o.json ? JSON.stringify(r, null, 2) + '\n' : text(r));
+  process.stdout.write(o.json ? JSON.stringify(r, null, 2) + '\n' : r.pending ? pendingText(r) : text(r));
+  if (r.pending) return r.pending.shown ? 0 : 1;
   if (!o.gate) return 0;
   return r.commits.length && r.commits.every((c) => c.shown) ? 0 : 1;
 }

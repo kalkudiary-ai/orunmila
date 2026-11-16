@@ -332,4 +332,100 @@ it(
   }),
 );
 
+// --- --pending: the slice before its commit (O, 2026-11-16) --------------------
+
+/** Write and stage files without committing them. */
+function stage(repo, files) {
+  for (const f of files) {
+    fs.mkdirSync(path.dirname(path.join(repo, f)), { recursive: true });
+    fs.writeFileSync(path.join(repo, f), `${f} staged\n`);
+  }
+  git(repo, ['add', ...files]);
+}
+
+/** The textbook slice's records, with no commit yet (its git commit row dropped). */
+const pendingRows = (repo) => goodSliceRows(repo).filter((e) => e.call_id !== 'c71');
+function goodSliceRows(repo) {
+  return [
+    prompt(0),
+    gloveWrite(repo, 10, 'test/a.js'),
+    cmd(20, 'node test/a.js > /tmp/red.txt 2>&1', true),
+    gloveWrite(repo, 40, 'src/a.js'),
+    sentinelWrite(repo, 41, 'src/a.js'),
+    cmd(50, 'node test/a.js > /tmp/green.txt 2>&1', false),
+    ...gateRows(60),
+    cmd(71, 'git commit -F /tmp/msg', false),
+  ];
+}
+const PENDING = ['--pending', '--test', 'node test/a.js'];
+
+it(
+  '--pending: a staged slice with red, green and every gate is shown, exit 0',
+  withRepo((repo) => {
+    stage(repo, ['test/a.js', 'src/a.js']);
+    const r = check(repo, pendingRows(repo), PENDING);
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    assert.ok(r.json && r.json.pending, r.stdout);
+    const p = r.json.pending;
+    assert.deepStrictEqual(p.files, ['src/a.js', 'test/a.js']);
+    assert.strictEqual(p.red.status, 'yes', JSON.stringify(p.red));
+    assert.strictEqual(p.green.status, 'yes', JSON.stringify(p.green));
+    assert.strictEqual(p.shown, true);
+  }),
+);
+
+it(
+  '--pending: no failing run before the first non-test write, exit 1',
+  withRepo((repo) => {
+    stage(repo, ['test/a.js', 'src/a.js']);
+    const r = check(repo, pendingRows(repo).filter((e) => e.call_id !== 'c20'), PENDING);
+    assert.strictEqual(r.status, 1, r.stdout);
+    assert.strictEqual(r.json.pending.red.status, 'no run');
+    assert.strictEqual(r.json.pending.shown, false);
+  }),
+);
+
+it(
+  '--pending: nothing staged is not a pass, exit 1',
+  withRepo((repo) => {
+    const r = check(repo, pendingRows(repo), PENDING);
+    assert.strictEqual(r.status, 1, r.stdout);
+    assert.strictEqual(r.json.pending.status, 'nothing staged');
+  }),
+);
+
+it(
+  '--pending without --test is a usage error, exit 2',
+  withRepo((repo) => {
+    stage(repo, ['src/a.js']);
+    assert.strictEqual(check(repo, pendingRows(repo), ['--pending']).status, 2);
+  }),
+);
+
+it(
+  "--pending: the window starts at the session's last Slice commit, so the earlier slice's gates do not count",
+  withRepo((repo) => {
+    const first = goodSlice(repo);
+    stage(repo, ['test/b.js', 'src/b.js']);
+    const second = [gloveWrite(repo, 110, 'test/b.js'), cmd(120, 'node test/b.js', true), gloveWrite(repo, 130, 'src/b.js'), cmd(140, 'node test/b.js', false)];
+    const r = check(repo, [...first.rows, ...second], ['--pending', '--test', 'node test/b.js']);
+    assert.strictEqual(r.status, 1, r.stdout);
+    assert.ok(r.json.pending.gates.every((g) => g.status === 'not run'), JSON.stringify(r.json.pending.gates));
+    const withGates = check(repo, [...first.rows, ...second, ...gateRows(150)], ['--pending', '--test', 'node test/b.js']);
+    assert.strictEqual(withGates.status, 0, withGates.stdout);
+  }),
+);
+
+it(
+  "--pending: an earlier slice's red run of the same Test: does not count for a slice that re-touches its files",
+  withRepo((repo) => {
+    const first = goodSlice(repo); // red at 20, writes 10 and 40, committed at 70
+    stage(repo, ['test/a.js', 'src/a.js']);
+    const again = [gloveWrite(repo, 110, 'test/a.js'), gloveWrite(repo, 130, 'src/a.js'), cmd(140, 'node test/a.js', false), ...gateRows(150)];
+    const r = check(repo, [...first.rows, ...again], PENDING);
+    assert.strictEqual(r.json.pending.red.status, 'no run', JSON.stringify(r.json.pending.red));
+    assert.strictEqual(r.status, 1, r.stdout);
+  }),
+);
+
 runAll('leopard-check');

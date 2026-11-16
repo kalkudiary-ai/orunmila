@@ -1,0 +1,119 @@
+'use strict';
+
+/**
+ * src/opon/intake/header.js — builds a session's header record (brief v3 line
+ * 282; Phase 1 slice A10): everything needed to reproduce the session's
+ * results, as it was at session start. Replay reads these values from the
+ * header, never from current settings (configFromHeader).
+ *
+ *   buildHeader({ sessionId, root, agent, orunmilaVersion, codeRoot, lawPacks,
+ *                 hookSettings, config?, observedAt?, monoNs? })
+ *     -> the header without seq / prev_hash / hash (intake seals it)
+ *   codeFingerprint(dir)       one fingerprint over every file under dir
+ *                              (path and content), for Orunmila's own code
+ *                              (ledger A3, NF41); a change mid-session is a
+ *                              tampering mark (slice B3)
+ *   hooksReportFrom(settings)  which tools the agent's hooks report before and
+ *                              after they run (line 337), from its settings
+ *   configFromHeader(header)   the configuration replay must use
+ *
+ * Frozen files are fingerprinted with plain SHA-256; an absent file is null.
+ * Accounts: the agent's and Orunmila's are the same until the separate-user
+ * setup in Phase 5 (line 587).
+ */
+
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const crypto = require('crypto');
+
+// Brief v3: quiet window 1,500 ms (line 356), ceiling 30 s (357), lag grace
+// 3,000 ms (362). The diff size limit (line 266) is the agent's choice (LD38).
+const DEFAULT_CONFIG = { quiet_window_ms: 1500, ceiling_ms: 30000, lag_grace_ms: 3000, exclusions: [], diff_size_limit_bytes: 10 * 1024 * 1024 };
+
+const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
+
+function fileFingerprint(p) {
+  try {
+    return 'sha256:' + sha256(fs.readFileSync(p));
+  } catch {
+    return null;
+  }
+}
+
+function codeFingerprint(dir) {
+  const files = [];
+  const walk = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.isFile()) files.push(p);
+    }
+  };
+  walk(dir);
+  const lines = files
+    .map((p) => `${path.relative(dir, p).split(path.sep).join('/')}\0${sha256(fs.readFileSync(p))}\n`)
+    .sort();
+  return 'sha256:' + sha256(lines.join(''));
+}
+
+function hooksReportFrom(settingsList) {
+  const out = { before: [], after: [] };
+  const add = (list, matcher) => {
+    for (const m of String(matcher || '*').split('|').map((s) => s.trim() || '*')) if (!list.includes(m)) list.push(m);
+  };
+  for (const s of settingsList) {
+    const hooks = (s && s.hooks) || {};
+    for (const [event, list] of [['PreToolUse', out.before], ['PostToolUse', out.after]]) {
+      for (const entry of hooks[event] || []) {
+        const ours = ((entry && entry.hooks) || []).some((h) => /(pre|post)-tool-use\.js/.test(String(h && h.command)));
+        if (ours) add(list, entry.matcher);
+      }
+    }
+  }
+  return out;
+}
+
+function buildHeader(o) {
+  const user = os.userInfo().username;
+  const orunmilaDir = path.join(o.root, '.orunmila');
+  const settings = [];
+  const hookSettings = {};
+  for (const p of o.hookSettings || []) {
+    hookSettings[p] = fileFingerprint(p);
+    try {
+      settings.push(JSON.parse(fs.readFileSync(p, 'utf8')));
+    } catch {}
+  }
+  const lawPacks = {};
+  for (const [name, p] of Object.entries(o.lawPacks || {})) lawPacks[name] = fileFingerprint(p);
+  const config = { ...DEFAULT_CONFIG, exclusions: [...DEFAULT_CONFIG.exclusions], ...(o.config || {}) };
+  return {
+    schema_version: 1,
+    record: 'session_header',
+    session_id: o.sessionId,
+    observed_at: o.observedAt || new Date().toISOString(),
+    mono_ns: Number.isInteger(o.monoNs) ? o.monoNs : Number(process.hrtime.bigint()),
+    orunmila: { version: o.orunmilaVersion, code_fingerprint: codeFingerprint(o.codeRoot) },
+    agent: { name: o.agent.name, version: o.agent.version === undefined ? null : o.agent.version },
+    os: { platform: process.platform, release: os.release() },
+    accounts: { agent_user: user, orunmila_user: user },
+    project_root: fs.realpathSync(o.root),
+    config,
+    frozen: {
+      rules: fileFingerprint(path.join(orunmilaDir, 'rules')),
+      byproducts: fileFingerprint(path.join(orunmilaDir, 'byproducts')),
+      ignore: fileFingerprint(path.join(orunmilaDir, 'ignore')),
+      law_packs: lawPacks,
+      hook_settings: hookSettings,
+    },
+    hooks_report: hooksReportFrom(settings),
+  };
+}
+
+function configFromHeader(header) {
+  if (!header || !header.config || typeof header.config !== 'object') throw new Error('the session header has no config to replay with');
+  return JSON.parse(JSON.stringify(header.config));
+}
+
+module.exports = { buildHeader, codeFingerprint, hooksReportFrom, configFromHeader, DEFAULT_CONFIG };

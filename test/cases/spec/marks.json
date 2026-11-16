@@ -9,7 +9,7 @@
       "turn": null,
       "sub_agent": null,
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": {
         "kind": "file",
         "path": "src/auth.ts"
@@ -36,7 +36,7 @@
       "turn": null,
       "sub_agent": null,
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": {
         "kind": "file",
         "path": "src/auth.ts"
@@ -63,7 +63,7 @@
       "turn": "t3",
       "sub_agent": null,
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": {
         "kind": "command",
         "text": "npm test"
@@ -85,7 +85,7 @@
       "turn": "t3",
       "sub_agent": null,
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": {
         "kind": "command",
         "text": "npm test"
@@ -113,7 +113,7 @@
       "turn": "t3",
       "sub_agent": null,
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": {
         "kind": "command",
         "text": "npm test"
@@ -137,7 +137,7 @@
       "turn": "t3",
       "sub_agent": null,
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": {
         "kind": "file",
         "path": "src/new.ts"
@@ -165,7 +165,7 @@
       "turn": "t3",
       "sub_agent": null,
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": {
         "kind": "file",
         "path": "src/auth.ts"
@@ -191,7 +191,7 @@
       "turn": "t3",
       "sub_agent": null,
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": {
         "kind": "file",
         "path": ".env"
@@ -217,7 +217,7 @@
       "turn": "t3",
       "sub_agent": null,
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": {
         "kind": "dir",
         "path": "."
@@ -242,7 +242,7 @@
       "turn": "t3",
       "sub_agent": null,
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": {
         "kind": "network",
         "host": null,
@@ -266,7 +266,7 @@
       "turn": "t3",
       "sub_agent": null,
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": {
         "kind": "network",
         "host": "example.com",
@@ -290,7 +290,7 @@
       "turn": "t3",
       "sub_agent": null,
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": {
         "kind": "tool",
         "name": "mcp__x__y"
@@ -316,7 +316,7 @@
       "turn": "t3",
       "sub_agent": null,
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": {
         "kind": "tool",
         "name": "mcp__x__y"
@@ -342,7 +342,7 @@
         "type": "general-purpose"
       },
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": {
         "kind": "command",
         "text": "npm test"
@@ -364,7 +364,7 @@
       "turn": "t3",
       "sub_agent": null,
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": {
         "kind": "turn",
         "id": "t3"
@@ -386,7 +386,7 @@
       "turn": "t3",
       "sub_agent": null,
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": {
         "kind": "turn",
         "id": "t3"
@@ -406,7 +406,7 @@
       "turn": "t3",
       "sub_agent": null,
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": {
         "kind": "claim"
       },
@@ -427,7 +427,7 @@
       "turn": "t3",
       "sub_agent": null,
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": {
         "kind": "turn",
         "id": "t3"
@@ -451,7 +451,7 @@
       "turn": "t3",
       "sub_agent": null,
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": {
         "kind": "turn",
         "id": "t3"
@@ -480,7 +480,7 @@
       "turn": null,
       "sub_agent": null,
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": {
         "kind": "process"
       },
@@ -501,7 +501,7 @@
       "turn": null,
       "sub_agent": null,
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": null,
       "says": "tick",
       "detail": {
@@ -520,7 +520,7 @@
       "turn": null,
       "sub_agent": null,
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": {
         "kind": "dir",
         "path": "src"
@@ -542,7 +542,7 @@
       "turn": null,
       "sub_agent": null,
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": {
         "kind": "process"
       },
@@ -564,7 +564,7 @@
       "turn": null,
       "sub_agent": null,
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": {
         "kind": "file",
         "path": "src/auth.ts"
@@ -588,7 +588,7 @@
       "turn": "t3",
       "sub_agent": null,
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": {
         "kind": "turn",
         "id": "t3"
@@ -612,7 +612,7 @@
       "turn": "t3",
       "sub_agent": null,
       "observed_at": "2026-11-16T09:00:00.123Z",
-      "mono_ns": 5000000000,
+      "mono_ns": "5000000000",
       "target": {
         "kind": "file",
         "path": "/private/tmp/scratch/a.js",
@@ -708,12 +708,12 @@
       "name": "negative monotonic clock",
       "from": "hook_started",
       "set": {
-        "/mono_ns": -1
+        "/mono_ns": "-1"
       },
       "unset": [],
       "error": {
         "path": "/mono_ns",
-        "keyword": "minimum"
+        "keyword": "pattern"
       }
     },
     {
@@ -1415,6 +1415,18 @@
       "unset": [],
       "error": {
         "path": "/target/outside",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "mono_ns as a JSON number (inexact past 2^53)",
+      "from": "sentinel_modified",
+      "set": {
+        "/mono_ns": 5000000000
+      },
+      "unset": [],
+      "error": {
+        "path": "/mono_ns",
         "keyword": "type"
       }
     }

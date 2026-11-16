@@ -59,9 +59,9 @@
     },
     "mono_ns": {
       "description": "The system-wide monotonic clock (never goes backwards), stamped as close to the moment of observation as the source allows; if a source cannot stamp it, intake stamps arrival time and records that in `detail.stamped_by`. Use it for all timing maths.",
-      "$comment": "brief v3 line 238. Open point P1 in spec/README.md: a JSON number holds integers exactly only up to 2^53, about 104 days of nanoseconds.",
-      "type": "integer",
-      "minimum": 0
+      "$comment": "brief v3 line 238; brief v4 line 238: written as a decimal string of the integer, because a JSON number is exact only up to 2^53 (about 104 days of nanoseconds since boot); compared as a big integer (open point P1, decided 2026-11-16).",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
     },
     "target": {
       "description": "What the mark is about. `target.kind`: `file`, `dir`, `command`, `process`, `claim`, `turn`, `tool`, or `network`.",

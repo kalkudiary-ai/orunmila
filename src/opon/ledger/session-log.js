@@ -29,6 +29,7 @@ const { seal } = require('../../verify/chain');
 const { canonicalize } = require('../../verify/canonical');
 const { verifySession } = require('../../verify/session');
 const { redactText, redactMark } = require('../intake/redact');
+const { nowMono } = require('../intake/mono');
 
 const SPEC = path.join(__dirname, '..', '..', '..', 'spec');
 const checkMark = compile(JSON.parse(fs.readFileSync(path.join(SPEC, 'mark.schema.json'), 'utf8')));
@@ -122,7 +123,7 @@ function createSessionLog(dir, headerInput, { envValues = [] } = {}) {
     }
 
     if (m.mono_ns === undefined) {
-      m.mono_ns = Number(process.hrtime.bigint());
+      m.mono_ns = nowMono(); // a decimal string (brief v4 line 238)
       if (isObject(m.detail)) m.detail = { ...m.detail, stamped_by: 'intake' };
     }
     let sealed;

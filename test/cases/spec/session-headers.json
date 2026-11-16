@@ -6,7 +6,7 @@
       "session_id": "ses_test_0001",
       "seq": 0,
       "observed_at": "2026-11-16T08:59:59.000Z",
-      "mono_ns": 4900000000,
+      "mono_ns": "4900000000",
       "orunmila": {
         "version": "0.3.0",
         "code_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -61,7 +61,7 @@
       "session_id": "ses_test_0001",
       "seq": 0,
       "observed_at": "2026-11-16T08:59:59.000Z",
-      "mono_ns": 4900000000,
+      "mono_ns": "4900000000",
       "orunmila": {
         "version": "0.3.0",
         "code_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -243,6 +243,18 @@
       "error": {
         "path": "/orunmila/version",
         "keyword": "required"
+      }
+    },
+    {
+      "name": "mono_ns as a JSON number (inexact past 2^53)",
+      "from": "header",
+      "set": {
+        "/mono_ns": 5000000000
+      },
+      "unset": [],
+      "error": {
+        "path": "/mono_ns",
+        "keyword": "type"
       }
     }
   ]

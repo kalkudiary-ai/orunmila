@@ -31,6 +31,7 @@
  */
 
 const { getAdapter } = require('../../../capture/agents');
+const { monoString } = require('../mono');
 
 const CC = getAdapter('claude-code');
 const EXCERPT = 2000;
@@ -91,7 +92,8 @@ function translatePayload(payload, ctx = {}) {
       cause_hint: null,
       ...over,
     };
-    if (Number.isInteger(ctx.monoNs)) m.mono_ns = ctx.monoNs;
+    const mono = monoString(ctx.monoNs); // a decimal string (brief v4 line 238); else intake stamps it
+    if (mono !== undefined) m.mono_ns = mono;
     return m;
   };
   const turnTarget = { kind: 'turn', id: ctx.turn };

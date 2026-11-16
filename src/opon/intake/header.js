@@ -26,6 +26,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
+const { monoString, nowMono } = require('./mono');
 
 // Brief v3: quiet window 1,500 ms (line 356), ceiling 30 s (357), lag grace
 // 3,000 ms (362). The diff size limit (line 266) is the agent's choice (LD38).
@@ -93,7 +94,7 @@ function buildHeader(o) {
     record: 'session_header',
     session_id: o.sessionId,
     observed_at: o.observedAt || new Date().toISOString(),
-    mono_ns: Number.isInteger(o.monoNs) ? o.monoNs : Number(process.hrtime.bigint()),
+    mono_ns: monoString(o.monoNs) || nowMono(), // a decimal string (brief v4 line 238)
     orunmila: { version: o.orunmilaVersion, code_fingerprint: codeFingerprint(o.codeRoot) },
     agent: { name: o.agent.name, version: o.agent.version === undefined ? null : o.agent.version },
     os: { platform: process.platform, release: os.release() },

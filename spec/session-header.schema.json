@@ -25,7 +25,12 @@
       "type": "string",
       "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$"
     },
-    "mono_ns": { "description": "The monotonic clock at session start.", "$comment": "brief v3 line 238", "type": "integer", "minimum": 0 },
+    "mono_ns": {
+      "description": "The monotonic clock at session start, as a decimal string of the integer.",
+      "$comment": "brief v3 line 238; brief v4 line 238 (open point P1, decided 2026-11-16)",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
     "orunmila": {
       "description": "Orunmila's version.",
       "$comment": "brief v3 line 282",

@@ -158,7 +158,7 @@ it(
     delete m.mono_ns;
     assert.strictEqual(log.append(m).ok, true);
     const line = readLines(path.join(dir, 'raw.jsonl'))[1];
-    assert.ok(Number.isInteger(line.mono_ns) && line.mono_ns >= 0);
+    assert.match(line.mono_ns, /^(0|[1-9][0-9]*)$/, 'a decimal string (brief v4 line 238)');
     assert.strictEqual(line.detail.stamped_by, 'intake');
   }),
 );

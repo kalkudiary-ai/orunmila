@@ -40,7 +40,8 @@ chain and the exact bytes it hashes, redaction before hashing, and path normalis
 
 - **P1. `mono_ns` above 2^53.** JSON numbers are IEEE doubles, so integers are exact only up to
   2^53. In nanoseconds that is about 104 days of uptime. **Decided:** `mono_ns` is written as a
-  decimal string of the integer (brief v4 line 238), compared as a big integer. Slice S1b.
+  decimal string of the integer (brief v4 line 238), compared as a big integer
+  (`src/opon/intake/mono.js`).
 - **P2. Writes outside the project.** **Decided:** the absolute real path, with
   `target.outside: true` (brief v4 line 345; slice A7's proposal).
 - **P3. Targets the brief does not shape.** **Decided:** a `renamed` mark carries `detail.from`,

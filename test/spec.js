@@ -105,7 +105,7 @@ for (const f of FORMATS) {
   });
 }
 
-it("the brief's own example mark (lines 215-232), with its shortened hashes written out in full, is a valid mark", () => {
+it("the brief's own example mark (v4 lines 215-232), with its shortened hashes written out in full, is a valid mark", () => {
   const check = compile(load(path.join(SPEC, 'mark.schema.json')));
   const full = (h) => 'sha256:' + h.repeat(64 / h.length);
   const example = {
@@ -117,7 +117,7 @@ it("the brief's own example mark (lines 215-232), with its shortened hashes writ
     turn: null,
     sub_agent: null,
     observed_at: '2026-10-30T09:21:04.310Z',
-    mono_ns: 81234567890123,
+    mono_ns: '81234567890123',
     target: { kind: 'file', path: 'src/auth.ts' },
     says: 'modified',
     detail: { size: 4211, fingerprint: full('9f2c') },

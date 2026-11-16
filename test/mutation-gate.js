@@ -15,7 +15,7 @@ const { spawnSync } = require('child_process');
 const GATE = path.join(ROOT, 'scripts', 'mutation-gate.js');
 
 // Folders whose every .js file must be the target of at least one mutant (NF72).
-const COVERED_DIRS = ['src/verify', 'src/opon/intake'];
+const COVERED_DIRS = ['src/verify', 'src/opon/intake', 'src/opon/ledger', 'src/opon/fixtures'];
 
 function node(code, timeout = 30000) {
   const r = spawnSync('node', ['-e', code], { cwd: ROOT, encoding: 'utf8', timeout });

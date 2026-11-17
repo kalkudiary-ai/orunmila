@@ -9,7 +9,7 @@
 
 const { assert, fs, path, tmpDir, rmrf, it, runAll } = require('./helpers');
 const { createIntake } = require('../src/opon/intake/engine');
-const { createSessionLog, verifySessionLog } = require('../src/opon/ledger/session-log');
+const { createSessionLog, openSessionLog, verifySessionLog } = require('../src/opon/ledger/session-log');
 
 const SPEC = JSON.parse(fs.readFileSync(path.join(__dirname, 'cases', 'spec', 'marks.json'), 'utf8'));
 const HEADERS = JSON.parse(fs.readFileSync(path.join(__dirname, 'cases', 'spec', 'session-headers.json'), 'utf8'));
@@ -215,6 +215,116 @@ it(
     assert.strictEqual(intake.receive(other(mark('hook_started')), HTTP(100)).ok, false);
     assert.strictEqual(rawLines(dir('ses_test_0002')).filter((x) => x.says === 'tampered').length, 1);
     assert.strictEqual(rawLines(dir(SID)).filter((x) => x.says === 'tampered').length, 0);
+  }),
+);
+
+// --- B1c-2: the restart gap (test 84; design D-I 4.7) -----------------------------
+
+const B = 'ses_test_0002';
+const inSession = (m, id) => ({ ...m, session_id: id });
+const noNewLog = () => {
+  throw new Error('a resumed session is never created anew');
+};
+
+/**
+ * Two sessions served: both tick at 600 ms, B gets a mark at 700 ms, and only A
+ * ticks at 1,100 ms. The intake's last record is A's tick; B's own is older.
+ */
+function serveTwo(intake, clock) {
+  intake.receive(mark('hook_started'));
+  intake.receive(inSession(mark('hook_started'), B));
+  clock.advance(600);
+  intake.poll();
+  clock.advance(100);
+  intake.receive(inSession(mark('hook_started'), B));
+  clock.advance(400);
+  assert.strictEqual(intake.poll(), 1);
+  return clock();
+}
+
+it(
+  'test 84: intake stopped for a while mid-session: on restart, one gap in each session it was serving, from its last record to now, naming them all; the logs verify',
+  withIntake(({ intake, clock, dir }) => {
+    const before = serveTwo(intake, clock);
+    clock.advance(60000);
+    const now = clock();
+    const again = createIntake({ openLog: noNewLog, clock });
+    const r = again.resume([SID, B].map((id) => ({ id, log: openSessionLog(dir(id)) })));
+    assert.deepStrictEqual(r.failed, []);
+    assert.deepStrictEqual(r.gaps.map((g) => g.id), [SID, B]);
+    for (const id of [SID, B]) {
+      const rows = rawLines(dir(id));
+      const gaps = rows.filter((x) => x.says === 'gap');
+      assert.strictEqual(gaps.length, 1, `one gap in ${id}`);
+      const g = gaps[0];
+      assert.strictEqual(g, rows[rows.length - 1]);
+      assert.deepStrictEqual([g.source, g.turn, g.target, g.agent, g.cause_hint, g.mono_ns, g.observed_at], ['process', null, null, null, null, now.mono, now.wall]);
+      assert.deepStrictEqual(g.detail.since, { mono_ns: before.mono, observed_at: before.wall }, 'the intake\'s last record, in any session');
+      assert.deepStrictEqual(g.detail.until, { mono_ns: now.mono, observed_at: now.wall });
+      assert.deepStrictEqual(g.detail.sessions, [SID, B].sort());
+      assert.ok(g.detail.lost.includes(before.wall) && g.detail.lost.includes(now.wall), g.detail.lost);
+      assert.strictEqual(g.detail.clock_reset, undefined);
+      assert.strictEqual(r.gaps.find((x) => x.id === id).seq, g.seq);
+      const v = verifySessionLog(dir(id));
+      assert.strictEqual(v.ok, true, v.words);
+    }
+  }),
+);
+
+it(
+  'after a resume the intake carries on: marks continue the reopened logs, idle sessions tick, and nothing is created anew',
+  withIntake(({ intake, clock, dir }) => {
+    serveTwo(intake, clock);
+    clock.advance(5000);
+    const again = createIntake({ openLog: noNewLog, clock });
+    again.resume([SID, B].map((id) => ({ id, log: openSessionLog(dir(id)) })));
+    const gapSeq = rawLines(dir(SID)).length - 1;
+    assert.deepStrictEqual(again.receive(mark('hook_started')), { ok: true, seq: gapSeq + 1 });
+    clock.advance(500);
+    assert.strictEqual(again.poll(), 2);
+    for (const id of [SID, B]) assert.strictEqual(verifySessionLog(dir(id)).ok, true, id);
+  }),
+);
+
+it(
+  'resume comes first and names each session once: refused after a mark, refused for a repeated session; an empty resume writes nothing',
+  withIntake(({ intake, clock, dir }) => {
+    intake.receive(mark('hook_started'));
+    assert.throws(() => intake.resume([{ id: SID, log: openSessionLog(dir(SID)) }]), /first/);
+    const again = createIntake({ openLog: noNewLog, clock });
+    assert.throws(() => again.resume([SID, SID].map((id) => ({ id, log: openSessionLog(dir(id)) }))), /twice/);
+    assert.deepStrictEqual(createIntake({ openLog: noNewLog, clock }).resume([]), { gaps: [], failed: [] });
+    assert.strictEqual(rawLines(dir(SID)).filter((x) => x.says === 'gap').length, 0);
+  }),
+);
+
+it(
+  'a restart after the machine rebooted (the clock now reads below the last record) still writes the gap, and says the clocks reset',
+  withIntake(({ intake, clock, dir }) => {
+    const before = serveTwo(intake, clock);
+    const rebooted = () => ({ mono: '5000', wall: '2026-11-16T13:00:00.000Z' });
+    const r = createIntake({ openLog: noNewLog, clock: rebooted }).resume([SID, B].map((id) => ({ id, log: openSessionLog(dir(id)) })));
+    assert.strictEqual(r.gaps.length, 2);
+    for (const id of [SID, B]) {
+      const g = rawLines(dir(id)).filter((x) => x.says === 'gap')[0];
+      assert.deepStrictEqual([g.detail.clock_reset, g.detail.since.mono_ns, g.detail.until.mono_ns], [true, before.mono, '5000']);
+      assert.strictEqual(verifySessionLog(dir(id)).ok, true, id);
+    }
+  }),
+);
+
+it(
+  'a gap a log refuses is reported with its reason, never dropped silently; the other sessions still get theirs',
+  withIntake(({ intake, clock, dir }) => {
+    serveTwo(intake, clock);
+    clock.advance(1000);
+    const refusing = { last: () => ({ seq: 3, mono_ns: '1', observed_at: '2026-11-16T12:00:00.000Z' }), append: () => ({ ok: false, reasons: ['disk full'] }) };
+    const r = createIntake({ openLog: noNewLog, clock }).resume([
+      { id: SID, log: openSessionLog(dir(SID)) },
+      { id: B, log: refusing },
+    ]);
+    assert.deepStrictEqual(r.failed, [{ id: B, reason: 'disk full' }]);
+    assert.deepStrictEqual(r.gaps.map((g) => g.id), [SID]);
   }),
 );
 

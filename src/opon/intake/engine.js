@@ -30,6 +30,10 @@
  *   intake.poll()         writes a `tick` (source process) to every session with
  *                         no mark written for tickMs (line 360: the heartbeat
  *                         ticks only while idle); returns how many it wrote
+ *   intake.resume([{ id, log }])
+ *                         after a restart, before anything else: one gap per
+ *                         reopened session for the downtime (test 84; below);
+ *                         returns { gaps: [{ id, seq }], failed: [{ id, reason }] }
  *
  * Silence is measured on the intake's clock from the last mark written to the
  * session (a tick included), not from a source's own mono_ns. The caller's mark
@@ -125,7 +129,45 @@ function createIntake({ openLog, clock, tickMs = TICK_MS }) {
     return written;
   }
 
-  return { receive, poll };
+  /**
+   * After a restart (test 84; design D-I 4.7). `entries` are the reopened logs
+   * (session-log.js openSessionLog) of the sessions the intake was serving;
+   * which ones is the caller's choice, since the contract has no session-end
+   * mark yet. One gap goes into each, from the latest record among them (the
+   * intake's last write: a tick when idle) to now, naming them all. It is
+   * written on every restart, however short: hooks never wait for intake, so
+   * anything sent meanwhile is lost. A reboot resets the monotonic clock, so a
+   * now below `since` is written too, flagged clock_reset. A gap a log refuses
+   * is reported in `failed`, never dropped.
+   */
+  function resume(entries) {
+    if (sessions.size) throw new Error('resume comes first: this intake already holds sessions');
+    const ids = entries.map((e) => e.id);
+    if (new Set(ids).size !== ids.length) throw new Error('a session is resumed twice');
+    const out = { gaps: [], failed: [] };
+    if (!entries.length) return out;
+    const now = clock();
+    const since = entries.map((e) => e.log.last()).reduce((a, b) => (BigInt(b.mono_ns) > BigInt(a.mono_ns) ? b : a));
+    const named = [...ids].sort();
+    for (const { id, log } of entries) {
+      const s = { log, last: BigInt(now.mono), pin: null };
+      sessions.set(id, s);
+      const detail = {
+        lost: `every mark sent to intake while it was not running, from ${since.observed_at} to ${now.wall}`,
+        since: { mono_ns: since.mono_ns, observed_at: since.observed_at },
+        until: { mono_ns: now.mono, observed_at: now.wall },
+        sessions: named,
+      };
+      if (BigInt(now.mono) < BigInt(since.mono_ns)) detail.clock_reset = true;
+      const gap = { schema_version: 1, session_id: id, source: 'process', agent: null, turn: null, sub_agent: null, target: null, observed_at: now.wall, mono_ns: now.mono, says: 'gap', detail, cause_hint: null };
+      const r = write(s, gap, now);
+      if (r.ok) out.gaps.push({ id, seq: r.seq });
+      else out.failed.push({ id, reason: (r.reasons || [r.reason]).join('; ') });
+    }
+    return out;
+  }
+
+  return { receive, poll, resume };
 }
 
 module.exports = { createIntake, TICK_MS };

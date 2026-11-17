@@ -462,6 +462,28 @@ const MUTANTS = [
   { id: "B10 a foreign payload's evidence dropped", file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
     from: 'received: JSON.stringify(m) }', to: "received: '' }",
     fails: ['test 82: a payload for a pinned session from another process'] },
+  // Track B slice B1c-2: the restart gap (test 84).
+  { id: 'B11 the gap starts at the earliest last record, not the latest', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: '(BigInt(b.mono_ns) > BigInt(a.mono_ns) ? b : a)', to: '(BigInt(b.mono_ns) < BigInt(a.mono_ns) ? b : a)',
+    fails: ['test 84: intake stopped for a while mid-session'] },
+  { id: 'B12 a reboot (clock below the last record) not flagged', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: 'if (BigInt(now.mono) < BigInt(since.mono_ns)) detail.clock_reset = true;', to: 'void 0;',
+    fails: ['a restart after the machine rebooted'] },
+  { id: 'B13 resume allowed after the intake holds sessions', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: 'if (sessions.size) throw', to: 'if (false) throw',
+    fails: ['resume comes first'] },
+  { id: 'B14 a session resumed twice (two gaps)', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: 'if (new Set(ids).size !== ids.length) throw', to: 'if (false) throw',
+    fails: ['resume comes first'] },
+  { id: 'B15 a gap the log refuses dropped silently', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: 'else out.failed.push(', to: 'else void (',
+    fails: ['a gap a log refuses is reported'] },
+  { id: 'B16 the gap names only its own session', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: 'sessions: named,', to: 'sessions: [id],',
+    fails: ['test 84: intake stopped for a while mid-session'] },
+  { id: 'B17 resumed sessions not held (the next mark makes a new log)', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: 'const s = { log, last: BigInt(now.mono), pin: null };\n      sessions.set(id, s);', to: 'const s = { log, last: BigInt(now.mono), pin: null };\n      void sessions;',
+    fails: ['after a resume the intake carries on'] },
 ];
 
 function copyRepo(root) {

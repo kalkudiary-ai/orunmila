@@ -31,7 +31,7 @@ const crypto = require('crypto');
 const { compile } = require('../../verify/schema');
 const { seal } = require('../../verify/chain');
 const { canonicalize } = require('../../verify/canonical');
-const { verifySession } = require('../../verify/session');
+const { verifySession, checkLog, fileWords } = require('../../verify/session');
 const { redactText, redactMark } = require('../intake/redact');
 const { nowMono } = require('../intake/mono');
 
@@ -74,33 +74,71 @@ function createSessionLog(dir, headerInput, { envValues = [] } = {}) {
   fs.writeFileSync(rawFile, line(header), { flag: 'wx', mode: 0o600 });
   const qHeader = seal({ schema_version: 1, record: 'quarantine_header', session_id: header.session_id, seq: 0 }, null);
   fs.writeFileSync(qFile, line(qHeader), { flag: 'wx', mode: 0o600 });
-  return writer(dir, { header, last: header, qLast: qHeader, counts: { marks: 0, quarantined: 0 }, ended: false, pin: null, envValues });
+  return writer(dir, { rawFile, qFile, header, last: header, timed: header, qLast: qHeader, counts: { marks: 0, quarantined: 0 }, ended: false, pin: null, envValues });
+}
+
+/** Start the next part of a log a crash cut (LD57): its first line names the cut and follows the last whole line. */
+function continueLog(dir, name, tail, sessionId) {
+  const part = tail.part + 1;
+  const cont = seal(
+    { schema_version: 1, record: 'continuation', session_id: sessionId, log: name, part, seq: tail.last.seq + 1, cut: { line: tail.line, bytes: tail.bytes, fingerprint: tail.fingerprint } },
+    tail.last.hash,
+  );
+  const file = path.join(dir, `${name}.${part}.jsonl`);
+  fs.writeFileSync(file, line(cont), { flag: 'wx', mode: 0o600 });
+  return { file, last: cont };
 }
 
 /**
  * Reopen an existing session log, for an intake that restarted (test 84): both
- * chains continue where they stopped. A log that does not verify (an edited or
- * torn line, a broken quarantine log, a changed or missing kept file, no log)
- * is refused with the verifier's words and nothing is written: a broken chain
- * is never extended, and nothing in a session is ever edited (line 348).
+ * chains continue where they stopped. A log whose last line a crash cut is
+ * never edited: it continues in a new part whose first line names the cut
+ * (LD57, spec/hash-chain.md "A log in parts"). Any other log that does not
+ * verify (an edited line, a broken quarantine log, a changed or missing kept
+ * file, no log) is refused with the verifier's words and nothing is written:
+ * a broken chain is never extended, and nothing in a session is ever edited
+ * (line 348). Known limit: a part whose own first line is cut is refused.
  * Known limit: the redaction kinds of a file kept before the reopen are not
  * merged into a later mark that names it (they live only in memory).
  */
 function openSessionLog(dir, { envValues = [] } = {}) {
   const v = verifySession(dir);
-  if (!v.ok) throw new Error(`the session log in ${dir} cannot be reopened: ${v.words}`);
-  const lines = (f) => fs.readFileSync(path.join(dir, f), 'utf8').split('\n').slice(0, -1).map((l) => JSON.parse(l));
-  const raw = lines('raw.jsonl');
-  const q = lines('quarantine.jsonl');
-  const counts = { marks: raw.length - 1, quarantined: q.length - 1 };
-  const pinning = raw.slice(1).find((r) => pinOf(r) !== null);
-  return writer(dir, { header: raw[0], last: raw[raw.length - 1], qLast: q[q.length - 1], counts, ended: raw.slice(1).some(endsSession), pin: pinning ? pinOf(pinning) : null, envValues });
+  const rawLog = checkLog(dir, 'raw');
+  const qLog = checkLog(dir, 'quarantine');
+  // Only a cut last line (a crash mid-write) may stand between a log and its reopening (LD57).
+  const chainsOk = (rawLog.ok || rawLog.tail) && (qLog.ok || qLog.tail);
+  if (!v.ok && !(chainsOk && v.schema.ok && v.files.bad.length === 0)) {
+    const why = chainsOk && v.schema.ok ? fileWords(v.files.bad[0]) : v.words;
+    throw new Error(`the session log in ${dir} cannot be reopened: ${why}`);
+  }
+  const header = rawLog.records[0].rec;
+  const ends = (l, name) => (l.tail ? continueLog(dir, name, l.tail, header.session_id) : { file: l.file, last: l.records[l.records.length - 1].rec });
+  const rawEnd = ends(rawLog, 'raw');
+  const qEnd = ends(qLog, 'quarantine');
+  const timedRecs = rawLog.records.filter((r) => !(r.part > 1 && r.line === 1)).map((r) => r.rec); // header and marks: no continuation
+  const marks = timedRecs.slice(1);
+  const counts = { marks: v.counts.marks, quarantined: v.counts.quarantined };
+  const pinning = marks.find((r) => pinOf(r) !== null);
+  return writer(dir, {
+    rawFile: rawEnd.file,
+    qFile: qEnd.file,
+    header,
+    last: rawEnd.last,
+    timed: timedRecs[timedRecs.length - 1],
+    qLast: qEnd.last,
+    counts,
+    ended: marks.some(endsSession),
+    pin: pinning ? pinOf(pinning) : null,
+    envValues,
+  });
 }
 
-/** Appends to one session folder whose chains end at `last` (raw) and `qLast` (quarantine). */
-function writer(dir, { header, last, qLast, counts, ended, pin, envValues }) {
-  const rawFile = path.join(dir, 'raw.jsonl');
-  const qFile = path.join(dir, 'quarantine.jsonl');
+/**
+ * Appends to one session folder whose chains end at `last` (raw, in rawFile)
+ * and `qLast` (quarantine, in qFile); `timed` is the raw log's last header or
+ * mark, which last() reports (a continuation record has no times).
+ */
+function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended, pin, envValues }) {
   const filesDir = path.join(dir, 'files');
 
   const keptKinds = new Map(); // ref -> redaction kinds of that kept file
@@ -172,6 +210,7 @@ function writer(dir, { header, last, qLast, counts, ended, pin, envValues }) {
     if (reasons.length) return reject(reasons);
     fs.appendFileSync(rawFile, line(sealed));
     last = sealed;
+    timed = sealed;
     counts.marks++;
     if (endsSession(sealed)) ended = true;
     if (pin === null) pin = pinOf(sealed);
@@ -179,7 +218,7 @@ function writer(dir, { header, last, qLast, counts, ended, pin, envValues }) {
   }
 
   /** The raw log's last record: where an intake that restarts finds when it last wrote (test 84). */
-  const lastRecord = () => ({ seq: last.seq, mono_ns: last.mono_ns, observed_at: last.observed_at });
+  const lastRecord = () => ({ seq: timed.seq, mono_ns: timed.mono_ns, observed_at: timed.observed_at });
 
   return { append, keep, counts: () => ({ ...counts }), last: lastRecord, ended: () => ended, pin: () => pin };
 }

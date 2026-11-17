@@ -133,6 +133,8 @@ function checkLog(dir, name) {
 const isContinuation = (r) => r.part > 1 && r.line === 1;
 const summary = (l) => ({ ok: l.ok, parts: l.parts, cuts: l.cuts, ...(l.fail || {}) });
 
+const fileWords = (b) => `Record broken: the file kept beside the log for mark ${b.seq} (${b.ref}) ${b.problem === 'changed' ? 'was changed after it was written' : 'is missing'}.`;
+
 function failWords(l, name) {
   const log = LOG_NAMES[name];
   const f = l.fail;
@@ -194,8 +196,7 @@ function verifySession(dir) {
   } else if (!quarantine.ok) {
     words = failWords(quarantine, 'quarantine');
   } else if (files.bad.length) {
-    const b = files.bad[0];
-    words = `Record broken: the file kept beside the log for mark ${b.seq} (${b.ref}) ${b.problem === 'changed' ? 'was changed after it was written' : 'is missing'}.`;
+    words = fileWords(files.bad[0]);
   } else {
     const cuts = [
       ...raw.cuts.map((c) => `${where('raw log', c.part, c.line)} was cut by a crash and continues in part ${c.part + 1}`),
@@ -208,4 +209,4 @@ function verifySession(dir) {
   return { ok: raw.ok && schema.ok && quarantine.ok && files.bad.length === 0, words, counts, raw: summary(raw), schema, quarantine: summary(quarantine), files };
 }
 
-module.exports = { verifySession, checkLog };
+module.exports = { verifySession, checkLog, fileWords };

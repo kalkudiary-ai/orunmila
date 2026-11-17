@@ -271,7 +271,7 @@ it(
 );
 
 it(
-  'a log that does not verify is never reopened, and nothing is written: an edited line, a torn last line (a crash mid-write), a broken quarantine log, no log at all',
+  'a log that does not verify is never reopened, and nothing is written: an edited line, a broken quarantine log, a changed kept file beside a cut line, no log at all',
   () => {
     const base = tmpDir();
     try {
@@ -289,15 +289,20 @@ it(
       let dir = made('edited');
       edit(path.join(dir, 'raw.jsonl'), '"says":"started"', '"says":"exited"');
       cases.push([dir, /line 2 of the raw log/]);
-      dir = made('torn');
+      dir = made('cut-and-changed');
+      const log = openSessionLog(dir);
+      const m = mark('sentinel_modified');
+      m.detail.diff_ref = log.keep('-a\n+b\n');
+      log.append(m);
+      fs.writeFileSync(path.join(dir, 'files', m.detail.diff_ref.slice(7)), 'changed');
       fs.appendFileSync(path.join(dir, 'raw.jsonl'), '{"schema_version":1,"sess');
-      cases.push([dir, /line 3 of the raw log/]);
+      cases.push([dir, /was changed after it was written/]);
       dir = made('quarantine');
       edit(path.join(dir, 'quarantine.jsonl'), 'quarantine_header', 'quarantine_headex');
       cases.push([dir, /quarantine log/]);
       cases.push([path.join(base, 'none'), /missing/]);
       for (const [d, why] of cases) {
-        const files = ['raw.jsonl', 'quarantine.jsonl'].map((f) => path.join(d, f));
+        const files = ['raw.jsonl', 'quarantine.jsonl', 'raw.2.jsonl', 'quarantine.2.jsonl'].map((f) => path.join(d, f));
         const before = files.map((f) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : null));
         assert.throws(() => openSessionLog(d), (e) => /cannot be reopened/.test(e.message) && why.test(e.message), d);
         assert.deepStrictEqual(files.map((f) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : null)), before, `${d} unchanged`);
@@ -307,6 +312,71 @@ it(
       rmrf(base);
     }
   },
+);
+
+// --- C1c: a crash-cut log continued in a new part on reopen (LD57) ------------------
+
+const CUT = '{"schema_version":1,"sess';
+
+it(
+  'LD57: a log whose last line a crash cut is reopened by continuing it in part 2: part 1 is never touched, last() names the last whole mark, the next mark lands in part 2, and the log verifies naming the cut',
+  withLog((log, dir) => {
+    log.append(mark('hook_started'));
+    const m2 = mark('hook_read_range');
+    log.append(m2);
+    fs.appendFileSync(path.join(dir, 'raw.jsonl'), CUT);
+    const before = fs.readFileSync(path.join(dir, 'raw.jsonl'));
+    const again = openSessionLog(dir);
+    assert.deepStrictEqual(again.last(), { seq: 2, mono_ns: m2.mono_ns, observed_at: m2.observed_at });
+    assert.deepStrictEqual(again.counts(), { marks: 2, quarantined: 0 });
+    assert.deepStrictEqual(again.append(mark('hook_started')), { ok: true, seq: 4 });
+    assert.ok(fs.readFileSync(path.join(dir, 'raw.jsonl')).equals(before), 'part 1 unchanged, its cut line kept');
+    const p2 = readLines(path.join(dir, 'raw.2.jsonl'));
+    assert.deepStrictEqual(
+      [p2[0].record, p2[0].log, p2[0].part, p2[0].seq, p2[0].cut.line, p2[0].cut.bytes],
+      ['continuation', 'raw', 2, 3, 4, Buffer.byteLength(CUT)],
+    );
+    assert.deepStrictEqual(p2.map((r) => r.seq), [3, 4]);
+    if (process.platform !== 'win32') assert.strictEqual(fs.statSync(path.join(dir, 'raw.2.jsonl')).mode & 0o777, 0o600);
+    const v = verifySessionLog(dir);
+    assert.strictEqual(v.ok, true, v.words);
+    assert.ok(v.words.endsWith('unbroken; line 4 of the raw log was cut by a crash and continues in part 2.'), v.words);
+  }),
+);
+
+it(
+  'LD57: both logs cut at once are both continued; a quarantined input lands in quarantine part 2',
+  withLog((log, dir) => {
+    log.append(mark('hook_started'));
+    log.append('{not json');
+    fs.appendFileSync(path.join(dir, 'raw.jsonl'), CUT);
+    fs.appendFileSync(path.join(dir, 'quarantine.jsonl'), '{"cut');
+    const again = openSessionLog(dir);
+    assert.strictEqual(again.append('[1]').ok, false);
+    assert.deepStrictEqual(readLines(path.join(dir, 'quarantine.2.jsonl')).map((r) => r.record), ['continuation', 'quarantined']);
+    assert.strictEqual(again.append(mark('hook_started')).ok, true);
+    const v = verifySessionLog(dir);
+    assert.strictEqual(v.ok, true, v.words);
+    assert.deepStrictEqual(v.counts, { marks: 2, quarantined: 2, kept_files: 0 });
+  }),
+);
+
+it(
+  'LD57: a continued log reopens into its last part; a second crash there makes part 3; ended() and pin() read every part',
+  withLog((log, dir) => {
+    log.append({ ...mark('hook_started'), detail: { tool: 'Bash', channel: 'http', sender_pid: 100 } });
+    fs.appendFileSync(path.join(dir, 'raw.jsonl'), CUT);
+    const second = openSessionLog(dir);
+    second.append(mark('hook_session_ended'));
+    fs.appendFileSync(path.join(dir, 'raw.2.jsonl'), CUT);
+    const third = openSessionLog(dir);
+    assert.deepStrictEqual([third.ended(), third.pin()], [true, 100]);
+    assert.strictEqual(third.append(mark('hook_started')).ok, true);
+    assert.deepStrictEqual(readLines(path.join(dir, 'raw.3.jsonl')).map((r) => r.seq), [4, 5], 'the continuation follows the last whole line, seq 3');
+    const v = verifySessionLog(dir);
+    assert.strictEqual(v.ok, true, v.words);
+    assert.ok(v.words.includes('line 3 of part 2 of the raw log was cut by a crash and continues in part 3'), v.words);
+  }),
 );
 
 runAll('session-log');

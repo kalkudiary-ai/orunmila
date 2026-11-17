@@ -99,7 +99,7 @@ it('a line that is not a JSON object, a blank line, a carriage return, or no fin
   ];
   for (const [c, at] of cases) assert.strictEqual(verifyText(join(c)).line, at, JSON.stringify(c[1]));
   assert.deepStrictEqual(verifyText(ls.map((l) => l + '\r\n').join('')), { ok: false, line: 1, reason: 'not canonical', checked: 0 });
-  assert.deepStrictEqual(verifyText(ls.join('\n')), { ok: false, line: 5, reason: 'not canonical', checked: 4 });
+  assert.deepStrictEqual(verifyText(ls.join('\n')), { ok: false, line: 5, reason: 'not canonical', checked: 4, cut: true }, 'no final line feed: cut, as a crash leaves it (LD57)');
 });
 
 it('the header must start the chain: a prev_hash on line 1 does not follow; seq must count 0, 1, 2, ...', () => {

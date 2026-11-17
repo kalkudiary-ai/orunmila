@@ -148,6 +148,134 @@ it(
   }),
 );
 
+// --- C1b: a log in parts after a crash (LD57; spec/hash-chain.md, "A log in parts") ---
+
+const sha = (buf) => 'sha256:' + require('crypto').createHash('sha256').update(buf).digest('hex');
+const TORN = '{"schema_version":1,"session_id":"ses_test_0001","sé';
+const whole = (file) => fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+
+/** Cut a log's last line short, as a crash does, and start part 2 the way the restart will. Returns part 2's first record. */
+function cutAndContinue(dir, log = 'raw', over = {}) {
+  const f1 = path.join(dir, `${log}.jsonl`);
+  const recs = whole(f1);
+  const last = recs[recs.length - 1];
+  fs.appendFileSync(f1, TORN);
+  const cut = { line: recs.length + 1, bytes: Buffer.byteLength(TORN), fingerprint: sha(Buffer.from(TORN)) };
+  const rec = { schema_version: 1, record: 'continuation', session_id: last.session_id, log, part: 2, seq: last.seq + 1, cut, ...over };
+  for (const k of Object.keys(rec)) if (rec[k] === undefined) delete rec[k]; // { cut: undefined } leaves cut out
+  const cont = seal(rec, over.prev_hash || last.hash);
+  fs.writeFileSync(path.join(dir, `${log}.2.jsonl`), canonicalize(cont) + '\n');
+  return cont;
+}
+const addTo = (file, rec) => {
+  const recs = whole(file);
+  const last = recs[recs.length - 1];
+  const s = seal({ ...rec, seq: last.seq + 1 }, last.hash);
+  fs.appendFileSync(file, canonicalize(s) + '\n');
+  return s;
+};
+
+it(
+  'LD57: a raw log cut by a crash and continued in part 2 verifies; the answer names the cut, and marks in part 2 count',
+  withSession(({ dir }) => {
+    cutAndContinue(dir);
+    addTo(path.join(dir, 'raw.2.jsonl'), strip(SPEC.good.hook_read_range));
+    const r = verify(dir);
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    assert.strictEqual(r.stdout.trim(), 'Record intact: 3 marks, 1 quarantined input, 1 kept file, unbroken; line 4 of the raw log was cut by a crash and continues in part 2.');
+  }),
+);
+
+it(
+  'LD57: the quarantine log continues the same way, and a part may itself be cut and continued',
+  withSession(({ dir }) => {
+    cutAndContinue(dir, 'quarantine');
+    const q2 = path.join(dir, 'quarantine.2.jsonl');
+    const last = addTo(q2, { schema_version: 1, record: 'quarantined', session_id: 'ses_test_0001', received_at: '2026-11-17T08:00:00.000Z', reasons: ['not JSON'], received: '{x' });
+    fs.appendFileSync(q2, '{"cut');
+    const cont = seal({ schema_version: 1, record: 'continuation', session_id: 'ses_test_0001', log: 'quarantine', part: 3, seq: last.seq + 1, cut: { line: 3, bytes: 5, fingerprint: sha(Buffer.from('{"cut')) } }, last.hash);
+    fs.writeFileSync(path.join(dir, 'quarantine.3.jsonl'), canonicalize(cont) + '\n');
+    const r = verify(dir);
+    assert.strictEqual(r.status, 0, r.stdout);
+    assert.strictEqual(
+      r.stdout.trim(),
+      'Record intact: 2 marks, 2 quarantined inputs, 1 kept file, unbroken; line 3 of the quarantine log was cut by a crash and continues in part 2; line 3 of part 2 of the quarantine log was cut by a crash and continues in part 3.',
+    );
+  }),
+);
+
+it(
+  'LD57: a cut last line that no part continues is broken, and named as a cut',
+  withSession(({ dir }) => {
+    fs.appendFileSync(path.join(dir, 'raw.jsonl'), TORN);
+    const r = verify(dir);
+    assert.strictEqual(r.status, 1);
+    assert.strictEqual(r.stdout.trim(), 'Record broken at line 4 of the raw log: this line was cut short, as a crash leaves it, and no later part continues the log.');
+  }),
+);
+
+it(
+  'LD57: a part 2 whose first line does not name the cut exactly (its length, its fingerprint, its line, its part) is broken',
+  () => {
+    for (const over of [{ cut: { line: 4, bytes: 3, fingerprint: sha(Buffer.from(TORN)) } }, { cut: { line: 4, bytes: Buffer.byteLength(TORN), fingerprint: sha(Buffer.from('other')) } }, { cut: { line: 3, bytes: Buffer.byteLength(TORN), fingerprint: sha(Buffer.from(TORN)) } }, { part: 3 }, { log: 'quarantine' }]) {
+      const s = buildSession();
+      try {
+        cutAndContinue(s.dir, 'raw', over);
+        const r = verify(s.dir);
+        assert.strictEqual(r.status, 1, JSON.stringify(over));
+        assert.strictEqual(r.stdout.trim(), 'Record broken at line 1 of part 2 of the raw log: it does not match the cut at the end of part 1.', JSON.stringify(over));
+      } finally {
+        rmrf(s.base);
+      }
+    }
+  },
+);
+
+it(
+  'LD57: a part 2 that does not follow the last whole line, or is not a valid continuation, or comes after a part that was not cut, is broken',
+  () => {
+    const cases = [
+      [(dir) => cutAndContinue(dir, 'raw', { prev_hash: 'sha256:' + 'f'.repeat(64) }), 'Record broken at line 1 of part 2 of the raw log: this line does not follow the last whole line of part 1.'],
+      [(dir) => cutAndContinue(dir, 'raw', { cut: undefined }), 'Record broken at line 1 of part 2 of the raw log: it is not a valid continuation (/cut required).'],
+      [
+        (dir) => {
+          const recs = whole(path.join(dir, 'raw.jsonl'));
+          const last = recs[recs.length - 1];
+          const c = seal({ schema_version: 1, record: 'continuation', session_id: 'ses_test_0001', log: 'raw', part: 2, seq: last.seq + 1, cut: { line: 4, bytes: 1, fingerprint: sha(Buffer.from('x')) } }, last.hash);
+          fs.writeFileSync(path.join(dir, 'raw.2.jsonl'), canonicalize(c) + '\n');
+        },
+        'Record broken: part 2 of the raw log follows part 1, which was not cut.',
+      ],
+    ];
+    for (const [make, want] of cases) {
+      const s = buildSession();
+      try {
+        make(s.dir);
+        const r = verify(s.dir);
+        assert.strictEqual(r.status, 1, want);
+        assert.strictEqual(r.stdout.trim(), want);
+      } finally {
+        rmrf(s.base);
+      }
+    }
+  },
+);
+
+it(
+  'LD57: a mark in part 2 changed after it was written is named by its part; a part 2 mark that is not a valid mark is named too',
+  withSession(({ dir }) => {
+    cutAndContinue(dir);
+    const f2 = path.join(dir, 'raw.2.jsonl');
+    addTo(f2, strip(SPEC.good.hook_read_range));
+    const ls = fs.readFileSync(f2, 'utf8').split('\n');
+    fs.writeFileSync(f2, ls.join('\n').replace('"says":"read"', '"says":"redd"'));
+    assert.strictEqual(verify(dir).stdout.trim(), 'Record broken at line 2 of part 2 of the raw log: this line was changed after it was written.');
+    fs.writeFileSync(f2, ls[0] + '\n');
+    addTo(f2, { ...strip(SPEC.good.hook_read_range), says: 'redd' });
+    assert.strictEqual(verify(dir).stdout.trim(), 'Record broken at line 2 of part 2 of the raw log: it is not a valid mark (/says enum).');
+  }),
+);
+
 it('the verifier stays small and separate: src/verify/session.js loads nothing outside src/verify (brief line 699)', () => {
   const { spawnSync } = require('child_process');
   const probe = "require('./src/verify/session'); process.stdout.write(JSON.stringify(Object.keys(require.cache)))";

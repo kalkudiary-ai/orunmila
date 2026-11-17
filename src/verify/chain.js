@@ -7,8 +7,13 @@
  *   hashRecord(record)        "sha256:<hex>" of the RFC 8785 bytes of the
  *                             record without its `hash` member
  *   seal(record, prevHash)    the record with `prev_hash` and `hash` set
- *   verifyText(text)          { ok: true, lines } or
- *                             { ok: false, line, reason, checked }
+ *   verifyText(text, start?)  { ok: true, lines } or
+ *                             { ok: false, line, reason, checked, cut? };
+ *                             start ({ prevHash, seq }, default null and 0) is
+ *                             what the first line must follow: a later part of
+ *                             a log continues the chain (LD57). cut is true
+ *                             when the failing line is a last line with no
+ *                             line feed, as a crash leaves it.
  *
  * `reason` is the first rule line `line` breaks, in the spec's order:
  * "not canonical", "changed", "does not follow", "out of sequence"; or
@@ -43,20 +48,21 @@ function readLine(line) {
   }
 }
 
-function verifyText(text) {
+function verifyText(text, start = { prevHash: null, seq: 0 }) {
   if (text === '') return { ok: false, line: 1, reason: 'missing', checked: 0 };
   const parts = text.split('\n');
   const terminated = parts[parts.length - 1] === '';
   const lines = terminated ? parts.slice(0, -1) : parts;
   let prev = null;
   for (let i = 0; i < lines.length; i++) {
-    const fail = (reason) => ({ ok: false, line: i + 1, reason, checked: i });
     const last = i === lines.length - 1;
+    // A last line with no line feed is cut short, as a crash leaves it (a log in parts, LD57).
+    const fail = (reason) => ({ ok: false, line: i + 1, reason, checked: i, ...(!terminated && last ? { cut: true } : {}) });
     const rec = !terminated && last ? null : readLine(lines[i]);
     if (!rec) return fail('not canonical');
     if (typeof rec.hash !== 'string' || hashRecord(rec) !== rec.hash) return fail('changed');
-    if (rec.prev_hash !== (i === 0 ? null : prev.hash)) return fail('does not follow');
-    if (rec.seq !== (i === 0 ? 0 : prev.seq + 1)) return fail('out of sequence');
+    if (rec.prev_hash !== (i === 0 ? start.prevHash : prev.hash)) return fail('does not follow');
+    if (rec.seq !== (i === 0 ? start.seq : prev.seq + 1)) return fail('out of sequence');
     prev = rec;
   }
   return { ok: true, lines: lines.length };

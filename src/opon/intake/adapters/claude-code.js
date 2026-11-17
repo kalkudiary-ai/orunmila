@@ -28,6 +28,8 @@
  * - Stop: the `claimed` mark from the payload's own final text (N10), then
  *   the turn's `ended` mark. No final text: '' with claim_unconfirmed.
  * - A prompt Claude Code wrote itself is noted `from_human: false` (NF54).
+ * - SessionEnd: the session's `ended` mark, target the session, no turn, with
+ *   Claude Code's reason when it gives one (LD55).
  */
 
 const { getAdapter } = require('../../../capture/agents');
@@ -76,9 +78,17 @@ function writeDetail(file, status) {
 function translatePayload(payload, ctx = {}) {
   const ev = payload && payload.hook_event_name;
   const reject = (reason) => ({ marks: [], rejects: [{ payload, reason }] });
-  if (!['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'Stop'].includes(ev)) return reject(`no translation for hook event ${ev}`);
-  if (!ctx.turn) return reject('no turn given for a Glove mark');
+  if (!['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'Stop', 'SessionEnd'].includes(ev)) return reject(`no translation for hook event ${ev}`);
   const f = CC.fields;
+  if (ev === 'SessionEnd') {
+    // The session's end belongs to no turn (LD55).
+    const detail = typeof payload.reason === 'string' && payload.reason ? { reason: payload.reason } : {};
+    const m = { schema_version: 1, session_id: f.sessionId(payload), source: 'hook', agent: CC.id, turn: null, sub_agent: null, observed_at: ctx.observedAt, cause_hint: null, target: { kind: 'session', id: f.sessionId(payload) }, says: 'ended', detail };
+    const mono = monoString(ctx.monoNs);
+    if (mono !== undefined) m.mono_ns = mono;
+    return { marks: [{ mark: m, keep: [] }], rejects: [] };
+  }
+  if (!ctx.turn) return reject('no turn given for a Glove mark');
   const subId = f.subAgentId(payload);
   const mark = (over) => {
     const m = {

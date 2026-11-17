@@ -120,6 +120,13 @@ it('test 63, mark side: Stop gives the claimed mark (the payload\'s own final te
   assert.deepStrictEqual([none.detail.text, none.detail.claim_unconfirmed], ['', true]);
 });
 
+it('LD55: SessionEnd is the session\'s end: ended, target the session, no turn (none is needed), with the reason Claude Code gives', () => {
+  const m = only({ ...base, hook_event_name: 'SessionEnd', reason: 'prompt_input_exit' }, { observedAt: ctx.observedAt }).mark;
+  assert.deepStrictEqual([m.source, m.says, m.turn, m.target, m.detail, m.cause_hint], ['hook', 'ended', null, { kind: 'session', id: SID }, { reason: 'prompt_input_exit' }, null]);
+  assert.strictEqual(only({ ...base, hook_event_name: 'SessionEnd' }, ctx).mark.turn, null, 'a turn given is not used');
+  assert.deepStrictEqual(only({ ...base, hook_event_name: 'SessionEnd' }, ctx).mark.detail, {}, 'no reason given, none written');
+});
+
 it('an unknown hook event, or a payload with no turn given, is rejected with a reason, never dropped', () => {
   assert.strictEqual(translatePayload({ ...base, hook_event_name: 'Notification' }, ctx).rejects[0].reason, 'no translation for hook event Notification');
   assert.strictEqual(translatePayload(pre('Bash', { command: 'x' }), { observedAt: ctx.observedAt }).rejects[0].reason, 'no turn given for a Glove mark');
@@ -143,6 +150,7 @@ it('every translated mark is accepted by the session log', () => {
       [post('WebSearch', { query: 'q' }, {}), ctx],
       [post('mcp__x', {}, {}), ctx],
       [{ ...base, hook_event_name: 'Stop', last_assistant_message: 'ok' }, ctx],
+      [{ ...base, hook_event_name: 'SessionEnd', reason: 'clear' }, ctx],
     ];
     for (const [p, c] of payloads) {
       for (const { mark, keep } of translatePayload(p, c).marks) {

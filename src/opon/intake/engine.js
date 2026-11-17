@@ -33,7 +33,8 @@
  *   intake.resume([{ id, log }])
  *                         after a restart, before anything else: one gap per
  *                         reopened session for the downtime (test 84; below);
- *                         returns { gaps: [{ id, seq }], failed: [{ id, reason }] }
+ *                         returns { gaps: [{ id, seq }], failed: [{ id, reason }],
+ *                         skipped: [{ id, reason }] } (sessions that ended)
  *
  * Silence is measured on the intake's clock from the last mark written to the
  * session (a tick included), not from a source's own mono_ns. The caller's mark
@@ -102,13 +103,16 @@ function createIntake({ openLog, clock, tickMs = TICK_MS }) {
       m.mono_ns = now.mono;
       if (isObject(m.detail)) m.detail = { ...m.detail, stamped_by: 'intake' };
     }
-    return write(s, m, now);
+    const r = write(s, m, now);
+    if (r.ok && m.says === 'ended' && isObject(m.target) && m.target.kind === 'session') s.ended = true;
+    return r;
   }
 
   function poll() {
     const now = clock();
     let written = 0;
     for (const [id, s] of sessions) {
+      if (s.ended) continue; // an ended session never ticks (LD55)
       if (BigInt(now.mono) - s.last < quiet) continue;
       const tick = {
         schema_version: 1,
@@ -131,10 +135,11 @@ function createIntake({ openLog, clock, tickMs = TICK_MS }) {
 
   /**
    * After a restart (test 84; design D-I 4.7). `entries` are the reopened logs
-   * (session-log.js openSessionLog) of the sessions the intake was serving;
-   * which ones is the caller's choice, since the contract has no session-end
-   * mark yet. One gap goes into each, from the latest record among them (the
-   * intake's last write: a tick when idle) to now, naming them all. It is
+   * (session-log.js openSessionLog) of the sessions the intake was serving.
+   * A session whose log holds its end mark is held but skipped: no gap, no
+   * tick, named in no gap (LD55). One gap goes into each of the others, from
+   * the latest record among all of them (the intake's last write: a tick when
+   * idle) to now, naming them all. It is
    * written on every restart, however short: hooks never wait for intake, so
    * anything sent meanwhile is lost. A reboot resets the monotonic clock, so a
    * now below `since` is written too, flagged clock_reset. A gap a log refuses
@@ -144,14 +149,21 @@ function createIntake({ openLog, clock, tickMs = TICK_MS }) {
     if (sessions.size) throw new Error('resume comes first: this intake already holds sessions');
     const ids = entries.map((e) => e.id);
     if (new Set(ids).size !== ids.length) throw new Error('a session is resumed twice');
-    const out = { gaps: [], failed: [] };
+    const out = { gaps: [], failed: [], skipped: [] };
     if (!entries.length) return out;
     const now = clock();
     const since = entries.map((e) => e.log.last()).reduce((a, b) => (BigInt(b.mono_ns) > BigInt(a.mono_ns) ? b : a));
-    const named = [...ids].sort();
+    const live = entries.filter((e) => !e.log.ended());
+    const named = live.map((e) => e.id).sort();
     for (const { id, log } of entries) {
       const s = { log, last: BigInt(now.mono), pin: null };
       sessions.set(id, s);
+      if (log.ended()) {
+        // Held, so a late mark still lands in its log, but no gap and no tick (LD55).
+        s.ended = true;
+        out.skipped.push({ id, reason: 'the session ended' });
+        continue;
+      }
       const detail = {
         lost: `every mark sent to intake while it was not running, from ${since.observed_at} to ${now.wall}`,
         since: { mono_ns: since.mono_ns, observed_at: since.observed_at },

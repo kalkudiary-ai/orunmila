@@ -437,6 +437,12 @@ const MUTANTS = [
   { id: 'E9 a failed write recorded as modified', file: 'src/opon/intake/adapters/events-v0.js', test: 'test/adapter-events-v0.js',
     from: "return e.failed ? 'ended' : kind;", to: 'return kind;',
     fails: ['a hook write: modified'] },
+  { id: "L18 the session's end not noted when written (LD55)", file: 'src/opon/ledger/session-log.js', test: 'test/session-log.js',
+    from: 'if (endsSession(sealed)) ended = true;', to: 'void 0;',
+    fails: ["LD55: ended() is false until the session's end mark is written"] },
+  { id: "L19 a reopened log forgets the session's end (LD55)", file: 'src/opon/ledger/session-log.js', test: 'test/session-log.js',
+    from: 'ended: raw.slice(1).some(endsSession),', to: 'ended: false,',
+    fails: ["LD55: ended() is false until the session's end mark is written"] },
   // Track B, built unwired: the intake engine (src/opon/intake/engine.js).
   { id: 'B1 ticks while busy', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
     from: 'if (BigInt(now.mono) - s.last < quiet) continue;', to: 'if (false) continue;',
@@ -490,6 +496,19 @@ const MUTANTS = [
   { id: 'B17 resumed sessions not held (the next mark makes a new log)', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
     from: 'const s = { log, last: BigInt(now.mono), pin: null };\n      sessions.set(id, s);', to: 'const s = { log, last: BigInt(now.mono), pin: null };\n      void sessions;',
     fails: ['after a resume the intake carries on'] },
+  // Track B slice B1d-2: the session's end (LD55).
+  { id: 'B18 an ended session still ticks', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: 'if (s.ended) continue;', to: 'void 0;',
+    fails: ['LD55: an ended session gets no tick', 'LD55: on restart, a session that ended'] },
+  { id: "B19 the session's end not noted on arrival", file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: "if (r.ok && m.says === 'ended' && isObject(m.target) && m.target.kind === 'session') s.ended = true;", to: 'void 0;',
+    fails: ['LD55: an ended session gets no tick'] },
+  { id: 'B20 an ended session given a restart gap', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: "out.skipped.push({ id, reason: 'the session ended' });\n        continue;", to: "out.skipped.push({ id, reason: 'the session ended' });",
+    fails: ['LD55: on restart, a session that ended'] },
+  { id: 'B21 an ended session named in the others\' gaps', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: 'const named = live.map((e) => e.id).sort();', to: 'const named = [...ids].sort();',
+    fails: ['LD55: on restart, a session that ended'] },
 ];
 
 function copyRepo(root) {

@@ -293,7 +293,7 @@ it(
     assert.throws(() => intake.resume([{ id: SID, log: openSessionLog(dir(SID)) }]), /first/);
     const again = createIntake({ openLog: noNewLog, clock });
     assert.throws(() => again.resume([SID, SID].map((id) => ({ id, log: openSessionLog(dir(id)) }))), /twice/);
-    assert.deepStrictEqual(createIntake({ openLog: noNewLog, clock }).resume([]), { gaps: [], failed: [] });
+    assert.deepStrictEqual(createIntake({ openLog: noNewLog, clock }).resume([]), { gaps: [], failed: [], skipped: [] });
     assert.strictEqual(rawLines(dir(SID)).filter((x) => x.says === 'gap').length, 0);
   }),
 );
@@ -318,13 +318,53 @@ it(
   withIntake(({ intake, clock, dir }) => {
     serveTwo(intake, clock);
     clock.advance(1000);
-    const refusing = { last: () => ({ seq: 3, mono_ns: '1', observed_at: '2026-11-16T12:00:00.000Z' }), append: () => ({ ok: false, reasons: ['disk full'] }) };
+    const refusing = { last: () => ({ seq: 3, mono_ns: '1', observed_at: '2026-11-16T12:00:00.000Z' }), ended: () => false, append: () => ({ ok: false, reasons: ['disk full'] }) };
     const r = createIntake({ openLog: noNewLog, clock }).resume([
       { id: SID, log: openSessionLog(dir(SID)) },
       { id: B, log: refusing },
     ]);
     assert.deepStrictEqual(r.failed, [{ id: B, reason: 'disk full' }]);
     assert.deepStrictEqual(r.gaps.map((g) => g.id), [SID]);
+  }),
+);
+
+// --- B1d-2: the session's end (LD55) ---------------------------------------------
+
+const ended = (id) => inSession(mark('hook_session_ended'), id);
+
+it(
+  'LD55: an ended session gets no tick; a mark that still arrives for it is written, never refused',
+  withIntake(({ intake, clock, dir }) => {
+    intake.receive(mark('hook_started'));
+    assert.strictEqual(intake.receive(ended(SID)).ok, true);
+    for (let t = 0; t < 2000; t += 100) {
+      clock.advance(100);
+      assert.strictEqual(intake.poll(), 0);
+    }
+    assert.strictEqual(intake.receive(mark('hook_started')).ok, true, 'a late mark lands');
+    clock.advance(1000);
+    assert.strictEqual(intake.poll(), 0, 'and does not start the ticks again');
+    assert.deepStrictEqual(rawLines(dir(SID)).slice(1).map((x) => x.says), ['started', 'ended', 'started']);
+  }),
+);
+
+it(
+  'LD55: on restart, a session that ended gets no gap and is named in no other gap; a late mark for it still lands in its log, and it never ticks',
+  withIntake(({ intake, clock, dir }) => {
+    serveTwo(intake, clock);
+    intake.receive(ended(B));
+    clock.advance(30000);
+    const again = createIntake({ openLog: noNewLog, clock });
+    const r = again.resume([SID, B].map((id) => ({ id, log: openSessionLog(dir(id)) })));
+    assert.deepStrictEqual(r.gaps.map((g) => g.id), [SID]);
+    assert.deepStrictEqual(r.skipped, [{ id: B, reason: 'the session ended' }]);
+    const g = rawLines(dir(SID)).filter((x) => x.says === 'gap')[0];
+    assert.deepStrictEqual(g.detail.sessions, [SID]);
+    assert.strictEqual(rawLines(dir(B)).filter((x) => x.says === 'gap').length, 0);
+    assert.strictEqual(again.receive(inSession(mark('hook_started'), B)).ok, true);
+    clock.advance(1000);
+    assert.strictEqual(again.poll(), 1, 'only the live session ticks');
+    for (const id of [SID, B]) assert.strictEqual(verifySessionLog(dir(id)).ok, true, id);
   }),
 );
 

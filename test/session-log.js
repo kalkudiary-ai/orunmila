@@ -242,6 +242,20 @@ it(
 );
 
 it(
+  'LD55: ended() is false until the session\'s end mark is written, then true; a quarantined end does not count; the same after a reopen',
+  withLog((log, dir) => {
+    log.append(mark('hook_started'));
+    assert.strictEqual(log.ended(), false);
+    assert.strictEqual(log.append({ ...mark('hook_session_ended'), turn: 't3' }).ok, false, 'malformed: quarantined');
+    assert.strictEqual(log.ended(), false);
+    assert.strictEqual(openSessionLog(dir).ended(), false);
+    assert.strictEqual(log.append(mark('hook_session_ended')).ok, true);
+    assert.strictEqual(log.ended(), true);
+    assert.strictEqual(openSessionLog(dir).ended(), true);
+  }),
+);
+
+it(
   'a log that does not verify is never reopened, and nothing is written: an edited line, a torn last line (a crash mid-write), a broken quarantine log, no log at all',
   () => {
     const base = tmpDir();

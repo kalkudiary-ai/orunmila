@@ -51,6 +51,7 @@ function patch(base, { set = {}, unset = [] }) {
 const FORMATS = [
   { name: 'mark', schema: 'mark.schema.json', cases: 'marks.json' },
   { name: 'session header', schema: 'session-header.schema.json', cases: 'session-headers.json' },
+  { name: 'continuation', schema: 'continuation.schema.json', cases: 'continuations.json' },
 ];
 
 for (const f of FORMATS) {

@@ -1,0 +1,156 @@
+{
+  "good": {
+    "raw_part_2": {
+      "schema_version": 1,
+      "record": "continuation",
+      "session_id": "ses_test_0001",
+      "log": "raw",
+      "part": 2,
+      "seq": 4,
+      "cut": {
+        "line": 4,
+        "bytes": 37,
+        "fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "quarantine_part_3": {
+      "schema_version": 1,
+      "record": "continuation",
+      "session_id": "ses_test_0001",
+      "log": "quarantine",
+      "part": 3,
+      "seq": 9,
+      "cut": {
+        "line": 2,
+        "bytes": 1,
+        "fingerprint": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "prev_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "hash": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+    }
+  },
+  "bad": [
+    {
+      "name": "part 1 is the log's own file, never a continuation",
+      "from": "raw_part_2",
+      "set": {
+        "/part": 1
+      },
+      "unset": [],
+      "error": {
+        "path": "/part",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "a continuation names a log that does not exist",
+      "from": "raw_part_2",
+      "set": {
+        "/log": "odu"
+      },
+      "unset": [],
+      "error": {
+        "path": "/log",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "a continuation with no cut",
+      "from": "raw_part_2",
+      "set": {},
+      "unset": [
+        "/cut"
+      ],
+      "error": {
+        "path": "/cut",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "a cut of no bytes is no cut",
+      "from": "raw_part_2",
+      "set": {
+        "/cut/bytes": 0
+      },
+      "unset": [],
+      "error": {
+        "path": "/cut/bytes",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "a cut fingerprint that is keyed",
+      "from": "raw_part_2",
+      "set": {
+        "/cut/fingerprint": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "unset": [],
+      "error": {
+        "path": "/cut/fingerprint",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "a continuation that starts a chain",
+      "from": "raw_part_2",
+      "set": {
+        "/prev_hash": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a continuation at seq 0, the header's",
+      "from": "raw_part_2",
+      "set": {
+        "/seq": 0
+      },
+      "unset": [],
+      "error": {
+        "path": "/seq",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "a record that is not a continuation",
+      "from": "raw_part_2",
+      "set": {
+        "/record": "session_header"
+      },
+      "unset": [],
+      "error": {
+        "path": "/record",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "a cut with no fingerprint of what was left",
+      "from": "raw_part_2",
+      "set": {},
+      "unset": [
+        "/cut/fingerprint"
+      ],
+      "error": {
+        "path": "/cut/fingerprint",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "a cut that names no line",
+      "from": "raw_part_2",
+      "set": {},
+      "unset": [
+        "/cut/line"
+      ],
+      "error": {
+        "path": "/cut/line",
+        "keyword": "required"
+      }
+    }
+  ]
+}

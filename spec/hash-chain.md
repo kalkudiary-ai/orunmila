@@ -46,6 +46,30 @@ Read the lines in order. For line *n* (counting from 1):
 
 The first line that fails is the one reported. Every line after it is unproven.
 
+## A log in parts
+
+A crash can cut a log's last line short. That log is never edited (agent's choice LD57, approved
+by O 2026-11-17). The restart starts a new part beside it, and the chain goes on there.
+
+- Part 1 is the log's own file (`raw.jsonl`, `quarantine.jsonl`). Part 2 is `raw.2.jsonl` (or
+  `quarantine.2.jsonl`), then `.3`, and so on.
+- A part may be followed by another only if its last line is **cut**: the file does not end with
+  a line feed. Every line before the cut checks by the rules above. A part whose last line is whole
+  ends the log; another part after it is a broken record.
+- The next part's first line is a **continuation record** (`continuation.schema.json`). Its
+  `prev_hash` is the hash of the last whole line before the cut, and its `seq` is one more than
+  that line's. It names its `part` and its `log`. Its `cut` gives the cut line's number in the
+  previous part, its length in bytes, and `sha256:` with the SHA-256 of those bytes.
+- Every later line follows the rules above, so one chain runs through all the parts.
+
+Checking a log in parts: check part 1 as above. While another part exists, the part just
+checked must be cut, and the next part's first line must name that cut exactly (line number,
+length, fingerprint) and follow the last whole line before it. Then check that part the same way.
+A cut last line in the last part is not continued: the log is broken there.
+
+The cut line's content is lost. A continuation shows where the crash cut the log, never what the
+cut line said. The restart's gap mark covers the marks lost while intake was down.
+
 ## What the chain cannot show
 
 - **Lines removed from the end.** A log cut short still checks as an unbroken chain. The session

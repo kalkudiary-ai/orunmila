@@ -8,7 +8,8 @@ still change. After that, fields may be added but never renamed or removed witho
 |---|---|
 | `mark.schema.json` | The mark: one raw observation, one line of a session's raw log |
 | `session-header.schema.json` | The session header: the raw log's first line, where the hash chain starts |
-| `hash-chain.md` | The hash chain: the exact bytes hashed, how lines link, how a log is checked (`src/verify/chain.js`) |
+| `hash-chain.md` | The hash chain: the exact bytes hashed, how lines link, how a log is checked (`src/verify/chain.js`), and a log continued in parts after a crash |
+| `continuation.schema.json` | The continuation record: the first line of a log's second or later part, naming where the crash cut the previous part |
 
 The odù record and the verdict record come later (Phases 2 and 6), after the contract amendment
 for the Glove's marks (open question 5) is approved.

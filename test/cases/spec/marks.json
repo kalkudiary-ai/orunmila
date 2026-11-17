@@ -662,6 +662,75 @@
       "cause_hint": null,
       "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
       "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_session_ended": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "session",
+        "id": "ses_test_0001"
+      },
+      "says": "ended",
+      "detail": {
+        "reason": "prompt_input_exit"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_intake_stopped": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "process",
+        "name": "intake"
+      },
+      "says": "exited",
+      "detail": {
+        "exit_status": "pass",
+        "reason": "a stop signal"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_started_pinning": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "command",
+        "text": "npm test"
+      },
+      "says": "started",
+      "detail": {
+        "tool": "Bash",
+        "channel": "http",
+        "sender_pid": 4100
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
     }
   },
   "bad": [
@@ -1558,6 +1627,66 @@
       "unset": [],
       "error": {
         "path": "/detail/received",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a session end inside a turn",
+      "from": "hook_session_ended",
+      "set": {
+        "/turn": "t3"
+      },
+      "unset": [],
+      "error": {
+        "path": "/turn",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a session target with no id",
+      "from": "hook_session_ended",
+      "set": {},
+      "unset": [
+        "/target/id"
+      ],
+      "error": {
+        "path": "/target/id",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "a session end from the sentinel",
+      "from": "hook_session_ended",
+      "set": {
+        "/source": "sentinel"
+      },
+      "unset": [],
+      "error": {
+        "path": "/source",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "a session target with a verb other than ended",
+      "from": "hook_session_ended",
+      "set": {
+        "/says": "started"
+      },
+      "unset": [],
+      "error": {
+        "path": "/says",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "a pinning sender_pid that is not an integer",
+      "from": "hook_started_pinning",
+      "set": {
+        "/detail/sender_pid": "4100"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/sender_pid",
         "keyword": "type"
       }
     }

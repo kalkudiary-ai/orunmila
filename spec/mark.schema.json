@@ -36,8 +36,8 @@
       "minLength": 1
     },
     "turn": {
-      "description": "Every Glove mark, and every law-gate mark, names the agent's turn. Sources that know nothing of turns (sentinel, git, process) write `null`.",
-      "$comment": "brief v3 line 255",
+      "description": "Every Glove mark, and every law-gate mark, names the agent's turn. Sources that know nothing of turns (sentinel, git, process) write `null`. The session's end belongs to no turn, so its mark writes `null` too.",
+      "$comment": "brief v3 line 255; the session end's null is the agent's choice, LD55 (format change approved by O 2026-11-17)",
       "type": ["string", "null"],
       "minLength": 1
     },
@@ -64,13 +64,13 @@
       "pattern": "^(0|[1-9][0-9]*)$"
     },
     "target": {
-      "description": "What the mark is about. `target.kind`: `file`, `dir`, `command`, `process`, `claim`, `turn`, `tool`, or `network`.",
-      "$comment": "brief v3 lines 244, 259",
+      "description": "What the mark is about. `target.kind`: `file`, `dir`, `command`, `process`, `claim`, `turn`, `tool`, `network`, or `session`.",
+      "$comment": "brief v3 lines 244, 259; `session` is the agent's choice, LD55",
       "$ref": "#/definitions/target"
     },
     "says": {
-      "description": "A fixed verb list: created, modified, deleted, renamed, started, exited, ended (a turn finished, or a tool call failed), prompted (a user prompt arrived), read, contacted, called, claimed, checked (the law gate checked a turn), fingerprinted (the Opon recorded a file's fingerprint), gap (a source lost or dropped events), tampered (source process: Orunmila's own logs, frozen configuration, code or the agent's hook settings changed during the session, or a payload arrived from a process other than the one pinned to the session). Also tick (heartbeat).",
-      "$comment": "brief v3 line 245; brief v4 line 245 adds tampered (decision I-1, 2026-11-16)",
+      "description": "A fixed verb list: created, modified, deleted, renamed, started, exited, ended (a turn finished, a tool call failed, or the session ended), prompted (a user prompt arrived), read, contacted, called, claimed, checked (the law gate checked a turn), fingerprinted (the Opon recorded a file's fingerprint), gap (a source lost or dropped events), tampered (source process: Orunmila's own logs, frozen configuration, code or the agent's hook settings changed during the session, or a payload arrived from a process other than the one pinned to the session). Also tick (heartbeat).",
+      "$comment": "brief v3 line 245; brief v4 line 245 adds tampered (decision I-1, 2026-11-16); ended for the session is the agent's choice, LD55",
       "enum": ["created", "modified", "deleted", "renamed", "started", "exited", "ended", "prompted", "read", "contacted", "called", "claimed", "checked", "fingerprinted", "gap", "tampered", "tick"]
     },
     "detail": {
@@ -97,9 +97,18 @@
   },
   "allOf": [
     {
-      "$comment": "brief v3 line 255: Glove and law-gate marks name the turn",
-      "if": { "required": ["source"], "properties": { "source": { "enum": ["hook", "agent_claim", "law_gate"] } } },
+      "$comment": "brief v3 line 255: Glove and law-gate marks name the turn, except the session's end (LD55)",
+      "if": {
+        "required": ["source"],
+        "properties": { "source": { "enum": ["hook", "agent_claim", "law_gate"] } },
+        "not": { "$ref": "#/definitions/session_target" }
+      },
       "then": { "properties": { "turn": { "type": "string" } } }
+    },
+    {
+      "$comment": "agent's choice, LD55: only the agent's own hook ends a session, outside any turn",
+      "if": { "$ref": "#/definitions/session_target" },
+      "then": { "properties": { "source": { "const": "hook" }, "says": { "const": "ended" }, "turn": { "type": "null" } } }
     },
     {
       "$comment": "brief v3 line 255: sentinel, git and process write null",
@@ -252,18 +261,23 @@
         { "properties": { "says": { "enum": ["started", "created", "modified", "deleted", "renamed", "exited", "read", "contacted", "called"] } } },
         {
           "required": ["target"],
-          "properties": { "says": { "const": "ended" }, "target": { "type": "object", "required": ["kind"], "properties": { "kind": { "not": { "const": "turn" } } } } }
+          "properties": { "says": { "const": "ended" }, "target": { "type": "object", "required": ["kind"], "properties": { "kind": { "not": { "enum": ["turn", "session"] } } } } }
         }
       ]
+    },
+    "session_target": {
+      "$comment": "A mark about the session itself: target { kind: session } (LD55).",
+      "required": ["target"],
+      "allOf": [{ "properties": { "target": { "type": "object", "required": ["kind"], "properties": { "kind": { "const": "session" } } } } }]
     },
     "target": {
       "type": ["object", "null"],
       "required": ["kind"],
       "properties": {
         "kind": {
-          "description": "`file`, `dir`, `command`, `process`, `claim`, `turn`, `tool`, or `network`.",
-          "$comment": "brief v3 line 244",
-          "enum": ["file", "dir", "command", "process", "claim", "turn", "tool", "network"]
+          "description": "`file`, `dir`, `command`, `process`, `claim`, `turn`, `tool`, `network`, or `session` (the session itself, for its end).",
+          "$comment": "brief v3 line 244; `session` is the agent's choice, LD55",
+          "enum": ["file", "dir", "command", "process", "claim", "turn", "tool", "network", "session"]
         },
         "path": {
           "description": "The file or folder. Normalise paths: convert to repo-relative, resolve symlinks, and normalise case on case-insensitive filesystems.",
@@ -277,8 +291,18 @@
           "type": "boolean"
         },
         "text": { "description": "A command targets `{ \"kind\": \"command\", \"text\": ... }`.", "$comment": "brief v3 line 259", "type": "string" },
-        "id": { "description": "A turn, target `{ \"kind\": \"turn\", \"id\": ... }`.", "$comment": "brief v3 line 257", "type": "string", "minLength": 1 },
-        "name": { "description": "Any other tool targets `{ \"kind\": \"tool\", \"name\": ... }`.", "$comment": "brief v3 line 259", "type": "string", "minLength": 1 },
+        "id": {
+          "description": "A turn, target `{ \"kind\": \"turn\", \"id\": ... }`. The session itself, `{ \"kind\": \"session\", \"id\": ... }`, with its session id.",
+          "$comment": "brief v3 line 257; the session target is the agent's choice, LD55",
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "description": "Any other tool targets `{ \"kind\": \"tool\", \"name\": ... }`. A process target may name the process: `intake` for Orunmila's own intake.",
+          "$comment": "brief v3 line 259; the process name is the agent's choice, LD56",
+          "type": "string",
+          "minLength": 1
+        },
         "host": {
           "description": "A network contact targets `{ \"kind\": \"network\", \"host\": ..., \"url\": ... }`; for a web search `host` is `null`, because the agent's tool picks the hosts and Orunmila does not see them.",
           "$comment": "brief v3 line 259",
@@ -290,7 +314,7 @@
       "allOf": [
         { "if": { "required": ["kind"], "properties": { "kind": { "enum": ["file", "dir"] } } }, "then": { "required": ["path"] } },
         { "if": { "required": ["kind"], "properties": { "kind": { "const": "command" } } }, "then": { "required": ["text"] } },
-        { "if": { "required": ["kind"], "properties": { "kind": { "const": "turn" } } }, "then": { "required": ["id"] } },
+        { "if": { "required": ["kind"], "properties": { "kind": { "enum": ["turn", "session"] } } }, "then": { "required": ["id"] } },
         { "if": { "required": ["kind"], "properties": { "kind": { "const": "tool" } } }, "then": { "required": ["name"] } },
         { "if": { "required": ["kind"], "properties": { "kind": { "const": "network" } } }, "then": { "required": ["host"] } }
       ]
@@ -381,8 +405,8 @@
           }
         },
         "reason": {
-          "description": "Why a check was skipped, for example: could not confirm the current turn.",
-          "$comment": "brief v3 lines 242, 575; agent's choice of name, LD36",
+          "description": "Why a check was skipped, for example: could not confirm the current turn. On the session's end, the reason the agent gave; on the intake's closing note, why it stopped.",
+          "$comment": "brief v3 lines 242, 575; agent's choice of name, LD36; the session end's and the closing note's use, LD55 and LD56",
           "type": "string"
         },
         "lost": {
@@ -443,8 +467,8 @@
           "const": true
         },
         "sender_pid": {
-          "description": "On a tampered mark for a foreign sender: the process that sent the payload.",
-          "$comment": "brief v4 line 245 (\"with the evidence\"); the name is the agent's choice, B1b, wording approved by O 2026-11-17",
+          "description": "On a tampered mark for a foreign sender: the process that sent the payload. On the Glove mark that pinned the session (its first HTTP payload): the pinned process, so a restarted intake re-pins from the record. Only intake writes it.",
+          "$comment": "brief v4 line 245 (\"with the evidence\"); the name is the agent's choice, B1b, wording approved by O 2026-11-17; the pinning mark's use, LD58 (approved by O 2026-11-17)",
           "type": "integer",
           "minimum": 0
         },

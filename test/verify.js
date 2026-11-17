@@ -27,10 +27,10 @@ function buildSession() {
   const dir = path.join(base, 'ses');
   const log = createSessionLog(dir, strip(HEADERS.good.header));
   log.append(strip(SPEC.good.hook_started));
-  const ref = log.keep('-a\n+b\n');
   const m = strip(SPEC.good.sentinel_modified);
-  m.detail.diff_ref = ref;
-  log.append(m);
+  delete m.detail.diff_ref;
+  log.append(m, [{ slot: 'diff_ref', text: '-a\n+b\n' }]);
+  const ref = JSON.parse(fs.readFileSync(path.join(dir, 'raw.jsonl'), 'utf8').split('\n')[2]).detail.diff_ref;
   log.append('{broken');
   return { base, dir, ref };
 }

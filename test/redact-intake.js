@@ -124,17 +124,19 @@ it(
 it(
   'a kept file (a diff, full output) is redacted before it is written, and the mark naming it notes the kinds',
   withLog({ envValues: [ENV_SECRET] }, (log, dir) => {
-    const ref = log.keep(`-PASSWORD=${ENV_SECRET}\n+PASSWORD=${ANTHROPIC}\n`);
     const m = strip(SPEC.good.sentinel_modified);
-    m.detail.diff_ref = ref;
-    assert.strictEqual(log.append(m).ok, true);
+    delete m.detail.diff_ref;
+    assert.strictEqual(log.append(m, [{ slot: 'diff_ref', text: `-PASSWORD=${ENV_SECRET}\n+PASSWORD=${ANTHROPIC}\n` }]).ok, true);
+    const line = JSON.parse(fs.readFileSync(path.join(dir, 'raw.jsonl'), 'utf8').split('\n')[1]);
+    const ref = line.detail.diff_ref;
     const kept = fs.readFileSync(path.join(dir, 'files', ref.slice(7)), 'utf8');
     assert.ok(!kept.includes(ENV_SECRET) && !kept.includes(ANTHROPIC), kept);
     assert.strictEqual(ref, 'sha256:' + crypto.createHash('sha256').update(kept).digest('hex'), 'diff_ref is the plain SHA-256 of the redacted copy');
-    const line = JSON.parse(fs.readFileSync(path.join(dir, 'raw.jsonl'), 'utf8').split('\n')[1]);
     assert.deepStrictEqual(line.detail.redactions, ['anthropic_key', 'env_value']);
+    assert.ok(!folderBytes(dir).includes(ENV_SECRET) && !folderBytes(dir).includes(ANTHROPIC), 'in no file of the folder');
     const bin = Buffer.from([0xff, 0xfe, 0x00, 0x41]);
-    const bref = log.keep(bin);
+    assert.strictEqual(log.append(m, [{ slot: 'diff_ref', text: bin }]).ok, true);
+    const bref = JSON.parse(fs.readFileSync(path.join(dir, 'raw.jsonl'), 'utf8').split('\n')[2]).detail.diff_ref;
     assert.ok(fs.readFileSync(path.join(dir, 'files', bref.slice(7))).equals(bin), 'binary content is kept as is');
   }),
 );

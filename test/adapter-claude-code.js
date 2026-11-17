@@ -154,8 +154,7 @@ it('every translated mark is accepted by the session log', () => {
     ];
     for (const [p, c] of payloads) {
       for (const { mark, keep } of translatePayload(p, c).marks) {
-        for (const k of keep) mark.detail[k.slot] = log.keep(k.text);
-        const res = log.append(mark);
+        const res = log.append(mark, keep); // the adapter's keep list goes in with its mark (LD59)
         assert.strictEqual(res.ok, true, `${p.hook_event_name} ${p.tool_name || ''}: ${JSON.stringify(res.reasons)}`);
       }
     }

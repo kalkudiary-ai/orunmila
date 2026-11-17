@@ -174,8 +174,7 @@ it('every translated mark is accepted by the session log (schema, keep requests,
       return h;
     })());
     for (const { mark, keep } of one(events).marks) {
-      for (const k of keep) mark.detail[k.slot] = log.keep(k.text);
-      const res = log.append(mark);
+      const res = log.append(mark, keep); // the adapter's keep list goes in with its mark (LD59)
       assert.strictEqual(res.ok, true, JSON.stringify(res));
     }
   } finally {

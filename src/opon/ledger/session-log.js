@@ -13,7 +13,8 @@
  *
  * Intake alone assigns seq, prev_hash and hash; an input that sets one is
  * quarantined. A mark naming a diff_ref or output_ref that was not kept is
- * quarantined too, so no mark points at evidence that does not exist.
+ * quarantined too, so no mark points at evidence that does not exist. Files
+ * are kept only through append(mark, files), with their mark (LD59).
  *
  * Every input, quarantined text included, and every kept text file is redacted
  * first (src/opon/intake/redact.js, slice A6), before anything is hashed or
@@ -98,8 +99,6 @@ function continueLog(dir, name, tail, sessionId) {
  * file, no log) is refused with the verifier's words and nothing is written:
  * a broken chain is never extended, and nothing in a session is ever edited
  * (line 348). Known limit: a part whose own first line is cut is refused.
- * Known limit: the redaction kinds of a file kept before the reopen are not
- * merged into a later mark that names it (they live only in memory).
  */
 function openSessionLog(dir, { envValues = [] } = {}) {
   const v = verifySession(dir);
@@ -141,9 +140,7 @@ function openSessionLog(dir, { envValues = [] } = {}) {
 function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended, pin, envValues }) {
   const filesDir = path.join(dir, 'files');
 
-  const keptKinds = new Map(); // ref -> redaction kinds of that kept file
-
-  /** Keep a file beside the log: text is redacted first (line 266); binary is kept as is. */
+  /** Keep a file beside the log: text is redacted first (line 266); binary is kept as is. Returns { ref, kinds }. */
   function keep(content) {
     let buf = Buffer.isBuffer(content) ? content : Buffer.from(String(content), 'utf8');
     const text = buf.toString('utf8');
@@ -156,14 +153,13 @@ function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended
     const hex = sha256(buf);
     const file = path.join(filesDir, hex);
     if (!fs.existsSync(file)) fs.writeFileSync(file, buf, { flag: 'wx', mode: 0o600 });
-    const ref = `sha256:${hex}`;
-    if (kinds.length) keptKinds.set(ref, kinds);
-    return ref;
+    return { ref: `sha256:${hex}`, kinds };
   }
 
-  function quarantine(received, reasons, redactions) {
+  function quarantine(received, reasons, redactions, kept) {
     const entry = { schema_version: 1, record: 'quarantined', session_id: header.session_id, seq: qLast.seq + 1, received_at: new Date().toISOString(), reasons, received };
     if (redactions.length) entry.redactions = redactions;
+    if (kept.length) entry.kept = kept; // the files kept with it: evidence is never dropped (LD59)
     const sealed = seal(entry, qLast.hash);
     fs.appendFileSync(qFile, line(sealed));
     qLast = sealed;
@@ -171,26 +167,38 @@ function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended
     return { ok: false, quarantined: sealed.seq, reasons };
   }
 
-  function append(input) {
+  /**
+   * Append one mark. `files` are the files kept with it (an adapter's keep
+   * list, [{ slot, text }]): each is kept first, redacted, and the mark's slot
+   * names it and its detail.redactions notes the kinds, in this one call, so
+   * the file and its note cannot come apart (LD59). A quarantined mark's files
+   * are kept too, and its quarantine entry lists them.
+   */
+  function append(input, files = []) {
+    const kept = files.map((f) => ({ slot: f.slot, ...keep(f.text) }));
+    const refs = kept.map((k) => k.ref);
     // Redact first, before anything is hashed or written, quarantined text included (lines 248, 340).
     let value;
     try {
       value = typeof input === 'string' ? JSON.parse(input) : JSON.parse(JSON.stringify(input));
     } catch (e) {
       const r = redactText(typeof input === 'string' ? input : String(input), envValues);
-      return quarantine(r.text, [`not JSON: ${e.message}`], r.kinds);
+      return quarantine(r.text, [`not JSON: ${e.message}`], r.kinds, refs);
     }
     const { mark: m, kinds: redactions } = redactMark(value, envValues);
     const received = JSON.stringify(m);
-    const reject = (reasons) => quarantine(received, reasons, redactions);
+    const reject = (reasons) => quarantine(received, reasons, redactions, refs);
     if (!isObject(m)) return reject(['not a JSON object']);
-    const reasons = [];
+    // The slot name is the caller's text, so it is never echoed into a reason (it could hold a secret).
+    const reasons = kept.filter((k) => !REF_SLOTS.includes(k.slot)).map(() => 'a kept file is named for a detail slot that holds no kept file');
     for (const k of INTAKE_FIELDS) if (k in m) reasons.push(`the source sets ${k}, which intake assigns`);
     if (m.session_id !== header.session_id) reasons.push(`session_id ${JSON.stringify(m.session_id)} is not this session's`);
     if (reasons.length) return reject(reasons);
-    for (const { ref } of refsOf(m)) {
-      const k = keptKinds.get(ref);
-      if (k) m.detail.redactions = [...new Set([...(m.detail.redactions || []), ...k])].sort();
+    if (isObject(m.detail)) {
+      for (const k of kept) {
+        m.detail[k.slot] = k.ref;
+        if (k.kinds.length) m.detail.redactions = [...new Set([...(m.detail.redactions || []), ...k.kinds])].sort();
+      }
     }
 
     if (m.mono_ns === undefined) {
@@ -220,7 +228,7 @@ function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended
   /** The raw log's last record: where an intake that restarts finds when it last wrote (test 84). */
   const lastRecord = () => ({ seq: timed.seq, mono_ns: timed.mono_ns, observed_at: timed.observed_at });
 
-  return { append, keep, counts: () => ({ ...counts }), last: lastRecord, ended: () => ended, pin: () => pin };
+  return { append, counts: () => ({ ...counts }), last: lastRecord, ended: () => ended, pin: () => pin };
 }
 
 /** Check a session folder: the ledger uses src/verify for checking (brief v3 line 618). */

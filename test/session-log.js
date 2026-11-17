@@ -113,15 +113,16 @@ it(
   withLog((log, dir) => {
     const big = Buffer.alloc(2 * 1024 * 1024 + 7, 'x');
     big.write('-old\n+new\n', 0);
-    const ref = log.keep(big);
+    const m = mark('sentinel_modified');
+    delete m.detail.diff_ref;
+    assert.strictEqual(log.append(m, [{ slot: 'diff_ref', text: big }]).ok, true);
+    const ref = readLines(path.join(dir, 'raw.jsonl'))[1].detail.diff_ref;
     assert.strictEqual(ref, 'sha256:' + crypto.createHash('sha256').update(big).digest('hex'));
     const kept = fs.readFileSync(path.join(dir, 'files', ref.slice(7)));
     assert.ok(kept.equals(big), 'kept whole, never cut short');
     if (process.platform !== 'win32') assert.strictEqual(fs.statSync(path.join(dir, 'files', ref.slice(7))).mode & 0o777, 0o600);
-    assert.strictEqual(log.keep(big), ref, 'keeping the same bytes twice gives the same file');
-    const m = mark('sentinel_modified');
-    m.detail.diff_ref = ref;
-    assert.strictEqual(log.append(m).ok, true);
+    assert.strictEqual(log.append(m, [{ slot: 'diff_ref', text: big }]).ok, true);
+    assert.strictEqual(readLines(path.join(dir, 'raw.jsonl'))[2].detail.diff_ref, ref, 'keeping the same bytes twice gives the same file');
     assert.strictEqual(verifySessionLog(dir).ok, true);
   }),
 );
@@ -129,10 +130,10 @@ it(
 it(
   'verifySessionLog names a changed kept file, a missing kept file, and a broken raw or quarantine line',
   withLog((log, dir) => {
-    const ref = log.keep('diff text');
     const m = mark('sentinel_modified');
-    m.detail.diff_ref = ref;
-    log.append(m);
+    delete m.detail.diff_ref;
+    log.append(m, [{ slot: 'diff_ref', text: 'diff text' }]);
+    const ref = readLines(path.join(dir, 'raw.jsonl'))[1].detail.diff_ref;
     log.append('{not json');
     const file = path.join(dir, 'files', ref.slice(7));
     fs.chmodSync(file, 0o600);
@@ -292,9 +293,10 @@ it(
       dir = made('cut-and-changed');
       const log = openSessionLog(dir);
       const m = mark('sentinel_modified');
-      m.detail.diff_ref = log.keep('-a\n+b\n');
-      log.append(m);
-      fs.writeFileSync(path.join(dir, 'files', m.detail.diff_ref.slice(7)), 'changed');
+      delete m.detail.diff_ref;
+      log.append(m, [{ slot: 'diff_ref', text: '-a\n+b\n' }]);
+      const ref = readLines(path.join(dir, 'raw.jsonl'))[2].detail.diff_ref;
+      fs.writeFileSync(path.join(dir, 'files', ref.slice(7)), 'changed');
       fs.appendFileSync(path.join(dir, 'raw.jsonl'), '{"schema_version":1,"sess');
       cases.push([dir, /was changed after it was written/]);
       dir = made('quarantine');
@@ -312,6 +314,68 @@ it(
       rmrf(base);
     }
   },
+);
+
+// --- R1: a kept file goes in with its mark, in one call (LD59) ------------------------
+
+const SECRET = 'hunter2-not-a-real-value';
+function withEnvLog(fn) {
+  return () => {
+    const dir = path.join(tmpDir(), 'ses');
+    try {
+      fn(createSessionLog(dir, header(), { envValues: [SECRET] }), dir);
+    } finally {
+      rmrf(path.dirname(dir));
+    }
+  };
+}
+const plainMod = () => {
+  const m = mark('sentinel_modified');
+  delete m.detail.diff_ref;
+  return m;
+};
+
+it(
+  'LD59: append(mark, keep) keeps each file redacted, names it in its slot and notes its redaction kinds, all in one call; keep() is not public',
+  withEnvLog((log, dir) => {
+    assert.strictEqual(log.keep, undefined, 'no separate keep: the file and its mark cannot be split');
+    const r = log.append(plainMod(), [{ slot: 'diff_ref', text: `-a\n+TOKEN=${SECRET}\n` }]);
+    assert.strictEqual(r.ok, true, JSON.stringify(r));
+    const line = readLines(path.join(dir, 'raw.jsonl'))[1];
+    const kept = fs.readFileSync(path.join(dir, 'files', line.detail.diff_ref.slice(7)), 'utf8');
+    assert.ok(!kept.includes(SECRET) && kept.includes('[REDACTED:'), kept);
+    assert.ok(line.detail.redactions.includes('env_value'), JSON.stringify(line.detail));
+    assert.strictEqual(verifySessionLog(dir).ok, true);
+  }),
+);
+
+it(
+  'LD59: the note survives a restart, since nothing is held between calls: a reopened log keeps and notes in the same call',
+  withEnvLog((log, dir) => {
+    const again = openSessionLog(dir, { envValues: [SECRET] });
+    assert.strictEqual(again.append(mark('hook_started'), []).ok, true);
+    const m = mark('hook_exited_fail');
+    assert.strictEqual(again.append(m, [{ slot: 'output_ref', text: `x ${SECRET} y` }]).ok, true);
+    const line = readLines(path.join(dir, 'raw.jsonl'))[2];
+    assert.deepStrictEqual([typeof line.detail.output_ref, line.detail.redactions], ['string', ['api_key', 'env_value']], "merged with the mark's own note");
+  }),
+);
+
+it(
+  'LD59: a quarantined mark\'s files are still kept and its quarantine entry names them; a keep entry for a slot that holds no kept file is quarantined with its reason',
+  withEnvLog((log, dir) => {
+    const bad = log.append({ ...plainMod(), says: 'edited' }, [{ slot: 'diff_ref', text: '-a\n+b\n' }]);
+    assert.strictEqual(bad.ok, false);
+    const q = readLines(path.join(dir, 'quarantine.jsonl'))[1];
+    assert.strictEqual(q.kept.length, 1);
+    assert.ok(fs.existsSync(path.join(dir, 'files', q.kept[0].slice(7))), 'the evidence is kept, never dropped');
+    const wrong = log.append(plainMod(), [{ slot: 'tool_input', text: 'x' }]);
+    assert.strictEqual(wrong.ok, false);
+    assert.ok(wrong.reasons.some((x) => x.includes('holds no kept file')), JSON.stringify(wrong.reasons));
+    log.append(plainMod(), [{ slot: SECRET, text: 'x' }]);
+    for (const f of ['raw.jsonl', 'quarantine.jsonl']) assert.ok(!fs.readFileSync(path.join(dir, f), 'utf8').includes(SECRET), `a slot name is never echoed: ${f}`);
+    assert.strictEqual(verifySessionLog(dir).ok, true);
+  }),
 );
 
 // --- C1c: a crash-cut log continued in a new part on reopen (LD57) ------------------

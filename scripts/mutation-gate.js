@@ -326,7 +326,7 @@ const MUTANTS = [
     from: 'const counts = { marks: raw.length - 1, quarantined: q.length - 1 };', to: 'const counts = { marks: 0, quarantined: 0 };',
     fails: ['a reopened session log continues both chains'] },
   { id: 'L16 a reopened log forgets the .env values', file: 'src/opon/ledger/session-log.js', test: 'test/session-log.js',
-    from: 'counts, envValues });', to: 'counts, envValues: [] });',
+    from: 'pin: pinning ? pinOf(pinning) : null, envValues });', to: 'pin: pinning ? pinOf(pinning) : null, envValues: [] });',
     fails: ['a reopened log still checks marks and redacts'] },
   { id: "L17 last() names the header, not the raw log's last record", file: 'src/opon/ledger/session-log.js', test: 'test/session-log.js',
     from: '({ seq: last.seq, mono_ns: last.mono_ns, observed_at: last.observed_at })', to: '({ seq: header.seq, mono_ns: header.mono_ns, observed_at: header.observed_at })',

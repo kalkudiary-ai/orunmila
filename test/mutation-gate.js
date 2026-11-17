@@ -122,4 +122,10 @@ it(
   }),
 );
 
+it("every real mutant's snippet occurs exactly once in its file today, so an edit that moves one fails npm test, not only the phase-end gate", () => {
+  const { MUTANTS } = node(`process.stdout.write(JSON.stringify({ MUTANTS: require(${JSON.stringify(GATE)}).MUTANTS }))`);
+  const bad = MUTANTS.map((m) => [m.id, fs.readFileSync(path.join(ROOT, m.file), 'utf8').split(m.from).length - 1]).filter(([, n]) => n !== 1);
+  assert.deepStrictEqual(bad, []);
+});
+
 runAll('mutation-gate');

@@ -21,7 +21,8 @@
  * One writer per session log is assumed (one intake per machine, slice B1).
  * createSessionLog makes a new folder; openSessionLog reopens one that
  * verifies, for an intake that restarted (slice B1c, test 84). ended() says
- * whether the raw log holds the session's end mark (LD55).
+ * whether the raw log holds the session's end mark (LD55); pin() is the
+ * process the session is pinned to, from the record (LD58), or null.
  */
 
 const fs = require('fs');
@@ -46,6 +47,9 @@ const line = (rec) => canonicalize(rec) + '\n';
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 /** The session's end mark (LD55): ended, about the session itself. */
 const endsSession = (rec) => rec.says === 'ended' && isObject(rec.target) && rec.target.kind === 'session';
+/** The pin a mark records (LD58): an HTTP Glove mark's sender_pid, which intake alone writes; else null. */
+const pinOf = (rec) =>
+  ['hook', 'agent_claim'].includes(rec.source) && isObject(rec.detail) && rec.detail.channel === 'http' && Number.isInteger(rec.detail.sender_pid) ? rec.detail.sender_pid : null;
 const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
 const describe = (errs) => errs.map((e) => `${e.path} ${e.keyword}: ${e.message}`);
 
@@ -70,7 +74,7 @@ function createSessionLog(dir, headerInput, { envValues = [] } = {}) {
   fs.writeFileSync(rawFile, line(header), { flag: 'wx', mode: 0o600 });
   const qHeader = seal({ schema_version: 1, record: 'quarantine_header', session_id: header.session_id, seq: 0 }, null);
   fs.writeFileSync(qFile, line(qHeader), { flag: 'wx', mode: 0o600 });
-  return writer(dir, { header, last: header, qLast: qHeader, counts: { marks: 0, quarantined: 0 }, ended: false, envValues });
+  return writer(dir, { header, last: header, qLast: qHeader, counts: { marks: 0, quarantined: 0 }, ended: false, pin: null, envValues });
 }
 
 /**
@@ -89,11 +93,12 @@ function openSessionLog(dir, { envValues = [] } = {}) {
   const raw = lines('raw.jsonl');
   const q = lines('quarantine.jsonl');
   const counts = { marks: raw.length - 1, quarantined: q.length - 1 };
-  return writer(dir, { header: raw[0], last: raw[raw.length - 1], qLast: q[q.length - 1], counts, ended: raw.slice(1).some(endsSession), envValues });
+  const pinning = raw.slice(1).find((r) => pinOf(r) !== null);
+  return writer(dir, { header: raw[0], last: raw[raw.length - 1], qLast: q[q.length - 1], counts, ended: raw.slice(1).some(endsSession), pin: pinning ? pinOf(pinning) : null, envValues });
 }
 
 /** Appends to one session folder whose chains end at `last` (raw) and `qLast` (quarantine). */
-function writer(dir, { header, last, qLast, counts, ended, envValues }) {
+function writer(dir, { header, last, qLast, counts, ended, pin, envValues }) {
   const rawFile = path.join(dir, 'raw.jsonl');
   const qFile = path.join(dir, 'quarantine.jsonl');
   const filesDir = path.join(dir, 'files');
@@ -169,13 +174,14 @@ function writer(dir, { header, last, qLast, counts, ended, envValues }) {
     last = sealed;
     counts.marks++;
     if (endsSession(sealed)) ended = true;
+    if (pin === null) pin = pinOf(sealed);
     return { ok: true, seq: sealed.seq };
   }
 
   /** The raw log's last record: where an intake that restarts finds when it last wrote (test 84). */
   const lastRecord = () => ({ seq: last.seq, mono_ns: last.mono_ns, observed_at: last.observed_at });
 
-  return { append, keep, counts: () => ({ ...counts }), last: lastRecord, ended: () => ended };
+  return { append, keep, counts: () => ({ ...counts }), last: lastRecord, ended: () => ended, pin: () => pin };
 }
 
 /** Check a session folder: the ledger uses src/verify for checking (brief v3 line 618). */

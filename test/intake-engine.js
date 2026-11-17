@@ -42,6 +42,9 @@ function fakeClock() {
   return clock;
 }
 
+/** A sender check that accepts every process (the wiring's real one reads the pid's program, LD58). */
+const ANY = () => true;
+
 /** An intake whose logs live in a throwaway folder, one per session id. */
 function withIntake(fn) {
   return () => {
@@ -54,7 +57,7 @@ function withIntake(fn) {
     };
     const clock = fakeClock();
     try {
-      fn({ intake: createIntake({ openLog, clock }), clock, dir: (id) => dirs.get(id) });
+      fn({ intake: createIntake({ openLog, clock, checkSender: ANY }), clock, dir: (id) => dirs.get(id) });
     } finally {
       rmrf(base);
     }
@@ -248,7 +251,7 @@ it(
     const before = serveTwo(intake, clock);
     clock.advance(60000);
     const now = clock();
-    const again = createIntake({ openLog: noNewLog, clock });
+    const again = createIntake({ checkSender: ANY, openLog: noNewLog, clock });
     const r = again.resume([SID, B].map((id) => ({ id, log: openSessionLog(dir(id)) })));
     assert.deepStrictEqual(r.failed, []);
     assert.deepStrictEqual(r.gaps.map((g) => g.id), [SID, B]);
@@ -276,7 +279,7 @@ it(
   withIntake(({ intake, clock, dir }) => {
     serveTwo(intake, clock);
     clock.advance(5000);
-    const again = createIntake({ openLog: noNewLog, clock });
+    const again = createIntake({ checkSender: ANY, openLog: noNewLog, clock });
     again.resume([SID, B].map((id) => ({ id, log: openSessionLog(dir(id)) })));
     const gapSeq = rawLines(dir(SID)).length - 1;
     assert.deepStrictEqual(again.receive(mark('hook_started')), { ok: true, seq: gapSeq + 1 });
@@ -291,9 +294,9 @@ it(
   withIntake(({ intake, clock, dir }) => {
     intake.receive(mark('hook_started'));
     assert.throws(() => intake.resume([{ id: SID, log: openSessionLog(dir(SID)) }]), /first/);
-    const again = createIntake({ openLog: noNewLog, clock });
+    const again = createIntake({ checkSender: ANY, openLog: noNewLog, clock });
     assert.throws(() => again.resume([SID, SID].map((id) => ({ id, log: openSessionLog(dir(id)) }))), /twice/);
-    assert.deepStrictEqual(createIntake({ openLog: noNewLog, clock }).resume([]), { gaps: [], failed: [], skipped: [] });
+    assert.deepStrictEqual(createIntake({ checkSender: ANY, openLog: noNewLog, clock }).resume([]), { gaps: [], failed: [], skipped: [] });
     assert.strictEqual(rawLines(dir(SID)).filter((x) => x.says === 'gap').length, 0);
   }),
 );
@@ -303,7 +306,7 @@ it(
   withIntake(({ intake, clock, dir }) => {
     const before = serveTwo(intake, clock);
     const rebooted = () => ({ mono: '5000', wall: '2026-11-16T13:00:00.000Z' });
-    const r = createIntake({ openLog: noNewLog, clock: rebooted }).resume([SID, B].map((id) => ({ id, log: openSessionLog(dir(id)) })));
+    const r = createIntake({ checkSender: ANY, openLog: noNewLog, clock: rebooted }).resume([SID, B].map((id) => ({ id, log: openSessionLog(dir(id)) })));
     assert.strictEqual(r.gaps.length, 2);
     for (const id of [SID, B]) {
       const g = rawLines(dir(id)).filter((x) => x.says === 'gap')[0];
@@ -318,8 +321,8 @@ it(
   withIntake(({ intake, clock, dir }) => {
     serveTwo(intake, clock);
     clock.advance(1000);
-    const refusing = { last: () => ({ seq: 3, mono_ns: '1', observed_at: '2026-11-16T12:00:00.000Z' }), ended: () => false, append: () => ({ ok: false, reasons: ['disk full'] }) };
-    const r = createIntake({ openLog: noNewLog, clock }).resume([
+    const refusing = { last: () => ({ seq: 3, mono_ns: '1', observed_at: '2026-11-16T12:00:00.000Z' }), ended: () => false, pin: () => null, append: () => ({ ok: false, reasons: ['disk full'] }) };
+    const r = createIntake({ checkSender: ANY, openLog: noNewLog, clock }).resume([
       { id: SID, log: openSessionLog(dir(SID)) },
       { id: B, log: refusing },
     ]);
@@ -354,7 +357,7 @@ it(
     serveTwo(intake, clock);
     intake.receive(ended(B));
     clock.advance(30000);
-    const again = createIntake({ openLog: noNewLog, clock });
+    const again = createIntake({ checkSender: ANY, openLog: noNewLog, clock });
     const r = again.resume([SID, B].map((id) => ({ id, log: openSessionLog(dir(id)) })));
     assert.deepStrictEqual(r.gaps.map((g) => g.id), [SID]);
     assert.deepStrictEqual(r.skipped, [{ id: B, reason: 'the session ended' }]);
@@ -407,7 +410,7 @@ it(
     const at = clock();
     intake.stop('a stop signal');
     clock.advance(60000);
-    createIntake({ openLog: noNewLog, clock }).resume([SID, B].map((id) => ({ id, log: openSessionLog(dir(id)) })));
+    createIntake({ checkSender: ANY, openLog: noNewLog, clock }).resume([SID, B].map((id) => ({ id, log: openSessionLog(dir(id)) })));
     for (const id of [SID, B]) {
       const g = rawLines(dir(id)).filter((x) => x.says === 'gap')[0];
       assert.deepStrictEqual(g.detail.since, { mono_ns: at.mono, observed_at: at.wall }, id);
@@ -417,9 +420,71 @@ it(
 
 it('LD56: a closing note a log refuses is reported with its reason, never dropped silently', () => {
   const refusing = { append: () => ({ ok: false, reasons: ['disk full'] }), last: () => null, ended: () => false };
-  const intake = createIntake({ openLog: () => refusing, clock: fakeClock() });
+  const intake = createIntake({ checkSender: ANY, openLog: () => refusing, clock: fakeClock() });
   intake.receive(mark('hook_started'));
   assert.deepStrictEqual(intake.stop('a stop signal'), { notes: [], failed: [{ id: SID, reason: 'disk full' }] });
+});
+
+// --- B1f: the pin kept in the record (LD58) ---------------------------------------
+
+it(
+  'LD58: the mark that pins a session carries the sender\'s pid, written by intake alone; no later mark does, and a sender_pid a source wrote itself is removed',
+  withIntake(({ intake, dir }) => {
+    const forged = (m) => ({ ...m, detail: { ...m.detail, sender_pid: 999 } });
+    intake.receive(forged(mark('hook_started')), { channel: 'command', pid: 5 });
+    intake.receive(forged(mark('hook_started')), HTTP(100));
+    intake.receive(forged(mark('hook_started')), HTTP(100));
+    const rows = rawLines(dir(SID)).slice(1);
+    assert.deepStrictEqual(rows.map((x) => x.detail.sender_pid), [undefined, 100, undefined]);
+  }),
+);
+
+it(
+  'LD58: a restarted intake re-pins from the record: the pinned sender is accepted, another is tampered with the old pin named',
+  withIntake(({ intake, clock, dir }) => {
+    intake.receive(mark('hook_started'), HTTP(100));
+    clock.advance(5000);
+    const again = createIntake({ checkSender: ANY, openLog: noNewLog, clock });
+    again.resume([{ id: SID, log: openSessionLog(dir(SID)) }]);
+    const r = again.receive(mark('hook_started'), HTTP(200));
+    assert.strictEqual(r.ok, false);
+    assert.deepStrictEqual(again.receive(mark('hook_started'), HTTP(100)).ok, true);
+    const t = rawLines(dir(SID)).filter((x) => x.says === 'tampered');
+    assert.deepStrictEqual(t.map((x) => [x.detail.sender_pid, x.detail.pinned_pid]), [[200, 100]]);
+  }),
+);
+
+it(
+  'LD58: a first sender the check refuses (not the agent\'s program) pins nothing and is recorded as tampered with no pinned_pid; the agent\'s own sender then pins',
+  () => {
+    const base = tmpDir();
+    try {
+      const seen = [];
+      const checkSender = (pid, m) => {
+        seen.push([pid, m.session_id]);
+        return pid === 100;
+      };
+      const openLog = (id) => createSessionLog(path.join(base, id), { ...strip(HEADERS.good.header), session_id: id });
+      const intake = createIntake({ openLog, clock: fakeClock(), checkSender });
+      const r = intake.receive(mark('hook_started'), HTTP(666));
+      assert.strictEqual(r.ok, false);
+      assert.ok(/program/.test(r.reason), r.reason);
+      assert.strictEqual(intake.receive(mark('hook_started'), HTTP(100)).ok, true);
+      assert.strictEqual(intake.receive(mark('hook_started'), HTTP(666)).ok, false, 'pinned now: refused as foreign');
+      const rows = rawLines(path.join(base, SID)).slice(1);
+      assert.deepStrictEqual(rows.map((x) => x.says), ['tampered', 'started', 'tampered']);
+      assert.deepStrictEqual([rows[0].detail.what, rows[0].detail.sender_pid, 'pinned_pid' in rows[0].detail], ['foreign_sender', 666, false]);
+      assert.deepStrictEqual(rows[2].detail.pinned_pid, 100);
+      assert.deepStrictEqual(seen, [[666, SID], [100, SID]], 'checked only at first contact');
+      assert.strictEqual(verifySessionLog(path.join(base, SID)).ok, true);
+    } finally {
+      rmrf(base);
+    }
+  },
+);
+
+it('LD58: an intake built without a sender check throws, so the wiring cannot forget it', () => {
+  assert.throws(() => createIntake({ openLog: noNewLog, clock: fakeClock() }), /checkSender/);
 });
 
 runAll('intake-engine');

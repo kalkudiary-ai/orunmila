@@ -256,6 +256,21 @@ it(
 );
 
 it(
+  'LD58: pin() is the sender_pid of the first HTTP Glove mark that carries one, null before; a command-channel mark\'s is no pin; the same after a reopen',
+  withLog((log, dir) => {
+    const withPid = (channel, pid) => ({ ...mark('hook_started'), detail: { tool: 'Bash', channel, sender_pid: pid } });
+    assert.strictEqual(log.pin(), null);
+    log.append(withPid('command', 7));
+    assert.strictEqual(log.pin(), null);
+    assert.strictEqual(openSessionLog(dir).pin(), null);
+    log.append(withPid('http', 100));
+    log.append(withPid('http', 200));
+    assert.strictEqual(log.pin(), 100);
+    assert.strictEqual(openSessionLog(dir).pin(), 100);
+  }),
+);
+
+it(
   'a log that does not verify is never reopened, and nothing is written: an edited line, a torn last line (a crash mid-write), a broken quarantine log, no log at all',
   () => {
     const base = tmpDir();

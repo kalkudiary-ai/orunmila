@@ -443,6 +443,15 @@ const MUTANTS = [
   { id: "L19 a reopened log forgets the session's end (LD55)", file: 'src/opon/ledger/session-log.js', test: 'test/session-log.js',
     from: 'ended: raw.slice(1).some(endsSession),', to: 'ended: false,',
     fails: ["LD55: ended() is false until the session's end mark is written"] },
+  { id: 'L20 the pin not noted when written (LD58)', file: 'src/opon/ledger/session-log.js', test: 'test/session-log.js',
+    from: 'if (pin === null) pin = pinOf(sealed);', to: 'void 0;',
+    fails: ['LD58: pin() is the sender_pid of the first HTTP Glove mark'] },
+  { id: 'L21 a reopened log forgets the pin (LD58)', file: 'src/opon/ledger/session-log.js', test: 'test/session-log.js',
+    from: 'pin: pinning ? pinOf(pinning) : null,', to: 'pin: null,',
+    fails: ['LD58: pin() is the sender_pid of the first HTTP Glove mark'] },
+  { id: "L22 a command-channel mark's sender_pid taken as the pin (LD58)", file: 'src/opon/ledger/session-log.js', test: 'test/session-log.js',
+    from: "rec.detail.channel === 'http' && Number.isInteger", to: 'Number.isInteger',
+    fails: ['LD58: pin() is the sender_pid of the first HTTP Glove mark'] },
   // Track B, built unwired: the intake engine (src/opon/intake/engine.js).
   { id: 'B1 ticks while busy', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
     from: 'if (BigInt(now.mono) - s.last < quiet) continue;', to: 'if (false) continue;',
@@ -494,7 +503,7 @@ const MUTANTS = [
     from: 'sessions: named,', to: 'sessions: [id],',
     fails: ['test 84: intake stopped for a while mid-session'] },
   { id: 'B17 resumed sessions not held (the next mark makes a new log)', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
-    from: 'const s = { log, last: BigInt(now.mono), pin: null };\n      sessions.set(id, s);', to: 'const s = { log, last: BigInt(now.mono), pin: null };\n      void sessions;',
+    from: '// re-pinned from the record (LD58)\n      sessions.set(id, s);', to: '// re-pinned from the record (LD58)\n      void sessions;',
     fails: ['after a resume the intake carries on'] },
   // Track B slice B1d-2: the session's end (LD55).
   { id: 'B18 an ended session still ticks', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
@@ -525,6 +534,22 @@ const MUTANTS = [
   { id: 'B26 a closing note the log refuses dropped silently', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
     from: 'if (r.ok) out.notes.push({ id, seq: r.seq });\n      else out.failed.push(', to: 'if (r.ok) out.notes.push({ id, seq: r.seq });\n      else void (',
     fails: ['LD56: a closing note a log refuses is reported'] },
+  // Track B slice B1f: the pin kept in the record (LD58).
+  { id: 'B27 the pin not written into the record', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: 'if (pins && isObject(m.detail)) m.detail = { ...m.detail, sender_pid: pid };', to: 'void 0;',
+    fails: ['LD58: the mark that pins a session carries', 'LD58: a restarted intake re-pins from the record'] },
+  { id: "B28 a source's own sender_pid kept", file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: "if (glove && isObject(m.detail) && 'sender_pid' in m.detail) {", to: 'if (false) {',
+    fails: ['LD58: the mark that pins a session carries'] },
+  { id: 'B29 a restarted intake does not re-pin from the record', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: 'pin: log.pin() }; // re-pinned', to: 'pin: null }; // re-pinned',
+    fails: ['LD58: a restarted intake re-pins from the record'] },
+  { id: 'B30 any first sender pins (the sender check ignored)', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: 'if (!checkSender(pid, m)) return foreign(s, id, m, pid, now);', to: 'void 0;',
+    fails: ["LD58: a first sender the check refuses"] },
+  { id: 'B31 an intake built without a sender check', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: "if (typeof checkSender !== 'function') throw", to: 'if (false) throw',
+    fails: ['LD58: an intake built without a sender check throws'] },
 ];
 
 function copyRepo(root) {

@@ -549,7 +549,9 @@
       "says": "tampered",
       "detail": {
         "what": "foreign_sender",
-        "pid": 4242
+        "sender_pid": 4242,
+        "pinned_pid": 4100,
+        "received": "{\"session_id\":\"ses_test_0001\",\"source\":\"hook\",\"says\":\"started\"}"
       },
       "cause_hint": null,
       "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
@@ -627,6 +629,37 @@
         "fingerprint": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
       },
       "cause_hint": "toolu_1",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_restart_gap": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": null,
+      "says": "gap",
+      "detail": {
+        "lost": "every mark sent to intake while it was not running, from 2026-11-16T08:59:00.000Z to 2026-11-16T09:00:00.123Z",
+        "since": {
+          "mono_ns": "4940000000",
+          "observed_at": "2026-11-16T08:59:00.000Z"
+        },
+        "until": {
+          "mono_ns": "5000000000",
+          "observed_at": "2026-11-16T09:00:00.123Z"
+        },
+        "sessions": [
+          "ses_test_0001",
+          "ses_test_0002"
+        ]
+      },
+      "cause_hint": null,
       "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
       "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
     }
@@ -1427,6 +1460,104 @@
       "unset": [],
       "error": {
         "path": "/mono_ns",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a restart gap's since with no wall time",
+      "from": "process_restart_gap",
+      "set": {},
+      "unset": [
+        "/detail/since/observed_at"
+      ],
+      "error": {
+        "path": "/detail/since/observed_at",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "a restart gap's since mono_ns as a JSON number",
+      "from": "process_restart_gap",
+      "set": {
+        "/detail/since/mono_ns": 4940000000
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/since/mono_ns",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a restart gap's until with no mono_ns",
+      "from": "process_restart_gap",
+      "set": {},
+      "unset": [
+        "/detail/until/mono_ns"
+      ],
+      "error": {
+        "path": "/detail/until/mono_ns",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "a restart gap's sessions as one string",
+      "from": "process_restart_gap",
+      "set": {
+        "/detail/sessions": "ses_test_0001"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/sessions",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a restart gap's clock_reset false (absent unless the clock reset)",
+      "from": "process_restart_gap",
+      "set": {
+        "/detail/clock_reset": false
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/clock_reset",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "a foreign sender's pid as text",
+      "from": "process_tampered",
+      "set": {
+        "/detail/sender_pid": "4242"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/sender_pid",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a pinned pid that is not a whole number",
+      "from": "process_tampered",
+      "set": {
+        "/detail/pinned_pid": 4100.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/pinned_pid",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a foreign payload kept as an object, not text",
+      "from": "process_tampered",
+      "set": {
+        "/detail/received": {
+          "says": "started"
+        }
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/received",
         "keyword": "type"
       }
     }

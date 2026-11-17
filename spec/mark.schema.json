@@ -224,6 +224,26 @@
       "type": ["integer", "null"],
       "minimum": 0
     },
+    "instant": {
+      "description": "On a gap for intake's downtime: one end of the window. since is when intake last wrote before it stopped (the latest record among the sessions it was serving); until is when it ran again.",
+      "$comment": "agent's choice, B1c-2 (test 84); wording approved by O 2026-11-17",
+      "type": "object",
+      "required": ["mono_ns", "observed_at"],
+      "properties": {
+        "mono_ns": {
+          "description": "The monotonic clock at that moment, as a decimal string.",
+          "$comment": "brief v4 line 238",
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "observed_at": {
+          "description": "Wall-clock time at that moment, for humans, and the only clock that compares across a reboot.",
+          "$comment": "brief v4 line 238",
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$"
+        }
+      }
+    },
     "glove_tool_mark": {
       "$comment": "A Glove (source hook) mark about one tool call: started, an outcome verb, or ended on something other than a turn (brief v3 line 258).",
       "required": ["source", "says"],
@@ -402,6 +422,42 @@
           "$comment": "brief v3 line 248; a list of kinds is the agent's choice, LD15",
           "type": "array",
           "items": { "type": "string", "pattern": "^[a-z0-9_]+$" }
+        },
+        "since": {
+          "$comment": "agent's choice, B1c-2 (test 84); wording approved by O 2026-11-17",
+          "$ref": "#/definitions/instant"
+        },
+        "until": {
+          "$comment": "agent's choice, B1c-2 (test 84); wording approved by O 2026-11-17",
+          "$ref": "#/definitions/instant"
+        },
+        "sessions": {
+          "description": "On a gap for intake's downtime: every session intake was serving when it stopped, each of which gets this same gap.",
+          "$comment": "brief v4 line 851 (test 84: naming the sessions active at its last tick); the name is the agent's choice, wording approved by O 2026-11-17",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "clock_reset": {
+          "description": "On a gap for intake's downtime: true when the machine's monotonic clock restarted meanwhile (a reboot), so since and until compare only by wall time. Absent otherwise.",
+          "$comment": "agent's choice, B1c-2 (test 84); wording approved by O 2026-11-17",
+          "const": true
+        },
+        "sender_pid": {
+          "description": "On a tampered mark for a foreign sender: the process that sent the payload.",
+          "$comment": "brief v4 line 245 (\"with the evidence\"); the name is the agent's choice, B1b, wording approved by O 2026-11-17",
+          "type": "integer",
+          "minimum": 0
+        },
+        "pinned_pid": {
+          "description": "On a tampered mark for a foreign sender: the process the session is pinned to, its first HTTP sender.",
+          "$comment": "brief v4 line 247; the name is the agent's choice, B1b, wording approved by O 2026-11-17",
+          "type": "integer",
+          "minimum": 0
+        },
+        "received": {
+          "description": "On a tampered mark for a foreign sender: the payload as it arrived, kept as text for evidence and redacted like any mark. It is never the session's own mark.",
+          "$comment": "brief v4 line 245; the name is the agent's choice, B1b, wording approved by O 2026-11-17",
+          "type": "string"
         }
       },
       "allOf": [

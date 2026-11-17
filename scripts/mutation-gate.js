@@ -488,7 +488,7 @@ const MUTANTS = [
     from: 'if (new Set(ids).size !== ids.length) throw', to: 'if (false) throw',
     fails: ['resume comes first'] },
   { id: 'B15 a gap the log refuses dropped silently', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
-    from: 'else out.failed.push(', to: 'else void (',
+    from: 'if (r.ok) out.gaps.push({ id, seq: r.seq });\n      else out.failed.push(', to: 'if (r.ok) out.gaps.push({ id, seq: r.seq });\n      else void (',
     fails: ['a gap a log refuses is reported'] },
   { id: 'B16 the gap names only its own session', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
     from: 'sessions: named,', to: 'sessions: [id],',
@@ -498,7 +498,7 @@ const MUTANTS = [
     fails: ['after a resume the intake carries on'] },
   // Track B slice B1d-2: the session's end (LD55).
   { id: 'B18 an ended session still ticks', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
-    from: 'if (s.ended) continue;', to: 'void 0;',
+    from: 'if (s.ended) continue; // an ended session never ticks', to: 'void 0; //',
     fails: ['LD55: an ended session gets no tick', 'LD55: on restart, a session that ended'] },
   { id: "B19 the session's end not noted on arrival", file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
     from: "if (r.ok && m.says === 'ended' && isObject(m.target) && m.target.kind === 'session') s.ended = true;", to: 'void 0;',
@@ -509,6 +509,22 @@ const MUTANTS = [
   { id: 'B21 an ended session named in the others\' gaps', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
     from: 'const named = live.map((e) => e.id).sort();', to: 'const named = [...ids].sort();',
     fails: ['LD55: on restart, a session that ended'] },
+  // Track B slice B1e: the closing note on a planned stop (LD56).
+  { id: 'B22 an ended session given a closing note', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: 'if (s.ended) continue;\n      const note = {', to: 'const note = {',
+    fails: ['LD56: a planned stop writes one closing note'] },
+  { id: 'B23 marks still accepted after a stop', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: "if (stopped) return { ok: false, reason: 'intake has stopped:", to: "if (false) return { ok: false, reason: 'intake has stopped:",
+    fails: ['LD56: a planned stop writes one closing note'] },
+  { id: 'B24 ticks after a stop', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: 'if (stopped) return 0;', to: 'void 0;',
+    fails: ['LD56: a planned stop writes one closing note'] },
+  { id: 'B25 a second stop writes a second note', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: 'if (stopped) return out;', to: 'void 0;',
+    fails: ['LD56: a planned stop writes one closing note'] },
+  { id: 'B26 a closing note the log refuses dropped silently', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
+    from: 'if (r.ok) out.notes.push({ id, seq: r.seq });\n      else out.failed.push(', to: 'if (r.ok) out.notes.push({ id, seq: r.seq });\n      else void (',
+    fails: ['LD56: a closing note a log refuses is reported'] },
 ];
 
 function copyRepo(root) {

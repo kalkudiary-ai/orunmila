@@ -35,6 +35,9 @@
  *                         reopened session for the downtime (test 84; below);
  *                         returns { gaps: [{ id, seq }], failed: [{ id, reason }],
  *                         skipped: [{ id, reason }] } (sessions that ended)
+ *   intake.stop(reason)   a planned stop: a closing note in each session not
+ *                         yet ended, then nothing more (LD56); returns
+ *                         { notes: [{ id, seq }], failed: [{ id, reason }] }
  *
  * Silence is measured on the intake's clock from the last mark written to the
  * session (a tick included), not from a source's own mono_ns. The caller's mark
@@ -50,6 +53,7 @@ const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 function createIntake({ openLog, clock, tickMs = TICK_MS }) {
   const sessions = new Map(); // session id -> { log, last: bigint mono of the last mark written }
   const quiet = BigInt(tickMs) * NS_PER_MS;
+  let stopped = false;
 
   function write(s, m, now) {
     const r = s.log.append(m);
@@ -82,6 +86,7 @@ function createIntake({ openLog, clock, tickMs = TICK_MS }) {
   }
 
   function receive(input, from = {}) {
+    if (stopped) return { ok: false, reason: 'intake has stopped: nothing more is written until it restarts, and the restart gap covers this mark' };
     const m = JSON.parse(JSON.stringify(input));
     const id = m && m.session_id;
     if (typeof id !== 'string' || !id) return { ok: false, reason: 'the mark names no session, so it cannot be routed to a log' };
@@ -109,6 +114,7 @@ function createIntake({ openLog, clock, tickMs = TICK_MS }) {
   }
 
   function poll() {
+    if (stopped) return 0;
     const now = clock();
     let written = 0;
     for (const [id, s] of sessions) {
@@ -179,7 +185,40 @@ function createIntake({ openLog, clock, tickMs = TICK_MS }) {
     return out;
   }
 
-  return { receive, poll, resume };
+  /**
+   * A planned stop (LD56): one closing note in each session not yet ended,
+   * then nothing more is accepted or ticked. The next restart's gap starts
+   * at the note, the intake's last write. A second stop writes nothing.
+   */
+  function stop(reason) {
+    const out = { notes: [], failed: [] };
+    if (stopped) return out;
+    stopped = true;
+    const now = clock();
+    for (const [id, s] of sessions) {
+      if (s.ended) continue;
+      const note = {
+        schema_version: 1,
+        session_id: id,
+        source: 'process',
+        agent: null,
+        turn: null,
+        sub_agent: null,
+        observed_at: now.wall,
+        mono_ns: now.mono,
+        target: { kind: 'process', name: 'intake' },
+        says: 'exited',
+        detail: { exit_status: 'pass', reason: String(reason) },
+        cause_hint: null,
+      };
+      const r = write(s, note, now);
+      if (r.ok) out.notes.push({ id, seq: r.seq });
+      else out.failed.push({ id, reason: (r.reasons || [r.reason]).join('; ') });
+    }
+    return out;
+  }
+
+  return { receive, poll, resume, stop };
 }
 
 module.exports = { createIntake, TICK_MS };

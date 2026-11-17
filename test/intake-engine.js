@@ -368,4 +368,58 @@ it(
   }),
 );
 
+// --- B1e: the closing note on a planned stop (LD56) --------------------------------
+
+it(
+  'LD56: a planned stop writes one closing note into each session not yet ended, then accepts nothing and ticks nothing; a second stop writes nothing',
+  withIntake(({ intake, clock, dir }) => {
+    serveTwo(intake, clock);
+    intake.receive(ended(B));
+    clock.advance(200);
+    const now = clock();
+    const r = intake.stop('a stop signal');
+    assert.deepStrictEqual(r.failed, []);
+    assert.deepStrictEqual(r.notes.map((n) => n.id), [SID]);
+    const rows = rawLines(dir(SID));
+    const n = rows[rows.length - 1];
+    assert.strictEqual(r.notes[0].seq, n.seq);
+    assert.deepStrictEqual(
+      [n.source, n.says, n.turn, n.target, n.detail, n.mono_ns, n.observed_at],
+      ['process', 'exited', null, { kind: 'process', name: 'intake' }, { exit_status: 'pass', reason: 'a stop signal' }, now.mono, now.wall],
+    );
+    assert.strictEqual(rawLines(dir(B)).filter((x) => x.says === 'exited').length, 0, 'an ended session gets no note');
+    const late = intake.receive(mark('hook_started'));
+    assert.strictEqual(late.ok, false);
+    assert.ok(/stopped/.test(late.reason), late.reason);
+    clock.advance(5000);
+    assert.strictEqual(intake.poll(), 0);
+    assert.deepStrictEqual(intake.stop('again'), { notes: [], failed: [] });
+    assert.strictEqual(rawLines(dir(SID)).length, rows.length, 'nothing written after the note');
+    for (const id of [SID, B]) assert.strictEqual(verifySessionLog(dir(id)).ok, true, id);
+  }),
+);
+
+it(
+  'LD56: after a planned stop, the restart gap starts at the closing note, the intake\'s last write',
+  withIntake(({ intake, clock, dir }) => {
+    serveTwo(intake, clock);
+    clock.advance(300);
+    const at = clock();
+    intake.stop('a stop signal');
+    clock.advance(60000);
+    createIntake({ openLog: noNewLog, clock }).resume([SID, B].map((id) => ({ id, log: openSessionLog(dir(id)) })));
+    for (const id of [SID, B]) {
+      const g = rawLines(dir(id)).filter((x) => x.says === 'gap')[0];
+      assert.deepStrictEqual(g.detail.since, { mono_ns: at.mono, observed_at: at.wall }, id);
+    }
+  }),
+);
+
+it('LD56: a closing note a log refuses is reported with its reason, never dropped silently', () => {
+  const refusing = { append: () => ({ ok: false, reasons: ['disk full'] }), last: () => null, ended: () => false };
+  const intake = createIntake({ openLog: () => refusing, clock: fakeClock() });
+  intake.receive(mark('hook_started'));
+  assert.deepStrictEqual(intake.stop('a stop signal'), { notes: [], failed: [{ id: SID, reason: 'disk full' }] });
+});
+
 runAll('intake-engine');

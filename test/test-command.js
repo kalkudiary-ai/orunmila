@@ -141,7 +141,7 @@ it(
 );
 
 it(
-  'only a regular file of at most 1 MiB is read: a FIFO cannot stall the session start, and a huge file cannot fill the header (LD71)',
+  'only a regular file of at most 1 MiB is read: a huge file cannot fill the header, and a folder is not read (LD71; the FIFO cases run in a child, below)',
   withRoot((root) => {
     const none = { text: null, source: null, scripts_fingerprint: null };
     writePkg(root, JSON.stringify({ scripts: { test: 'x'.repeat(1024 * 1024) } }));
@@ -150,9 +150,66 @@ it(
     fs.mkdirSync(path.join(root, 'package.json'));
     assert.deepStrictEqual(testCommandFrom(root), none, 'a folder');
     fs.rmdirSync(path.join(root, 'package.json'));
-    if (process.platform === 'win32') return; // no mkfifo on Windows; the folder case above covers "not a regular file" there
-    require('child_process').execFileSync('mkfifo', [path.join(root, 'package.json')]);
-    assert.deepStrictEqual(testCommandFrom(root), none, 'a FIFO');
+  }),
+);
+
+// testCommandFrom in a child with a deadline, so a read that blocks fails the
+// test instead of hanging the suite. With a FIFO path given, the first stat or
+// fstat call renames that FIFO over package.json just after it returns: the
+// file swapped in after the check (NF84).
+const TC = path.join(__dirname, '..', 'src', 'opon', 'intake', 'test-command.js');
+const CHILD = `
+const fs = require('fs');
+const [mod, root, fifo] = process.argv.slice(1);
+const { testCommandFrom } = require(mod);
+let swapped = !fifo;
+for (const name of ['statSync', 'fstatSync']) {
+  const real = fs[name];
+  fs[name] = function (...a) {
+    const r = real.apply(this, a);
+    if (!swapped) { swapped = true; fs.renameSync(fifo, root + '/package.json'); }
+    return r;
+  };
+}
+process.stdout.write(JSON.stringify(testCommandFrom(root)));
+`;
+const inChild = (root, fifo) => {
+  const r = require('child_process').spawnSync(process.execPath, ['-e', CHILD, TC, root, ...(fifo ? [fifo] : [])], { encoding: 'utf8', timeout: 10000 });
+  assert.strictEqual(r.signal, null, `testCommandFrom did not return within 10 s (killed by ${r.signal})`);
+  assert.strictEqual(r.status, 0, r.stderr);
+  return JSON.parse(r.stdout);
+};
+
+it(
+  'NF84: package.json is judged and read through one descriptor: a FIFO there, or one swapped in after the check, never stalls the session start',
+  withRoot((root) => {
+    if (process.platform === 'win32') return; // no mkfifo on Windows
+    const mkfifo = (p) => require('child_process').execFileSync('mkfifo', [p]);
+    mkfifo(path.join(root, 'package.json'));
+    assert.deepStrictEqual(inChild(root), { text: null, source: null, scripts_fingerprint: null }, 'a FIFO from the start');
+    fs.rmSync(path.join(root, 'package.json'));
+    writePkg(root, PKG);
+    const fifo = path.join(root, 'swap.fifo');
+    mkfifo(fifo);
+    const want = { text: 'node test/all.js', source: { path: 'package.json', key: 'scripts.test' }, scripts_fingerprint: sha(canonicalize(PKG.scripts)) };
+    assert.deepStrictEqual(inChild(root, fifo), want, 'the file checked is the file read');
+  }),
+);
+
+it(
+  'NF84: a package.json that grows past 1 MiB after the check is still refused',
+  withRoot((root) => {
+    writePkg(root, JSON.stringify({ scripts: { test: 'x'.repeat(1024 * 1024) } }));
+    const real = fs.fstatSync;
+    fs.fstatSync = function (...a) {
+      const st = real.apply(this, a);
+      return Object.assign(Object.create(Object.getPrototypeOf(st)), st, { size: 10 }); // the check sees the small file it was
+    };
+    try {
+      assert.deepStrictEqual(testCommandFrom(root), { text: null, source: null, scripts_fingerprint: null });
+    } finally {
+      fs.fstatSync = real;
+    }
   }),
 );
 

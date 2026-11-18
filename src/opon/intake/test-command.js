@@ -40,11 +40,11 @@
  * is unknown both at the start and now, its changes are not seen.
  */
 
-const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { canonicalize } = require('../../verify/canonical');
 const { redactText } = require('./redact');
+const { readRegular } = require('./regular-file');
 
 const FILE = 'package.json';
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -52,12 +52,13 @@ const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 const MAX_BYTES = 1024 * 1024; // LD71
 
 function redactedScripts(root, envValues) {
+  // judged and read through one descriptor (NF84): a FIFO, even one swapped in
+  // after the check, cannot stall the session start; a huge file cannot fill the header
+  const buf = readRegular(path.join(root, FILE), MAX_BYTES);
+  if (buf === null) return null;
   let pkg;
   try {
-    const p = path.join(root, FILE);
-    const st = fs.statSync(p);
-    if (!st.isFile() || st.size > MAX_BYTES) return null; // a FIFO would stall the session start; a huge file would fill the header
-    pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+    pkg = JSON.parse(buf.toString('utf8'));
   } catch {
     return null;
   }

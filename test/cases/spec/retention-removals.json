@@ -577,6 +577,18 @@
         "path": "/raw/hash",
         "keyword": "type"
       }
+    },
+    {
+      "name": "/quarantine of the wrong type (cold verify of S3, LD78)",
+      "from": "first_removal",
+      "set": {
+        "/quarantine": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/quarantine",
+        "keyword": "type"
+      }
     }
   ]
 }

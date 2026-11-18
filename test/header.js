@@ -11,6 +11,7 @@ const crypto = require('crypto');
 const { buildHeader, codeFingerprint, hooksReportFrom, configFromHeader, DEFAULT_CONFIG } = require('../src/opon/intake/header');
 const { compile } = require('../src/verify/schema');
 const { createSessionLog } = require('../src/opon/ledger/session-log');
+const { testCommandFrom } = require('../src/opon/intake/test-command');
 
 const checkHeader = compile(JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'spec', 'session-header.schema.json'), 'utf8')));
 const sha = (s) => 'sha256:' + crypto.createHash('sha256').update(s).digest('hex');
@@ -119,6 +120,22 @@ it(
     assert.deepStrictEqual(hooksReportFrom([s]), { before: ['Write', 'Edit', 'MultiEdit'], after: ['*'] });
     assert.deepStrictEqual(hooksReportFrom([{}]), { before: [], after: [] });
     assert.deepStrictEqual(buildHeader(opts(root)).hooks_report, { before: ['Write', 'Edit', 'MultiEdit'], after: ['*'] });
+  }),
+);
+
+it(
+  "B8: the header freezes the project's test command and its scripts block (LD70); none found is null, and the header is still valid",
+  withProject((root) => {
+    const none = buildHeader(opts(root));
+    assert.deepStrictEqual(none.test_command, { text: null, source: null, scripts_fingerprint: null });
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ scripts: { test: 'node test/all.js' } }));
+    const h = buildHeader(opts(root));
+    assert.deepStrictEqual(h.test_command, testCommandFrom(root));
+    assert.strictEqual(h.test_command.text, 'node test/all.js');
+    const sealed = { ...h, seq: 0, prev_hash: null, hash: 'sha256:' + '0'.repeat(64) };
+    assert.deepStrictEqual(checkHeader(sealed), []);
+    const { test_command: _gone, ...without } = sealed;
+    assert.deepStrictEqual(checkHeader(without).map((e) => `${e.path} ${e.keyword}`), ['/test_command required'], 'a header without it is refused');
   }),
 );
 

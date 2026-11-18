@@ -5,7 +5,7 @@
   "description": "Every session's raw log begins with a header record, and the hash chain starts from it. It records everything needed to reproduce the session's results. Replay reads these values from the header, never from current settings.",
   "$comment": "brief v3 line 282 lists what the header holds but names no fields: every field name here is the agent's choice (LD16). Draft from Phase 1 slice A1; built in slice A10. Unknown fields are allowed (line 209).",
   "type": "object",
-  "required": ["schema_version", "record", "session_id", "seq", "observed_at", "mono_ns", "orunmila", "agent", "os", "accounts", "project_root", "config", "frozen", "hooks_report", "prev_hash", "hash"],
+  "required": ["schema_version", "record", "session_id", "seq", "observed_at", "mono_ns", "orunmila", "agent", "os", "accounts", "project_root", "config", "frozen", "hooks_report", "test_command", "prev_hash", "hash"],
   "properties": {
     "schema_version": { "description": "All carry a `schema_version`.", "$comment": "brief v3 line 209", "const": 1 },
     "record": {
@@ -130,6 +130,31 @@
       "properties": {
         "before": { "description": "Tools reported before they run.", "$comment": "brief v3 line 337", "type": "array", "items": { "type": "string", "minLength": 1 } },
         "after": { "description": "Tools reported after they run.", "$comment": "brief v3 line 337", "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "test_command": {
+      "description": "The project's own test command as it was at session start, and a fingerprint of the scripts block that decides what it runs. Configuration is frozen at session start: a change to the block mid-session is a tampering mark (`frozen_config`) and does not take effect until the next session. Every value is null when none was found.",
+      "$comment": "agent: slice B8, proposed in writing to O (brief v4 line 859, rule 4) and approved 2026-11-18 (\"If you're sure b8 is the best choice, lets go\"), narrowed by LD70 from the whole file to its scripts block; grounded in brief v4 lines 283 and 349",
+      "type": "object",
+      "required": ["text", "source", "scripts_fingerprint"],
+      "properties": {
+        "text": { "description": "The test command, redacted like every other text the log holds; null when none was found.", "$comment": "agent: LD70; redaction as brief v4 line 249", "type": ["string", "null"] },
+        "source": {
+          "description": "Where the command was read from; null with no command.",
+          "$comment": "agent: LD70",
+          "type": ["object", "null"],
+          "required": ["path", "key"],
+          "properties": {
+            "path": { "description": "The file, relative to the project root (today always `package.json`).", "$comment": "agent: LD70", "type": "string", "minLength": 1 },
+            "key": { "description": "The entry in that file (today always `scripts.test`).", "$comment": "agent: LD70", "type": "string", "minLength": 1 }
+          }
+        },
+        "scripts_fingerprint": {
+          "description": "Plain SHA-256 of the RFC 8785 form of package.json's whole scripts block, its string values redacted first; null when the block is unknown.",
+          "$comment": "agent: LD70; a test script can run other scripts, so the whole block is frozen",
+          "type": ["string", "null"],
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
       }
     },
     "prev_hash": { "description": "The hash chain starts from the header, so it has no previous hash.", "$comment": "brief v3 line 282", "type": "null" },

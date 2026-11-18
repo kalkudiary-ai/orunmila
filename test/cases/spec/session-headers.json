@@ -52,6 +52,14 @@
           "*"
         ]
       },
+      "test_command": {
+        "text": "node test/all.js",
+        "source": {
+          "path": "package.json",
+          "key": "scripts.test"
+        },
+        "scripts_fingerprint": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
       "prev_hash": null,
       "hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
     },
@@ -107,6 +115,11 @@
         "after": [
           "*"
         ]
+      },
+      "test_command": {
+        "text": null,
+        "source": null,
+        "scripts_fingerprint": null
       },
       "prev_hash": null,
       "hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
@@ -254,6 +267,50 @@
       "unset": [],
       "error": {
         "path": "/mono_ns",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "no test command",
+      "from": "header",
+      "unset": [
+        "/test_command"
+      ],
+      "error": {
+        "path": "/test_command",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "test command fingerprint malformed",
+      "from": "header",
+      "set": {
+        "/test_command/scripts_fingerprint": "sha256:xyz"
+      },
+      "error": {
+        "path": "/test_command/scripts_fingerprint",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "test command source without its key",
+      "from": "header",
+      "unset": [
+        "/test_command/source/key"
+      ],
+      "error": {
+        "path": "/test_command/source/key",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "test command text a number",
+      "from": "header",
+      "set": {
+        "/test_command/text": 5
+      },
+      "error": {
+        "path": "/test_command/text",
         "keyword": "type"
       }
     }

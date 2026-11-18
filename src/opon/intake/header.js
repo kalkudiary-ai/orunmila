@@ -7,8 +7,9 @@
  * header, never from current settings (configFromHeader).
  *
  *   buildHeader({ sessionId, root, agent, orunmilaVersion, codeRoot, lawPacks,
- *                 hookSettings, config?, observedAt?, monoNs? })
- *     -> the header without seq / prev_hash / hash (intake seals it)
+ *                 hookSettings, config?, observedAt?, monoNs?, envValues? })
+ *     -> the header without seq / prev_hash / hash (intake seals it); its
+ *        test_command is the project's test command, frozen (slice B8, LD70)
  *   codeFingerprint(dir)       one fingerprint over every file under dir
  *                              (path and content), for Orunmila's own code
  *                              (ledger A3, NF41); a change mid-session is a
@@ -27,6 +28,7 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const { monoString, nowMono } = require('./mono');
+const { testCommandFrom } = require('./test-command');
 
 // Brief v3: quiet window 1,500 ms (line 356), ceiling 30 s (357), lag grace
 // 3,000 ms (362). The diff size limit (line 266) is the agent's choice (LD38).
@@ -109,6 +111,7 @@ function buildHeader(o) {
       hook_settings: hookSettings,
     },
     hooks_report: hooksReportFrom(settings),
+    test_command: testCommandFrom(o.root, o.envValues),
   };
 }
 

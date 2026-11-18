@@ -151,6 +151,270 @@
         "path": "/cut/line",
         "keyword": "required"
       }
+    },
+    {
+      "name": "/schema_version missing (generated, LD79)",
+      "from": "raw_part_2",
+      "set": {},
+      "unset": [
+        "/schema_version"
+      ],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/record missing (generated, LD79)",
+      "from": "raw_part_2",
+      "set": {},
+      "unset": [
+        "/record"
+      ],
+      "error": {
+        "path": "/record",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/session_id missing (generated, LD79)",
+      "from": "raw_part_2",
+      "set": {},
+      "unset": [
+        "/session_id"
+      ],
+      "error": {
+        "path": "/session_id",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/log missing (generated, LD79)",
+      "from": "raw_part_2",
+      "set": {},
+      "unset": [
+        "/log"
+      ],
+      "error": {
+        "path": "/log",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/part missing (generated, LD79)",
+      "from": "raw_part_2",
+      "set": {},
+      "unset": [
+        "/part"
+      ],
+      "error": {
+        "path": "/part",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/seq missing (generated, LD79)",
+      "from": "raw_part_2",
+      "set": {},
+      "unset": [
+        "/seq"
+      ],
+      "error": {
+        "path": "/seq",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/prev_hash missing (generated, LD79)",
+      "from": "raw_part_2",
+      "set": {},
+      "unset": [
+        "/prev_hash"
+      ],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/hash missing (generated, LD79)",
+      "from": "raw_part_2",
+      "set": {},
+      "unset": [
+        "/hash"
+      ],
+      "error": {
+        "path": "/hash",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/schema_version not 1 (generated, LD79)",
+      "from": "raw_part_2",
+      "set": {
+        "/schema_version": 2
+      },
+      "unset": [],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "/session_id of the wrong type (generated, LD79)",
+      "from": "raw_part_2",
+      "set": {
+        "/session_id": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/session_id",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/session_id empty (generated, LD79)",
+      "from": "raw_part_2",
+      "set": {
+        "/session_id": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/session_id",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/part of the wrong type (generated, LD79)",
+      "from": "raw_part_2",
+      "set": {
+        "/part": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/part",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/seq of the wrong type (generated, LD79)",
+      "from": "raw_part_2",
+      "set": {
+        "/seq": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/seq",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/cut of the wrong type (generated, LD79)",
+      "from": "raw_part_2",
+      "set": {
+        "/cut": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/cut",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/cut/bytes missing (generated, LD79)",
+      "from": "raw_part_2",
+      "set": {},
+      "unset": [
+        "/cut/bytes"
+      ],
+      "error": {
+        "path": "/cut/bytes",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/cut/line of the wrong type (generated, LD79)",
+      "from": "raw_part_2",
+      "set": {
+        "/cut/line": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/cut/line",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/cut/line below 1 (generated, LD79)",
+      "from": "raw_part_2",
+      "set": {
+        "/cut/line": 0
+      },
+      "unset": [],
+      "error": {
+        "path": "/cut/line",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "/cut/bytes of the wrong type (generated, LD79)",
+      "from": "raw_part_2",
+      "set": {
+        "/cut/bytes": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/cut/bytes",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/cut/fingerprint of the wrong type (generated, LD79)",
+      "from": "raw_part_2",
+      "set": {
+        "/cut/fingerprint": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/cut/fingerprint",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/prev_hash not a whole sha256 hash (generated, LD79)",
+      "from": "raw_part_2",
+      "set": {
+        "/prev_hash": "sha256:0123"
+      },
+      "unset": [],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/hash of the wrong type (generated, LD79)",
+      "from": "raw_part_2",
+      "set": {
+        "/hash": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/hash",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/hash not a whole sha256 hash (generated, LD79)",
+      "from": "raw_part_2",
+      "set": {
+        "/hash": "sha256:0123"
+      },
+      "unset": [],
+      "error": {
+        "path": "/hash",
+        "keyword": "pattern"
+      }
     }
   ]
 }

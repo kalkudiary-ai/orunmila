@@ -51,10 +51,39 @@ function patch(base, { set = {}, unset = [] }) {
 const FORMATS = [
   { name: 'mark', schema: 'mark.schema.json', cases: 'marks.json' },
   { name: 'session header', schema: 'session-header.schema.json', cases: 'session-headers.json' },
-  { name: 'continuation', schema: 'continuation.schema.json', cases: 'continuations.json' },
-  { name: 'retention header', schema: 'retention-header.schema.json', cases: 'retention-headers.json' },
-  { name: 'retention removal', schema: 'retention-removal.schema.json', cases: 'retention-removals.json' },
+  { name: 'continuation', schema: 'continuation.schema.json', cases: 'continuations.json', sweep: true },
+  { name: 'retention header', schema: 'retention-header.schema.json', cases: 'retention-headers.json', sweep: true },
+  { name: 'retention removal', schema: 'retention-removal.schema.json', cases: 'retention-removals.json', sweep: true },
 ];
+
+// --- the deletion sweep (NF85, LD79) ----------------------------------------------
+// A constraint no bad fixture notices can be deleted and every test stays green. The sweep
+// deletes each one in turn. It does not descend into allOf, anyOf, oneOf, not, if, then or
+// else, and leaves out the root's own type, which a fixture patch cannot replace.
+
+const SWEPT = ['type', 'enum', 'const', 'minimum', 'minLength', 'maxLength', 'pattern', '$ref', 'items', 'additionalProperties'];
+
+function constraintSites(schema) {
+  const sites = [];
+  const visit = (s, at) => {
+    if (!s || typeof s !== 'object' || Array.isArray(s)) return;
+    for (const k of SWEPT) if (k in s && !(k === 'type' && at.length === 0)) sites.push({ at, kind: k });
+    (s.required || []).forEach((_, i) => sites.push({ at, kind: 'required', i }));
+    for (const [n, sub] of Object.entries(s.properties || {})) visit(sub, [...at, 'properties', n]);
+    for (const [n, sub] of Object.entries(s.definitions || {})) visit(sub, [...at, 'definitions', n]);
+    if (s.items && typeof s.items === 'object') visit(s.items, [...at, 'items']);
+    if (s.additionalProperties && typeof s.additionalProperties === 'object') visit(s.additionalProperties, [...at, 'additionalProperties']);
+  };
+  visit(schema, []);
+  return sites;
+}
+
+/** True when some fixture fails under `schema`: a good one invalid, or a bad one not rejected for its reason. */
+function fixturesNotice(schema, { good, bad }) {
+  const check = compile(schema);
+  if (Object.values(good).some((r) => check(r).length)) return true;
+  return !bad.every((c) => check(patch(good[c.from], c)).some((e) => e.path === c.error.path && e.keyword === c.error.keyword));
+}
 
 for (const f of FORMATS) {
   const schemaFile = path.join(SPEC, f.schema);
@@ -106,6 +135,26 @@ for (const f of FORMATS) {
     visit(load(schemaFile), '');
     assert.deepStrictEqual(missing, []);
   });
+
+  if (f.sweep) {
+    it(`${f.name}: deleting any one constraint of the schema makes a fixture fail (NF85, LD79)`, () => {
+      const schema = load(schemaFile);
+      const cases = load(casesFile);
+      const sites = constraintSites(schema);
+      assert.ok(sites.length > 0, 'no constraints found');
+      const unnoticed = [];
+      for (const site of sites) {
+        const s = JSON.parse(JSON.stringify(schema));
+        let o = s;
+        for (const k of site.at) o = o[k];
+        unnoticed.push(`/${site.at.join('/')} ${site.kind}${site.kind === 'required' ? ' ' + o.required[site.i] : ''}`);
+        if (site.kind === 'required') o.required.splice(site.i, 1);
+        else delete o[site.kind];
+        if (fixturesNotice(s, cases)) unnoticed.pop();
+      }
+      assert.deepStrictEqual(unnoticed, []);
+    });
+  }
 }
 
 it("the brief's own example mark (v4 lines 215-232), with its shortened hashes written out in full, is a valid mark", () => {

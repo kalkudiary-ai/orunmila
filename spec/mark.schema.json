@@ -254,8 +254,7 @@
       }
     },
     "glove_tool_mark": {
-      "$comment": "A Glove (source hook) mark about one tool call: started, an outcome verb, or ended on something other than a turn (brief v3 line 258).",
-      "required": ["source", "says"],
+      "$comment": "A Glove (source hook) mark about one tool call: started, an outcome verb, or ended on something other than a turn (brief v3 line 258). It names no required keys: the root requires source and says (LD81).",
       "allOf": [{ "properties": { "source": { "const": "hook" } } }],
       "anyOf": [
         { "properties": { "says": { "enum": ["started", "created", "modified", "deleted", "renamed", "exited", "read", "contacted", "called"] } } },

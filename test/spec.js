@@ -49,7 +49,15 @@ function patch(base, { set = {}, unset = [] }) {
 // --- one block of tests per format -----------------------------------------------
 
 const FORMATS = [
-  { name: 'mark', schema: 'mark.schema.json', cases: 'marks.json' },
+  {
+    name: 'mark',
+    schema: 'mark.schema.json',
+    cases: 'marks.json',
+    sweep: true,
+    // LD80: used only by `if`s with no `else`, so deleting either widens the `if` and can only add errors;
+    // the root requires both keys, so no record changes verdict.
+    exempt: ['/definitions/glove_tool_mark required source', '/definitions/glove_tool_mark required says'],
+  },
   { name: 'session header', schema: 'session-header.schema.json', cases: 'session-headers.json', sweep: true },
   { name: 'continuation', schema: 'continuation.schema.json', cases: 'continuations.json', sweep: true },
   { name: 'retention header', schema: 'retention-header.schema.json', cases: 'retention-headers.json', sweep: true },
@@ -142,17 +150,24 @@ for (const f of FORMATS) {
       const cases = load(casesFile);
       const sites = constraintSites(schema);
       assert.ok(sites.length > 0, 'no constraints found');
+      const exempt = new Set(f.exempt || []);
       const unnoticed = [];
+      const exemptNoticed = [];
       for (const site of sites) {
         const s = JSON.parse(JSON.stringify(schema));
         let o = s;
         for (const k of site.at) o = o[k];
-        unnoticed.push(`/${site.at.join('/')} ${site.kind}${site.kind === 'required' ? ' ' + o.required[site.i] : ''}`);
+        const label = `/${site.at.join('/')} ${site.kind}${site.kind === 'required' ? ' ' + o.required[site.i] : ''}`;
         if (site.kind === 'required') o.required.splice(site.i, 1);
         else delete o[site.kind];
-        if (fixturesNotice(s, cases)) unnoticed.pop();
+        const noticed = fixturesNotice(s, cases);
+        if (exempt.delete(label)) {
+          if (noticed) exemptNoticed.push(label);
+        } else if (!noticed) unnoticed.push(label);
       }
       assert.deepStrictEqual(unnoticed, []);
+      assert.deepStrictEqual(exemptNoticed, [], 'an exempt constraint a fixture notices is no longer exempt');
+      assert.deepStrictEqual([...exempt], [], 'an exempt entry names no constraint');
     });
   }
 }

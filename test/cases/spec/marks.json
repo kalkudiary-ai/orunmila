@@ -1689,6 +1689,1016 @@
         "path": "/detail/sender_pid",
         "keyword": "type"
       }
+    },
+    {
+      "name": "/schema_version missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/schema_version"
+      ],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/session_id missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/session_id"
+      ],
+      "error": {
+        "path": "/session_id",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/seq missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/seq"
+      ],
+      "error": {
+        "path": "/seq",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/source missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/source"
+      ],
+      "error": {
+        "path": "/source",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/agent missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/agent"
+      ],
+      "error": {
+        "path": "/agent",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/turn missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/turn"
+      ],
+      "error": {
+        "path": "/turn",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/sub_agent missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/sub_agent"
+      ],
+      "error": {
+        "path": "/sub_agent",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/observed_at missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/observed_at"
+      ],
+      "error": {
+        "path": "/observed_at",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/mono_ns missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/mono_ns"
+      ],
+      "error": {
+        "path": "/mono_ns",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/target missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/target"
+      ],
+      "error": {
+        "path": "/target",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/says missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/says"
+      ],
+      "error": {
+        "path": "/says",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/detail missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/detail"
+      ],
+      "error": {
+        "path": "/detail",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/cause_hint missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/cause_hint"
+      ],
+      "error": {
+        "path": "/cause_hint",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/prev_hash missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/prev_hash"
+      ],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/session_id of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/session_id": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/session_id",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/agent of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/agent": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/agent",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/agent empty (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/agent": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/agent",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/turn empty (generated, LD79)",
+      "from": "hook_started",
+      "set": {
+        "/turn": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/turn",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/sub_agent of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/sub_agent": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/sub_agent",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/sub_agent/id missing (generated, LD79)",
+      "from": "hook_in_sub_agent",
+      "set": {},
+      "unset": [
+        "/sub_agent/id"
+      ],
+      "error": {
+        "path": "/sub_agent/id",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/sub_agent/id of the wrong type (generated, LD79)",
+      "from": "hook_in_sub_agent",
+      "set": {
+        "/sub_agent/id": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/sub_agent/id",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/sub_agent/id empty (generated, LD79)",
+      "from": "hook_in_sub_agent",
+      "set": {
+        "/sub_agent/id": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/sub_agent/id",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/sub_agent/type of the wrong type (generated, LD79)",
+      "from": "hook_in_sub_agent",
+      "set": {
+        "/sub_agent/type": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/sub_agent/type",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/sub_agent/type empty (generated, LD79)",
+      "from": "hook_in_sub_agent",
+      "set": {
+        "/sub_agent/type": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/sub_agent/type",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/observed_at of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/observed_at": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/observed_at",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/cause_hint of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/cause_hint": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/cause_hint",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/cause_hint empty (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/cause_hint": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/cause_hint",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/prev_hash of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/prev_hash": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/fingerprint_before of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/fingerprint_before": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/fingerprint_before",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/lines_added below its minimum (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/lines_added": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/lines_added",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "/detail/since of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/since": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/since",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/since/mono_ns not matching its pattern (generated, LD79)",
+      "from": "process_restart_gap",
+      "set": {
+        "/detail/since/mono_ns": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/since/mono_ns",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/detail/since/observed_at of the wrong type (generated, LD79)",
+      "from": "process_restart_gap",
+      "set": {
+        "/detail/since/observed_at": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/since/observed_at",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/since/observed_at not matching its pattern (generated, LD79)",
+      "from": "process_restart_gap",
+      "set": {
+        "/detail/since/observed_at": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/since/observed_at",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "a session end with no target, so its null turn breaks the turn rule (generated, LD79)",
+      "from": "hook_session_ended",
+      "set": {},
+      "unset": [
+        "/target"
+      ],
+      "error": {
+        "path": "/turn",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/target of the wrong type (generated, LD79)",
+      "from": "tick",
+      "set": {
+        "/target": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/target",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/target/kind missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/target": {}
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/kind",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/target/path of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/target/path": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/path",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/target/path empty (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/target/path": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/path",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/target/text of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/target/text": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/text",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/target/id of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/target/id": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/id",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/target/id empty (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/target/id": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/id",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/target/name of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/target/name": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/name",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/target/name empty (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/target/name": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/name",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/target/host of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/target/host": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/host",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/target/url of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/target/url": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/url",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/target/query of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/target/query": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/query",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail of the wrong type (generated, LD79)",
+      "from": "hook_exited_fail",
+      "set": {
+        "/detail": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/tool of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/tool": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/tool",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/tool empty (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/tool": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/tool",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/detail/output_excerpt of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/output_excerpt": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/output_excerpt",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/output_ref of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/output_ref": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/output_ref",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/vcs of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/vcs": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/vcs",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/vcs/0 of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/vcs": [
+          "x"
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/vcs/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/read_kind of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/read_kind": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/read_kind",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/pattern of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/pattern": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/pattern",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/size of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/size": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/size",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/lines_removed of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/lines_removed": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/lines_removed",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/diff_ref of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/diff_ref": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/diff_ref",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/tool_result_excerpt of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/tool_result_excerpt": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/tool_result_excerpt",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/tool_result_size of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/tool_result_size": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/tool_result_size",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/tool_result_size below its minimum (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/tool_result_size": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/tool_result_size",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "/detail/text of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/text": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/text",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/prompt of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/prompt": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/prompt",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/findings of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/findings": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/findings",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/findings/0 of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/findings": [
+          "x"
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/findings/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/findings/0/severity missing (generated, LD79)",
+      "from": "law_gate_blocked",
+      "set": {},
+      "unset": [
+        "/detail/findings/0/severity"
+      ],
+      "error": {
+        "path": "/detail/findings/0/severity",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/detail/findings/0/quote missing (generated, LD79)",
+      "from": "law_gate_blocked",
+      "set": {},
+      "unset": [
+        "/detail/findings/0/quote"
+      ],
+      "error": {
+        "path": "/detail/findings/0/quote",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/detail/findings/0/law of the wrong type (generated, LD79)",
+      "from": "law_gate_blocked",
+      "set": {
+        "/detail/findings/0/law": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/findings/0/law",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/findings/0/law empty (generated, LD79)",
+      "from": "law_gate_blocked",
+      "set": {
+        "/detail/findings/0/law": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/findings/0/law",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/detail/findings/0/quote of the wrong type (generated, LD79)",
+      "from": "law_gate_blocked",
+      "set": {
+        "/detail/findings/0/quote": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/findings/0/quote",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/reason of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/reason": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/reason",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/lost of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/lost": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/lost",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/lost empty (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/lost": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/lost",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/detail/from of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/from": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/from",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/from empty (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/from": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/from",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/detail/redactions/0 of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/redactions": [
+          1
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/redactions/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/redactions/0 not matching its pattern (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/redactions": [
+          "X Y"
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/redactions/0",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/detail/sessions/0 of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/sessions": [
+          1
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/sessions/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/sessions/0 empty (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/sessions": [
+          ""
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/sessions/0",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/detail/sender_pid below its minimum (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/sender_pid": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/sender_pid",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "/detail/pinned_pid below its minimum (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/pinned_pid": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/pinned_pid",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "/turn of the wrong type on a mark with no source, which no turn rule covers (generated, LD79)",
+      "from": "hook_started",
+      "set": {
+        "/turn": 1.5
+      },
+      "unset": [
+        "/source"
+      ],
+      "error": {
+        "path": "/turn",
+        "keyword": "type"
+      }
     }
   ]
 }

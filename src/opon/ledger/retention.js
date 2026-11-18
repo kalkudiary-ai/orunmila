@@ -2,7 +2,7 @@
 
 /**
  * src/opon/ledger/retention.js — retention replaces `prune` (brief v4 line
- * 343; test 45; N4, NF7; Phase 1 slice B6, pure part; LD66). Not wired.
+ * 348; test 45; N4, NF7; Phase 1 slice B6, pure part; LD66). Not wired.
  *
  * Old sessions are removed only whole: the session's folder (its raw and
  * quarantine logs, every part, and the files kept beside them) goes as one.

@@ -3,15 +3,18 @@
 /**
  * test/retention.js — src/opon/ledger/retention.js: old sessions are removed
  * only whole, each removal written first to a hash-chained retention log
- * (brief v4 line 343; test 45; N4, NF7; Phase 1 slice B6, pure part; LD66).
+ * (brief v4 line 348; test 45; N4, NF7; Phase 1 slice B6, pure part; LD66).
  * Not wired. Fixtures are synthetic.
  */
 
-const { assert, fs, path, tmpDir, rmrf, it, runAll } = require('./helpers');
+const { assert, fs, path, ROOT, tmpDir, rmrf, it, runAll } = require('./helpers');
 const { createSessionLog } = require('../src/opon/ledger/session-log');
 const { verifySession } = require('../src/verify/session');
 const { verifyText } = require('../src/verify/chain');
+const { compile } = require('../src/verify/schema');
 const { retire, plan, readRetentionLog } = require('../src/opon/ledger/retention');
+
+const schemaOf = (f) => compile(JSON.parse(fs.readFileSync(path.join(ROOT, 'spec', f), 'utf8')));
 
 const SPEC = JSON.parse(fs.readFileSync(path.join(__dirname, 'cases', 'spec', 'marks.json'), 'utf8'));
 const HEADERS = JSON.parse(fs.readFileSync(path.join(__dirname, 'cases', 'spec', 'session-headers.json'), 'utf8'));
@@ -139,6 +142,21 @@ it(
     assert.deepStrictEqual(readRetentionLog(logFile).removed.map((x) => x.session_id), ['ses_a', 'ses_b'], 'recorded before anything was removed');
     assert.deepStrictEqual(retire({ sessionsDir: sessions, id: 'ses_b', logFile, reason: 'r', now: NOW }), { ok: true, seq: 2, finished: true });
     assert.strictEqual(fs.existsSync(b), false);
+    assert.strictEqual(readRetentionLog(logFile).removed.length, 2, 'the finish wrote no second record');
+  }),
+);
+
+it(
+  'every line retire writes is valid by its schema in spec/: the log header, then each removal (LD77)',
+  withHome(({ sessions, logFile }) => {
+    makeSession(sessions, 'ses_a', '2026-01-01T00:00:00.000Z', '2026-01-01T01:00:00.000Z');
+    makeSession(sessions, 'ses_b', '2026-01-02T00:00:00.000Z');
+    for (const id of ['ses_a', 'ses_b']) assert.strictEqual(retire({ sessionsDir: sessions, id, logFile, reason: 'older than 30 days', now: NOW }).ok, true);
+    const recs = fs.readFileSync(logFile, 'utf8').split('\n').slice(0, -1).map((l) => JSON.parse(l));
+    assert.deepStrictEqual(recs.map((r) => r.record), ['retention_header', 'removed', 'removed']);
+    const header = schemaOf('retention-header.schema.json');
+    const removal = schemaOf('retention-removal.schema.json');
+    recs.forEach((r, i) => assert.deepStrictEqual((i === 0 ? header : removal)(r), [], `line ${i + 1}`));
   }),
 );
 

@@ -671,6 +671,17 @@ const MUTANTS = [
   { id: 'R9 a later folder removed before its record', file: 'src/opon/ledger/retention.js', test: 'test/retention.js',
     from: 'else fs.appendFileSync(logFile, line(rec));', to: 'else { remove(dir); fs.appendFileSync(logFile, line(rec)); }',
     fails: ['a later removal cut short is recorded first too'] },
+  // Slice B6c: the delta check's omission of session 02880d0d, and the records against spec/ (LD77).
+  { id: 'R10 a finish with the folder intact recorded again', file: 'src/opon/ledger/retention.js', test: 'test/retention.js',
+    from: '    remove(dir);\n    return { ok: true, seq: prior.seq, finished: true };',
+    to: '    if (hh !== null) fs.appendFileSync(logFile, line(seal({ ...prior, seq: log.records.length }, log.records[log.records.length - 1].hash)));\n    remove(dir);\n    return { ok: true, seq: prior.seq, finished: true };',
+    fails: ['a later removal cut short is recorded first too'] },
+  { id: 'R11 a removal written under another schema version', file: 'src/opon/ledger/retention.js', test: 'test/retention.js',
+    from: "      schema_version: 1,\n      record: 'removed',", to: "      schema_version: 2,\n      record: 'removed',",
+    fails: ['every line retire writes is valid by its schema'] },
+  { id: 'R12 the log header written without its time', file: 'src/opon/ledger/retention.js', test: 'test/retention.js',
+    from: "record: 'retention_header', seq: 0, created_at: now }", to: "record: 'retention_header', seq: 0 }",
+    fails: ['every line retire writes is valid by its schema'] },
   // Track B slice B9a: receipts from marks, open question 3 as O decided it (LD67).
   { id: 'RC1 a failed call graded by its read_kind (NF26)', file: 'src/opon/gate/receipts.js', test: 'test/receipts.js',
     from: "if (d.exit_status !== 'pass') continue;", to: "if (d.exit_status === 'fail' && m.says !== 'read') continue;",

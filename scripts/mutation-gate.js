@@ -655,6 +655,25 @@ const MUTANTS = [
   { id: 'R8 any retention setting accepted', file: 'src/opon/ledger/retention.js', test: 'test/retention.js',
     from: 'if (!Number.isInteger(keepDays) || keepDays < 1) throw', to: 'if (false) throw',
     fails: ['plan refuses a setting'] },
+  // Track B slice B9a: receipts from marks, open question 3 as O decided it (LD67).
+  { id: 'G1 a failed call graded by its read_kind (NF26)', file: 'src/opon/gate/receipts.js', test: 'test/receipts.js',
+    from: "if (d.exit_status !== 'pass') continue;", to: "if (d.exit_status === 'fail' && m.says !== 'read') continue;",
+    fails: ['a read mark that did not pass is no receipt'] },
+  { id: 'G2 a range or null read graded weak', file: 'src/opon/gate/receipts.js', test: 'test/receipts.js',
+    from: "const searched = d.read_kind === 'pattern';", to: "const searched = d.read_kind !== 'full';",
+    fails: ['test 80: a range read'] },
+  { id: 'G3 a folder covers a name that extends it', file: 'src/opon/gate/receipts.js', test: 'test/receipts.js',
+    from: "p.startsWith(dir.endsWith('/') ? dir : dir + '/')", to: 'p.startsWith(dir)',
+    fails: ['test 81: a folder listing'] },
+  { id: 'G4 the last grade wins, not the strongest', file: 'src/opon/gate/receipts.js', test: 'test/receipts.js',
+    from: "if (RANK[grade] > RANK[map.get(key) || 'none']) map.set(key, grade);", to: 'map.set(key, grade);',
+    fails: ['the strongest receipt wins'] },
+  { id: 'G5 a Sentinel mark gives a receipt', file: 'src/opon/gate/receipts.js', test: 'test/receipts.js',
+    from: "m.source !== 'hook' || ", to: '',
+    fails: ['only the Glove gives receipts'] },
+  { id: 'G6 a failed write gives a receipt (NF69)', file: 'src/opon/gate/receipts.js', test: 'test/receipts.js',
+    from: "if (d.exit_status !== 'pass') continue;", to: "if (d.exit_status !== 'pass' && !WRITES.includes(m.says)) continue;",
+    fails: ['test 79: a turn whose only edit'] },
 ];
 
 function copyRepo(root) {

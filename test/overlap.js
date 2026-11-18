@@ -76,6 +76,24 @@ it('concurrent: mono_ns compares as an integer, never as text', () => {
   assert.deepStrictEqual(concurrent(spans, ROOT_A, '100'), []);
 });
 
+it('spanOf: an ended mark with a null target does not end the session', () => {
+  const s = spanOf([header('s1', ROOT_A, 100), mark('s1', 1, 300, 'ended', null), mark('s1', 2, 700)]);
+  assert.deepStrictEqual(s, { id: 's1', root: ROOT_A, from: '100', to: '700', ended: false });
+});
+
+it('concurrent: mono_ns past 2^53 stays exact', () => {
+  // 2^53 + 1 has no exact float: as a Number it reads as 2^53.
+  const spans = [spanOf([header('s1', ROOT_A, '9007199254740993')])];
+  assert.deepStrictEqual(concurrent(spans, ROOT_A, '9007199254740992'), [], 'one nanosecond before the header');
+  assert.deepStrictEqual(concurrent(spans, ROOT_A, '9007199254740993'), ['s1']);
+});
+
+it("concurrent: a folder whose name extends another's is a different folder", () => {
+  const spans = [spanOf([header('s1', '/work/a', 100), mark('s1', 1, 900)]), spanOf([header('s2', '/work/ab', 100), mark('s2', 1, 900)])];
+  assert.deepStrictEqual(concurrent(spans, '/work/a', '500'), ['s1']);
+  assert.deepStrictEqual(concurrent(spans, '/work/ab', '500'), ['s2']);
+});
+
 it('concurrent: a header-only session is active only at its start', () => {
   const spans = [spanOf([header('s1', ROOT_A, 100)])];
   assert.deepStrictEqual(concurrent(spans, ROOT_A, '100'), ['s1']);

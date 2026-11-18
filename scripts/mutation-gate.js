@@ -620,6 +620,16 @@ const MUTANTS = [
   { id: 'O8 the header not active', file: 'src/opon/intake/overlap.js', test: 'test/overlap.js',
     from: 'BigInt(s.from) <= t', to: 'BigInt(s.from) < t',
     fails: ['concurrent: names every session active', 'concurrent: a header-only session'] },
+  // Track B slice O2: the three test gaps the O1 cold verify found.
+  { id: 'O9 mono_ns compared as a float', file: 'src/opon/intake/overlap.js', test: 'test/overlap.js',
+    from: 'BigInt(s.from) <= t && t <= BigInt(s.to)', to: 'Number(s.from) <= Number(mono) && Number(mono) <= Number(s.to)',
+    fails: ['concurrent: mono_ns past 2^53 stays exact'] },
+  { id: 'O10 a root matched by prefix', file: 'src/opon/intake/overlap.js', test: 'test/overlap.js',
+    from: 's.root === root && ', to: 's.root.startsWith(root) && ',
+    fails: ["concurrent: a folder whose name extends another's"] },
+  { id: 'O11 an ended mark with no target read as the end', file: 'src/opon/intake/overlap.js', test: 'test/overlap.js',
+    from: "rec.says === 'ended' && isObject(rec.target) && ", to: "rec.says === 'ended' && ",
+    fails: ['spanOf: an ended mark with a null target'] },
 ];
 
 function copyRepo(root) {

@@ -127,6 +127,22 @@ it(
 );
 
 it(
+  'a later removal cut short is recorded first too (the log already exists)',
+  withHome(({ sessions, logFile }) => {
+    makeSession(sessions, 'ses_a', '2026-01-01T00:00:00.000Z');
+    const b = makeSession(sessions, 'ses_b', '2026-01-02T00:00:00.000Z');
+    assert.deepStrictEqual(retire({ sessionsDir: sessions, id: 'ses_a', logFile, reason: 'r', now: NOW }), { ok: true, seq: 1 });
+    const crash = () => {
+      throw new Error('crashed mid-removal');
+    };
+    assert.throws(() => retire({ sessionsDir: sessions, id: 'ses_b', logFile, reason: 'r', now: NOW, remove: crash }), /crashed mid-removal/);
+    assert.deepStrictEqual(readRetentionLog(logFile).removed.map((x) => x.session_id), ['ses_a', 'ses_b'], 'recorded before anything was removed');
+    assert.deepStrictEqual(retire({ sessionsDir: sessions, id: 'ses_b', logFile, reason: 'r', now: NOW }), { ok: true, seq: 2, finished: true });
+    assert.strictEqual(fs.existsSync(b), false);
+  }),
+);
+
+it(
   'a new session under an id removed before is not taken for a cut-short removal',
   withHome(({ sessions, logFile }) => {
     makeSession(sessions, 'ses_a', '2026-01-01T00:00:00.000Z');

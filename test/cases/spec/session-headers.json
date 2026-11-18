@@ -313,6 +313,1140 @@
         "path": "/test_command/text",
         "keyword": "type"
       }
+    },
+    {
+      "name": "/schema_version missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/schema_version"
+      ],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/record missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/record"
+      ],
+      "error": {
+        "path": "/record",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/session_id missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/session_id"
+      ],
+      "error": {
+        "path": "/session_id",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/seq missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/seq"
+      ],
+      "error": {
+        "path": "/seq",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/observed_at missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/observed_at"
+      ],
+      "error": {
+        "path": "/observed_at",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/mono_ns missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/mono_ns"
+      ],
+      "error": {
+        "path": "/mono_ns",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/orunmila missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/orunmila"
+      ],
+      "error": {
+        "path": "/orunmila",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/agent missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/agent"
+      ],
+      "error": {
+        "path": "/agent",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/os missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/os"
+      ],
+      "error": {
+        "path": "/os",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/project_root missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/project_root"
+      ],
+      "error": {
+        "path": "/project_root",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/config missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/config"
+      ],
+      "error": {
+        "path": "/config",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/frozen missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/frozen"
+      ],
+      "error": {
+        "path": "/frozen",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/prev_hash missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/prev_hash"
+      ],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/hash missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/hash"
+      ],
+      "error": {
+        "path": "/hash",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/schema_version not 1 (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/schema_version": 2
+      },
+      "unset": [],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "/session_id of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/session_id": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/session_id",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/session_id empty (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/session_id": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/session_id",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/observed_at of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/observed_at": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/observed_at",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/observed_at not matching its pattern (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/observed_at": "sha256:0123"
+      },
+      "unset": [],
+      "error": {
+        "path": "/observed_at",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/mono_ns not matching its pattern (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/mono_ns": "sha256:0123"
+      },
+      "unset": [],
+      "error": {
+        "path": "/mono_ns",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/orunmila of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/orunmila": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/orunmila",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/orunmila/version of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/orunmila/version": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/orunmila/version",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/orunmila/version empty (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/orunmila/version": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/orunmila/version",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/orunmila/code_fingerprint of the wrong type (its definition) (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/orunmila/code_fingerprint": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/orunmila/code_fingerprint",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/agent of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/agent": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/agent",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/agent/name missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/agent/name"
+      ],
+      "error": {
+        "path": "/agent/name",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/agent/name of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/agent/name": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/agent/name",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/agent/name empty (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/agent/name": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/agent/name",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/agent/version of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/agent/version": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/agent/version",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/os of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/os": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/os",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/os/platform missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/os/platform"
+      ],
+      "error": {
+        "path": "/os/platform",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/os/platform of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/os/platform": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/os/platform",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/os/platform empty (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/os/platform": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/os/platform",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/os/release of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/os/release": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/os/release",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/accounts of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/accounts": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/accounts",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/accounts/agent_user missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/accounts/agent_user"
+      ],
+      "error": {
+        "path": "/accounts/agent_user",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/accounts/orunmila_user missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/accounts/orunmila_user"
+      ],
+      "error": {
+        "path": "/accounts/orunmila_user",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/accounts/agent_user of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/accounts/agent_user": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/accounts/agent_user",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/accounts/agent_user empty (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/accounts/agent_user": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/accounts/agent_user",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/accounts/orunmila_user of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/accounts/orunmila_user": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/accounts/orunmila_user",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/accounts/orunmila_user empty (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/accounts/orunmila_user": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/accounts/orunmila_user",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/project_root of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/project_root": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/project_root",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/config of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/config": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/config",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/config/quiet_window_ms missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/config/quiet_window_ms"
+      ],
+      "error": {
+        "path": "/config/quiet_window_ms",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/config/ceiling_ms missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/config/ceiling_ms"
+      ],
+      "error": {
+        "path": "/config/ceiling_ms",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/config/lag_grace_ms missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/config/lag_grace_ms"
+      ],
+      "error": {
+        "path": "/config/lag_grace_ms",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/config/exclusions missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/config/exclusions"
+      ],
+      "error": {
+        "path": "/config/exclusions",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/config/quiet_window_ms of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/config/quiet_window_ms": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/quiet_window_ms",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/config/ceiling_ms of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/config/ceiling_ms": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/ceiling_ms",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/config/ceiling_ms below 0 (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/config/ceiling_ms": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/ceiling_ms",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "/config/lag_grace_ms of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/config/lag_grace_ms": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/lag_grace_ms",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/config/lag_grace_ms below 0 (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/config/lag_grace_ms": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/lag_grace_ms",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "/config/exclusions of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/config/exclusions": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/exclusions",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/config/exclusions holding an item of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/config/exclusions": [
+          7
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/exclusions/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/config/exclusions/0 of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/config/exclusions/0": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/exclusions/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/config/diff_size_limit_bytes of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/config/diff_size_limit_bytes": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/diff_size_limit_bytes",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/config/diff_size_limit_bytes below 0 (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/config/diff_size_limit_bytes": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/diff_size_limit_bytes",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "/frozen of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/frozen": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/frozen",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/frozen/rules missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/frozen/rules"
+      ],
+      "error": {
+        "path": "/frozen/rules",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/frozen/byproducts missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/frozen/byproducts"
+      ],
+      "error": {
+        "path": "/frozen/byproducts",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/frozen/ignore missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/frozen/ignore"
+      ],
+      "error": {
+        "path": "/frozen/ignore",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/frozen/hook_settings missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/frozen/hook_settings"
+      ],
+      "error": {
+        "path": "/frozen/hook_settings",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/frozen/rules of the wrong type (its definition) (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/frozen/rules": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/frozen/rules",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/frozen/byproducts of the wrong type (its definition) (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/frozen/byproducts": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/frozen/byproducts",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/frozen/ignore of the wrong type (its definition) (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/frozen/ignore": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/frozen/ignore",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/frozen/law_packs of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/frozen/law_packs": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/frozen/law_packs",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/frozen/law_packs/canon of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/frozen/law_packs/canon": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/frozen/law_packs/canon",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/frozen/law_packs/canon of the wrong type (its definition) (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/frozen/law_packs/canon": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/frozen/law_packs/canon",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/frozen/hook_settings of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/frozen/hook_settings": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/frozen/hook_settings",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/hooks_report of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/hooks_report": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/hooks_report",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/hooks_report/before missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/hooks_report/before"
+      ],
+      "error": {
+        "path": "/hooks_report/before",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/hooks_report/after missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/hooks_report/after"
+      ],
+      "error": {
+        "path": "/hooks_report/after",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/hooks_report/before of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/hooks_report/before": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/hooks_report/before",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/hooks_report/before holding an item of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/hooks_report/before": [
+          7
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/hooks_report/before/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/hooks_report/before/0 of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/hooks_report/before/0": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/hooks_report/before/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/hooks_report/before/0 empty (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/hooks_report/before/0": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/hooks_report/before/0",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/hooks_report/after of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/hooks_report/after": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/hooks_report/after",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/hooks_report/after holding an item of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/hooks_report/after": [
+          7
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/hooks_report/after/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/hooks_report/after/0 of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/hooks_report/after/0": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/hooks_report/after/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/hooks_report/after/0 empty (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/hooks_report/after/0": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/hooks_report/after/0",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/test_command of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/test_command": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/test_command",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/test_command/text missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/test_command/text"
+      ],
+      "error": {
+        "path": "/test_command/text",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/test_command/source missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/test_command/source"
+      ],
+      "error": {
+        "path": "/test_command/source",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/test_command/scripts_fingerprint missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/test_command/scripts_fingerprint"
+      ],
+      "error": {
+        "path": "/test_command/scripts_fingerprint",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/test_command/source of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/test_command/source": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/test_command/source",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/test_command/source/path missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/test_command/source/path"
+      ],
+      "error": {
+        "path": "/test_command/source/path",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/test_command/source/path of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/test_command/source/path": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/test_command/source/path",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/test_command/source/path empty (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/test_command/source/path": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/test_command/source/path",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/test_command/source/key of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/test_command/source/key": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/test_command/source/key",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/test_command/source/key empty (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/test_command/source/key": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/test_command/source/key",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/test_command/scripts_fingerprint of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/test_command/scripts_fingerprint": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/test_command/scripts_fingerprint",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/hash of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/hash": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/hash",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/hash not matching its pattern (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/hash": "sha256:0123"
+      },
+      "unset": [],
+      "error": {
+        "path": "/hash",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/frozen/rules of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/frozen/rules": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/frozen/rules",
+        "keyword": "type"
+      }
     }
   ]
 }

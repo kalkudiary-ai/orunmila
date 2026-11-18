@@ -50,7 +50,7 @@ function patch(base, { set = {}, unset = [] }) {
 
 const FORMATS = [
   { name: 'mark', schema: 'mark.schema.json', cases: 'marks.json' },
-  { name: 'session header', schema: 'session-header.schema.json', cases: 'session-headers.json' },
+  { name: 'session header', schema: 'session-header.schema.json', cases: 'session-headers.json', sweep: true },
   { name: 'continuation', schema: 'continuation.schema.json', cases: 'continuations.json', sweep: true },
   { name: 'retention header', schema: 'retention-header.schema.json', cases: 'retention-headers.json', sweep: true },
   { name: 'retention removal', schema: 'retention-removal.schema.json', cases: 'retention-removals.json', sweep: true },

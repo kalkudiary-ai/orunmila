@@ -52,6 +52,8 @@ const FORMATS = [
   { name: 'mark', schema: 'mark.schema.json', cases: 'marks.json' },
   { name: 'session header', schema: 'session-header.schema.json', cases: 'session-headers.json' },
   { name: 'continuation', schema: 'continuation.schema.json', cases: 'continuations.json' },
+  { name: 'retention header', schema: 'retention-header.schema.json', cases: 'retention-headers.json' },
+  { name: 'retention removal', schema: 'retention-removal.schema.json', cases: 'retention-removals.json' },
 ];
 
 for (const f of FORMATS) {

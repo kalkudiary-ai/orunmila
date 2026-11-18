@@ -29,7 +29,9 @@
  *
  * Limits: a crash that cuts the retention log's last line leaves it broken, and
  * retention stops until someone looks (it is never extended past a break). The
- * record shape is not yet in spec/ (LD66).
+ * records' shapes are spec/retention-header.schema.json and
+ * spec/retention-removal.schema.json (LD77); readRetentionLog does not check
+ * them yet.
  */
 
 const fs = require('fs');

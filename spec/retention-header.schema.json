@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:orunmila:spec:v1:retention-header",
+  "title": "Orunmila retention log header, schema version 1: DRAFT",
+  "description": "The first line of the retention log, where its hash chain starts. Old sessions are removed only whole, and each removal is written to this hash-chained log, so a removal can never look like a session that never existed. Removal records follow (retention-removal.schema.json).",
+  "$comment": "brief v4 line 348 asks for the log and names no fields: every field name here is the agent's choice (LD66; as schemas, LD77). Written by src/opon/ledger/retention.js, not wired. Unknown fields are allowed, as in the other v1 drafts (LD17).",
+  "type": "object",
+  "required": ["schema_version", "record", "seq", "created_at", "prev_hash", "hash"],
+  "properties": {
+    "schema_version": { "description": "All carry a `schema_version`.", "$comment": "brief v4 line 209", "const": 1 },
+    "record": {
+      "description": "Marks this line as the retention log's header, so a reader tells it from a removal without guessing.",
+      "$comment": "agent's choice, LD66",
+      "const": "retention_header"
+    },
+    "seq": { "description": "The header is the log's first record; removals follow from seq 1.", "$comment": "agent's choice, LD66", "const": 0 },
+    "created_at": {
+      "description": "Wall-clock time of the first removal, which created the log, by the caller's clock.",
+      "$comment": "agent's choice, LD66; the form of the session header's observed_at",
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$"
+    },
+    "prev_hash": { "description": "The hash chain starts from the header, so it has no previous hash.", "$comment": "brief v4 line 248; spec/hash-chain.md", "type": "null" },
+    "hash": {
+      "description": "The header's own hash; the first removal's prev_hash.",
+      "$comment": "brief v4 line 248; spec/hash-chain.md",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

@@ -1,8 +1,9 @@
 # The hash chain, v1 (draft)
 
 **Status: draft** (Phase 1 slice A3a). This is the exact rule, so anyone can recompute every hash
-without Orunmila's code. It covers the raw log (the session header, then marks). The odù log and the
-verdict log will use the same rule when they are built.
+without Orunmila's code. It covers the raw log (the session header, then marks) and the retention
+log (its header, then removals; LD66). The odù log and the verdict log will use the same rule when
+they are built.
 
 ## A log is lines
 

@@ -674,6 +674,16 @@ const MUTANTS = [
   { id: 'G6 a failed write gives a receipt (NF69)', file: 'src/opon/gate/receipts.js', test: 'test/receipts.js',
     from: "if (d.exit_status !== 'pass') continue;", to: "if (d.exit_status !== 'pass' && !WRITES.includes(m.says)) continue;",
     fails: ['test 79: a turn whose only edit'] },
+  // Track B slice B9b: a turn's prompts, open question 2 as O decided it (LD68).
+  { id: 'P1 a prompt borrowed from another turn', file: 'src/opon/gate/prompts.js', test: 'test/prompts.js',
+    from: "m.says === 'prompted' && m.turn === turn && isObject(m.target) && m.target.kind === 'turn' && m.target.id === turn", to: "m.says === 'prompted'",
+    fails: ['test 75: a continuation turn', 'only a Glove prompt mark about this turn'] },
+  { id: 'P2 a tool-written prompt refills the budget', file: 'src/opon/gate/prompts.js', test: 'test/prompts.js',
+    from: 'refillsBudget: prompts.some((p) => p.from_human)', to: 'refillsBudget: prompts.length > 0',
+    fails: ['test 77: a prompt Claude Code wrote itself'] },
+  { id: 'P3 a prompt mark from another source counted', file: 'src/opon/gate/prompts.js', test: 'test/prompts.js',
+    from: "m.source === 'hook' && ", to: '',
+    fails: ['only a Glove prompt mark about this turn'] },
 ];
 
 function copyRepo(root) {

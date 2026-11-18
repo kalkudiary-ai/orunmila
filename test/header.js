@@ -8,10 +8,12 @@
 
 const { assert, fs, path, tmpDir, rmrf, it, runAll } = require('./helpers');
 const crypto = require('crypto');
+const { spawnSync, execFileSync } = require('child_process');
 const { buildHeader, codeFingerprint, hooksReportFrom, configFromHeader, DEFAULT_CONFIG } = require('../src/opon/intake/header');
 const { compile } = require('../src/verify/schema');
 const { createSessionLog } = require('../src/opon/ledger/session-log');
 const { testCommandFrom } = require('../src/opon/intake/test-command');
+const { readRegular } = require('../src/opon/intake/regular-file');
 
 const checkHeader = compile(JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'spec', 'session-header.schema.json'), 'utf8')));
 const sha = (s) => 'sha256:' + crypto.createHash('sha256').update(s).digest('hex');
@@ -83,6 +85,57 @@ it(
     assert.strictEqual(h.frozen.ignore, null);
     assert.strictEqual(h.frozen.law_packs.canon, sha('{"laws":[{"id":"x"}]}\n'));
     assert.strictEqual(h.frozen.hook_settings[path.join(root, '.claude', 'settings.local.json')], sha(fs.readFileSync(path.join(root, '.claude', 'settings.local.json'))));
+  }),
+);
+
+// buildHeader in a child with a deadline, so a read that blocks fails this test
+// instead of hanging the suite (the mutation gate's runSuite has no timeout).
+const HEADER = path.join(__dirname, '..', 'src', 'opon', 'intake', 'header.js');
+const CHILD = 'const h = require(process.argv[1]).buildHeader(JSON.parse(process.argv[2])); process.stdout.write(JSON.stringify(h));';
+
+it(
+  'NF83: a frozen file that is not a regular file (a FIFO, a device, a folder) is never read: its fingerprint is null and the header still builds',
+  withProject((root) => {
+    const dot = path.join(root, '.orunmila');
+    const settings = path.join(root, '.claude', 'settings.local.json');
+    const fifoSettings = path.join(root, '.claude', 'settings.json');
+    fs.mkdirSync(path.join(dot, 'byproducts'));
+    const fifos = process.platform !== 'win32'; // no mkfifo on Windows; the folder case still runs there
+    if (fifos) {
+      fs.rmSync(path.join(dot, 'rules'));
+      fs.rmSync(path.join(root, 'canon.json'));
+      for (const p of [path.join(dot, 'rules'), path.join(root, 'canon.json'), fifoSettings]) execFileSync('mkfifo', [p]);
+      fs.symlinkSync('/dev/null', path.join(dot, 'ignore')); // a character device: reads empty, never blocks
+    }
+    const r = spawnSync(process.execPath, ['-e', CHILD, HEADER, JSON.stringify(opts(root, { hookSettings: [fifoSettings, settings] }))], { encoding: 'utf8', timeout: 10000 });
+    assert.strictEqual(r.signal, null, `buildHeader did not return within 10 s (killed by ${r.signal})`);
+    assert.strictEqual(r.status, 0, r.stderr);
+    const h = JSON.parse(r.stdout);
+    assert.strictEqual(h.frozen.byproducts, null, 'a folder');
+    if (fifos) {
+      assert.strictEqual(h.frozen.rules, null, 'a FIFO at .orunmila/rules');
+      assert.strictEqual(h.frozen.ignore, null, 'a device (/dev/null) at .orunmila/ignore');
+      assert.strictEqual(h.frozen.law_packs.canon, null, 'a FIFO as a law pack');
+      assert.strictEqual(h.frozen.hook_settings[fifoSettings], null, 'a FIFO as a hook settings file');
+    }
+    assert.strictEqual(h.frozen.law_packs.project, sha('{"laws":[]}\n'), 'a regular file beside them is still read');
+    assert.strictEqual(h.frozen.hook_settings[settings], sha(fs.readFileSync(settings)));
+    assert.deepStrictEqual(h.hooks_report, { before: ['Write', 'Edit', 'MultiEdit'], after: ['*'] }, "the regular settings file's hooks are still reported");
+  }),
+);
+
+it(
+  'NF83: readRegular closes every file it opens, whatever it finds there',
+  withProject((root) => {
+    if (process.platform === 'win32') return; // /dev/fd lists open descriptors on macOS and Linux only
+    const dot = path.join(root, '.orunmila');
+    fs.mkdirSync(path.join(dot, 'byproducts'));
+    // no FIFO here: this runs in the suite's own process, and a blocking open would hang it
+    const open = () => fs.readdirSync('/dev/fd').length;
+    const before = open();
+    for (let i = 0; i < 20; i++) for (const f of ['rules', 'byproducts', 'absent']) readRegular(path.join(dot, f));
+    assert.strictEqual(open(), before);
+    assert.strictEqual(readRegular(path.join(dot, 'rules')).toString(), 'rule 1\n');
   }),
 );
 

@@ -736,6 +736,27 @@ const MUTANTS = [
   { id: 'TC9 the header leaves the test command out', file: 'src/opon/intake/header.js', test: 'test/header.js',
     from: 'test_command: testCommandFrom(o.root, o.envValues),', to: 'test_command: { text: null, source: null, scripts_fingerprint: null },',
     fails: ["B8: the header freezes the project's test command"] },
+  // Slice A10b: only a regular file is read into the header (NF83, LD73). The test runs
+  // buildHeader in a child with a deadline, so a mutant that blocks fails instead of hanging.
+  { id: 'H5 a frozen file read whatever it is', file: 'src/opon/intake/regular-file.js', test: 'test/header.js',
+    from: 'fs.fstatSync(fd).isFile() ? fs.readFileSync(fd) : null', to: 'fs.readFileSync(fd)',
+    fails: ['NF83: a frozen file that is not a regular file'] },
+  { id: 'H10 only a FIFO refused (a device read)', file: 'src/opon/intake/regular-file.js', test: 'test/header.js',
+    from: 'fs.fstatSync(fd).isFile()', to: '!fs.fstatSync(fd).isFIFO()',
+    fails: ['NF83: a frozen file that is not a regular file'] },
+  { id: 'H6 a FIFO opened blocking', file: 'src/opon/intake/regular-file.js', test: 'test/header.js',
+    from: 'fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK || 0)', to: 'fs.constants.O_RDONLY',
+    fails: ['NF83: a frozen file that is not a regular file'] },
+  { id: 'H7 a descriptor left open', file: 'src/opon/intake/regular-file.js', test: 'test/header.js',
+    from: 'if (fd !== undefined) fs.closeSync(fd);', to: 'void fd;',
+    fails: ['NF83: readRegular closes every file it opens'] },
+  { id: "H8 frozen files read by name again (A10's read)", file: 'src/opon/intake/header.js', test: 'test/header.js',
+    from: 'const fileFingerprint = (p) => fingerprintOf(readRegular(p));',
+    to: 'const fileFingerprint = (p) => { try { return fingerprintOf(fs.readFileSync(p)); } catch { return null; } };',
+    fails: ['NF83: a frozen file that is not a regular file'] },
+  { id: 'H9 hook settings read by name again', file: 'src/opon/intake/header.js', test: 'test/header.js',
+    from: 'const buf = readRegular(p); //', to: 'const buf = (() => { try { return fs.readFileSync(p); } catch { return null; } })(); //',
+    fails: ['NF83: a frozen file that is not a regular file'] },
 ];
 
 function copyRepo(root) {

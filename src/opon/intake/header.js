@@ -18,7 +18,8 @@
  *                              after they run (line 337), from its settings
  *   configFromHeader(header)   the configuration replay must use
  *
- * Frozen files are fingerprinted with plain SHA-256; an absent file is null.
+ * Frozen files are fingerprinted with plain SHA-256; an absent file, or one
+ * that is not a regular file (a FIFO, a folder; NF83), is null.
  * Accounts: the agent's and Orunmila's are the same until the separate-user
  * setup in Phase 5 (line 587).
  */
@@ -29,6 +30,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { monoString, nowMono } = require('./mono');
 const { testCommandFrom } = require('./test-command');
+const { readRegular } = require('./regular-file');
 
 // Brief v3: quiet window 1,500 ms (line 356), ceiling 30 s (357), lag grace
 // 3,000 ms (362). The diff size limit (line 266) is the agent's choice (LD38).
@@ -36,13 +38,9 @@ const DEFAULT_CONFIG = { quiet_window_ms: 1500, ceiling_ms: 30000, lag_grace_ms:
 
 const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
 
-function fileFingerprint(p) {
-  try {
-    return 'sha256:' + sha256(fs.readFileSync(p));
-  } catch {
-    return null;
-  }
-}
+// Only a regular file is read (NF83): a FIFO would stall the session start.
+const fingerprintOf = (buf) => (buf === null ? null : 'sha256:' + sha256(buf));
+const fileFingerprint = (p) => fingerprintOf(readRegular(p));
 
 function codeFingerprint(dir) {
   const files = [];
@@ -83,9 +81,10 @@ function buildHeader(o) {
   const settings = [];
   const hookSettings = {};
   for (const p of o.hookSettings || []) {
-    hookSettings[p] = fileFingerprint(p);
+    const buf = readRegular(p); // read once: the fingerprint and the hooks report are of the same bytes
+    hookSettings[p] = fingerprintOf(buf);
     try {
-      settings.push(JSON.parse(fs.readFileSync(p, 'utf8')));
+      if (buf !== null) settings.push(JSON.parse(buf.toString('utf8')));
     } catch {}
   }
   const lawPacks = {};

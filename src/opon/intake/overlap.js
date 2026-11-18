@@ -17,16 +17,29 @@
  *                    delivery and does not extend the span. Records with no
  *                    mono_ns (a continuation, LD57) are skipped.
  *   concurrent(spans, root, mono)
- *                    the ids, sorted, of the sessions in `root` whose span
- *                    holds `mono` (both ends included). mono_ns is compared
- *                    as an integer.
+ *                    the ids, sorted, of the sessions whose root shares files
+ *                    with `root` (the same folder, or one inside the other, by
+ *                    whole folder names: NF80, LD69) and whose span holds
+ *                    `mono` (both ends included). mono_ns is compared as an
+ *                    integer.
  *
  * Limits: a session whose agent died with no end mark counts as active while
  * the intake holds it (NF79; more overlap means fewer credits, never a false
- * one); mono_ns across a reboot is not comparable (clock_reset).
+ * one); mono_ns across a reboot is not comparable (clock_reset); roots are
+ * compared as written, so two spellings of one folder that differ in case are
+ * two folders.
  */
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+
+/** A root with `/` separators and no trailing one (`/` becomes '', which holds every absolute path). */
+const folderOf = (root) => String(root).replace(/\\/g, '/').replace(/\/+$/, '');
+const within = (child, parent) => child === parent || child.startsWith(parent + '/');
+const sharesFiles = (a, b) => {
+  const x = folderOf(a);
+  const y = folderOf(b);
+  return within(x, y) || within(y, x);
+};
 const endsSession = (rec) => rec.says === 'ended' && isObject(rec.target) && rec.target.kind === 'session';
 
 function spanOf(records) {
@@ -48,7 +61,7 @@ function spanOf(records) {
 function concurrent(spans, root, mono) {
   const t = BigInt(mono);
   return spans
-    .filter((s) => s.root === root && BigInt(s.from) <= t && t <= BigInt(s.to))
+    .filter((s) => sharesFiles(s.root, root) && BigInt(s.from) <= t && t <= BigInt(s.to))
     .map((s) => s.id)
     .sort();
 }

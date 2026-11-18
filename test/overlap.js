@@ -94,6 +94,25 @@ it("concurrent: a folder whose name extends another's is a different folder", ()
   assert.deepStrictEqual(concurrent(spans, '/work/ab', '500'), ['s2']);
 });
 
+it('concurrent: a session in a subfolder and one in its parent watch the same files, so both are named (NF80)', () => {
+  const at = (id, root) => spanOf([header(id, root, 100), mark(id, 1, 900)]);
+  const spans = [at('s1', '/work/a'), at('s2', '/work/a/sub'), at('s3', '/work/ab'), at('s4', '/work/b'), at('s5', '/work/a/sub/deep')];
+  assert.deepStrictEqual(concurrent(spans, '/work/a', '500'), ['s1', 's2', 's5'], 'the parent names every session below it');
+  assert.deepStrictEqual(concurrent(spans, '/work/a/sub', '500'), ['s1', 's2', 's5'], 'a subfolder names its parent and its own subfolders');
+  assert.deepStrictEqual(concurrent(spans, '/work/a/sub/deep', '500'), ['s1', 's2', 's5']);
+  assert.deepStrictEqual(concurrent(spans, '/work/ab', '500'), ['s3'], 'a name that extends another is still a different folder');
+  assert.deepStrictEqual(concurrent(spans, '/work/a/', '500'), ['s1', 's2', 's5'], 'a trailing separator names the same folder');
+  assert.deepStrictEqual(concurrent([at('r', '/'), at('s1', '/work/a')], '/work/a', '500'), ['r', 's1'], 'the file system root holds every folder');
+});
+
+it('concurrent: Windows roots nest by whole folder names too (NF80)', () => {
+  const at = (id, root) => spanOf([header(id, root, 100), mark(id, 1, 900)]);
+  const spans = [at('w1', 'C:\\work\\a'), at('w2', 'C:\\work\\a\\sub'), at('w3', 'C:\\work\\ab'), at('w4', 'C:\\')];
+  assert.deepStrictEqual(concurrent(spans, 'C:\\work\\a', '500'), ['w1', 'w2', 'w4']);
+  assert.deepStrictEqual(concurrent(spans, 'C:\\work\\ab', '500'), ['w3', 'w4']);
+  assert.deepStrictEqual(concurrent(spans, 'D:\\work\\a', '500'), [], 'another drive is another folder');
+});
+
 it('concurrent: a header-only session is active only at its start', () => {
   const spans = [spanOf([header('s1', ROOT_A, 100)])];
   assert.deepStrictEqual(concurrent(spans, ROOT_A, '100'), ['s1']);

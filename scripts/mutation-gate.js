@@ -775,6 +775,22 @@ const MUTANTS = [
   { id: 'H9 hook settings read by name again', file: 'src/opon/intake/header.js', test: 'test/header.js',
     from: 'const buf = readRegular(p); //', to: 'const buf = (() => { try { return fs.readFileSync(p); } catch { return null; } })(); //',
     fails: ['NF83: a frozen file that is not a regular file'] },
+  // LD84: the stripper's fixed lists for top-level keys and kept-field values.
+  { id: 'S11 an unknown top-level key kept by name', file: 'src/opon/fixtures/strip.js', test: 'test/strip.js',
+    from: "o[ph('a', k)] = v === null || v === undefined ? v : stripValue(v);", to: 'o[k] = v === null || v === undefined ? v : stripValue(v);',
+    fails: ["LD84: every top-level key and every kept field's value"] },
+  { id: 'S12 a kept field keeps any string', file: 'src/opon/fixtures/strip.js', test: 'test/strip.js',
+    from: 'if (KEEP_STRINGS[k] ? KEEP_STRINGS[k].has(v) : KEEP_SHAPES[k] ? KEEP_SHAPES[k].test(v) : false) return keep(v);', to: 'return keep(v);',
+    fails: ["LD84: every top-level key and every kept field's value"] },
+  { id: "S13 a kept field's object value kept raw", file: 'src/opon/fixtures/strip.js', test: 'test/strip.js',
+    from: "return v !== null && typeof v === 'object' ? stripValue(v) : v;", to: 'return v;',
+    fails: ["LD84: every top-level key and every kept field's value"] },
+  { id: "S14 a kept field's array kept raw", file: 'src/opon/fixtures/strip.js', test: 'test/strip.js',
+    from: 'Array.isArray(v) ? v.map((x) => keepField(k, x)) : keepField(k, v)', to: 'Array.isArray(v) ? v : keepField(k, v)',
+    fails: ["LD84: every top-level key and every kept field's value"] },
+  { id: 'S15 any ts kept', file: 'src/opon/fixtures/strip.js', test: 'test/strip.js',
+    from: 'ts: /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$/,', to: 'ts: /./,',
+    fails: ["LD84: every top-level key and every kept field's value"] },
 ];
 
 function copyRepo(root) {

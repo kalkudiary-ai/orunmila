@@ -12,10 +12,14 @@
  *                              same one), and all content masked to the same
  *                              length (lines and their +/- markers kept).
  *                              Kept as is: order, timing, counts, sizes, exit
- *                              statuses and codes (null stays null), event
- *                              types, flags, operators, file extensions, common
- *                              program names and public tool names. `kept` is
- *                              that vocabulary, for the leak check.
+ *                              statuses and codes (null stays null), and words
+ *                              from fixed lists only: Orunmila's own event field
+ *                              names, event types, sources, agent ids and the
+ *                              other kept fields' values, flags, operators, file
+ *                              extensions, common program names and public tool
+ *                              names (LD42, LD84). A key or kept value off its
+ *                              list becomes a placeholder. `kept` is that
+ *                              vocabulary, for the leak check.
  *   leakCheck(raw, stripped)   the private tokens of the raw events that still
  *                              appear in the stripped ones ([] when clean)
  *   relevance(raw, stripped)   whether both translate (A8) to the same marks,
@@ -55,10 +59,25 @@ const { PATTERNS, PREFIXED } = require('../../store/secrets');
 const REDACTION_KINDS = new Set([...PATTERNS, ...PREFIXED].map(([kind]) => kind).concat('env_value'));
 const HEX = /^[0-9a-f]{40}$|^[0-9a-f]{64}$/;
 const KEEP_FIELDS = new Set(['ts', 'type', 'source', 'agent', 'turn_id', 'failed', 'exit_code', 'read_kind', 'change_kind', 'binary', 'bytes', 'result_bytes', 'channel', 'claim_unconfirmed']);
+// LD84: a kept field keeps a string only from its own fixed list (or shape); its non-string fields keep only
+// booleans, numbers and null. The lists are Orunmila's: the A8 adapter's event types, capture's sources and
+// channel, the agent registry's ids, and today's read and change kinds.
+const KEEP_STRINGS = {
+  type: new Set(['command_run', 'file_write', 'file_read', 'tool_call', 'network_call', 'user_prompt', 'turn_claim', 'turn_end', 'git_state', 'pr_state', 'ci_state']),
+  source: new Set(['hook', 'fs-sentinel']),
+  agent: new Set([...Object.keys(require('../../capture/agents').REGISTRY), 'fs-sentinel']),
+  read_kind: new Set(['full', 'range', 'pattern']),
+  change_kind: new Set(['create', 'modify', 'delete']),
+  channel: new Set(['network']),
+};
+const KEEP_SHAPES = { ts: /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?Z$/, turn_id: /^t[0-9]+$/ };
 const ID_FIELDS = new Set(['session_id', 'call_id', 'sub_agent_id']);
 const PATH_FIELDS = new Set(['path', 'rel_path', 'output_path']);
 const HASH_FIELDS = new Set(['hash', 'hash_before', 'hash_after', 'head_sha', 'merged_sha']);
 const TEXT_FIELDS = new Set(['text', 'stdout_excerpt', 'result_excerpt', 'diff']);
+const OTHER_FIELDS = ['command', 'host', 'target', 'tool_name', 'sub_agent_type', 'redactions', 'input', 'branch', 'checks', 'ref'];
+// LD84: every top-level key the event log is known to hold; any other key is raw data and becomes a placeholder.
+const EVENT_KEYS = new Set([...KEEP_FIELDS, ...ID_FIELDS, ...PATH_FIELDS, ...HASH_FIELDS, ...TEXT_FIELDS, ...OTHER_FIELDS]);
 
 function stripEvents(events) {
   const maps = { s: new Map(), a: new Map(), h: new Map(), id: new Map(), x: new Map() };
@@ -145,12 +164,22 @@ function stripEvents(events) {
     return TOOL_NAMES.has(s) ? keep(s) : ph('a', s);
   };
 
+  const keepField = (k, v) => {
+    if (typeof v !== 'string') return v !== null && typeof v === 'object' ? stripValue(v) : v;
+    if (KEEP_STRINGS[k] ? KEEP_STRINGS[k].has(v) : KEEP_SHAPES[k] ? KEEP_SHAPES[k].test(v) : false) return keep(v);
+    return k === 'turn_id' ? ph('id', v) : mask(v);
+  };
+
   const out = events.map((e) => {
     const o = {};
     for (const [k, v] of Object.entries(e)) {
+      if (!EVENT_KEYS.has(k)) {
+        o[ph('a', k)] = v === null || v === undefined ? v : stripValue(v);
+        continue;
+      }
       keep(k);
       if (v === null || v === undefined) o[k] = v;
-      else if (KEEP_FIELDS.has(k)) o[k] = Array.isArray(v) ? v.map(keep) : (typeof v === 'string' && keep(v), v);
+      else if (KEEP_FIELDS.has(k)) o[k] = Array.isArray(v) ? v.map((x) => keepField(k, x)) : keepField(k, v);
       else if (ID_FIELDS.has(k)) o[k] = ph('id', String(v));
       else if (PATH_FIELDS.has(k)) o[k] = stripPath(v);
       else if (HASH_FIELDS.has(k)) o[k] = HEX.test(String(v)) ? ph('x', String(v)) : mask(v);

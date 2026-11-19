@@ -112,6 +112,24 @@ it('no raw word is kept by key or name: tool-input keys, unknown tool names, sub
   assert.strictEqual(Object.keys(s.events[0].input).length, 2, 'the shape of the input object is kept');
 });
 
+it('LD84: every top-level key and every kept field\'s value comes from Orunmila\'s own lists; anything else is a placeholder', () => {
+  const raw = [
+    { ...RAW[1], call_id: 'm1', acme_tenant: 'x1', agent: 'acme-agent', source: 'acmesource', type: 'acme_type', read_kind: 'acmeread' },
+    { ...RAW[6], change_kind: 'acmechange', channel: 'acmechannel', turn_id: 'acme-turn-1', ts: 'acme o clock' },
+    { ...RAW[3], call_id: 'm3', failed: 'acmefailed', exit_code: ['acmecode'], bytes: { acmekey: 'acmebytes' } },
+    { ...RAW[4], call_id: 'm4', channel: 'acmenet' },
+  ];
+  const s = stripEvents(raw);
+  const text = JSON.stringify(s.events).toLowerCase();
+  assert.ok(!text.includes('acme'), text);
+  assert.ok(![...s.kept].some((k) => k.includes('acme')), 'nothing private in the kept vocabulary');
+  assert.strictEqual(Object.keys(s.events[0]).length, Object.keys(raw[0]).length, 'an unknown key keeps its place, under a placeholder name');
+  const s0 = stripEvents(RAW).events;
+  for (const [i, k] of [[1, 'agent'], [1, 'source'], [1, 'type'], [1, 'read_kind'], [6, 'change_kind'], [4, 'channel'], [1, 'turn_id'], [1, 'ts']]) {
+    assert.strictEqual(s0[i][k], RAW[i][k], `a listed ${k} is kept`);
+  }
+});
+
 it('relevance at the mark level: the stripped events translate to the same marks, kinds and counts as the raw ones', () => {
   const stripped = stripEvents(RAW);
   const r = relevance(RAW, stripped.events);

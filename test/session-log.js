@@ -479,17 +479,30 @@ it(
 
 it(
   'LD101: a value in a quarantined input, and in a kept file that is not text, is reported where it was written',
-  withLeakLog({ envEntries: ENTRIES }, (log, dir) => {
-    // redactMark redacts strings, not object keys: a key holding a value is written as it came.
-    const q = log.append({ ...mark('hook_started'), says: 'edited', [QUOTED]: 1 });
+  withLeakLog({ envEntries: [...ENTRIES, { names: ['DB_PASSWORD'], value: 'pw12' }] }, (log, dir) => {
+    // pw12 is redacted only as a whole word, so pw123 keeps it (LD93).
+    const q = log.append({ ...mark('hook_started'), says: 'edited', note: 'login pw123' });
     assert.strictEqual(q.ok, false);
-    assert.deepStrictEqual(q.leaks, [hit({ log: 'quarantine', seq: 1 }, ['API_TOKEN'], QUOTED)]);
+    assert.deepStrictEqual(q.leaks, [hit({ log: 'quarantine', seq: 1 }, ['DB_PASSWORD'], 'pw12')]);
     const binary = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(QUOTED)]); // not UTF-8: kept as is, unredacted
     const r = log.append(plainMod(), [{ slot: 'diff_ref', text: binary }]);
     const ref = readLines(path.join(dir, 'raw.jsonl'))[1].detail.diff_ref;
     assert.deepStrictEqual(r, { ok: true, seq: 1, leaks: [hit({ log: 'files', ref }, ['API_TOKEN'], QUOTED)] });
     assert.deepStrictEqual(log.leaks(), [...q.leaks, ...r.leaks]);
     assert.strictEqual(verifySessionLog(dir).ok, true);
+  }),
+);
+
+it(
+  'LD102: a .env value held in an object key is redacted before anything is written, so the check finds nothing',
+  withLeakLog({ envEntries: ENTRIES }, (log, dir) => {
+    const q = log.append({ ...mark('hook_started'), says: 'edited', [QUOTED]: 1 });
+    assert.strictEqual(q.ok, false);
+    assert.strictEqual(q.leaks, undefined);
+    assert.deepStrictEqual(log.leaks(), []);
+    const received = JSON.parse(readLines(path.join(dir, 'quarantine.jsonl'))[1].received);
+    assert.strictEqual(received['[REDACTED:env_value]'], 1);
+    assert.ok(!fs.readFileSync(path.join(dir, 'quarantine.jsonl'), 'utf8').includes('en-not-a-real'), 'no part of the value on disk');
   }),
 );
 

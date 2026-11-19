@@ -187,6 +187,37 @@ it('redactMark walks every string of a mark, notes the kinds in detail.redaction
   assert.ok(!JSON.stringify(m).includes('[REDACTED'), 'the input object is not changed in place');
 });
 
+it('LD102: an object key is redacted by the rules a string is, the kinds noted; keys that clash keep every value ([REDACTED#2], #3)', () => {
+  const GITHUB2 = 'ghp_' + 'b'.repeat(36);
+  const m = strip(SPEC.good.hook_called);
+  m.detail.tool_input = {
+    [ENV_SECRET]: 1,
+    [`PASS_${ENV_SECRET}`]: 2,
+    list: [{ pw12x: 'whole word', pw12xy: 'inside a longer word' }],
+    // A plain key that reads like a placeholder keeps its name; the redacted keys step round it.
+    clash: { [GITHUB]: 'a', [GITHUB2]: 'b', '[REDACTED:github_token]': 'plain' },
+  };
+  const { mark, kinds } = redactMark(m, [ENV_SECRET, 'pw12x']);
+  assert.deepStrictEqual(mark.detail.tool_input, {
+    '[REDACTED:env_value]': 1,
+    'PASS_[REDACTED:env_value]': 2,
+    list: [{ '[REDACTED:env_value]': 'whole word', pw12xy: 'inside a longer word' }],
+    clash: { '[REDACTED:github_token]': 'plain', '[REDACTED#2]': 'a', '[REDACTED#3]': 'b' },
+  });
+  assert.deepStrictEqual(kinds, ['env_value', 'github_token']);
+  assert.deepStrictEqual(mark.detail.redactions, ['env_value', 'github_token']);
+  assert.deepStrictEqual(Object.keys(m.detail.tool_input.clash), [GITHUB, GITHUB2, '[REDACTED:github_token]'], 'the input object is not changed in place');
+  assert.ok(ENV_SECRET in m.detail.tool_input && !('redactions' in m.detail));
+  // LD103: a clash name holds none of the key's text (`qwerty1` + `#2` would write `qwerty1#`; `TOKEN=abcdef` + `#2`
+  // made v2's loop endless); only the key's kinds count.
+  const two = redactMark({ detail: { o: { [`${ENV_SECRET} qwerty1`]: 1, 'other-secret-1 qwerty1': 2 } } }, [ENV_SECRET, 'other-secret-1', 'qwerty1#']);
+  assert.deepStrictEqual(two.mark.detail.o, { '[REDACTED:env_value] qwerty1': 1, '[REDACTED#2]': 2 });
+  const tail = ' DB_TOKEN=abcdef';
+  const three = redactMark({ detail: { o: { [GITHUB + tail]: 1, [GITHUB2 + tail]: 2, ['ghp_' + 'c'.repeat(36) + tail]: 3, '[REDACTED#2]': 'plain' } } }, []);
+  assert.deepStrictEqual(three.mark.detail.o, { [`[REDACTED:github_token]${tail}`]: 1, '[REDACTED#3]': 2, '[REDACTED#4]': 3, '[REDACTED#2]': 'plain' });
+  assert.deepStrictEqual(three.kinds, ['github_token']);
+});
+
 it(
   'test 33: an API key in a command never appears in any file of the session log; the redaction is noted',
   withLog({}, (log, dir) => {

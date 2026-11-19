@@ -7,8 +7,9 @@
  *   redactText(text, envValues)   { text, kinds }: today's secrets.js patterns
  *                                 (used, not changed), and the given `.env`
  *                                 values, replaced with [REDACTED:<kind>]
- *   redactMark(mark, envValues)   { mark, kinds }: every string in the mark,
- *                                 with the kinds noted in detail.redactions
+ *   redactMark(mark, envValues)   { mark, kinds }: every string and object key
+ *                                 in the mark (LD102), with the kinds noted in
+ *                                 detail.redactions
  *   envEntriesFrom(text)          [{ name, value }] of a `.env`-style file, each
  *                                 line cut by dotenv's and a shell's rules (LD98): 8+ chars,
  *                                 or 4-7 under a secret name (LD88); never a
@@ -134,8 +135,22 @@ function walk(value, envValues, kinds) {
   }
   if (Array.isArray(value)) return value.map((v) => walk(v, envValues, kinds));
   if (value && typeof value === 'object') {
+    // LD102: a key is redacted as a string is. A plain key keeps its name; a
+    // redacted one that would land on a name already taken is named
+    // [REDACTED#2], #3, ... so no value is overwritten. That name holds none of
+    // the key's text (LD103).
+    const keys = Object.keys(value).map((k) => [k, redactText(k, envValues)]);
+    const taken = new Set(keys.filter(([k, r]) => r.text === k).map(([k]) => k));
     const out = {};
-    for (const [k, v] of Object.entries(value)) out[k] = walk(v, envValues, kinds);
+    for (const [k, r] of keys) {
+      let name = r.text;
+      if (name !== k) {
+        for (const kd of r.kinds) kinds.add(kd);
+        for (let n = 2; taken.has(name); n++) name = `[REDACTED#${n}]`;
+        taken.add(name);
+      }
+      out[name] = walk(value[k], envValues, kinds);
+    }
     return out;
   }
   return value;

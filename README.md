@@ -847,6 +847,15 @@ node bin/orunmila.js trail                      # report now redacts those, coll
 node bin/orunmila.js trail --no-redact-home     # keep full home paths (local-only use)
 ```
 
+**Check before you share: `orunmila leak-check`.** Redaction can miss a secret
+in a format it does not know, and capture does not use your `.env` values to
+redact. Run
+`orunmila leak-check` in your project folder before sharing a report. It reads
+that folder's `.env` files once, searches the data dir and the report files for
+those values, and prints each one's name, file and line, never the value (exit
+1 if any is found). [`SECURITY.md`](SECURITY.md), "Your `.env` values,
+and the leak check", lists what it does not cover.
+
 ## Prior art / what this isn't
 
 This is not another activity logger - [Gryph](https://github.com/safedep/gryph)

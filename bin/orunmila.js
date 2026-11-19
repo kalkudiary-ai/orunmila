@@ -1060,6 +1060,84 @@ function cmdVerify() {
   process.exitCode = r.ok ? 0 : 1;
 }
 
+/**
+ * `orunmila leak-check [--root dir] [--path p]...` — search everything Orunmila
+ * stored, and the report files it wrote, for the exact values of the project's
+ * `.env` files (LD93, LD95). Run by hand: nothing runs it automatically.
+ * Prints names, never values. Exit 0 none found, 1 found, 2 nothing checked, a
+ * path not read, or a failure.
+ */
+function cmdLeakCheck() {
+  try {
+    leakCheck();
+  } catch (err) {
+    // The code only: an error's message is never printed, so it cannot carry a value.
+    console.log(`leak-check failed (${(err && (err.code || err.name)) || 'error'}): nothing reliable was checked.`);
+    process.exitCode = 2;
+  }
+}
+
+function leakCheck() {
+  const lc = require('../src/opon/intake/leak-check');
+  // Every argument is --root <dir> or --path <file-or-folder>; anything else
+  // (--path=x, a typo) is refused, so a path is never dropped in silence.
+  const paths = [];
+  let root = process.cwd();
+  for (let i = 1; i < args.length; i++) {
+    const value = args[i + 1];
+    if ((args[i] !== '--path' && args[i] !== '--root') || !value || value.startsWith('--')) {
+      console.log(`Usage: orunmila leak-check [--root dir] [--path file-or-folder]...  (not understood: ${args[i]})`);
+      process.exitCode = 2;
+      return;
+    }
+    if (args[i] === '--path') paths.push(path.resolve(value));
+    else root = value;
+    i++;
+  }
+  root = path.resolve(root);
+  const { entries, files: envFiles, unreadable: envUnread, sources } = lc.readEnvEntries(root);
+  for (const u of envUnread) console.log(`NOT READ  ${u}`);
+  if (!entries.length) {
+    console.log(envFiles.length
+      ? `No value in ${envFiles.join(', ')} is long enough to check (8+ characters, or 4+ under a secret name).`
+      : `No readable .env file in ${root}: there is nothing to check against.`);
+    console.log('Nothing was checked.');
+    process.exitCode = 2;
+    return;
+  }
+  // The data dir by the same rule as eventlog.dataDir(), which would create it.
+  const data = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
+  const targets = lc.defaultTargets({ dataDir: data, root });
+  for (const p of paths) targets.push({ path: p, required: true });
+  const r = lc.scan(targets, entries, { skip: sources });
+  const unread = [...envUnread, ...r.unreadable];
+  console.log(`Checked ${entries.length} value(s) from ${envFiles.join(', ')} in ${root}`);
+  console.log(`against ${r.files} file(s): the data dir ${data}, report files in the root, and each --path.`);
+  for (const h of r.hits) {
+    console.log(`\x1b[31mLEAK\x1b[0m  ${h.file} line ${h.line}, byte ${h.byte}  ${h.names.join(', ')} (${h.length} characters), ${h.count} time(s) in this file`);
+  }
+  for (const u of r.unreadable) console.log(`NOT READ  ${u}`);
+  console.log('Not checked: anything printed to the terminal or piped (trail --json, json without --out). Pass a saved copy with --path.');
+  if (r.hits.length) {
+    const files = new Set(r.hits.map((h) => h.file)).size;
+    console.log(`\n${r.hits.length} value(s) found in ${files} file(s). Values are never printed.`);
+    console.log('Rotate each secret named above. `orunmila log redact` removes known formats only, not these values.');
+    process.exitCode = 1;
+    return;
+  }
+  if (!r.files) {
+    console.log('\nNo file was checked: there is no data dir, report file or --path to read.');
+    process.exitCode = 2;
+    return;
+  }
+  if (unread.length) {
+    console.log(`\nNo value found, but ${unread.length} path(s) were not read, so this is not a clean result.`);
+    process.exitCode = 2;
+    return;
+  }
+  console.log('\nNo value found.');
+}
+
 const COMMANDS = {
   install: cmdInstall,
   agents: cmdAgents,
@@ -1083,6 +1161,7 @@ const COMMANDS = {
   'watch-fs': cmdWatchFs,
   'debug-transcript': cmdDebugTranscript,
   verify: cmdVerify,
+  'leak-check': cmdLeakCheck,
 };
 
 if (!cmd || !COMMANDS[cmd]) {
@@ -1127,6 +1206,8 @@ Both lenses
   orunmila prune [--keep N]                       cap the log to the N most-recent sessions (explicit, never automatic)
   orunmila log redact                             scrub known secret formats from everything already stored
   orunmila log delete [--yes]                     delete stored session data (lists it first; --yes to delete)
+  orunmila leak-check [--root dir] [--path p]     search stored data and report files for this project's .env
+                                                  values (names printed, never values; exit 1 if any found)
   orunmila rescore [--dry-run]                    re-reconcile every persisted report (originals archived, never deleted)
   orunmila archives                               list archived rescore snapshots, readable with --archive <stamp>
   orunmila feedback [--session ID] [--include claim_text]   write sanitized accuracy cases to a local drop folder

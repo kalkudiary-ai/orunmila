@@ -53,6 +53,7 @@ complete key itself.
 | Case | Witness | What happens |
 |---|---|---|
 | A secret in a format Orunmila does not know | Glove and Sentinel | Not redacted. |
+| A value from your `.env` file in a format Orunmila does not know | Glove and Sentinel | Not redacted: capture does not use your `.env` values to redact. Run `orunmila leak-check` to find any that were stored. |
 | A PEM private key with its END line | Glove and Sentinel | Removed whole. |
 | A PEM header with no END line (text that reached Orunmila already cut off, or a header string in source code) | Glove and Sentinel | The header and the next 16384 characters are removed, up to the end of that line but at most 128 more, or up to the next `-----BEGIN `, whichever comes first. If an END line follows later with no `-----BEGIN ` in between, everything up to it is removed. |
 | A cut-off key longer than 16384 characters | Glove and Sentinel | Its remaining lines can be written. |
@@ -63,6 +64,56 @@ complete key itself.
 | A bare number under a count word: COUNT, LIMIT, MAX, MIN, SIZE, LEN, LENGTH, TTL, TIMEOUT, AGE, SECONDS, MS, DAYS | Glove and Sentinel | Kept, even beside a secret word (`SECRET_MIN=12345678`, `MS_PASSWORD=12345678`). A number under any other secret-style name is removed. |
 | Per-session folders created before 0.2.2 | Storage | Keep their mode, inside a parent that is now `0700`. Reports, law state, the turn counter and archives are written with the default file mode, relying on those folders; sidecars and before-snapshots are `0600`. |
 | Windows | Storage | File modes do not apply, so the owner-only settings above have no effect: the data dir is only as private as the folder it sits in. |
+
+## Your `.env` values, and the leak check
+
+The trade-off, stated plainly: redaction will sometimes miss a secret.
+Orunmila keeps everything on your machine and sends nothing anywhere, so a
+missed secret sits with the rest of your session data. The risk is a report or
+export you share. Orunmila's part is to say so, and to give you a way to find
+one.
+
+`orunmila leak-check`, run in your project folder, reads that folder's own
+`.env` and `.env.*` files once (`NAME=value` lines, with `export`, quotes and
+backticks; an unquoted value is tried both cut at its first `#` and cut at its
+first ` #`), keeps their values in memory, and
+searches for each value as written, JSON-escaped, HTML-escaped, and as
+Orunmila's report pages escape it in their embedded data, in:
+
+- everything in the data dir (`~/.orunmila`, or `ORUNMILA_HOME`); a symbolic
+  link inside it is listed as not read, never followed,
+- the report files Orunmila writes into the project folder by default
+  (`orunmila-*.html`, `orunmila-*.json` and `.orunmila-feedback/`),
+- any file or folder you name with `--path`.
+
+Every file there is read, whatever its name (a `.env.bak` too), except the
+`.env` files the values came from. An argument it does not understand
+(`--path=file`, a typo) stops it with exit 2 rather than being dropped.
+
+It prints the file, the line and byte offset, the variable's name and the
+value's length, never the value. Exit 1 means at least one value was found:
+rotate that secret. Exit 2 means nothing was checked, a path could not be read,
+or the command failed. Exit 0 means every file was read and no value was found.
+
+What it does not cover:
+
+- It finds only the values it was given. A secret that is not in a top-level
+  `.env` file of the folder it runs in (a nested `config/.env.production`, a
+  key in your shell profile) is not looked for. `--root <dir>` reads another
+  folder's.
+- A value of 4 to 7 characters is looked for only under a name that the rule
+  redacting `NAME=value` assignments treats as a secret's (such as
+  `DB_PASSWORD` or `API_TOKEN`; `APP_PASSPHRASE` is not one), and a shorter
+  one never.
+- Some `.env` forms are not read: a name with `.` or `-`, `NAME: value`, a
+  quoted value over several lines, and a line ended by a lone carriage return.
+- It also reports a value inside a longer word (`pw12` inside `pw123`), so a
+  short value can raise a false alarm. An alarm hides nothing.
+- Output printed to the terminal or piped (`trail --json`, or `json` without
+  `--out`) is not on disk for it to read: pass a saved copy with `--path`.
+  Other encodings (base64, URL encoding) are not searched.
+- You run it by hand, and nothing runs it automatically, so a leak is found
+  when you run the command, not when it happens.
 
 ## Reporting a vulnerability
 

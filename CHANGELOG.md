@@ -90,6 +90,15 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ### Added
 
+- **`orunmila leak-check`: find your `.env` values in what Orunmila stored.**
+  Capture redacts known secret formats, not your `.env` values, so a value in
+  a format it does not know is stored as written, by both witnesses;
+  SECURITY.md now says so. The command reads the project's top-level `.env`
+  files once, when you run it, and searches the data dir, the report files in
+  the project folder and any `--path` for each value (as written, and as JSON,
+  HTML and the report pages escape it). It prints names, files and lines, never
+  values, and exits 1 if any value is found, 2 if nothing was checked or a path
+  was not read. Nothing runs it automatically.
 - **A facts line for the Closeout Gate, off by default
   (`ORUNMILA_FACTS_LINE=1`).** It puts one line from the turn's records above
   the gate's findings, and prints it alone on a judged turn with none: the

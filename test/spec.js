@@ -58,8 +58,8 @@ const FORMATS = [
 
 // --- the deletion sweep (NF85, LD79) ----------------------------------------------
 // A constraint no bad fixture notices can be deleted and every test stays green. The sweep
-// deletes each one in turn. It does not descend into allOf, anyOf, oneOf, not, if, then or
-// else, and leaves out the root's own type, which a fixture patch cannot replace.
+// deletes each one in turn, inside allOf, anyOf, oneOf, not, if, then and else too (LD83), and
+// leaves out the root's own type, which a fixture patch cannot replace.
 
 const SWEPT = ['type', 'enum', 'const', 'minimum', 'minLength', 'maxLength', 'pattern', '$ref', 'items', 'additionalProperties'];
 
@@ -73,6 +73,8 @@ function constraintSites(schema) {
     for (const [n, sub] of Object.entries(s.definitions || {})) visit(sub, [...at, 'definitions', n]);
     if (s.items && typeof s.items === 'object') visit(s.items, [...at, 'items']);
     if (s.additionalProperties && typeof s.additionalProperties === 'object') visit(s.additionalProperties, [...at, 'additionalProperties']);
+    for (const k of ['not', 'if', 'then', 'else']) if (s[k] && typeof s[k] === 'object') visit(s[k], [...at, k]);
+    for (const k of ['allOf', 'anyOf', 'oneOf']) if (Array.isArray(s[k])) s[k].forEach((sub, i) => visit(sub, [...at, k, i]));
   };
   visit(schema, []);
   return sites;
@@ -142,6 +144,9 @@ for (const f of FORMATS) {
       const cases = load(casesFile);
       const sites = constraintSites(schema);
       assert.ok(sites.length > 0, 'no constraints found');
+      const used = new Set();
+      JSON.stringify(schema, (k, v) => (used.add(k), v));
+      for (const k of ['allOf', 'anyOf', 'oneOf', 'not', 'if', 'then', 'else']) if (used.has(k)) assert.ok(sites.some((s) => s.at.includes(k)), `the sweep reaches inside ${k}`);
       const unnoticed = [];
       for (const site of sites) {
         const s = JSON.parse(JSON.stringify(schema));

@@ -731,6 +731,28 @@
       "cause_hint": "toolu_01",
       "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
       "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "generated_ld83_1": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "command",
+        "text": "npm test"
+      },
+      "says": "fingerprinted",
+      "detail": {
+        "tool": "Bash"
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
     }
   },
   "bad": [
@@ -2687,20 +2709,6 @@
       }
     },
     {
-      "name": "/turn of the wrong type on a mark with no source, which no turn rule covers (generated, LD79)",
-      "from": "hook_started",
-      "set": {
-        "/turn": 1.5
-      },
-      "unset": [
-        "/source"
-      ],
-      "error": {
-        "path": "/turn",
-        "keyword": "type"
-      }
-    },
-    {
       "name": "a claim's claim_unconfirmed other than true (LD85)",
       "from": "claim",
       "set": {
@@ -2709,6 +2717,102 @@
       "unset": [],
       "error": {
         "path": "/detail/claim_unconfirmed",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "generated 2 (LD83)",
+      "from": "hook_started",
+      "set": {
+        "/says": "ended"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/exit_status",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "generated 3 (LD83)",
+      "from": "hook_session_ended",
+      "set": {
+        "/target": {}
+      },
+      "unset": [],
+      "error": {
+        "path": "/turn",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "generated 4 (LD83)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/fingerprint_before": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/lines_removed",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "generated 5 (LD83)",
+      "from": "sentinel_modified",
+      "set": {
+        "/says": "claimed"
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/kind",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "generated 6 (LD83)",
+      "from": "sentinel_modified",
+      "set": {
+        "/source": "law_gate"
+      },
+      "unset": [],
+      "error": {
+        "path": "/says",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "generated 7 (LD83)",
+      "from": "sentinel_modified",
+      "set": {
+        "/says": "checked"
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/kind",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "generated 8 (LD83)",
+      "from": "sentinel_modified",
+      "set": {
+        "/says": "prompted"
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/kind",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "generated 9 (LD83)",
+      "from": "sentinel_modified",
+      "set": {
+        "/says": "called"
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/kind",
         "keyword": "const"
       }
     }

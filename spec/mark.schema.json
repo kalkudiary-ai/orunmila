@@ -37,8 +37,7 @@
     },
     "turn": {
       "description": "Every Glove mark, and every law-gate mark, names the agent's turn. Sources that know nothing of turns (sentinel, git, process) write `null`. The session's end belongs to no turn, so its mark writes `null` too.",
-      "$comment": "brief v3 line 255; the session end's null is the agent's choice, LD55 (format change approved by O 2026-11-17)",
-      "type": ["string", "null"],
+      "$comment": "brief v3 line 255; the session end's null is the agent's choice, LD55 (format change approved by O 2026-11-17). Its type is set by the turn rules, allOf/0 to /2, which cover every source (LD87).",
       "minLength": 1
     },
     "sub_agent": {
@@ -99,7 +98,6 @@
     {
       "$comment": "brief v3 line 255: Glove and law-gate marks name the turn, except the session's end (LD55)",
       "if": {
-        "required": ["source"],
         "properties": { "source": { "enum": ["hook", "agent_claim", "law_gate"] } },
         "not": { "$ref": "#/definitions/session_target" }
       },
@@ -112,49 +110,49 @@
     },
     {
       "$comment": "brief v3 line 255: sentinel, git and process write null",
-      "if": { "required": ["source"], "properties": { "source": { "enum": ["sentinel", "git", "process"] } } },
+      "if": { "properties": { "source": { "enum": ["sentinel", "git", "process"] } } },
       "then": { "properties": { "turn": { "type": "null" } } }
     },
     {
       "$comment": "brief v3 line 253: agent_claim is the agent's closing claim",
-      "if": { "required": ["source"], "properties": { "source": { "const": "agent_claim" } } },
+      "if": { "properties": { "source": { "const": "agent_claim" } } },
       "then": { "properties": { "says": { "const": "claimed" } } }
     },
     {
       "$comment": "brief v3 lines 257, 265: the claim stays a claimed mark, with its text",
-      "if": { "required": ["says"], "properties": { "says": { "const": "claimed" } } },
+      "if": { "properties": { "says": { "const": "claimed" } } },
       "then": { "properties": { "target": { "properties": { "kind": { "const": "claim" } } }, "detail": { "required": ["text"] } } }
     },
     {
       "$comment": "brief v3 line 242: each check is a checked mark on the turn, with detail.result",
-      "if": { "required": ["source"], "properties": { "source": { "const": "law_gate" } } },
+      "if": { "properties": { "source": { "const": "law_gate" } } },
       "then": { "properties": { "says": { "const": "checked" } } }
     },
     {
       "$comment": "brief v3 lines 242, 245: checked means the law gate checked a turn",
-      "if": { "required": ["says"], "properties": { "says": { "const": "checked" } } },
+      "if": { "properties": { "says": { "const": "checked" } } },
       "then": {
         "properties": { "source": { "const": "law_gate" }, "target": { "properties": { "kind": { "const": "turn" } } }, "detail": { "required": ["result"] } }
       }
     },
     {
       "$comment": "brief v3 line 346: tick marks have source process",
-      "if": { "required": ["says"], "properties": { "says": { "const": "tick" } } },
+      "if": { "properties": { "says": { "const": "tick" } } },
       "then": { "properties": { "source": { "const": "process" } } }
     },
     {
       "$comment": "agent's choice, LD13: only tick and gap may have a null target",
-      "if": { "required": ["says"], "properties": { "says": { "enum": ["tick", "gap"] } } },
+      "if": { "properties": { "says": { "enum": ["tick", "gap"] } } },
       "else": { "properties": { "target": { "type": "object" } } }
     },
     {
       "$comment": "brief v3 line 341: a gap mark names what was lost",
-      "if": { "required": ["says"], "properties": { "says": { "const": "gap" } } },
+      "if": { "properties": { "says": { "const": "gap" } } },
       "then": { "properties": { "detail": { "required": ["lost"] } } }
     },
     {
       "$comment": "brief v3 line 257: each user prompt is a prompted mark on the turn, with the text in detail.prompt",
-      "if": { "required": ["says"], "properties": { "says": { "const": "prompted" } } },
+      "if": { "properties": { "says": { "const": "prompted" } } },
       "then": { "properties": { "target": { "properties": { "kind": { "const": "turn" } } }, "detail": { "required": ["prompt"] } } }
     },
     {
@@ -169,48 +167,48 @@
     },
     {
       "$comment": "brief v3 line 240: exited marks always carry detail.exit_status",
-      "if": { "required": ["says"], "properties": { "says": { "const": "exited" } } },
+      "if": { "properties": { "says": { "const": "exited" } } },
       "then": { "properties": { "detail": { "required": ["exit_status"] } } },
       "else": { "properties": { "detail": { "not": { "required": ["exit_code"] } } } }
     },
     {
       "$comment": "brief v3 line 259: a command targets { kind: command, text }",
-      "if": { "required": ["source", "says"], "properties": { "source": { "const": "hook" }, "says": { "const": "exited" } } },
+      "if": { "properties": { "source": { "const": "hook" }, "says": { "const": "exited" } } },
       "then": { "properties": { "target": { "properties": { "kind": { "const": "command" } } } } }
     },
     {
       "$comment": "brief v3 lines 245, 264: file changes, the Glove's edit outcomes and the sentinel's marks alike",
-      "if": { "required": ["says"], "properties": { "says": { "enum": ["created", "modified", "deleted", "renamed"] } } },
+      "if": { "properties": { "says": { "enum": ["created", "modified", "deleted", "renamed"] } } },
       "then": { "properties": { "target": { "properties": { "kind": { "enum": ["file", "dir"] } } } } }
     },
     {
       "$comment": "brief v3 line 264: a created mark leaves fingerprint_before out",
-      "if": { "required": ["says"], "properties": { "says": { "const": "created" } } },
+      "if": { "properties": { "says": { "const": "created" } } },
       "then": { "properties": { "detail": { "not": { "required": ["fingerprint_before"] } } } }
     },
     {
       "$comment": "brief v3 lines 259, 261: a read targets the file, or the folder searched",
-      "if": { "required": ["says"], "properties": { "says": { "const": "read" } } },
+      "if": { "properties": { "says": { "const": "read" } } },
       "then": { "properties": { "target": { "properties": { "kind": { "enum": ["file", "dir"] } } }, "detail": { "required": ["read_kind"] } } }
     },
     {
       "$comment": "brief v3 line 259: a network contact targets { kind: network, host, url }",
-      "if": { "required": ["says"], "properties": { "says": { "const": "contacted" } } },
+      "if": { "properties": { "says": { "const": "contacted" } } },
       "then": { "properties": { "target": { "properties": { "kind": { "const": "network" } } } } }
     },
     {
       "$comment": "brief v3 lines 259, 263: any other tool targets { kind: tool, name }; called carries tool_input",
-      "if": { "required": ["says"], "properties": { "says": { "const": "called" } } },
+      "if": { "properties": { "says": { "const": "called" } } },
       "then": { "properties": { "target": { "properties": { "kind": { "const": "tool" } } }, "detail": { "required": ["tool_input"] } } }
     },
     {
       "$comment": "brief v4 line 245: a tampered mark has source process and says what was tampered with",
-      "if": { "required": ["says"], "properties": { "says": { "const": "tampered" } } },
+      "if": { "properties": { "says": { "const": "tampered" } } },
       "then": { "properties": { "source": { "const": "process" }, "detail": { "required": ["what"] } } }
     },
     {
       "$comment": "brief v4 line 265: a renamed mark also carries from, the old path",
-      "if": { "required": ["says"], "properties": { "says": { "const": "renamed" } } },
+      "if": { "properties": { "says": { "const": "renamed" } } },
       "then": { "properties": { "detail": { "required": ["from"] } } }
     }
   ],
@@ -254,13 +252,12 @@
       }
     },
     "glove_tool_mark": {
-      "$comment": "A Glove (source hook) mark about one tool call: started, an outcome verb, or ended on something other than a turn (brief v3 line 258). It names no required keys: the root requires source and says (LD81).",
+      "$comment": "A Glove (source hook) mark about one tool call: started, an outcome verb, or ended on something other than a turn (brief v3 line 258). It names no required keys: the root requires source, says and target (LD81, LD87).",
       "allOf": [{ "properties": { "source": { "const": "hook" } } }],
       "anyOf": [
         { "properties": { "says": { "enum": ["started", "created", "modified", "deleted", "renamed", "exited", "read", "contacted", "called"] } } },
         {
-          "required": ["target"],
-          "properties": { "says": { "const": "ended" }, "target": { "type": "object", "required": ["kind"], "properties": { "kind": { "not": { "enum": ["turn", "session"] } } } } }
+          "properties": { "says": { "const": "ended" }, "target": { "properties": { "kind": { "not": { "enum": ["turn", "session"] } } } } }
         }
       ]
     },
@@ -311,11 +308,11 @@
         "query": { "description": "For a web search, the query goes in `query`.", "$comment": "brief v3 line 259", "type": "string" }
       },
       "allOf": [
-        { "if": { "required": ["kind"], "properties": { "kind": { "enum": ["file", "dir"] } } }, "then": { "required": ["path"] } },
-        { "if": { "required": ["kind"], "properties": { "kind": { "const": "command" } } }, "then": { "required": ["text"] } },
-        { "if": { "required": ["kind"], "properties": { "kind": { "enum": ["turn", "session"] } } }, "then": { "required": ["id"] } },
-        { "if": { "required": ["kind"], "properties": { "kind": { "const": "tool" } } }, "then": { "required": ["name"] } },
-        { "if": { "required": ["kind"], "properties": { "kind": { "const": "network" } } }, "then": { "required": ["host"] } }
+        { "if": { "properties": { "kind": { "enum": ["file", "dir"] } } }, "then": { "required": ["path"] } },
+        { "if": { "properties": { "kind": { "const": "command" } } }, "then": { "required": ["text"] } },
+        { "if": { "properties": { "kind": { "enum": ["turn", "session"] } } }, "then": { "required": ["id"] } },
+        { "if": { "properties": { "kind": { "const": "tool" } } }, "then": { "required": ["name"] } },
+        { "if": { "properties": { "kind": { "const": "network" } } }, "then": { "required": ["host"] } }
       ]
     },
     "detail": {

@@ -2699,6 +2699,18 @@
         "path": "/turn",
         "keyword": "type"
       }
+    },
+    {
+      "name": "a claim's claim_unconfirmed other than true (LD85)",
+      "from": "claim",
+      "set": {
+        "/detail/claim_unconfirmed": false
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/claim_unconfirmed",
+        "keyword": "const"
+      }
     }
   ]
 }

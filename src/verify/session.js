@@ -8,7 +8,9 @@
  * line against its schema (line 1 the session header, the rest marks); the
  * quarantine log's chain; every file kept beside the log that a mark names
  * (missing, or changed since its fingerprint was taken). It loads nothing
- * outside src/verify and spec/, so it can be read in one sitting.
+ * outside src/verify and spec/, so it can be read in one sitting. A field the
+ * spec does not declare leaves a record intact (a reader ignores what it does
+ * not know, brief v3 line 209), and the answer names each one (LD85).
  *
  * A log may run on in parts after a crash cut its last line (spec/hash-chain.md,
  * "A log in parts"; LD57): raw.jsonl, raw.2.jsonl, ... and the same for the
@@ -16,7 +18,7 @@
  * starts with a continuation record naming the cut exactly. A record so
  * continued is intact, and the answer names every cut.
  *
- *   verifySession(dir) -> { ok, words, counts, raw, schema, quarantine, files }
+ *   verifySession(dir) -> { ok, words, counts, raw, schema, quarantine, files, undeclared }
  *   checkLog(dir, 'raw' | 'quarantine') -> one log across its parts:
  *     { ok, parts, file, records: [{ rec, part, line }], cuts: [{ part, line }],
  *       tail, fail }   tail: a cut last line no part continues yet
@@ -27,12 +29,15 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { verifyText } = require('./chain');
-const { compile } = require('./schema');
+const { compile, closed } = require('./schema');
 
 const SPEC = path.join(__dirname, '..', '..', 'spec');
-const load = (f) => compile(JSON.parse(fs.readFileSync(path.join(SPEC, f), 'utf8')));
+const read = (f) => JSON.parse(fs.readFileSync(path.join(SPEC, f), 'utf8'));
+const load = (f) => compile(read(f));
 const checkHeader = load('session-header.schema.json');
 const checkMark = load('mark.schema.json');
+const closedHeader = compile(closed(read('session-header.schema.json')));
+const closedMark = compile(closed(read('mark.schema.json')));
 const checkContinuation = load('continuation.schema.json');
 const REF_SLOTS = ['diff_ref', 'output_ref'];
 const REF = /^sha256:[0-9a-f]{64}$/;
@@ -161,6 +166,14 @@ function verifySession(dir) {
     }
   }
 
+  const undeclared = [];
+  if (schema.ok) {
+    for (const { rec, part, line } of raw.records) {
+      if (isContinuation({ part, line })) continue;
+      for (const e of (part === 1 && line === 1 ? closedHeader : closedMark)(rec)) if (e.keyword === 'additionalProperties') undeclared.push({ part, line, path: e.path });
+    }
+  }
+
   const files = { checked: 0, bad: [] };
   for (const { rec } of marks) {
     const d = rec && rec.detail && typeof rec.detail === 'object' ? rec.detail : {};
@@ -202,11 +215,14 @@ function verifySession(dir) {
       ...raw.cuts.map((c) => `${where('raw log', c.part, c.line)} was cut by a crash and continues in part ${c.part + 1}`),
       ...quarantine.cuts.map((c) => `${where('quarantine log', c.part, c.line)} was cut by a crash and continues in part ${c.part + 1}`),
     ];
+    const fields = undeclared.length
+      ? [`${plural(undeclared.length, 'field', 'fields')} the spec does not declare: ${undeclared.map((u) => `${u.path} at ${where('raw log', u.part, u.line)}`).join(', ')}`]
+      : [];
     words =
       `Record intact: ${plural(counts.marks, 'mark', 'marks')}, ${plural(counts.quarantined, 'quarantined input', 'quarantined inputs')}, ` +
-      `${plural(counts.kept_files, 'kept file', 'kept files')}, unbroken${cuts.map((c) => `; ${c}`).join('')}.`;
+      `${plural(counts.kept_files, 'kept file', 'kept files')}, unbroken${[...cuts, ...fields].map((c) => `; ${c}`).join('')}.`;
   }
-  return { ok: raw.ok && schema.ok && quarantine.ok && files.bad.length === 0, words, counts, raw: summary(raw), schema, quarantine: summary(quarantine), files };
+  return { ok: raw.ok && schema.ok && quarantine.ok && files.bad.length === 0, words, counts, raw: summary(raw), schema, quarantine: summary(quarantine), files, undeclared };
 }
 
 module.exports = { verifySession, checkLog, fileWords };

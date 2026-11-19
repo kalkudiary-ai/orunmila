@@ -383,6 +383,11 @@
         "tool_result_excerpt": { "description": "Only when the user switches result capture on.", "$comment": "brief v3 line 263", "type": "string" },
         "tool_result_size": { "description": "Only when the user switches result capture on.", "$comment": "brief v3 line 263", "type": "integer", "minimum": 0 },
         "text": { "description": "The claim.", "$comment": "brief v3 line 265", "type": "string" },
+        "claim_unconfirmed": {
+          "description": "On a claimed mark: true when the agent's host gave no final text for the turn, so the claim's text could not be confirmed as the turn's own and is empty (N10). Absent otherwise.",
+          "$comment": "agent's choice, LD85: today's turn_claim field (docs/SCHEMA.md), which the A8 adapter already carries",
+          "const": true
+        },
         "prompt": { "description": "The user prompt's text.", "$comment": "brief v3 line 257", "type": "string" },
         "result": {
           "description": "`passed`, `warned`, `blocked` or `skipped`.",

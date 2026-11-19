@@ -11,7 +11,7 @@
  */
 
 const { assert, fs, path, ROOT, it, runAll } = require('./helpers');
-const { compile, SUPPORTED } = require('../src/verify/schema');
+const { compile, closed, SUPPORTED } = require('../src/verify/schema');
 
 const SPEC = path.join(ROOT, 'spec');
 const CASES = path.join(__dirname, 'cases', 'spec');
@@ -156,6 +156,43 @@ for (const f of FORMATS) {
     });
   }
 }
+
+it('LD85: every good fixture of every format names only fields its schema declares, and the closed check catches a planted one', () => {
+  for (const f of FORMATS) {
+    const schema = load(path.join(SPEC, f.schema));
+    const check = compile(closed(schema));
+    const { good } = load(path.join(CASES, f.cases));
+    for (const [name, rec] of Object.entries(good)) assert.deepStrictEqual(check(rec), [], `${f.name} ${name}`);
+    const [first] = Object.values(good);
+    assert.deepStrictEqual(check({ ...first, colour: 'x' }).map((e) => `${e.path} ${e.keyword}`), ['/colour additionalProperties'], f.name);
+    assert.deepStrictEqual(compile(schema)({ ...first, colour: 'x' }), [], `${f.name}: the schema itself stays open (brief v3 line 209)`);
+  }
+});
+
+it('LD85: every mark the A8 adapter writes, of every kind it translates, names only fields the mark schema declares', () => {
+  const { translateEvents } = require('../src/opon/intake/adapters/events-v0');
+  const check = compile(closed(load(path.join(SPEC, 'mark.schema.json'))));
+  const c = { ts: '2026-11-16T09:00:00.000Z', session_id: 's', turn_id: 't1', agent: 'claude-code', source: 'hook', failed: false, call_id: 'c1' };
+  const events = [
+    { ...c, type: 'command_run', command: 'npm test', exit_code: null, stdout_excerpt: 'ok', output_path: null },
+    { ...c, call_id: 'c2', type: 'file_write', path: 'a.js', diff: '' },
+    { ...c, call_id: 'c3', type: 'file_read', path: 'a.js', hash: 'a'.repeat(64), bytes: 3, read_kind: 'full' },
+    { ...c, call_id: 'c4', type: 'file_read', path: 'x', read_kind: 'pattern' },
+    { ...c, call_id: 'c5', type: 'tool_call', tool_name: 'Task', input: {}, result_excerpt: 'r', result_bytes: 1 },
+    { ...c, call_id: 'c6', type: 'network_call', tool_name: 'WebFetch', host: 'h.example', target: 'https://h.example/' },
+    { ...c, call_id: 'c7', type: 'file_write', path: 'b.js', failed: true },
+    { ...c, type: 'user_prompt', text: 'go' },
+    { ...c, type: 'turn_claim', text: '', claim_unconfirmed: true },
+    { ...c, type: 'turn_end' },
+    { ...c, type: 'git_state', branch: 'main', head_sha: 'b'.repeat(40) },
+    { ts: '2026-11-16T09:00:01.000Z', session_id: null, turn_id: null, agent: 'fs-sentinel', source: 'fs-sentinel', type: 'file_write', path: '/w/a.js', rel_path: 'a.js', change_kind: 'modify', hash_before: 'c'.repeat(64), hash_after: 'd'.repeat(64), binary: false, diff: '-a\n+b\n', failed: false },
+  ];
+  const { marks, rejects } = translateEvents(events, { sessionId: 's' });
+  assert.deepStrictEqual(rejects, []);
+  assert.strictEqual(marks.length, events.length - 1, 'the git record joins its command');
+  const sealed = (m) => ({ ...m, seq: 1, mono_ns: '1', prev_hash: 'sha256:' + '0'.repeat(64), hash: 'sha256:' + '0'.repeat(64) });
+  for (const { mark } of marks) assert.deepStrictEqual(check(sealed(mark)), [], `${mark.source} ${mark.says}`);
+});
 
 it("the brief's own example mark (v4 lines 215-232), with its shortened hashes written out in full, is a valid mark", () => {
   const check = compile(load(path.join(SPEC, 'mark.schema.json')));

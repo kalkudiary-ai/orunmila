@@ -798,6 +798,19 @@ const MUTANTS = [
   { id: 'S17 the leak check skips key names', file: 'src/opon/fixtures/strip.js', test: 'test/strip.js',
     from: 'if (!EVENT_KEYS.has(k)) for (const w of words(k)) privateWords.add(w);', to: 'void EVENT_KEYS;',
     fails: ["LD86: a URL's scheme is kept only from a fixed list"] },
+  // LD85: fields the spec does not declare are named, and leave a record intact.
+  { id: 'U1 closed() closes nothing', file: 'src/verify/schema.js', test: 'test/spec.js',
+    from: "if (o.properties && !('additionalProperties' in o)) o.additionalProperties = false;", to: 'void o;',
+    fails: ['LD85: every good fixture of every format names only fields its schema declares'] },
+  { id: 'U2 closed() skips definitions', file: 'src/verify/schema.js', test: 'test/verify.js',
+    from: 'for (const x of Object.values(o.definitions || {})) visit(x);', to: 'void 0;',
+    fails: ['LD85: a mark naming a field the spec does not declare stays intact'] },
+  { id: 'U3 undeclared fields left out of the answer', file: 'src/verify/session.js', test: 'test/verify.js',
+    from: 'unbroken${[...cuts, ...fields]', to: 'unbroken${[...cuts]',
+    fails: ['LD85: a mark naming a field the spec does not declare stays intact'] },
+  { id: 'U4 a continuation record checked as a mark for undeclared fields', file: 'src/verify/session.js', test: 'test/verify.js',
+    from: 'if (isContinuation({ part, line })) continue;\n      for (const e of', to: 'for (const e of',
+    fails: ['LD57: a raw log cut by a crash and continued in part 2 verifies'] },
 ];
 
 function copyRepo(root) {

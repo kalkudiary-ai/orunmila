@@ -276,6 +276,18 @@ it(
   }),
 );
 
+it(
+  'LD85: a mark naming a field the spec does not declare stays intact (a reader ignores it), and the answer names the field',
+  withSession(({ dir }) => {
+    addTo(path.join(dir, 'raw.jsonl'), { ...strip(SPEC.good.hook_read_range), detail: { ...SPEC.good.hook_read_range.detail, colour: 'blue' } });
+    const r = verify(dir);
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    assert.strictEqual(r.stdout.trim(), 'Record intact: 3 marks, 1 quarantined input, 1 kept file, unbroken; 1 field the spec does not declare: /detail/colour at line 4 of the raw log.');
+    const j = JSON.parse(verify(dir, ['--json']).stdout);
+    assert.deepStrictEqual(j.undeclared, [{ part: 1, line: 4, path: '/detail/colour' }]);
+  }),
+);
+
 it('the verifier stays small and separate: src/verify/session.js loads nothing outside src/verify (brief line 699)', () => {
   const { spawnSync } = require('child_process');
   const probe = "require('./src/verify/session'); process.stdout.write(JSON.stringify(Object.keys(require.cache)))";

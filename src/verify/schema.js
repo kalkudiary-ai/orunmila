@@ -14,6 +14,13 @@
  *
  * `path` is a JSON Pointer to the offending value; for a missing required
  * property it points to where that property should be.
+ *
+ *   closed(schema)  a copy in which every object schema reached through
+ *                   properties, definitions or items that names its properties
+ *                   allows no others (LD85). The spec stays open, so a reader
+ *                   ignores fields it does not know (brief v3 line 209); the
+ *                   closed copy is how Orunmila checks that its own writers,
+ *                   fixtures and logs name only declared fields.
  */
 
 const SUPPORTED = [
@@ -142,4 +149,17 @@ function compile(schema) {
   return (record) => validate(schema, schema, record, '', []);
 }
 
-module.exports = { compile, SUPPORTED };
+function closed(schema) {
+  const s = JSON.parse(JSON.stringify(schema));
+  const visit = (o) => {
+    if (typeOf(o) !== 'object') return;
+    if (o.properties && !('additionalProperties' in o)) o.additionalProperties = false;
+    for (const x of Object.values(o.properties || {})) visit(x);
+    for (const x of Object.values(o.definitions || {})) visit(x);
+    if (typeOf(o.items) === 'object') visit(o.items);
+  };
+  visit(s);
+  return s;
+}
+
+module.exports = { compile, closed, SUPPORTED };

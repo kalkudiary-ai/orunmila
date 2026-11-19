@@ -100,6 +100,8 @@ it("dotenv's rules: an inline comment ends an unquoted value, a quoted value end
     ['K_SECRET', 'abcd1234#comment'],
     ['TICK', 'backtick-long-value'],
   ]);
+  // One parser: the values the check looks for are the values the intake redacts (LD98).
+  assert.deepStrictEqual(lc.envEntriesFrom(text).map((e) => e.value), envValuesFrom(text));
 });
 
 it('a .env that is a link to a file is read; one that cannot be read is listed, never skipped in silence', () => {

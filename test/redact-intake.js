@@ -84,6 +84,25 @@ it('LD88: a .env value under 8 characters is used only under a secret name, neve
   assert.deepStrictEqual(envValuesFrom(env), ['longenough1', 'quoted value here', 'pw12x', 'abcd', 'zq9z']);
 });
 
+it("LD98: a .env line is cut by dotenv's rules, so the bare value is redacted, never the value with its comment", () => {
+  const env = [
+    'API_PASSPHRASE=value-long-1 # rotate monthly',
+    'KEY_TWO="quoted long 2"  # note',
+    'K_SECRET=abcd1234#comment',
+    'TICK=`backtick-long-value`',
+    'EMPTY_KEY= # set me later',
+    'DB_PASSWORD=pw12x # short, under a secret name',
+  ].join('\n');
+  // dotenv cuts at any #, a shell at ' #': both values are kept.
+  assert.deepStrictEqual(envValuesFrom(env), ['value-long-1', 'quoted long 2', 'abcd1234', 'abcd1234#comment', 'backtick-long-value', 'pw12x']);
+  const r = redactText('login value-long-1 && psql -W pw12x', envValuesFrom(env));
+  assert.deepStrictEqual(r, { text: 'login [REDACTED:env_value] && psql -W [REDACTED:env_value]', kinds: ['env_value'] });
+  // A # with no space before it starts no comment in a shell: the value is kept. With a space, it is a comment.
+  assert.deepStrictEqual(envValuesFrom('API_TOKEN=#s3cr3t-valu3\nOTHER_KEY=  #comment-only'), ['#s3cr3t-valu3']);
+  // A value's core (trimmed, one pair of quotes off) is kept beside it, as the leak check looked for it before LD98.
+  assert.deepStrictEqual(envValuesFrom(`DB_PASSWORD="  s3cr3t-valu3"\nAPI_TOKEN="'abcdefgh'"`), ['  s3cr3t-valu3', 's3cr3t-valu3', "'abcdefgh'", 'abcdefgh']);
+});
+
 it('LD88: a short .env value is redacted only as a whole word, none under 4 characters; a long one wherever it occurs', () => {
   const r = redactText('psql -W pw12x; pw12xy xpw12x pw12x_1 pw12x-1 DB_PASSWORD=pw12x', ['pw12x']);
   assert.strictEqual(r.text, 'psql -W [REDACTED:env_value]; pw12xy xpw12x pw12x_1 [REDACTED:env_value]-1 DB_PASSWORD=[REDACTED:env_value]');

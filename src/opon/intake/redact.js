@@ -9,8 +9,10 @@
  *                                 values, replaced with [REDACTED:<kind>]
  *   redactMark(mark, envValues)   { mark, kinds }: every string in the mark,
  *                                 with the kinds noted in detail.redactions
- *   envValuesFrom(text)           the values of a `.env`-style file: 8+ chars,
+ *   envEntriesFrom(text)          [{ name, value }] of a `.env`-style file, each
+ *                                 line cut by dotenv's and a shell's rules (LD98): 8+ chars,
  *                                 or 4-7 under a secret name (LD88)
+ *   envValuesFrom(text)           the values of envEntriesFrom
  *   onRedactionList(relPath)      true for `.env` and `.env.*`
  *   fingerprint(relPath, buf, key) keyed HMAC-SHA-256 for a file on the
  *                                 redaction list, plain SHA-256 otherwise
@@ -146,20 +148,61 @@ function redactMark(mark, envValues = []) {
   return { mark: out, kinds };
 }
 
-/** Values from `KEY=VALUE` lines (optional `export `, optional quotes); comments skipped, short values as LD88. */
-function envValuesFrom(text) {
+/**
+ * The name and the values one `.env` line may mean (LD96, LD98). A quoted value
+ * (' " `) ends at the first matching quote followed only by spaces or a
+ * comment. An unquoted value is cut at a `#`: dotenv cuts at any `#`, a shell
+ * only at ` #`, so both are kept; `NAME= #x` (space, then #) is all comment,
+ * `NAME=#x` is `#x` to a shell. Each value's core (trimmed, one pair of ' or "
+ * off) is kept beside it, so a bare inner value is caught too. An empty value
+ * is none.
+ */
+const core = (x) => {
+  const t = x.trim();
+  return t.length >= 2 && (t[0] === '"' || t[0] === "'") && t[t.length - 1] === t[0] ? t.slice(1, -1) : t;
+};
+function dotenvLine(raw) {
+  const line = raw.trim().replace(/^export\s+/, '');
+  const eq = line.indexOf('=');
+  if (eq < 1) return { name: '', values: [] };
+  const name = line.slice(0, eq).trim();
+  const after = line.slice(eq + 1);
+  const v = after.trim();
+  let values = [v];
+  if (v[0] === '"' || v[0] === "'" || v[0] === '`') {
+    for (let end = v.indexOf(v[0], 1); end !== -1; end = v.indexOf(v[0], end + 1)) {
+      if (/^\s*(?:#.*)?$/.test(v.slice(end + 1))) {
+        values = [v.slice(1, end)];
+        break;
+      }
+    }
+  } else if (/^\s+#/.test(after)) {
+    values = []; // `NAME= # comment`: the whole value is a comment
+  } else if (v.includes('#')) {
+    values = [v.slice(0, v.indexOf('#')).trimEnd(), v.slice(0, v.search(/\s#|$/)).trimEnd()];
+  }
+  return { name, values: [...new Set(values.flatMap((x) => [x, core(x)]))].filter(Boolean) };
+}
+
+/**
+ * [{ name, value }] from `KEY=VALUE` lines (optional `export `), each cut as
+ * dotenvLine says; a line whose name is not a shell name (`# KEY=v` gives
+ * `# KEY`) is skipped; short values as LD88. The leak check reads this too,
+ * so it looks for exactly what is redacted (LD98).
+ */
+function envEntriesFrom(text) {
   const out = [];
   for (const raw of String(text).split(/\r?\n/)) {
-    const line = raw.trim().replace(/^export\s+/, '');
-    if (!line || line.startsWith('#')) continue;
-    const eq = line.indexOf('=');
-    const name = line.slice(0, eq).trim();
-    if (eq < 1 || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) continue;
-    let v = line.slice(eq + 1).trim();
-    if (v.length >= 2 && (v[0] === '"' || v[0] === "'") && v[v.length - 1] === v[0]) v = v.slice(1, -1);
-    if (v.length >= MIN_ENV_VALUE || shortSecret(name, v)) out.push(v);
+    const { name, values } = dotenvLine(raw);
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) continue;
+    for (const v of values) if (v.length >= MIN_ENV_VALUE || shortSecret(name, v)) out.push({ name, value: v });
   }
   return out;
+}
+
+/** The values of envEntriesFrom, in order. */
+function envValuesFrom(text) {
+  return envEntriesFrom(text).map((e) => e.value);
 }
 
 function onRedactionList(relPath) {
@@ -175,4 +218,4 @@ function fingerprint(relPath, buf, key) {
   return 'sha256:' + crypto.createHash('sha256').update(buf).digest('hex');
 }
 
-module.exports = { redactText, redactMark, envValuesFrom, onRedactionList, fingerprint, MIN_ENV_VALUE, MIN_SHORT_SECRET };
+module.exports = { redactText, redactMark, envEntriesFrom, envValuesFrom, onRedactionList, fingerprint, MIN_ENV_VALUE, MIN_SHORT_SECRET };

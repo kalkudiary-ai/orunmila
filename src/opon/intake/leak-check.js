@@ -6,10 +6,9 @@
  * exact values of a project's `.env` files, with no word rules, and reports
  * where each one is by its name, never its value.
  *
- *   envEntriesFrom(text)         [{ name, value }]: the values the intake
- *                                redacts (envValuesFrom, LD88), with their names;
- *                                a line is first cut by dotenv's rules (a quoted
- *                                value ends at its quote, an unquoted one at ` #`)
+ *   envEntriesFrom(text)         [{ name, value }]: the intake's own parser
+ *                                (redact.js, LD98), so the check looks for
+ *                                exactly the values the intake redacts
  *   readEnvEntries(root)         { entries: [{ names, value }], files, unreadable }:
  *                                root's own `.env` and `.env.*` files (top level;
  *                                a symbolic link to a file is followed), merged by value
@@ -32,7 +31,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { envValuesFrom, onRedactionList } = require('./redact');
+const { envEntriesFrom, onRedactionList } = require('./redact');
 
 const CHUNK = 16 * 1024 * 1024;
 const HTML = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -40,46 +39,6 @@ const html = (s) => s.replace(/[&<>"']/g, (c) => HTML[c]);
 const json = (s) => JSON.stringify(s).slice(1, -1);
 const U = { '<': '\\u003c', '>': '\\u003e', '&': '\\u0026' };
 const scriptSafe = (s, chars) => s.replace(chars, (c) => U[c]);
-
-/**
- * The `NAME=value` lines a `.env` line may mean, or []. A quoted value (' " `)
- * ends at the first matching quote followed only by spaces or a comment. An
- * unquoted value is cut at a `#`: dotenv cuts at any `#`, a shell only at ` #`,
- * so both are tried; a value that is then empty is none.
- */
-function dotenvLines(raw) {
-  const line = raw.trim().replace(/^export\s+/, '');
-  const eq = line.indexOf('=');
-  if (eq < 1) return [];
-  const name = line.slice(0, eq).trim();
-  const v = line.slice(eq + 1).trim();
-  let values = [v];
-  if (v[0] === '"' || v[0] === "'" || v[0] === '`') {
-    for (let end = v.indexOf(v[0], 1); end !== -1; end = v.indexOf(v[0], end + 1)) {
-      if (/^\s*(?:#.*)?$/.test(v.slice(end + 1))) {
-        values = [v.slice(1, end)];
-        break;
-      }
-    }
-  } else if (v[0] === '#') {
-    values = []; // `NAME= # comment`: the whole value is a comment
-  } else if (v.includes('#')) {
-    values = [v.slice(0, v.indexOf('#')).trimEnd(), v.slice(0, v.search(/\s#|$/)).trimEnd()];
-  }
-  return [...new Set(values)].filter(Boolean).map((x) => `${name}=${x}`);
-}
-
-/** Entries for the values envValuesFrom keeps from those lines, so the rules are the intake's (LD88). */
-function envEntriesFrom(text) {
-  const out = [];
-  for (const raw of String(text).split(/\r?\n/)) {
-    for (const l of dotenvLines(raw)) {
-      const [value] = envValuesFrom(l);
-      if (value !== undefined) out.push({ name: l.slice(0, l.indexOf('=')), value });
-    }
-  }
-  return out;
-}
 
 function readEnvEntries(root) {
   const byValue = new Map();

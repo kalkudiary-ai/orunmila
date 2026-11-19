@@ -254,10 +254,10 @@ it('orunmila leak-check exits 0 when clean, and 2 when nothing was checked or a 
     const none = run(CLI, { args: ['leak-check'], env, cwd: work });
     assert.strictEqual(none.status, 2, none.stdout);
     assert.ok(none.stdout.includes('No readable .env file') && none.stdout.includes('Nothing was checked.'), none.stdout);
-    fs.writeFileSync(path.join(work, '.env'), 'DEBUG=true\nPORT=3000\n');
+    fs.writeFileSync(path.join(work, '.env'), 'DEBUG=true\nPORT=3000\nFEATURE_FLAG=undefined\n');
     const short = run(CLI, { args: ['leak-check'], env, cwd: work });
     assert.strictEqual(short.status, 2, short.stdout);
-    assert.ok(short.stdout.includes('No value in .env is long enough'), short.stdout);
+    assert.ok(short.stdout.includes('No value in .env can be checked') && short.stdout.includes('are not looked for'), short.stdout);
     fs.writeFileSync(path.join(work, '.env'), ENV);
     fs.writeFileSync(path.join(home, 'events.jsonl'), '{"type":"user_prompt","text":"hi"}\n');
     // The project folder itself, .env included: the .env files are never scanned.

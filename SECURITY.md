@@ -105,6 +105,11 @@ What it does not cover:
   redacting `NAME=value` assignments treats as a secret's (such as
   `DB_PASSWORD` or `API_TOKEN`; `APP_PASSPHRASE` is not one), and a shorter
   one never.
+- A value that, trimmed and with one pair of `'` or `"` quotes taken off, is
+  the whole word `true`, `false`, `yes`, `no`, `on`, `off`, `null`, `none`,
+  `nil` or `undefined` (in any case) is never looked for and never used to
+  redact, at any length: these words fill ordinary text and code. A real
+  `DB_PASSWORD=undefined` is not looked for.
 - Some `.env` forms are not read: a name with `.` or `-`, `NAME: value`, a
   quoted value over several lines, and a line ended by a lone carriage return.
 - It also reports a value inside a longer word (`pw12` inside `pw123`), so a

@@ -1099,7 +1099,7 @@ function leakCheck() {
   for (const u of envUnread) console.log(`NOT READ  ${u}`);
   if (!entries.length) {
     console.log(envFiles.length
-      ? `No value in ${envFiles.join(', ')} is long enough to check (8+ characters, or 4+ under a secret name).`
+      ? `No value in ${envFiles.join(', ')} can be checked (it needs 8+ characters, or 4+ under a secret name; true, false, null, undefined and the like are not looked for).`
       : `No readable .env file in ${root}: there is nothing to check against.`);
     console.log('Nothing was checked.');
     process.exitCode = 2;

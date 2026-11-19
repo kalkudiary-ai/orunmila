@@ -98,7 +98,9 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   the project folder and any `--path` for each value (as written, and as JSON,
   HTML and the report pages escape it). It prints names, files and lines, never
   values, and exits 1 if any value is found, 2 if nothing was checked or a path
-  was not read. Nothing runs it automatically.
+  was not read. Nothing runs it automatically. A value that is only `true`,
+  `false`, `null`, `undefined` or a word like them is not looked for
+  (SECURITY.md lists them).
 - **A facts line for the Closeout Gate, off by default
   (`ORUNMILA_FACTS_LINE=1`).** It puts one line from the turn's records above
   the gate's findings, and prints it alone on a judged turn with none: the

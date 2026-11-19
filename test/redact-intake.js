@@ -103,6 +103,19 @@ it("LD98: a .env line is cut by dotenv's rules, so the bare value is redacted, n
   assert.deepStrictEqual(envValuesFrom(`DB_PASSWORD="  s3cr3t-valu3"\nAPI_TOKEN="'abcdefgh'"`), ['  s3cr3t-valu3', 's3cr3t-valu3', "'abcdefgh'", 'abcdefgh']);
 });
 
+it('LD100: a no-value word (undefined, null, true, ...) is never a value at any length, padded or quoted', () => {
+  const env = ['API_KEY=undefined', 'API_TOKEN=" undefined "', 'DB_PASSWORD="  null  "', "X_SECRET='  UNDEFINED'", 'APP_PASSWORD="  true  "'].join('\n');
+  assert.deepStrictEqual(envValuesFrom(env), []);
+  assert.deepStrictEqual(redactText('x === undefined;  null  ', envValuesFrom(env)), { text: 'x === undefined;  null  ', kinds: [] });
+  // A second pair of quotes inside the first: still the word, as code writes it ('undefined', "null").
+  const nested = [`API_KEY="'undefined'"`, `DB_PASSWORD=" 'null' "`, `API_TOKEN='"null"'`].join('\n');
+  assert.deepStrictEqual(envValuesFrom(nested), []);
+  const js = `typeof b === 'undefined' || a === 'null' || "null"`;
+  assert.deepStrictEqual(redactText(js, envValuesFrom(nested)), { text: js, kinds: [] });
+  // Only the whole word: a value that holds one is still a value, and a placeholder under a secret name still is (LD88).
+  assert.deepStrictEqual(envValuesFrom('API_KEY=undefined-1x\nPASSWORD=password\nAPI_TOKEN="null-token"'), ['undefined-1x', 'password', 'null-token']);
+});
+
 it('LD88: a short .env value is redacted only as a whole word, none under 4 characters; a long one wherever it occurs', () => {
   const r = redactText('psql -W pw12x; pw12xy xpw12x pw12x_1 pw12x-1 DB_PASSWORD=pw12x', ['pw12x']);
   assert.strictEqual(r.text, 'psql -W [REDACTED:env_value]; pw12xy xpw12x pw12x_1 [REDACTED:env_value]-1 DB_PASSWORD=[REDACTED:env_value]');

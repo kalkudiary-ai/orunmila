@@ -11,7 +11,8 @@
  *                                 with the kinds noted in detail.redactions
  *   envEntriesFrom(text)          [{ name, value }] of a `.env`-style file, each
  *                                 line cut by dotenv's and a shell's rules (LD98): 8+ chars,
- *                                 or 4-7 under a secret name (LD88)
+ *                                 or 4-7 under a secret name (LD88); never a
+ *                                 no-value word such as null or undefined (LD100)
  *   envValuesFrom(text)           the values of envEntriesFrom
  *   onRedactionList(relPath)      true for `.env` and `.env.*`
  *   fingerprint(relPath, buf, key) keyed HMAC-SHA-256 for a file on the
@@ -28,9 +29,10 @@ const { redactString, PREFIXED } = require('../../store/secrets');
 // LD88 (replaces LD30). A value of 8+ characters is redacted wherever it
 // occurs. A shorter one (4-7) is kept only under a name secrets.js's own
 // secret_assignment rule calls a secret (SECRET, TOKEN, PASSWORD, ...), never a
-// boolean, a no-value word (null, none) or a bare number under a count word
-// (TOKEN_TTL=3600), and is redacted only as a whole word, so `pw12` hides in
-// `-W pw12` but not in `pw123`. A JSON escape (`\b \f \n \r \t`, or `\u` and
+// bare number under a count word (TOKEN_TTL=3600), and is redacted only as a
+// whole word, so `pw12` hides in `-W pw12` but not in `pw123`. A value whose
+// core (trimmed, then one pair of ' or " off) is a whole boolean or no-value
+// word (true, null, undefined) is no value, at any length (LD100). A JSON escape (`\b \f \n \r \t`, or `\u` and
 // four hex digits) before it counts as a boundary, and a value's own non-word
 // edge needs none; a short value with no letter or digit is not used (LD91).
 // An escape is an odd run of backslashes, and an escape's letter is never the
@@ -95,10 +97,9 @@ function secretName(name) {
   return Boolean(m) && m.index === 0 && m[1] === prefix;
 }
 
-/** A 4-7 character value worth redacting: under a secret name, not a boolean, not a count. */
+/** A 4-7 character value worth redacting: under a secret name, not a count (no-value words: envEntriesFrom, LD100). */
 function shortSecret(name, v) {
   if (v.length < MIN_SHORT_SECRET || !secretName(name)) return false;
-  if (NO_VALUE.test(v)) return false;
   return !KEEP_COUNT(`${name.toUpperCase()}=`, v);
 }
 
@@ -187,15 +188,19 @@ function dotenvLine(raw) {
 /**
  * [{ name, value }] from `KEY=VALUE` lines (optional `export `), each cut as
  * dotenvLine says; a line whose name is not a shell name (`# KEY=v` gives
- * `# KEY`) is skipped; short values as LD88. The leak check reads this too,
- * so it looks for exactly what is redacted (LD98).
+ * `# KEY`) is skipped; short values as LD88; a no-value word is none
+ * (LD100). The leak check reads this too, so it looks for exactly what is
+ * redacted (LD98).
  */
 function envEntriesFrom(text) {
   const out = [];
   for (const raw of String(text).split(/\r?\n/)) {
     const { name, values } = dotenvLine(raw);
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) continue;
-    for (const v of values) if (v.length >= MIN_ENV_VALUE || shortSecret(name, v)) out.push({ name, value: v });
+    for (const v of values) {
+      if (NO_VALUE.test(core(v))) continue; // LD100: the core is a no-value word, at any length
+      if (v.length >= MIN_ENV_VALUE || shortSecret(name, v)) out.push({ name, value: v });
+    }
   }
   return out;
 }

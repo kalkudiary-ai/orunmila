@@ -30,7 +30,9 @@ const { redactString, PREFIXED } = require('../../store/secrets');
 // (TOKEN_TTL=3600), and is redacted only as a whole word, so `pw12` hides in
 // `-W pw12` but not in `pw123`. A JSON escape (`\b \f \n \r \t`, or `\u` and
 // four hex digits) before it counts as a boundary, and a value's own non-word
-// edge needs none; a short value with no letter or digit is not used (LD91). Under 4 characters
+// edge needs none; a short value with no letter or digit is not used (LD91).
+// An escape is an odd run of backslashes, and an escape's letter is never the
+// start of a value (LD92). Under 4 characters
 // nothing is redacted by value: it would hit ordinary text everywhere, and
 // patterns may still catch it.
 const MIN_ENV_VALUE = 8;
@@ -40,11 +42,49 @@ const REDACTED = `[REDACTED:${ENV_KIND}]`;
 const [, SECRET_ASSIGNMENT, KEEP_COUNT] = PREFIXED.find(([kind]) => kind === 'secret_assignment');
 const NO_VALUE = /^(?:true|false|yes|no|on|off|null|none|nil|undefined)$/i;
 const WORD = /[A-Za-z0-9_]/;
-const BEFORE = String.raw`(?<![A-Za-z0-9_])|(?<=\\[bfnrt]|\\u[0-9A-Fa-f]{4})`; // after a non-word, or after a JSON escape: \n, \t, \u00e9 (LD91)
-const wholeWord = (v) => {
-  const body = v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`${WORD.test(v[0]) ? `(?:${BEFORE})` : ''}${body}${WORD.test(v[v.length - 1]) ? '(?![A-Za-z0-9_])' : ''}`, 'g');
+// LD92: an escape is a backslash run of odd length, so `\\` (an escaped
+// backslash) starts none. The character at i is escaped when an odd run ends
+// just before it.
+const HEX4 = /^[0-9A-Fa-f]{4}$/;
+const escapedAt = (s, i) => {
+  let k = 0;
+  while (i - 1 - k >= 0 && s[i - 1 - k] === '\\') k++;
+  return k % 2 === 1;
 };
+// A JSON escape's letter sits at i: \b \f \n \r \t, or \u and four hex digits.
+const escapeLetterAt = (s, i) => 'bfnrt'.includes(s[i]) || (s[i] === 'u' && HEX4.test(s.slice(i + 1, i + 5)));
+// A JSON escape ends just before i (LD91), counted from a real escape (LD92).
+const escapeEndsAt = (s, i) => ('bfnrt'.includes(s[i - 1]) && escapedAt(s, i - 1))
+  || (i >= 5 && s[i - 5] === 'u' && HEX4.test(s.slice(i - 4, i)) && escapedAt(s, i - 5));
+// Before a value at i: a non-word, or the end of a JSON escape. A value whose
+// first letter is an escape's own (`\n123` for n123) is not there: that n is
+// the escape's. Plain text cannot be told from JSON, so `C:\n123` keeps n123:
+// a declared miss, never a damaged record (LD92).
+function boundaryBefore(s, i) {
+  if (i === 0) return true;
+  if (escapedAt(s, i)) return !escapeLetterAt(s, i);
+  return !WORD.test(s[i - 1]) || escapeEndsAt(s, i);
+}
+// Each occurrence is tested where it stands, stepping one character past a miss,
+// so a value inside a longer word never hides a later whole-word one.
+function replaceWholeWord(s, v) {
+  const needBefore = WORD.test(v[0]);
+  const needAfter = WORD.test(v[v.length - 1]);
+  let out = '';
+  let from = 0;
+  let i = s.indexOf(v);
+  while (i !== -1) {
+    const end = i + v.length;
+    if ((!needBefore || boundaryBefore(s, i)) && (!needAfter || end === s.length || !WORD.test(s[end]))) {
+      out += s.slice(from, i) + REDACTED;
+      from = end;
+      i = s.indexOf(v, end);
+    } else {
+      i = s.indexOf(v, i + 1);
+    }
+  }
+  return out + s.slice(from);
+}
 
 /** True when secrets.js's secret_assignment rule reads NAME= as a secret's name. */
 function secretName(name) {
@@ -68,7 +108,7 @@ function redactText(text, envValues = []) {
     .filter((v) => typeof v === 'string' && (v.length >= MIN_ENV_VALUE || (v.length >= MIN_SHORT_SECRET && /[A-Za-z0-9]/.test(v))))
     .sort((a, b) => b.length - a.length);
   for (const v of values) {
-    const next = v.length >= MIN_ENV_VALUE ? out.split(v).join(REDACTED) : out.replace(wholeWord(v), () => REDACTED);
+    const next = v.length >= MIN_ENV_VALUE ? out.split(v).join(REDACTED) : replaceWholeWord(out, v);
     if (next !== out) {
       out = next;
       kinds.add(ENV_KIND);

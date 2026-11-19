@@ -110,6 +110,25 @@ it("LD91: only JSON's own escapes are a boundary, and a short value needs a lett
   assert.deepStrictEqual(redactText('psql -W 4821 ok', ['4821']), { text: 'psql -W [REDACTED:env_value] ok', kinds: ['env_value'] });
 });
 
+it('LD92: an escape is a backslash run of odd length; an escaped backslash starts none, and an escape letter is never part of a value', () => {
+  const kept = (text, v) => assert.deepStrictEqual(redactText(text, [v]), { text, kinds: [] }, text);
+  const hid = (text, v, want) => assert.deepStrictEqual(redactText(text, [v]), { text: want, kinds: ['env_value'] }, text);
+  // \\ is one backslash, so the n after it is a letter of the word npw12x.
+  kept('C:\\\\npw12x', 'pw12x');
+  kept('C:\\\\u00e9pw12x', 'pw12x');
+  // The n of \n belongs to the escape: a newline then 123 is not the value n123.
+  kept('line1\\n123', 'n123');
+  kept('a\\t0k3', 't0k3');
+  kept('a\\u00e9', 'u00e9');
+  // A miss inside a longer word does not hide a whole-word occurrence that overlaps it.
+  hid('xab-ab-ab', 'ab-ab', 'xab-[REDACTED:env_value]');
+  // After an escaped backslash the value is a whole word; three backslashes are \\ then \n.
+  hid('C:\\\\n123', 'n123', 'C:\\\\[REDACTED:env_value]');
+  hid('C:\\\\pw12x', 'pw12x', 'C:\\\\[REDACTED:env_value]');
+  hid('a\\\\\\npw12x', 'pw12x', 'a\\\\\\n[REDACTED:env_value]');
+  hid('a\\\\\\u00e9pw12x', 'pw12x', 'a\\\\\\u00e9[REDACTED:env_value]');
+});
+
 it(
   'LD88: a short secret from a .env file reaches no file of the session log; the redaction is noted',
   withLog({ envValues: envValuesFrom('DB_PASSWORD=pw12x\n') }, (log, dir) => {

@@ -8,6 +8,8 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ## [Unreleased]
 
+## [0.2.3] — 2026-11-19
+
 ### Fixed
 
 - **A Stop with nothing before it is judged on its own turn (NF62).** Claude
@@ -474,7 +476,8 @@ renders the result as a colored map of the codebase.
 - Zero runtime dependencies; no network calls by the tool itself; no account
   or API key. Everything stays local in `~/.orunmila/`.
 
-[Unreleased]: https://github.com/kalkudiary-ai/orunmila/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/kalkudiary-ai/orunmila/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/kalkudiary-ai/orunmila/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/kalkudiary-ai/orunmila/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/kalkudiary-ai/orunmila/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/kalkudiary-ai/orunmila/compare/v0.1.0...v0.2.0

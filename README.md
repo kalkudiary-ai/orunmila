@@ -629,9 +629,8 @@ habit it exists to break.
 
 **0.2.3 fixes the Closeout Gate judging stale text.** When Claude Code's Stop
 hook fired, the gate could block a turn on a sentence the agent had already
-replaced, or judge a claim against the previous turn's records. It now takes
-the claim from the Stop payload and finds its own turn whichever hook runs
-first. `orunmila laws --check` shows what the live gate did: turns checked,
+replaced. It now takes the claim from the Stop payload.
+`orunmila laws --check` shows what the live gate did: turns checked,
 skipped and blocked. Details in the
 [0.2.3 changelog](CHANGELOG.md#023--2026-11-19).
 

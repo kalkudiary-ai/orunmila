@@ -97,6 +97,19 @@ it('LD88: a short .env value is redacted only as a whole word, none under 4 char
   assert.deepStrictEqual(redactText('xlongenough1x', ['longenough1']), { text: 'x[REDACTED:env_value]x', kinds: ['env_value'] });
 });
 
+it("LD91: only JSON's own escapes are a boundary, and a short value needs a letter or digit", () => {
+  // \u takes four hex digits, so a hex-only value inside it stays; the same value after it is redacted.
+  assert.deepStrictEqual(redactText('{"u": "\\u00e9 00e9"}', ['00e9']), { text: '{"u": "\\u00e9 [REDACTED:env_value]"}', kinds: ['env_value'] });
+  // A backslash and a letter that is not a JSON escape is no boundary.
+  assert.deepStrictEqual(redactText('dir\\spw12.txt', ['pw12']), { text: 'dir\\spw12.txt', kinds: [] });
+  // Each of JSON's letter escapes is one.
+  assert.strictEqual(redactText('"\\bpw12x\\fpw12x\\npw12x\\rpw12x\\tpw12x"', ['pw12x']).text, `"${'\\b \\f \\n \\r \\t'.split(' ').map((e) => `${e}[REDACTED:env_value]`).join('')}"`);
+  // A short value of non-word characters only would match anywhere; it is not used.
+  assert.deepStrictEqual(redactText('a ---- b ------', ['----']), { text: 'a ---- b ------', kinds: [] });
+  // A digit is enough: a PIN is still redacted.
+  assert.deepStrictEqual(redactText('psql -W 4821 ok', ['4821']), { text: 'psql -W [REDACTED:env_value] ok', kinds: ['env_value'] });
+});
+
 it(
   'LD88: a short secret from a .env file reaches no file of the session log; the redaction is noted',
   withLog({ envValues: envValuesFrom('DB_PASSWORD=pw12x\n') }, (log, dir) => {

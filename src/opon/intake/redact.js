@@ -28,8 +28,9 @@ const { redactString, PREFIXED } = require('../../store/secrets');
 // secret_assignment rule calls a secret (SECRET, TOKEN, PASSWORD, ...), never a
 // boolean, a no-value word (null, none) or a bare number under a count word
 // (TOKEN_TTL=3600), and is redacted only as a whole word, so `pw12` hides in
-// `-W pw12` but not in `pw123`. An escape in JSON text (`\npw12`) counts as a
-// boundary, and a value's own non-word edge needs none. Under 4 characters
+// `-W pw12` but not in `pw123`. A JSON escape (`\b \f \n \r \t`, or `\u` and
+// four hex digits) before it counts as a boundary, and a value's own non-word
+// edge needs none; a short value with no letter or digit is not used (LD91). Under 4 characters
 // nothing is redacted by value: it would hit ordinary text everywhere, and
 // patterns may still catch it.
 const MIN_ENV_VALUE = 8;
@@ -39,7 +40,7 @@ const REDACTED = `[REDACTED:${ENV_KIND}]`;
 const [, SECRET_ASSIGNMENT, KEEP_COUNT] = PREFIXED.find(([kind]) => kind === 'secret_assignment');
 const NO_VALUE = /^(?:true|false|yes|no|on|off|null|none|nil|undefined)$/i;
 const WORD = /[A-Za-z0-9_]/;
-const BEFORE = String.raw`(?<![A-Za-z0-9_])|(?<=\\[A-Za-z]|\\u[0-9A-Fa-f]{4})`; // after a non-word, or after \n, \t, \u00e9
+const BEFORE = String.raw`(?<![A-Za-z0-9_])|(?<=\\[bfnrt]|\\u[0-9A-Fa-f]{4})`; // after a non-word, or after a JSON escape: \n, \t, \u00e9 (LD91)
 const wholeWord = (v) => {
   const body = v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(`${WORD.test(v[0]) ? `(?:${BEFORE})` : ''}${body}${WORD.test(v[v.length - 1]) ? '(?![A-Za-z0-9_])' : ''}`, 'g');
@@ -63,7 +64,9 @@ function redactText(text, envValues = []) {
   if (typeof text !== 'string') return { text, kinds: [] };
   const kinds = new Set();
   let out = text;
-  const values = [...new Set(envValues)].filter((v) => typeof v === 'string' && v.length >= MIN_SHORT_SECRET).sort((a, b) => b.length - a.length);
+  const values = [...new Set(envValues)]
+    .filter((v) => typeof v === 'string' && (v.length >= MIN_ENV_VALUE || (v.length >= MIN_SHORT_SECRET && /[A-Za-z0-9]/.test(v))))
+    .sort((a, b) => b.length - a.length);
   for (const v of values) {
     const next = v.length >= MIN_ENV_VALUE ? out.split(v).join(REDACTED) : out.replace(wholeWord(v), () => REDACTED);
     if (next !== out) {

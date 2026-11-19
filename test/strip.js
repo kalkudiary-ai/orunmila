@@ -144,6 +144,27 @@ it("LD86: a URL's scheme is kept only from a fixed list, and the leak check read
   assert.ok(leaks.includes('zorbscheme') && leaks.includes('zorbkey'), JSON.stringify(leaks));
 });
 
+it("LD90: a URL keeps its structure: userinfo and fragment as placeholders, an opaque URL with no //, an empty host empty", () => {
+  const targets = [
+    'https://alice:hunter2pw@intranet.acme.example:8443/payroll/rates?q=acme#acme-section',
+    'https://:onlypw@acme.example/',
+    'mailto:alice@acme.example',
+    'file:///Users/alice/acme/notes.md',
+    'urn:acme:payroll',
+  ];
+  const raw = targets.map((target, i) => ({ ...RAW[4], call_id: `url${i}`, target }));
+  const s = stripEvents(raw);
+  const out = s.events.map((e) => e.target);
+  assert.match(out[0], /^https:\/\/a[0-9]+:x{9}@h[0-9]+\.example\/s[0-9]+\/s[0-9]+\?x+#x{12}$/);
+  assert.match(out[1], /^https:\/\/:x{6}@h[0-9]+\.example\/$/);
+  assert.match(out[2], /^mailto:s[0-9]+$/);
+  assert.match(out[3], /^file:\/\/\/s[0-9]+\/s[0-9]+\/s[0-9]+\/s[0-9]+$/);
+  assert.match(out[4], /^a[0-9]+:s[0-9]+$/);
+  const text = JSON.stringify(s.events).toLowerCase();
+  for (const p of ['alice', 'hunter2pw', 'onlypw', 'acme', 'intranet', 'payroll', 'section', 'notes']) assert.ok(!text.includes(p), p);
+  assert.deepStrictEqual(leakCheck(raw, s), []);
+});
+
 it('relevance at the mark level: the stripped events translate to the same marks, kinds and counts as the raw ones', () => {
   const stripped = stripEvents(RAW);
   const r = relevance(RAW, stripped.events);

@@ -145,7 +145,11 @@ function stripEvents(events) {
     }
     const p = url.pathname.split('/').map((s) => (s ? ph('s', s) : s)).join('/');
     const scheme = SCHEMES.has(url.protocol) ? keep(url.protocol) : ph('a', url.protocol.slice(0, -1)) + ':'; // LD86
-    return `${scheme}//${ph('h', url.host)}${p}${url.search ? '?' + mask(url.search.slice(1)) : ''}`;
+    const tail = `${p}${url.search ? '?' + mask(url.search.slice(1)) : ''}${url.hash ? '#' + mask(url.hash.slice(1)) : ''}`;
+    // LD90: an opaque URL (mailto:, urn:) has no authority, so no //; an empty host stays empty (file:///).
+    if (!url.href.slice(url.protocol.length).startsWith('//')) return `${scheme}${tail}`;
+    const user = url.username || url.password ? `${url.username ? ph('a', url.username) : ''}${url.password ? ':' + mask(url.password) : ''}@` : '';
+    return `${scheme}//${user}${url.host ? ph('h', url.host) : ''}${tail}`;
   };
 
   const stripValue = (v) => {

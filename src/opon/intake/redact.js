@@ -14,6 +14,7 @@
  *                                 or 4-7 under a secret name (LD88); never a
  *                                 no-value word such as null or undefined (LD100)
  *   envValuesFrom(text)           the values of envEntriesFrom
+ *   usedValue(v)                  true for a value redactText uses (LD91)
  *   onRedactionList(relPath)      true for `.env` and `.env.*`
  *   fingerprint(relPath, buf, key) keyed HMAC-SHA-256 for a file on the
  *                                 redaction list, plain SHA-256 otherwise
@@ -103,12 +104,15 @@ function shortSecret(name, v) {
   return !KEEP_COUNT(`${name.toUpperCase()}=`, v);
 }
 
+/** A `.env` value redactText uses: 8+ characters, or 4-7 with a letter or digit (LD91). The session log's leak check looks for these (LD101). */
+const usedValue = (v) => typeof v === 'string' && (v.length >= MIN_ENV_VALUE || (v.length >= MIN_SHORT_SECRET && /[A-Za-z0-9]/.test(v)));
+
 function redactText(text, envValues = []) {
   if (typeof text !== 'string') return { text, kinds: [] };
   const kinds = new Set();
   let out = text;
   const values = [...new Set(envValues)]
-    .filter((v) => typeof v === 'string' && (v.length >= MIN_ENV_VALUE || (v.length >= MIN_SHORT_SECRET && /[A-Za-z0-9]/.test(v))))
+    .filter(usedValue)
     .sort((a, b) => b.length - a.length);
   for (const v of values) {
     const next = v.length >= MIN_ENV_VALUE ? out.split(v).join(REDACTED) : replaceWholeWord(out, v);
@@ -223,4 +227,4 @@ function fingerprint(relPath, buf, key) {
   return 'sha256:' + crypto.createHash('sha256').update(buf).digest('hex');
 }
 
-module.exports = { redactText, redactMark, envEntriesFrom, envValuesFrom, onRedactionList, fingerprint, MIN_ENV_VALUE, MIN_SHORT_SECRET };
+module.exports = { redactText, redactMark, envEntriesFrom, envValuesFrom, usedValue, onRedactionList, fingerprint, MIN_ENV_VALUE, MIN_SHORT_SECRET };

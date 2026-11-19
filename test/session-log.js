@@ -443,4 +443,110 @@ it(
   }),
 );
 
+// --- W1: the leak check after redaction (LD101) ---------------------------------------
+
+const QUOTED = 'tok"en-not-a-real-value'; // a quote: JSON text that holds it escapes it, so redaction cannot see it
+const ENTRIES = [{ names: ['API_TOKEN'], value: QUOTED }];
+const hit = (at, names, value, count = 1) => ({ ...at, names, length: value.length, count });
+const jsonText = () => {
+  const m = mark('claim');
+  m.detail.text = JSON.stringify({ k: QUOTED }); // a tool result holding JSON: the value is escaped inside it
+  return m;
+};
+
+function withLeakLog(opts, fn) {
+  return () => {
+    const dir = path.join(tmpDir(), 'ses');
+    try {
+      fn(createSessionLog(dir, header(), opts), dir);
+    } finally {
+      rmrf(path.dirname(dir));
+    }
+  };
+}
+
+it(
+  'LD101: a .env value that survives redaction is reported by name, length and count, and the mark is still written; the report never holds the value',
+  withLeakLog({ envEntries: ENTRIES }, (log, dir) => {
+    const m = jsonText();
+    const r = log.append(m);
+    assert.deepStrictEqual(r, { ok: true, seq: 1, leaks: [hit({ log: 'raw', seq: 1 }, ['API_TOKEN'], QUOTED)] });
+    assert.strictEqual(readLines(path.join(dir, 'raw.jsonl'))[1].detail.text, m.detail.text, 'written as received');
+    assert.deepStrictEqual(log.leaks(), r.leaks);
+    assert.ok(!JSON.stringify(log.leaks()).includes('en-not-a-real'), 'no part of the value in the report');
+  }),
+);
+
+it(
+  'LD101: a value in a quarantined input, and in a kept file that is not text, is reported where it was written',
+  withLeakLog({ envEntries: ENTRIES }, (log, dir) => {
+    // redactMark redacts strings, not object keys: a key holding a value is written as it came.
+    const q = log.append({ ...mark('hook_started'), says: 'edited', [QUOTED]: 1 });
+    assert.strictEqual(q.ok, false);
+    assert.deepStrictEqual(q.leaks, [hit({ log: 'quarantine', seq: 1 }, ['API_TOKEN'], QUOTED)]);
+    const binary = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(QUOTED)]); // not UTF-8: kept as is, unredacted
+    const r = log.append(plainMod(), [{ slot: 'diff_ref', text: binary }]);
+    const ref = readLines(path.join(dir, 'raw.jsonl'))[1].detail.diff_ref;
+    assert.deepStrictEqual(r, { ok: true, seq: 1, leaks: [hit({ log: 'files', ref }, ['API_TOKEN'], QUOTED)] });
+    assert.deepStrictEqual(log.leaks(), [...q.leaks, ...r.leaks]);
+    assert.strictEqual(verifySessionLog(dir).ok, true);
+  }),
+);
+
+it("LD101: the header is checked when the log is made; leaks() lists every hit so far, as a copy; a clean log's is empty", () => {
+  const base = tmpDir();
+  try {
+    const clean = createSessionLog(path.join(base, 'clean'), header(), { envEntries: ENTRIES });
+    assert.strictEqual(clean.append(mark('hook_started')).leaks, undefined, 'a clean append carries no leaks field');
+    assert.deepStrictEqual(clean.leaks(), []);
+    const log = createSessionLog(path.join(base, 'leaky'), { ...header(), project_root: `/work/${QUOTED}` }, { envEntries: ENTRIES });
+    assert.deepStrictEqual(log.leaks(), [hit({ log: 'raw', seq: 0 }, ['API_TOKEN'], QUOTED)]);
+    log.leaks().length = 0;
+    assert.strictEqual(log.leaks().length, 1, 'the caller cannot clear the record');
+  } finally {
+    rmrf(base);
+  }
+});
+
+it(
+  'LD101: the check runs after redaction and looks only for values the redactor uses; a bare envValues value is named by none',
+  withLeakLog({ envEntries: [{ names: ['APP_SECRET'], value: SECRET }], envValues: ['xyz', '----', 'pw12'] }, (log, dir) => {
+    const m = mark('claim');
+    m.detail.text = `${SECRET} xyz ---- pw123`;
+    const r = log.append(m);
+    // pw12 is redacted only as a whole word, so pw123 keeps it: an alarm, accepted (LD93). xyz and ---- the redactor never uses.
+    assert.deepStrictEqual(r, { ok: true, seq: 1, leaks: [hit({ log: 'raw', seq: 1 }, [], 'pw12')] });
+    const text = readLines(path.join(dir, 'raw.jsonl'))[1].detail.text;
+    assert.ok(!text.includes(SECRET) && text.includes('[REDACTED:env_value]'), `an entry's value is redacted: ${text}`);
+  }),
+);
+
+it('LD101: .env entries in the wrong shape refuse the log before anything is written, made or reopened', () => {
+  const base = tmpDir();
+  try {
+    const bad = { envEntries: [{ name: 'API_TOKEN', value: QUOTED }] }; // envEntriesFrom's shape, not readEnvEntries'
+    const dir = path.join(base, 'ses');
+    assert.throws(() => createSessionLog(dir, header(), bad));
+    assert.ok(!fs.existsSync(path.join(dir, 'raw.jsonl')), 'no log left behind');
+    createSessionLog(dir, header()).append(mark('hook_started'));
+    fs.appendFileSync(path.join(dir, 'raw.jsonl'), CUT);
+    assert.throws(() => openSessionLog(dir, bad));
+    assert.ok(!fs.existsSync(path.join(dir, 'raw.2.jsonl')), 'no part 2 begun');
+  } finally {
+    rmrf(base);
+  }
+});
+
+it(
+  'LD101: a reopened log redacts and checks with the entries it is given',
+  withLog((log, dir) => {
+    const again = openSessionLog(dir, { envEntries: ENTRIES });
+    assert.deepStrictEqual(again.append(jsonText()).leaks, [hit({ log: 'raw', seq: 1 }, ['API_TOKEN'], QUOTED)]);
+    const m = mark('claim');
+    m.detail.text = `set ${QUOTED} now`;
+    assert.deepStrictEqual(again.append(m), { ok: true, seq: 2 });
+    assert.ok(!readLines(path.join(dir, 'raw.jsonl'))[2].detail.text.includes(QUOTED), 'redacted');
+  }),
+);
+
 runAll('session-log');

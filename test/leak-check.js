@@ -204,6 +204,30 @@ it('a value across a chunk boundary is found once, at the right line and column,
   }
 });
 
+it('scanBuffer reports what scanFile reports, for bytes in memory: names, length and count (LD101)', () => {
+  const work = tmpDir();
+  try {
+    const file = path.join(work, 'out.txt');
+    const once = JSON.stringify({ c: ODD });
+    const edges = ['ends-with-backslash\\', '\\starts-with-backslash', 'ends-with-amp&'];
+    const lines = [once, JSON.stringify(once), '<td>q&quot;u&lt;o&gt;t&amp;e&#39;s-value</td>', JSON.stringify({ a: edges[0], b: edges[1] }), '<td>ends-with-amp&amp;</td>', 'login pw12xy pw12x'];
+    fs.writeFileSync(file, lines.join('\n'));
+    const entries = [
+      { names: ['QUOTED'], value: ODD },
+      { names: ['DB_PASSWORD'], value: 'pw12x' },
+      { names: ['ABSENT'], value: 'not-in-the-file-9' },
+      ...edges.map((value, i) => ({ names: [`K${i}`], value })),
+    ];
+    const byName = (a, b) => a.names[0].localeCompare(b.names[0]);
+    const fromFile = lc.scanFile(file, entries).map(({ names, length, count }) => ({ names, length, count })).sort(byName);
+    assert.deepStrictEqual(fromFile.map((h) => [h.names[0], h.count]), [['DB_PASSWORD', 2], ['K0', 1], ['K1', 1], ['K2', 1], ['QUOTED', 3]]);
+    assert.deepStrictEqual(lc.scanBuffer(fs.readFileSync(file), entries).sort(byName), fromFile);
+    assert.deepStrictEqual(lc.scanBuffer(Buffer.alloc(0), entries), []);
+  } finally {
+    rmrf(work);
+  }
+});
+
 it('orunmila leak-check names each leaked value, its file, line and count, and never prints a value', () => {
   const home = tmpHome();
   const work = tmpDir();

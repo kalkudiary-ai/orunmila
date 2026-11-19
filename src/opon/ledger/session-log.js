@@ -18,7 +18,11 @@
  *
  * Every input, quarantined text included, and every kept text file is redacted
  * first (src/opon/intake/redact.js, slice A6), before anything is hashed or
- * written; `.env` values come in as `envValues`, held in memory only.
+ * written; `.env` values come in as `envValues`, or as `envEntries`
+ * ({ names, value }, as the leak check's readEnvEntries gives them), held in
+ * memory only. After redaction, each record and kept file is searched for
+ * those values right after it is written (the leak check, LD101), and a hit
+ * is reported by name in append's `leaks` and in leaks().
  * One writer per session log is assumed (one intake per machine, slice B1).
  * createSessionLog makes a new folder; openSessionLog reopens one that
  * verifies, for an intake that restarted (slice B1c, test 84). ended() says
@@ -33,7 +37,8 @@ const { compile } = require('../../verify/schema');
 const { seal } = require('../../verify/chain');
 const { canonicalize } = require('../../verify/canonical');
 const { verifySession, checkLog, fileWords } = require('../../verify/session');
-const { redactText, redactMark } = require('../intake/redact');
+const { redactText, redactMark, usedValue } = require('../intake/redact');
+const { scanBuffer } = require('../intake/leak-check');
 const { nowMono } = require('../intake/mono');
 
 const SPEC = path.join(__dirname, '..', '..', '..', 'spec');
@@ -59,7 +64,25 @@ function refsOf(rec) {
   return REF_SLOTS.filter((s) => typeof d[s] === 'string' && REF.test(d[s])).map((s) => ({ slot: s, ref: d[s] }));
 }
 
-function createSessionLog(dir, headerInput, { envValues = [] } = {}) {
+/**
+ * The values the leak check looks for (LD101): every `.env` value redactText
+ * uses, from envValues (named by none) and envEntries, each once, with all
+ * its names.
+ */
+function leakEntries(envValues, envEntries) {
+  const byValue = new Map();
+  const add = (value, names) => {
+    if (!usedValue(value)) return;
+    if (!byValue.has(value)) byValue.set(value, new Set());
+    for (const n of names) byValue.get(value).add(n);
+  };
+  for (const v of envValues) add(v, []);
+  for (const e of envEntries) add(e.value, e.names);
+  return [...byValue].map(([value, names]) => ({ names: [...names].sort(), value }));
+}
+
+function createSessionLog(dir, headerInput, { envValues = [], envEntries = [] } = {}) {
+  const entries = leakEntries(envValues, envEntries); // first: an entry with no names list refuses the log before any write
   const rawFile = path.join(dir, 'raw.jsonl');
   const qFile = path.join(dir, 'quarantine.jsonl');
   const filesDir = path.join(dir, 'files');
@@ -75,7 +98,7 @@ function createSessionLog(dir, headerInput, { envValues = [] } = {}) {
   fs.writeFileSync(rawFile, line(header), { flag: 'wx', mode: 0o600 });
   const qHeader = seal({ schema_version: 1, record: 'quarantine_header', session_id: header.session_id, seq: 0 }, null);
   fs.writeFileSync(qFile, line(qHeader), { flag: 'wx', mode: 0o600 });
-  return writer(dir, { rawFile, qFile, header, last: header, timed: header, qLast: qHeader, counts: { marks: 0, quarantined: 0 }, ended: false, pin: null, envValues });
+  return writer(dir, { rawFile, qFile, header, last: header, timed: header, qLast: qHeader, counts: { marks: 0, quarantined: 0 }, ended: false, pin: null, envValues, envEntries, entries, headerLine: line(header) });
 }
 
 /** Start the next part of a log a crash cut (LD57): its first line names the cut and follows the last whole line. */
@@ -100,7 +123,8 @@ function continueLog(dir, name, tail, sessionId) {
  * a broken chain is never extended, and nothing in a session is ever edited
  * (line 348). Known limit: a part whose own first line is cut is refused.
  */
-function openSessionLog(dir, { envValues = [] } = {}) {
+function openSessionLog(dir, { envValues = [], envEntries = [] } = {}) {
+  const entries = leakEntries(envValues, envEntries); // first: an entry with no names list refuses the reopen before any write
   const v = verifySession(dir);
   const rawLog = checkLog(dir, 'raw');
   const qLog = checkLog(dir, 'quarantine');
@@ -122,11 +146,13 @@ function openSessionLog(dir, { envValues = [] } = {}) {
     rawFile: rawEnd.file,
     qFile: qEnd.file,
     header,
+    entries,
     last: rawEnd.last,
     timed: timedRecs[timedRecs.length - 1],
     qLast: qEnd.last,
     counts,
     ended: marks.some(endsSession),
+    envEntries,
     pin: pinning ? pinOf(pinning) : null,
     envValues,
   });
@@ -137,11 +163,29 @@ function openSessionLog(dir, { envValues = [] } = {}) {
  * and `qLast` (quarantine, in qFile); `timed` is the raw log's last header or
  * mark, which last() reports (a continuation record has no times).
  */
-function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended, pin, envValues }) {
+function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended, pin, envValues, envEntries = [], entries, headerLine = null }) {
   const filesDir = path.join(dir, 'files');
 
+  // LD101: the leak check after redaction. Each record and kept file is searched,
+  // right after it is written, for every `.env` value the redactor uses, in the
+  // spellings `orunmila leak-check` uses (spellings(): a value holding a character
+  // JSON escapes is not found three JSON levels deep). A hit is reported by
+  // name, length and count, never by value; the record stays: nothing is dropped.
+  envValues = [...envValues, ...envEntries.map((e) => e.value)]; // the entries' values are redacted too
+  const leaks = [];
+  const copy = (h) => ({ ...h, names: [...h.names] });
+  function check(bytes, at, found) {
+    for (const h of scanBuffer(Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes, 'utf8'), entries)) {
+      const hit = { ...at, ...h };
+      leaks.push(hit);
+      found.push(copy(hit));
+    }
+  }
+  const reported = (r, found) => (found.length ? { ...r, leaks: found } : r);
+  if (headerLine !== null) check(headerLine, { log: 'raw', seq: 0 }, []);
+
   /** Keep a file beside the log: text is redacted first (line 266); binary is kept as is. Returns { ref, kinds }. */
-  function keep(content) {
+  function keep(content, found) {
     let buf = Buffer.isBuffer(content) ? content : Buffer.from(String(content), 'utf8');
     const text = buf.toString('utf8');
     let kinds = [];
@@ -153,18 +197,20 @@ function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended
     const hex = sha256(buf);
     const file = path.join(filesDir, hex);
     if (!fs.existsSync(file)) fs.writeFileSync(file, buf, { flag: 'wx', mode: 0o600 });
+    check(buf, { log: 'files', ref: `sha256:${hex}` }, found);
     return { ref: `sha256:${hex}`, kinds };
   }
 
-  function quarantine(received, reasons, redactions, kept) {
+  function quarantine(received, reasons, redactions, kept, found) {
     const entry = { schema_version: 1, record: 'quarantined', session_id: header.session_id, seq: qLast.seq + 1, received_at: new Date().toISOString(), reasons, received };
     if (redactions.length) entry.redactions = redactions;
     if (kept.length) entry.kept = kept; // the files kept with it: evidence is never dropped (LD59)
     const sealed = seal(entry, qLast.hash);
     fs.appendFileSync(qFile, line(sealed));
+    check(line(sealed), { log: 'quarantine', seq: sealed.seq }, found);
     qLast = sealed;
     counts.quarantined++;
-    return { ok: false, quarantined: sealed.seq, reasons };
+    return reported({ ok: false, quarantined: sealed.seq, reasons }, found);
   }
 
   /**
@@ -175,7 +221,8 @@ function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended
    * are kept too, and its quarantine entry lists them.
    */
   function append(input, files = []) {
-    const kept = files.map((f) => ({ slot: f.slot, ...keep(f.text) }));
+    const found = []; // this call's leak-check hits (LD101)
+    const kept = files.map((f) => ({ slot: f.slot, ...keep(f.text, found) }));
     const refs = kept.map((k) => k.ref);
     // Redact first, before anything is hashed or written, quarantined text included (lines 248, 340).
     let value;
@@ -183,11 +230,11 @@ function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended
       value = typeof input === 'string' ? JSON.parse(input) : JSON.parse(JSON.stringify(input));
     } catch (e) {
       const r = redactText(typeof input === 'string' ? input : String(input), envValues);
-      return quarantine(r.text, [`not JSON: ${e.message}`], r.kinds, refs);
+      return quarantine(r.text, [`not JSON: ${e.message}`], r.kinds, refs, found);
     }
     const { mark: m, kinds: redactions } = redactMark(value, envValues);
     const received = JSON.stringify(m);
-    const reject = (reasons) => quarantine(received, reasons, redactions, refs);
+    const reject = (reasons) => quarantine(received, reasons, redactions, refs, found);
     if (!isObject(m)) return reject(['not a JSON object']);
     // The slot name is the caller's text, so it is never echoed into a reason (it could hold a secret).
     const reasons = kept.filter((k) => !REF_SLOTS.includes(k.slot)).map(() => 'a kept file is named for a detail slot that holds no kept file');
@@ -217,18 +264,19 @@ function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended
     }
     if (reasons.length) return reject(reasons);
     fs.appendFileSync(rawFile, line(sealed));
+    check(line(sealed), { log: 'raw', seq: sealed.seq }, found);
     last = sealed;
     timed = sealed;
     counts.marks++;
     if (endsSession(sealed)) ended = true;
     if (pin === null) pin = pinOf(sealed);
-    return { ok: true, seq: sealed.seq };
+    return reported({ ok: true, seq: sealed.seq }, found);
   }
 
   /** The raw log's last record: where an intake that restarts finds when it last wrote (test 84). */
   const lastRecord = () => ({ seq: timed.seq, mono_ns: timed.mono_ns, observed_at: timed.observed_at });
 
-  return { append, counts: () => ({ ...counts }), last: lastRecord, ended: () => ended, pin: () => pin };
+  return { append, counts: () => ({ ...counts }), last: lastRecord, ended: () => ended, pin: () => pin, leaks: () => leaks.map(copy) };
 }
 
 /** Check a session folder: the ledger uses src/verify for checking (brief v3 line 618). */

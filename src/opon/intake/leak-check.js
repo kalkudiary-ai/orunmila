@@ -19,6 +19,8 @@
  *   scanFile(file, entries, o)   [{ names, length, count, line, byte }], one per
  *                                value found; overlapping matches of one value
  *                                count once; read in chunks that overlap
+ *   scanBuffer(buf, entries)     [{ names, length, count }], as scanFile, for
+ *                                bytes in memory (the session log, LD101)
  *   defaultTargets(o)            the data dir, and the report files `orunmila
  *                                html|trail|json|feedback` write into root
  *   scan(targets, entries)       { hits, files, unreadable } over files and
@@ -138,6 +140,31 @@ function scanFile(file, entries, { chunk = CHUNK } = {}) {
   return [...found.values()];
 }
 
+/**
+ * What scanFile reports, without its position, for bytes already in memory:
+ * the session log checks each record as it writes it (LD101).
+ */
+function scanBuffer(buf, entries) {
+  const out = [];
+  for (const e of entries) {
+    const spans = [];
+    for (const s of spellings(e.value)) {
+      const needle = Buffer.from(s, 'utf8');
+      if (!needle.length) continue;
+      for (let at = buf.indexOf(needle); at >= 0; at = buf.indexOf(needle, at + 1)) spans.push([at, at + needle.length]);
+    }
+    spans.sort((a, b) => a[0] - b[0] || b[1] - a[1]);
+    let count = 0;
+    let reach = 0;
+    for (const [from, to] of spans) {
+      if (from >= reach) count++; // a span that starts inside the last one is the same occurrence
+      reach = Math.max(reach, to);
+    }
+    if (count) out.push({ names: e.names, length: e.value.length, count });
+  }
+  return out;
+}
+
 function defaultTargets({ dataDir, root }) {
   const targets = [{ path: dataDir }, { path: path.join(root, '.orunmila-feedback') }];
   let dirents = [];
@@ -206,4 +233,4 @@ function scan(targets, entries, opts = {}) {
   return { hits, files, unreadable };
 }
 
-module.exports = { envEntriesFrom, readEnvEntries, spellings, scanFile, defaultTargets, scan, CHUNK };
+module.exports = { envEntriesFrom, readEnvEntries, spellings, scanFile, scanBuffer, defaultTargets, scan, CHUNK };

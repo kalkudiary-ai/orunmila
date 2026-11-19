@@ -16,8 +16,8 @@
  *                              from fixed lists only: Orunmila's own event field
  *                              names, event types, sources, agent ids and the
  *                              other kept fields' values, flags, operators, file
- *                              extensions, common program names and public tool
- *                              names (LD42, LD84). A key or kept value off its
+ *                              extensions, URL schemes, common program names and
+ *                              public tool names (LD42, LD84, LD86). A key or kept value off its
  *                              list becomes a placeholder. `kept` is that
  *                              vocabulary, for the leak check.
  *   leakCheck(raw, stripped)   the private tokens of the raw events that still
@@ -49,6 +49,7 @@ const FLAGS = new Set(
     '--watch --grep --stat --oneline --format --no-verify --facts-only --with-gate --gate-only --include --keep --agent').split(' '),
 );
 const FLAG = /^--?[A-Za-z][A-Za-z0-9-]*$/;
+const SCHEMES = new Set(['http:', 'https:', 'ws:', 'wss:', 'ftp:', 'file:', 'ssh:', 'git:', 'mailto:']);
 const TOOL_NAMES = new Set(
   ('Bash Read Write Edit MultiEdit NotebookEdit Glob Grep LS WebFetch WebSearch TodoWrite Task Agent ToolSearch Skill ' +
     'AskUserQuestion EnterPlanMode ExitPlanMode TaskStop Monitor SendMessage ListAgents Artifact SendUserFile SubagentHandback ' +
@@ -143,7 +144,8 @@ function stripEvents(events) {
       return mask(u);
     }
     const p = url.pathname.split('/').map((s) => (s ? ph('s', s) : s)).join('/');
-    return `${keep(url.protocol)}//${ph('h', url.host)}${p}${url.search ? '?' + mask(url.search.slice(1)) : ''}`;
+    const scheme = SCHEMES.has(url.protocol) ? keep(url.protocol) : ph('a', url.protocol.slice(0, -1)) + ':'; // LD86
+    return `${scheme}//${ph('h', url.host)}${p}${url.search ? '?' + mask(url.search.slice(1)) : ''}`;
   };
 
   const stripValue = (v) => {
@@ -220,6 +222,7 @@ function leakCheck(raw, stripped) {
   const privateWords = new Set();
   for (const e of raw) {
     for (const [k, v] of Object.entries(e)) {
+      if (!EVENT_KEYS.has(k)) for (const w of words(k)) privateWords.add(w); // LD86: a key off the list is raw data too
       if (v === null || v === undefined || KEEP_FIELDS.has(k)) continue;
       for (const w of words(v)) privateWords.add(w);
     }

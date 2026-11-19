@@ -791,6 +791,13 @@ const MUTANTS = [
   { id: 'S15 any ts kept', file: 'src/opon/fixtures/strip.js', test: 'test/strip.js',
     from: 'ts: /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$/,', to: 'ts: /./,',
     fails: ["LD84: every top-level key and every kept field's value"] },
+  // LD86: URL schemes from a fixed list; the leak check reads top-level key names.
+  { id: 'S16 any URL scheme kept', file: 'src/opon/fixtures/strip.js', test: 'test/strip.js',
+    from: "const scheme = SCHEMES.has(url.protocol) ? keep(url.protocol) : ph('a', url.protocol.slice(0, -1)) + ':';", to: 'const scheme = keep(url.protocol);',
+    fails: ["LD86: a URL's scheme is kept only from a fixed list"] },
+  { id: 'S17 the leak check skips key names', file: 'src/opon/fixtures/strip.js', test: 'test/strip.js',
+    from: 'if (!EVENT_KEYS.has(k)) for (const w of words(k)) privateWords.add(w);', to: 'void EVENT_KEYS;',
+    fails: ["LD86: a URL's scheme is kept only from a fixed list"] },
 ];
 
 function copyRepo(root) {

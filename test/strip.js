@@ -130,6 +130,20 @@ it('LD84: every top-level key and every kept field\'s value comes from Orunmila\
   }
 });
 
+it("LD86: a URL's scheme is kept only from a fixed list, and the leak check reads top-level key names and schemes", () => {
+  const raw = [{ ...RAW[4], call_id: 'u1', target: 'zorbscheme://h.test/p' }, { ...RAW[1], call_id: 'u2', zorbkey: 1 }];
+  const s = stripEvents(raw);
+  const text = JSON.stringify(s.events).toLowerCase();
+  assert.ok(!text.includes('zorb'), text);
+  assert.ok(![...s.kept].some((k) => k.includes('zorb')), 'nothing private in the kept vocabulary');
+  assert.ok(stripEvents(RAW).events[4].target.startsWith('https://'), 'a listed scheme is kept');
+  const planted = JSON.parse(JSON.stringify(s.events));
+  planted[0].target = 'zorbscheme' + planted[0].target.slice(planted[0].target.indexOf(':'));
+  planted[1].zorbkey = 1;
+  const leaks = leakCheck(raw, { ...s, events: planted });
+  assert.ok(leaks.includes('zorbscheme') && leaks.includes('zorbkey'), JSON.stringify(leaks));
+});
+
 it('relevance at the mark level: the stripped events translate to the same marks, kinds and counts as the raw ones', () => {
   const stripped = stripEvents(RAW);
   const r = relevance(RAW, stripped.events);

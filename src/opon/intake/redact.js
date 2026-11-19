@@ -9,7 +9,8 @@
  *                                 values, replaced with [REDACTED:<kind>]
  *   redactMark(mark, envValues)   { mark, kinds }: every string in the mark,
  *                                 with the kinds noted in detail.redactions
- *   envValuesFrom(text)           the values of a `.env`-style file, 8+ chars
+ *   envValuesFrom(text)           the values of a `.env`-style file: 8+ chars,
+ *                                 or 4-7 under a secret name (LD88)
  *   onRedactionList(relPath)      true for `.env` and `.env.*`
  *   fingerprint(relPath, buf, key) keyed HMAC-SHA-256 for a file on the
  *                                 redaction list, plain SHA-256 otherwise
@@ -20,19 +21,53 @@
 
 const crypto = require('crypto');
 const path = require('path');
-const { redactString } = require('../../store/secrets');
+const { redactString, PREFIXED } = require('../../store/secrets');
 
-const MIN_ENV_VALUE = 8; // shorter values (true, 3000, dev) would redact ordinary words
+// LD88 (replaces LD30). A value of 8+ characters is redacted wherever it
+// occurs. A shorter one (4-7) is kept only under a name secrets.js's own
+// secret_assignment rule calls a secret (SECRET, TOKEN, PASSWORD, ...), never a
+// boolean, a no-value word (null, none) or a bare number under a count word
+// (TOKEN_TTL=3600), and is redacted only as a whole word, so `pw12` hides in
+// `-W pw12` but not in `pw123`. An escape in JSON text (`\npw12`) counts as a
+// boundary, and a value's own non-word edge needs none. Under 4 characters
+// nothing is redacted by value: it would hit ordinary text everywhere, and
+// patterns may still catch it.
+const MIN_ENV_VALUE = 8;
+const MIN_SHORT_SECRET = 4;
 const ENV_KIND = 'env_value';
+const REDACTED = `[REDACTED:${ENV_KIND}]`;
+const [, SECRET_ASSIGNMENT, KEEP_COUNT] = PREFIXED.find(([kind]) => kind === 'secret_assignment');
+const NO_VALUE = /^(?:true|false|yes|no|on|off|null|none|nil|undefined)$/i;
+const WORD = /[A-Za-z0-9_]/;
+const BEFORE = String.raw`(?<![A-Za-z0-9_])|(?<=\\[A-Za-z]|\\u[0-9A-Fa-f]{4})`; // after a non-word, or after \n, \t, \u00e9
+const wholeWord = (v) => {
+  const body = v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`${WORD.test(v[0]) ? `(?:${BEFORE})` : ''}${body}${WORD.test(v[v.length - 1]) ? '(?![A-Za-z0-9_])' : ''}`, 'g');
+};
+
+/** True when secrets.js's secret_assignment rule reads NAME= as a secret's name. */
+function secretName(name) {
+  const prefix = `${name.toUpperCase()}=`;
+  const m = new RegExp(SECRET_ASSIGNMENT.source).exec(prefix + 'x'.repeat(MIN_ENV_VALUE));
+  return Boolean(m) && m.index === 0 && m[1] === prefix;
+}
+
+/** A 4-7 character value worth redacting: under a secret name, not a boolean, not a count. */
+function shortSecret(name, v) {
+  if (v.length < MIN_SHORT_SECRET || !secretName(name)) return false;
+  if (NO_VALUE.test(v)) return false;
+  return !KEEP_COUNT(`${name.toUpperCase()}=`, v);
+}
 
 function redactText(text, envValues = []) {
   if (typeof text !== 'string') return { text, kinds: [] };
   const kinds = new Set();
   let out = text;
-  const values = [...new Set(envValues)].filter((v) => typeof v === 'string' && v.length >= MIN_ENV_VALUE).sort((a, b) => b.length - a.length);
+  const values = [...new Set(envValues)].filter((v) => typeof v === 'string' && v.length >= MIN_SHORT_SECRET).sort((a, b) => b.length - a.length);
   for (const v of values) {
-    if (out.includes(v)) {
-      out = out.split(v).join(`[REDACTED:${ENV_KIND}]`);
+    const next = v.length >= MIN_ENV_VALUE ? out.split(v).join(REDACTED) : out.replace(wholeWord(v), () => REDACTED);
+    if (next !== out) {
+      out = next;
       kinds.add(ENV_KIND);
     }
   }
@@ -68,17 +103,18 @@ function redactMark(mark, envValues = []) {
   return { mark: out, kinds };
 }
 
-/** Values from `KEY=VALUE` lines (optional `export `, optional quotes); comments and short values skipped. */
+/** Values from `KEY=VALUE` lines (optional `export `, optional quotes); comments skipped, short values as LD88. */
 function envValuesFrom(text) {
   const out = [];
   for (const raw of String(text).split(/\r?\n/)) {
     const line = raw.trim().replace(/^export\s+/, '');
     if (!line || line.startsWith('#')) continue;
     const eq = line.indexOf('=');
-    if (eq < 1 || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(line.slice(0, eq).trim())) continue;
+    const name = line.slice(0, eq).trim();
+    if (eq < 1 || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) continue;
     let v = line.slice(eq + 1).trim();
     if (v.length >= 2 && (v[0] === '"' || v[0] === "'") && v[v.length - 1] === v[0]) v = v.slice(1, -1);
-    if (v.length >= MIN_ENV_VALUE) out.push(v);
+    if (v.length >= MIN_ENV_VALUE || shortSecret(name, v)) out.push(v);
   }
   return out;
 }
@@ -96,4 +132,4 @@ function fingerprint(relPath, buf, key) {
   return 'sha256:' + crypto.createHash('sha256').update(buf).digest('hex');
 }
 
-module.exports = { redactText, redactMark, envValuesFrom, onRedactionList, fingerprint, MIN_ENV_VALUE };
+module.exports = { redactText, redactMark, envValuesFrom, onRedactionList, fingerprint, MIN_ENV_VALUE, MIN_SHORT_SECRET };

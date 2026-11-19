@@ -63,10 +63,53 @@ it('redactText: secrets.js patterns and .env values both become [REDACTED:<kind>
   assert.deepStrictEqual(redactText('nothing secret here at all', [ENV_SECRET]), { text: 'nothing secret here at all', kinds: [] });
 });
 
-it('a .env value shorter than 8 characters is not used (it would redact ordinary words)', () => {
-  assert.deepStrictEqual(envValuesFrom('A=true\nB=short\nC=longenough1\n# D=commented-out-value\nexport E="quoted value here"\n'), ['longenough1', 'quoted value here']);
-  assert.deepStrictEqual(redactText('true short', ['true', 'short']).kinds, []);
+it('LD88: a .env value under 8 characters is used only under a secret name, never a boolean, a count or under 4', () => {
+  const env = [
+    'A=true',
+    'B=short',
+    'C=longenough1',
+    '# D=commented-out-value',
+    'export E="quoted value here"',
+    'DB_PASSWORD=pw12x',
+    "API_TOKEN='abcd'",
+    'db_passwd=zq9z',
+    'USE_TOKEN=true',
+    'TOKEN_TTL=3600',
+    'MAX_TOKENS=4096',
+    'SECRET_PIN=123',
+    'AUTH_MODE=oauth2',
+    'DB_PASSWORD=null',
+    'API_TOKEN=None',
+  ].join('\n');
+  assert.deepStrictEqual(envValuesFrom(env), ['longenough1', 'quoted value here', 'pw12x', 'abcd', 'zq9z']);
 });
+
+it('LD88: a short .env value is redacted only as a whole word, none under 4 characters; a long one wherever it occurs', () => {
+  const r = redactText('psql -W pw12x; pw12xy xpw12x pw12x_1 pw12x-1 DB_PASSWORD=pw12x', ['pw12x']);
+  assert.strictEqual(r.text, 'psql -W [REDACTED:env_value]; pw12xy xpw12x pw12x_1 [REDACTED:env_value]-1 DB_PASSWORD=[REDACTED:env_value]');
+  assert.deepStrictEqual(r.kinds, ['env_value']);
+  assert.deepStrictEqual(redactText('ab cd abc', ['ab', 'abc']), { text: 'ab cd abc', kinds: [] });
+  // An escape in JSON text (\n, \t, é) right before the value is a word boundary too.
+  const escaped = '{"cmd": "psql -h db\\npw12x", "p": "Password:\\tpw12x", "u": "\\u00e9pw12x"}';
+  assert.strictEqual(redactText(escaped, ['pw12x']).text, escaped.split('pw12x').join('[REDACTED:env_value]'));
+  // A value whose edge is not a word character needs no boundary on that side.
+  assert.strictEqual(redactText('x-pw1 y pw1#z', ['-pw1', 'pw1#']).text, 'x[REDACTED:env_value] y [REDACTED:env_value]z');
+  assert.deepStrictEqual(redactText('xlongenough1x', ['longenough1']), { text: 'x[REDACTED:env_value]x', kinds: ['env_value'] });
+});
+
+it(
+  'LD88: a short secret from a .env file reaches no file of the session log; the redaction is noted',
+  withLog({ envValues: envValuesFrom('DB_PASSWORD=pw12x\n') }, (log, dir) => {
+    const m = strip(SPEC.good.hook_exited_fail);
+    delete m.detail.output_ref;
+    m.target.text = 'PGPASSWORD=pw12x psql -h db';
+    m.detail.output_excerpt = 'login as pw12x failed';
+    assert.strictEqual(log.append(m).ok, true);
+    assert.ok(!folderBytes(dir).includes('pw12x'));
+    const line = JSON.parse(fs.readFileSync(path.join(dir, 'raw.jsonl'), 'utf8').split('\n')[1]);
+    assert.ok(line.detail.redactions.includes('env_value'), JSON.stringify(line.detail));
+  }),
+);
 
 it('redactMark walks every string of a mark, notes the kinds in detail.redactions, and keeps earlier notes', () => {
   const m = strip(SPEC.good.hook_called);

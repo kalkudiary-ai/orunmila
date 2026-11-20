@@ -8,7 +8,7 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ## [Unreleased]
 
-## [0.2.3] — 2026-11-19
+## [0.2.3] — 2026-11-20
 
 ### Fixed
 

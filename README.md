@@ -632,7 +632,7 @@ hook fired, the gate could block a turn on a sentence the agent had already
 replaced. It now takes the claim from the Stop payload.
 `orunmila laws --check` shows what the live gate did: turns checked,
 skipped and blocked. Details in the
-[0.2.3 changelog](CHANGELOG.md#023--2026-11-19).
+[0.2.3 changelog](CHANGELOG.md#023--2026-11-20).
 
 **0.2.2 is a security patch: upgrade, then run `orunmila log redact`.** Earlier
 versions stored your log readable by other accounts on your computer and did not

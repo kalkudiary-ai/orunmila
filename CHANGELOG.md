@@ -97,6 +97,21 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ### Added
 
+- **Exact capture, off by default (`ORUNMILA_EXACT_CAPTURE=1`).** Claude Code
+  sends a failed tool call with no `tool_response`; the exit code is the first
+  line of its `error` text (`Exit code N`, or `Error: Exit code N`) and the
+  command's output the rest. Capture read neither, so every failed command
+  was recorded as `exit_code: 1` with empty output (NF22). With the switch on,
+  the stated code is recorded, or `null` (still `failed: true`) when the text
+  states none, and the output is kept like any command's, redacted whole
+  before the excerpt is cut. A read records how much of the file it returned,
+  from the tool's own result, in `read_range`, and `read_kind` is `range` when
+  that was less than the whole file (LD94); a folder listing (`list_dir`) is
+  `read_kind: "listing"`, not a file read. The gate grades a `range` read of
+  a file it hashed as before, a full receipt; a `range` read with no hash, and
+  a listing, are now weak receipts, and a failed `range` read is none (each was
+  full while every read said `full`). With the switch off, capture writes
+  exactly what it wrote before; docs/SCHEMA.md lists the fields.
 - **`orunmila leak-check`: find your `.env` values in what Orunmila stored.**
   Capture redacts known secret formats, not your `.env` values, so a value in
   a format it does not know is stored as written, by both witnesses;

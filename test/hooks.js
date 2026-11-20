@@ -402,6 +402,147 @@ it('post-tool-use: a PostToolUseFailure payload marks the event failed', () => {
   rmrf(home);
 });
 
+// --- ORUNMILA_EXACT_CAPTURE: NF22 (exit codes) and LD94 (read extent) --------
+// Off by default: live capture writes exactly what it wrote before. On, a
+// failed Claude Code command keeps its real exit code and its output, and a
+// read records how much of the file the tool returned.
+
+const EXACT = { ORUNMILA_EXACT_CAPTURE: '1' };
+
+// Claude Code's failure payload: no tool_response; the code is the first line
+// of `error`, the command's output the rest (hooks page; transcripts show the
+// same text with an `Error: ` prefix).
+function failedBash(error) {
+  return JSON.stringify({
+    session_id: 'S', hook_event_name: 'PostToolUseFailure', tool_name: 'Bash',
+    tool_input: { command: 'npm test' }, tool_use_id: 'c1', error,
+  });
+}
+
+function postOnce(input, env) {
+  const home = tmpHome();
+  const r = run(HOOK('post-tool-use.js'), { env: Object.assign({ ORUNMILA_HOME: home }, env || {}), input });
+  assert.strictEqual(r.status, 0);
+  const events = readEvents(home);
+  rmrf(home);
+  return events;
+}
+
+it('NF22 flag off: a failed command is still recorded as exit 1 with no output (unchanged)', () => {
+  const ev = postOnce(failedBash('Exit code 2\nsuite failed')).find((e) => e.type === 'command_run');
+  assert.strictEqual(ev.failed, true);
+  assert.strictEqual(ev.exit_code, 1);
+  assert.strictEqual(ev.stdout_excerpt, '');
+});
+
+it('NF22 flag on: the exit code comes from the error line, with or without "Error: "', () => {
+  const a = postOnce(failedBash('Exit code 2\nsuite failed'), EXACT).find((e) => e.type === 'command_run');
+  assert.strictEqual(a.failed, true);
+  assert.strictEqual(a.exit_code, 2);
+  const b = postOnce(failedBash('Error: Exit code 127\nnpm: not found'), EXACT).find((e) => e.type === 'command_run');
+  assert.strictEqual(b.exit_code, 127);
+});
+
+it('NF22 flag on: a failed command keeps its output, the code line removed', () => {
+  const ev = postOnce(failedBash('Exit code 2\nline one\nline two'), EXACT).find((e) => e.type === 'command_run');
+  assert.strictEqual(ev.stdout_excerpt, 'line one\nline two');
+});
+
+it('NF22 flag on: no code line means the code was not observed: null, still failed, text kept', () => {
+  const ev = postOnce(failedBash('Command timed out after 2m'), EXACT).find((e) => e.type === 'command_run');
+  assert.strictEqual(ev.failed, true);
+  assert.strictEqual(ev.exit_code, null);
+  assert.strictEqual(ev.stdout_excerpt, 'Command timed out after 2m');
+});
+
+it('NF22 flag on: a secret in a failed command\'s output is redacted, excerpt and sidecar', () => {
+  const secret = 'ghp_' + 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8';
+  const home = tmpHome();
+  const long = 'x'.repeat(2100);
+  run(HOOK('post-tool-use.js'), {
+    env: Object.assign({ ORUNMILA_HOME: home }, EXACT),
+    input: failedBash(`Exit code 1\ntoken ${secret}\n${long}`),
+  });
+  const ev = readEvents(home).find((e) => e.type === 'command_run');
+  assert.ok(!ev.stdout_excerpt.includes(secret), 'excerpt redacted');
+  assert.deepStrictEqual(ev.redactions, ['github_token']);
+  assert.ok(ev.output_path, 'a long failure output goes to a sidecar');
+  assert.ok(!fs.readFileSync(ev.output_path, 'utf8').includes(secret), 'sidecar redacted');
+  rmrf(home);
+});
+
+it('NF22 flag on: a success payload is unchanged (no exit code given, none invented)', () => {
+  const ev = postOnce(JSON.stringify({
+    session_id: 'S', hook_event_name: 'PostToolUse', tool_name: 'Bash',
+    tool_input: { command: 'ls' }, tool_response: { stdout: 'a\n', stderr: '' },
+  }), EXACT).find((e) => e.type === 'command_run');
+  assert.strictEqual(ev.failed, false);
+  assert.strictEqual(ev.exit_code, null);
+  assert.strictEqual(ev.stdout_excerpt, 'a\n');
+});
+
+function readPayload(input, response, toolName) {
+  return JSON.stringify({ session_id: 'S', tool_name: toolName || 'Read', tool_input: input, tool_response: response });
+}
+
+it('LD94 flag off: a bounded read is still recorded as full, with no range (unchanged)', () => {
+  const ev = postOnce(readPayload({ file_path: '/no/a.js', offset: 5, limit: 10 },
+    { type: 'text', file: { filePath: '/no/a.js', content: 'x', numLines: 10, startLine: 5, totalLines: 40 } }))
+    .find((e) => e.type === 'file_read');
+  assert.strictEqual(ev.read_kind, 'full');
+  assert.strictEqual(ev.read_range, undefined);
+});
+
+it('LD94 flag on: a read that returned part of the file is a range, asked and returned both recorded', () => {
+  const ev = postOnce(readPayload({ file_path: '/no/a.js', offset: 5, limit: 10 },
+    { type: 'text', file: { filePath: '/no/a.js', content: 'x', numLines: 10, startLine: 5, totalLines: 40 } }), EXACT)
+    .find((e) => e.type === 'file_read');
+  assert.strictEqual(ev.read_kind, 'range');
+  assert.deepStrictEqual(ev.read_range, { asked_offset: 5, asked_limit: 10, start_line: 5, lines: 10, total_lines: 40 });
+});
+
+it('LD94 flag on: a read that returned every line is full, its extent recorded', () => {
+  const ev = postOnce(readPayload({ file_path: '/no/a.js' },
+    { type: 'text', file: { filePath: '/no/a.js', content: 'x', numLines: 40, startLine: 1, totalLines: 40 } }), EXACT)
+    .find((e) => e.type === 'file_read');
+  assert.strictEqual(ev.read_kind, 'full');
+  assert.deepStrictEqual(ev.read_range, { asked_offset: null, asked_limit: null, start_line: 1, lines: 40, total_lines: 40 });
+});
+
+it('LD94 flag on: content cut by the token cap is a range even when the line counts match', () => {
+  const ev = postOnce(readPayload({ file_path: '/no/a.js' },
+    { type: 'text', file: { filePath: '/no/a.js', content: 'x', numLines: 40, startLine: 1, totalLines: 40, truncatedByTokenCap: true } }), EXACT)
+    .find((e) => e.type === 'file_read');
+  assert.strictEqual(ev.read_kind, 'range');
+  assert.strictEqual(ev.read_range.truncated_by_token_cap, true);
+});
+
+it('LD94 flag on: the flat result shape is read too', () => {
+  const ev = postOnce(readPayload({ file_path: '/no/a.js' }, { numLines: 3, startLine: 1, totalLines: 9 }), EXACT)
+    .find((e) => e.type === 'file_read');
+  assert.strictEqual(ev.read_kind, 'range');
+  assert.strictEqual(ev.read_range.total_lines, 9);
+});
+
+it('LD94 flag on: with no extent in the result, a bounded request is a range and an unbounded one stays full', () => {
+  const bounded = postOnce(readPayload({ file_path: '/no/a.js', limit: 10 }, {}), EXACT).find((e) => e.type === 'file_read');
+  assert.strictEqual(bounded.read_kind, 'range');
+  assert.deepStrictEqual(bounded.read_range, { asked_offset: null, asked_limit: 10, start_line: null, lines: null, total_lines: null });
+  const open = postOnce(readPayload({ file_path: '/no/a.js' }, {}), EXACT).find((e) => e.type === 'file_read');
+  assert.strictEqual(open.read_kind, 'full');
+  assert.strictEqual(open.read_range, undefined, 'nothing known, nothing recorded');
+});
+
+it('LD94 flag on: a folder listing is recorded as a listing, never as a read of a file', () => {
+  const work = tmpDir();
+  const on = postOnce(readPayload({ path: work }, {}, 'list_dir'), EXACT).find((e) => e.type === 'file_read');
+  assert.strictEqual(on.read_kind, 'listing');
+  assert.strictEqual(on.hash, null);
+  const off = postOnce(readPayload({ path: work }, {}, 'list_dir')).find((e) => e.type === 'file_read');
+  assert.strictEqual(off.read_kind, 'full', 'flag off: unchanged');
+  rmrf(work);
+});
+
 it('post-tool-use: invalid JSON exits 0 and writes nothing', () => {
   const home = tmpHome();
   const r = run(HOOK('post-tool-use.js'), { env: { ORUNMILA_HOME: home }, input: 'oops' });

@@ -618,6 +618,11 @@ change how you should read a report:
   machine, flip to whichever session most recently emitted an event.
 - **The turn counter is not concurrency-safe** (P2-2). Parallel PostToolUse hooks
   can still land events in the wrong turn bucket.
+- **Claude Code: a failed command is recorded as exit 1 whatever its real
+  code, with none of its output** (NF22), **and a read of part of a file is
+  recorded as a full read** (LD94). `ORUNMILA_EXACT_CAPTURE=1` records the code
+  and output Claude Code reports, and how much of the file the read returned.
+  It is off by default until it has run on real sessions.
 - **Deep verify is specified and not built.** The optional LLM-judge pass for
   semantic claims is designed, off by default, and not wired up.
 

@@ -204,3 +204,19 @@ The event log has no `schema_version` and is not yet fully specified here.
   `claim` or `response`. `text` is then `''`, never the transcript's last
   message, which can be an earlier message of the turn (N10). An empty final
   message gives `text: ''` with no `claim_unconfirmed`.
+
+Only with `ORUNMILA_EXACT_CAPTURE=1` (off by default):
+
+- **`command_run.exit_code`** on a failed Claude Code command: the code its
+  failure text states, or `null` with `failed: true` when it states none.
+  Without the switch it is `1` whenever the code is unknown and the call failed.
+  `stdout_excerpt` and `output_path` then hold the failure text's output.
+- **`file_read.read_kind`** gains two values: `range` (the read returned less
+  than the whole file, its content was cut by a token cap, or, with no counts
+  in the result, it asked for a bounded range) and `listing` (a folder
+  listing such as `list_dir`, with `hash` and `bytes` null). `full` and
+  `pattern` are unchanged.
+- **`file_read.read_range`** (optional): `{ asked_offset, asked_limit,
+  start_line, lines, total_lines }`, each a whole number or `null`, plus
+  `truncated_by_token_cap: true` when the result says so. Absent when nothing
+  about the extent is known.

@@ -110,7 +110,24 @@ const defaultFields = {
   },
   stdout: (response) => String(response.stdout || response.output || response.stdoutText || ''),
   stderr: (response) => (response.stderr ? String(response.stderr) : ''),
+  // Read only with ORUNMILA_EXACT_CAPTURE=1 (core.js). What a failure payload
+  // itself says about a failed command, for a host whose failure hook carries
+  // no tool_response: { code, output }, code null when not stated (NF22).
+  // null here means the host's shape is not known, so capture keeps its old rule.
+  failureExit: () => null,
+  // How much of a file a read returned, from the tool's own result (LD94):
+  // { start_line, lines, total_lines } (each null when not given). null when the
+  // host's result shape is not known.
+  readExtent: () => null,
 };
+
+// The folder-listing tools among READ_TOOLS: a listing names entries, it shows
+// no file's content (LD94). Used only with ORUNMILA_EXACT_CAPTURE=1.
+const LISTING_TOOLS = /^(list_dir)$/i;
+
+function wholeNumber(v) {
+  return Number.isInteger(v) && v >= 0 ? v : null;
+}
 
 function withDefaults(adapter) {
   return Object.assign({}, adapter, {
@@ -146,6 +163,28 @@ const REGISTRY = {
       // no origin field (2.1.314); in one session the opening tag matched the
       // transcript's origin.kind on 7 prompts of 7 (NF54).
       promptFromHuman: (p) => !/^\s*<(?:task-notification|agent-message)[\s>]/.test(String(p.prompt || '')),
+      // PostToolUseFailure has no tool_response: a Bash failure's code is the
+      // first line of `error` ("Exit code N"; transcripts show "Error: Exit code
+      // N"), its output the rest. Any other first line states no code (a
+      // timeout, a refusal): the whole text is the output, the code null.
+      failureExit: (p) => {
+        if (typeof p.error !== 'string') return { code: null, output: '' };
+        const nl = p.error.indexOf('\n');
+        const first = nl === -1 ? p.error : p.error.slice(0, nl);
+        const m = /^(?:Error: )?Exit code (\d{1,9})\s*$/.exec(first);
+        if (!m) return { code: null, output: p.error };
+        return { code: Number(m[1]), output: nl === -1 ? '' : p.error.slice(nl + 1) };
+      },
+      // Read's result: { type: 'text', file: { filePath, content, numLines,
+      // startLine, totalLines, truncatedByTokenCap? } } in transcripts (1,254
+      // of 1,254 in this worktree's); a flat object is read the same way.
+      readExtent: (response) => {
+        const r = response && typeof response === 'object' ? response : {};
+        const f = r.file && typeof r.file === 'object' ? r.file : r;
+        const ext = { start_line: wholeNumber(f.startLine), lines: wholeNumber(f.numLines), total_lines: wholeNumber(f.totalLines) };
+        if (f.truncatedByTokenCap === true) ext.truncated_by_token_cap = true;
+        return ext;
+      },
     },
   }),
 
@@ -301,4 +340,6 @@ module.exports = {
   defaultFields,
   defaultClassifyTool,
   withDefaults,
+  LISTING_TOOLS,
+  wholeNumber,
 };

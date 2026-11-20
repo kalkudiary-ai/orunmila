@@ -10,6 +10,13 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ### Fixed
 
+- **A secret used as an object key no longer reaches the event log.** Capture
+  redacted every string value in an event but copied object keys as written,
+  so a tool input such as `{"<token>": "v"}` stored the token. A key is now
+  redacted as a string is and the kind it held is listed in `redactions`. A
+  redacted key whose name is already taken is named `[REDACTED#2]`, `#3` and
+  so on, so no value is overwritten. A log written before this fix can still
+  hold such a key: `orunmila log redact` removes it.
 - **A Stop with nothing before it is judged on its own turn (NF62).** Claude
   Code may run the gate before the capture hook, or both at once. On a Stop
   with no prompt or tool call before it, the gate read the turn counter before

@@ -1449,6 +1449,27 @@ it('facts: the Sentinel\'s writes inside the project are counted beside the Glov
   assert.strictEqual(line, 'Test runs this turn: none.' + GLOVE_ONLY + 'Files changed this turn, Glove: 1 (test files: none); Sentinel: 2 (test files: test/b.test.js).');
 });
 
+// Windows CI on 0.2.3 (PR #9): `root + path.sep` never matched a path written
+// with `/`, and path.relative wrote `\`. A record may hold either separator and
+// either drive-letter case. These cases give the same result on every platform.
+it('facts: a Windows path, either separator or drive-letter case, is inside its root and shown with /', () => {
+  const write = (p) => ({ type: 'file_write', path: p });
+  const disk = (p) => ({ type: 'file_write', source: 'fs-sentinel', path: p });
+  const line = factsLine([
+    write('C:\\repo\\src\\a.js'),
+    write('C:/repo/src/a.js'),
+    write('c:\\repo\\test\\b.test.js'),
+    write('C:\\repo-two\\test\\c.test.js'),
+  ], {
+    root: 'C:\\repo\\',
+    sentinelWrites: [disk('C:\\repo\\test\\b.test.js'), disk('D:\\repo\\x.js'), disk('C:\\repo-two\\y.js')],
+  });
+  assert.strictEqual(line, 'Test runs this turn: none.' + GLOVE_ONLY + 'Files changed this turn, Glove: 3 (test files: test/b.test.js, C:\\repo-two\\test\\c.test.js); Sentinel: 1 (test files: test/b.test.js).');
+  // A root with no drive letter keeps its case, and a path that climbs out of the root is not inside it.
+  const posix = factsLine([write('/Repo/test/a.test.js'), write('/repo/src/../test/b.test.js'), write('/repo/../etc/test/c.test.js')], { root: '/repo' });
+  assert.strictEqual(posix, 'Test runs this turn: none.' + GLOVE_ONLY + 'Files changed this turn, Glove: 3 (test files: /Repo/test/a.test.js, test/b.test.js, /repo/../etc/test/c.test.js); Sentinel: none.');
+});
+
 // With the switch on, the facts line comes first and the gate's own text follows
 // it word for word: every golden output, prefixed and nothing else changed.
 const FACTS_HEAD = 'orunmila facts (from the records, not your prose): ';

@@ -89,10 +89,28 @@ function status(e) {
   return e.agent === 'claude-code' ? 'pass' : 'status unknown';
 }
 
+// A path with `\` read as `/` and `.` and `..` resolved, so a Windows record and
+// a POSIX one are compared and shown alike, whichever platform runs the gate.
+const slashed = (p) => path.posix.normalize(String(p).replace(/\\/g, '/'));
+const DRIVE = /^[A-Za-z]:\//;
+
+/**
+ * The part of `p` under `root`, written with `/`, or null when `p` is not
+ * inside it. A root with a drive letter is matched without regard to case, as
+ * Windows matches it; any other root, with case.
+ */
+function under(p, root) {
+  if (!root) return null;
+  const s = slashed(p);
+  if (!s.startsWith('/') && !DRIVE.test(s)) return null;
+  const r = slashed(root).replace(/\/+$/, '');
+  const fold = DRIVE.test(r + '/') ? (x) => x.toLowerCase() : (x) => x;
+  return fold(s).startsWith(fold(r) + '/') ? s.slice(r.length + 1) : null;
+}
+
 function shown(p, root) {
-  const s = String(p);
-  if (root && path.isAbsolute(s) && s.startsWith(root + path.sep)) return path.relative(root, s);
-  return s;
+  const rel = under(p, root);
+  return rel === null ? String(p) : rel;
 }
 
 function isTestFile(p) {
@@ -101,7 +119,7 @@ function isTestFile(p) {
 }
 
 function inside(p, root) {
-  return path.isAbsolute(p) && p.startsWith(root + path.sep);
+  return under(p, root) !== null;
 }
 
 /** "none", or a count with the test files named. */

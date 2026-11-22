@@ -1261,6 +1261,13 @@ const MUTANTS = [
   { id: 'LC3-2 any Sentinel write is a restore', file: 'scripts/leopard-check.js', test: 'test/leopard-check.js',
     from: "w.hash !== undefined && w.hash === committedHash(rev, w.rel)) putBack.set(w.rel, w.t);", to: "w.hash !== undefined) putBack.set(w.rel, w.t);",
     fails: ['--pending (LC3): a write to other bytes'] },
+  // Slice G3: a command whose exit the intake's downtime lost (LD160).
+  { id: 'G3-1 a command whose exit was lost runs forever', file: 'src/opon/settle/engine.js', test: 'test/group.js',
+    from: "          c.lost = true;\n          c.exitAt = from;\n", to: "",
+    fails: ['G3 (found replaying a real session)'] },
+  { id: "G3-2 the hold ignores a lost exit", file: 'src/opon/settle/engine.js', test: 'test/group.js',
+    from: "=== 'ended') && !g.lost) return 'process';", to: "=== 'ended')) return 'process';",
+    fails: ['G3 (found replaying a real session)'] },
   // Slice G2: parents and children (LD159).
   { id: 'G2-1 a command has no children', file: 'src/opon/settle/engine.js', test: 'test/group.js',
     from: "        if (running.length === 1) {", to: "        if (false) {",
@@ -1343,7 +1350,7 @@ const MUTANTS = [
     fails: ["rule 4: an editor's temp names"] },
   // Slice S3: rule 3, the process-aware hold (LD154).
   { id: 'S3-1 a running command is not held', file: 'src/opon/settle/engine.js', test: 'test/settle.js',
-    from: "!g.says.some((v) => v === 'exited' || v === 'ended')) return 'process';", to: "!g.says.some((v) => v === 'exited' || v === 'ended')) return null;",
+    from: "=== 'ended') && !g.lost) return 'process';", to: "=== 'ended') && !g.lost) return null;",
     fails: ["rule 3: a running command's group"] },
   { id: 'S3-2 the ceiling cuts a running command', file: 'src/opon/settle/engine.js', test: 'test/settle.js',
     from: "const byCeiling = g.isCommand && g.says.includes('started') ? null : g.first + ceiling;", to: "const byCeiling = g.first + ceiling;",

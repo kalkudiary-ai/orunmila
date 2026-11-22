@@ -75,7 +75,13 @@
  * is held while its parent runs, then waits one quiet window after the exit;
  * a parent settles only once it has exited and every child has settled, at the
  * later of the two moments (groups with children are settled after the rest
- * at each step, so the moment is event time, not the order of a loop). A mark for a settled group (in its
+ * at each step, so the moment is event time, not the order of a loop).
+ *
+ * A command whose exit was lost (G3, LD160; found replaying a real session):
+ * the intake's downtime gap that begins after a command started, with no exit
+ * recorded yet, may have swallowed the exit (line 439: outcome missing, a gap
+ * covers it). From the gap's start the command is no longer counted as
+ * running: its hold ends, its group settles, and it takes no later children. A mark for a settled group (in its
  * grace) joins it and opens it again, its timer restarted: the grace is there
  * for a slow source's marks of the same event. A sealed group is never
  * reopened (rule 8, slice S6). Ticks only move time.
@@ -141,7 +147,7 @@ function createOpon({ sessionId, config }) {
       const p = unsealed.get(g.parentId);
       if (p && holdOf(p) === 'process') return 'process'; // a child of a running command (G2)
     }
-    if (g.isCommand && g.says.includes('started') && !g.says.some((v) => v === 'exited' || v === 'ended')) return 'process';
+    if (g.isCommand && g.says.includes('started') && !g.says.some((v) => v === 'exited' || v === 'ended') && !g.lost) return 'process';
     if (g.isTurn && !g.turnEnded) return 'turn';
     return null;
   }
@@ -165,7 +171,17 @@ function createOpon({ sessionId, config }) {
     const seen = BigInt(m.mono_ns);
     const from = d.since && d.since.mono_ns ? BigInt(d.since.mono_ns) : seen;
     const to = d.until && d.until.mono_ns ? BigInt(d.until.mono_ns) : seen;
-    gaps.push({ from, to, who: d.since ? 'both' : d.root ? 'sentinel' : 'glove' });
+    const who = d.since ? 'both' : d.root ? 'sentinel' : 'glove';
+    gaps.push({ from, to, who });
+    if (who === 'both') {
+      // G3: a command started before the intake's downtime, with no exit yet: its exit may be lost.
+      for (const c of unsealed.values()) {
+        if (c.isCommand && c.startAt !== null && c.exitAt === null && c.startAt <= from) {
+          c.lost = true;
+          c.exitAt = from;
+        }
+      }
+    }
   }
 
   function record(g) {
@@ -324,7 +340,7 @@ function createOpon({ sessionId, config }) {
       const continues = f && (f.held || now - f.at < quiet) ? f.id : null;
       const s = sealedLast.get(key);
       const amends = s && ((m.cause_hint && s.causes.has(m.cause_hint)) || BigInt(m.mono_ns) <= s.at) ? s.id : null;
-      g = { n: ++made, id: id(made), key, state: 'open', parentId: null, childIds: [], startAt: null, exitAt: null, target, seqs: [], says: [], real: [], realSays: [], sources: [], slots: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues, amends, causes: new Set(), isCommand: key.startsWith('command:'), isTurn: key.startsWith('turn:'), turnEnded: false };
+      g = { n: ++made, id: id(made), key, state: 'open', parentId: null, childIds: [], startAt: null, exitAt: null, lost: false, target, seqs: [], says: [], real: [], realSays: [], sources: [], slots: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues, amends, causes: new Set(), isCommand: key.startsWith('command:'), isTurn: key.startsWith('turn:'), turnEnded: false };
       live.set(key, g);
       unsealed.set(g.id, g);
       all.push(g);

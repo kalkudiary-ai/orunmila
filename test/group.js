@@ -155,4 +155,20 @@ it('G2: a parent settles no earlier than its last child: a slow source\'s child,
   assert.strictEqual(parent.settled_at_ns, ns(3300), 'the later of its own moment (2,500) and its last child\'s');
 }));
 
+it("G3 (found replaying a real session): a command whose exit was lost in the intake's downtime is no longer running after the gap: its group settles, and it takes no later children", withBase((base) => {
+  const s = makeLog(base);
+  s.append(M.started(0, 'c1', { kind: 'command', text: 'orunmila intake stop' }, 'Bash'));
+  s.append({ schema_version: 1, session_id: SID, source: 'process', agent: null, turn: null, sub_agent: null, observed_at: wall(3000), mono_ns: ns(3000), cause_hint: null, target: null, says: 'gap', detail: { lost: 'every mark sent to intake while it was not running', since: { mono_ns: ns(1000), observed_at: wall(1000) }, until: { mono_ns: ns(3000), observed_at: wall(3000) }, sessions: [SID] } });
+  s.append(M.started(6000, 'c2', { kind: 'command', text: 'make' }, 'Bash'));
+  s.append(M.disk(6500, 'y.o', 'created'));
+  s.append(M.exited(7000, 'c2', 'make'));
+  s.append(M.tick(30000));
+  const g = groups(s.dir);
+  const cmd = (text) => g.find((x) => x.target && x.target.kind === 'command' && x.target.text === text);
+  const c1 = cmd('orunmila intake stop');
+  const c2 = cmd('make');
+  assert.strictEqual(c1.state, 'sealed', 'not held forever by an exit the gap lost');
+  assert.deepStrictEqual(c2.children, [at(g, 'y.o').group_id], 'y.o is make\'s, not ambiguous with a command that stopped being seen');
+}));
+
 runAll('group');

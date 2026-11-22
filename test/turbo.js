@@ -838,6 +838,33 @@ it('clone: an isolated repo on the branch, the ledger branch local, no remote, h
   }
 });
 
+it('clone: a shallow source gives a clone whose history git can walk (the live repo is shallow)', () => {
+  const base = fs.realpathSync(tmpDir());
+  try {
+    const full = path.join(base, 'full');
+    fs.mkdirSync(full);
+    gitIn(full, ['init', '-q', '-b', 'work']);
+    for (const n of ['1', '2', '3']) {
+      fs.writeFileSync(path.join(full, 'f.txt'), n);
+      gitIn(full, ['add', 'f.txt']);
+      gitIn(full, ['commit', '-q', '-m', `c${n}`]);
+    }
+    const shallow = path.join(base, 'shallow');
+    assert.strictEqual(spawnSync('git', ['clone', '-q', '--depth', '1', '--branch', 'work', `file://${full}`, shallow]).status, 0);
+    assert.ok(fs.existsSync(path.join(shallow, '.git', 'shallow')), 'the test source is not shallow');
+    // The source is a linked worktree of the shallow repo, as orunmila-dev is of the live copy:
+    // its shallow file is in the common dir, which a local clone from the worktree path misses.
+    const wt = path.join(base, 'wt');
+    assert.strictEqual(gitIn(shallow, ['worktree', 'add', '-q', '-b', 'dev', wt]).status, 0);
+    const dest = path.join(base, 'turbo-clone');
+    turbo.cloneRepo({ source: wt, dest, branch: 'dev', claudeHome: path.join(base, 'ch') });
+    // Before the fix: "Failed to traverse parents" (the live clone's referee died on it, run 20261122T021632Z).
+    assert.strictEqual(gitIn(dest, ['log', '--all', '--format=%h']).status, 0, gitIn(dest, ['log', '--all']).stderr);
+  } finally {
+    rmrf(base);
+  }
+});
+
 it('driver: a HEAD reflog entry that is not a commit (a checkout, even one put back) makes the next session a recovery', async () => {
   const steps = [{ result: R('nothing', null), checkoutAndBack: true }, { result: R('recovered', null) }];
   const d = driverSetup(steps, { slices: [S('a')], maxSessions: 2 });

@@ -89,6 +89,10 @@ function cloneRepo({ source, dest, branch, ledger = 'output-1', claudeHome = pat
   if (spawnSync('git', ['-C', dest, 'rev-parse', '--verify', '-q', `refs/remotes/origin/${ledger}`]).status === 0 && ledger !== branch) g(['branch', ledger, `origin/${ledger}`]);
   g(['remote', 'remove', 'origin']);
   g(['config', 'turbo.source', fs.realpathSync(source)]);
+  // A shallow source's shallow file is in its common dir, which a local clone from a linked
+  // worktree's path misses; without it git cannot walk the history (the referee died on it).
+  const srcCommon = fs.realpathSync(path.resolve(source, execFileSync('git', ['-C', source, 'rev-parse', '--git-common-dir'], { encoding: 'utf8' }).trim()));
+  if (fs.existsSync(path.join(srcCommon, 'shallow')) && !fs.existsSync(path.join(dest, '.git', 'shallow'))) fs.copyFileSync(path.join(srcCommon, 'shallow'), path.join(dest, '.git', 'shallow'));
   const settings = path.join(source, '.claude', 'settings.local.json');
   if (fs.existsSync(settings)) {
     fs.mkdirSync(path.join(dest, '.claude'), { recursive: true });

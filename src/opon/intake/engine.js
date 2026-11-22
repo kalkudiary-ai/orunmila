@@ -39,9 +39,10 @@
  *   intake.poll()         writes a `tick` (source process) to every session with
  *                         no mark written for tickMs (line 360: the heartbeat
  *                         ticks only while idle); returns how many it wrote
- *   intake.resume([{ id, log }])
+ *   intake.resume([{ id, log }], { also }?)
  *                         after a restart, before anything else: one gap per
- *                         reopened session for the downtime (test 84; below);
+ *                         reopened session for the downtime (test 84; below),
+ *                         `also` added to its lost text (a squat, LD132);
  *                         returns { gaps: [{ id, seq }], failed: [{ id, reason }],
  *                         skipped: [{ id, reason }] } (sessions that ended)
  *   intake.stop(reason)   a planned stop: a closing note in each session not
@@ -218,7 +219,7 @@ function createIntake({ openLog, clock, checkSender, tickMs = TICK_MS }) {
    * now below `since` is written too, flagged clock_reset. A gap a log refuses
    * is reported in `failed`, never dropped.
    */
-  function resume(entries) {
+  function resume(entries, { also } = {}) {
     if (sessions.size) throw new Error('resume comes first: this intake already holds sessions');
     const ids = entries.map((e) => e.id);
     if (new Set(ids).size !== ids.length) throw new Error('a session is resumed twice');
@@ -238,7 +239,7 @@ function createIntake({ openLog, clock, checkSender, tickMs = TICK_MS }) {
         continue;
       }
       const detail = {
-        lost: `every mark sent to intake while it was not running, from ${since.observed_at} to ${now.wall}`,
+        lost: `every mark sent to intake while it was not running, from ${since.observed_at} to ${now.wall}` + (also ? `; ${also}` : ''),
         since: { mono_ns: since.mono_ns, observed_at: since.observed_at },
         until: { mono_ns: now.mono, observed_at: now.wall },
         sessions: named,

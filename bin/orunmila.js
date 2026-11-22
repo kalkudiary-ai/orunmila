@@ -1138,8 +1138,106 @@ function leakCheck() {
   console.log('\nNo value found.');
 }
 
+/**
+ * `orunmila intake run|start|status|stop` — the intake server (slice B1e,
+ * LD132): one per machine, on a Unix socket in Orunmila's home. `run` serves in
+ * the foreground (what a launch agent runs); `start` runs it detached and waits
+ * up to 5 s for it to answer; `status` exits 0 when one answers, 1 when none
+ * does; `stop` sends SIGTERM to the pid it answers with and waits for it to go.
+ * Nothing sends to it yet: the hooks' sender is slice B2.
+ */
+async function cmdIntake() {
+  const { createServer, intakePaths, readInstallKey, statusOf } = require('../src/opon/intake/server');
+  const home = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
+  const p = intakePaths(home);
+  const sub = args[1];
+  const waitFor = async (cond) => {
+    for (let end = Date.now() + 5000; Date.now() < end; ) {
+      if (await cond()) return true;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    return cond();
+  };
+  if (sub === 'run') {
+    const { createRouter } = require('../src/opon/intake/router');
+    const { nowMono } = require('../src/opon/intake/mono');
+    const router = createRouter({
+      home,
+      clock: () => ({ mono: nowMono(), wall: new Date().toISOString() }),
+      checkSender: () => false, // no HTTP channel yet: nothing may pin (LD132)
+      codeRoot: path.join(__dirname, '..', 'src'),
+      orunmilaVersion: require('../package.json').version,
+      installKey: readInstallKey(home),
+    });
+    const server = createServer({ home, router });
+    const r = await server.start();
+    if (!r.ok) {
+      console.error(`orunmila intake: ${r.reason}`);
+      process.exit(r.code === 'running' ? 3 : 1);
+    }
+    console.log(`orunmila intake: listening on ${r.sock} (pid ${process.pid})` + (r.squat ? `; another process held the socket: recorded in ${p.errors}` : ''));
+    let stopping = false;
+    for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) {
+      process.on(sig, async () => {
+        if (stopping) return;
+        stopping = true;
+        await server.stop(`stopped by ${sig}`);
+        process.exit(0);
+      });
+    }
+    return;
+  }
+  if (sub === 'start') {
+    const st = await statusOf(p.sock);
+    if (st) {
+      console.log(`orunmila intake: already running (pid ${st.pid}) on ${p.sock}`);
+      return;
+    }
+    fs.mkdirSync(p.dir, { recursive: true, mode: 0o700 });
+    const out = fs.openSync(p.out, 'a', 0o600);
+    const child = require('child_process').spawn(process.execPath, [__filename, 'intake', 'run'], { detached: true, stdio: ['ignore', out, out], env: process.env });
+    child.unref();
+    fs.closeSync(out);
+    let seen = null;
+    await waitFor(async () => (seen = await statusOf(p.sock, 300)) !== null && seen.pid === child.pid);
+    if (seen && seen.pid === child.pid) {
+      console.log(`orunmila intake: started (pid ${child.pid}) on ${p.sock}`);
+      return;
+    }
+    console.log(`orunmila intake: did not start within 5 s; its output is in ${p.out}`);
+    process.exitCode = 1;
+    return;
+  }
+  if (sub === 'status') {
+    const st = await statusOf(p.sock);
+    if (!st) {
+      console.log(`orunmila intake: not running (nothing answers on ${p.sock})`);
+      process.exitCode = 1;
+      return;
+    }
+    console.log(`orunmila intake: running (pid ${st.pid}) since ${st.started_at} on ${st.socket}; ${st.held.length} session(s) held`);
+    return;
+  }
+  if (sub === 'stop') {
+    const st = await statusOf(p.sock);
+    if (!st) {
+      console.log(`orunmila intake: not running (nothing answers on ${p.sock})`);
+      process.exitCode = 1;
+      return;
+    }
+    process.kill(st.pid, 'SIGTERM');
+    const gone = await waitFor(async () => !fs.existsSync(p.lock) && (await statusOf(p.sock, 300)) === null);
+    console.log(gone ? `orunmila intake: stopped (pid ${st.pid})` : `orunmila intake: pid ${st.pid} did not stop within 5 s`);
+    if (!gone) process.exitCode = 1;
+    return;
+  }
+  console.log('Usage: orunmila intake run|start|status|stop');
+  process.exitCode = 2;
+}
+
 const COMMANDS = {
   install: cmdInstall,
+  intake: cmdIntake,
   agents: cmdAgents,
   laws: cmdLaws,
   stats: cmdStats,
@@ -1215,6 +1313,7 @@ Both lenses
   orunmila debug-transcript <path>                inspect why transcript parsing isn't matching your install
   orunmila verify <session-folder> [--json]       check a session log folder's hash chains, records and kept files
                                                   (the new per-session format; capture does not write it yet)
+  orunmila intake run|start|status|stop           the intake server, one per machine (nothing sends to it yet)
 
 Docs: README.md · known issues with status: review/ISSUES.md
 `);

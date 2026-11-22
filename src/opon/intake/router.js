@@ -24,10 +24,16 @@
  *       writes no mark.
  *   router.poll()       the engine's ticks (returned: how many), then releases
  *                       each session with no payload for releaseMs (LD123)
- *   router.resume()     after a restart, before any payload: reopens the
+ *   router.resume({ also }?)
+ *                       after a restart, before any payload: reopens the
  *                       sessions held at the last write of held.json and gives
- *                       each a gap for the downtime (test 84); the engine's answer
+ *                       each a gap for the downtime (test 84), `also` added to
+ *                       its lost text (LD132); the engine's answer
  *   router.stop(reason) the engine's planned stop (LD56)
+ *   router.error(reason, payload)
+ *                       a line to <home>/intake/errors.jsonl, redacted (LD124);
+ *                       the server's unreadable lines and squats (LD132)
+ *   router.held()       the ids of the sessions held, sorted
  *
  * Turns (test 63; D-Q2): a turn opens at the first payload after the previous
  * turn's Stop, or at the session's first: a prompt, or, for a continuation, a
@@ -288,7 +294,7 @@ function createRouter(o) {
     return ticks;
   }
 
-  function resume() {
+  function resume(opts = {}) {
     let ids = [];
     try {
       ids = JSON.parse(fs.readFileSync(path.join(intakeDir, 'held.json'), 'utf8'));
@@ -307,7 +313,7 @@ function createRouter(o) {
         error(`a held session could not be reopened after a restart: ${e.message}`, { session_id: id });
       }
     }
-    const out = engine.resume(entries);
+    const out = engine.resume(entries, { also: opts.also });
     writeHeld();
     return { ...out, failed: [...out.failed, ...failed] };
   }
@@ -317,7 +323,7 @@ function createRouter(o) {
     return out;
   }
 
-  return { payload, poll, resume, stop };
+  return { payload, poll, resume, stop, error, held: engine.held };
 }
 
 module.exports = { createRouter, RELEASE_MS };

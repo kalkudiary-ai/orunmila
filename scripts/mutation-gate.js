@@ -1434,6 +1434,10 @@ const MUTANTS = [
   { id: 'B9-7 the gate reads the marks with the flag off', file: 'src/laws/gate.js', test: 'test/gate-from-marks.js',
     from: "if (process.env.ORUNMILA_GATE_FROM_MARKS === '1') {", to: "if (true) {",
     fails: ['B9 gate: with ORUNMILA_GATE_FROM_MARKS=1'] },
+  // Slice Q4: SECURITY.md's response times (LD164).
+  { id: 'Q4-1 SECURITY.md promises no time', file: 'SECURITY.md',
+    from: '- an acknowledgement within 7 days of your report;', to: "- an acknowledgement as soon as the maintainer sees it;",
+    fails: ['SECURITY.md says how fast a report is answered'] },
   // Slice B9b: only a turn the log shows is this Stop's, and whole (LD163).
   { id: "B9b-1 a turn ended with another claim is judged", file: 'src/opon/gate/turn-marks.js', test: 'test/gate-from-marks.js',
     from: 'if (!last || !last.detail || last.detail.text !== claimText) return', to: 'if (false) return',

@@ -246,6 +246,12 @@ it('the limits table in SECURITY.md states the PEM bounds the code uses', () => 
   assert.ok(counts && counts.includes(`count word: ${COUNT_WORDS.join(', ')} |`), String(counts));
 });
 
+it('SECURITY.md says how fast a report is answered: 7, 30 and 90 days (brief line 742, LD164)', () => {
+  const doc = fs.readFileSync(path.join(__dirname, '..', 'SECURITY.md'), 'utf8');
+  const section = doc.slice(doc.indexOf('## Reporting a vulnerability'));
+  for (const promise of ['acknowledgement within 7 days', 'within 30 days', 'within 90 days']) assert.ok(section.includes(promise), `the reporting section does not promise "${promise}"`);
+});
+
 // Regression guard, not a test of this fix: it passes on every version so far.
 it('a complete JSON-escaped key (a service-account file) is removed whole and the JSON after it is kept', () => {
   const whole = redactString('"-----BEGIN PRIVATE KEY-----\\nMIIEvQ' + 'j'.repeat(58) + '\\n-----END PRIVATE KEY-----\\n", "x": 1');

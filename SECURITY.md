@@ -136,6 +136,12 @@ on the repository. Include:
 - the version (`orunmila --version` / the `package.json` version) and your OS +
   Node version.
 
-You'll get an acknowledgement as soon as the maintainer sees it. Once a fix is
-released, we're happy to credit you in the changelog unless you'd prefer to stay
-anonymous.
+Orunmila has one maintainer, so these are the longest waits, not the usual ones:
+
+- an acknowledgement within 7 days of your report;
+- within 30 days, whether the issue is confirmed and what will be done;
+- within 90 days, a released fix, or, when a fix takes longer, a published
+  advisory with a workaround, on a date agreed with you first.
+
+Once a fix is released, we're happy to credit you in the changelog unless you'd
+prefer to stay anonymous.

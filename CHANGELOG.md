@@ -183,6 +183,9 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   The test suite fails if the gate or the Stain Map reads any of them
   differently from its label; `node scripts/laws-corpus.js` lists every
   sentence a change gets wrong.
+- **SECURITY.md says how fast a report is answered:** an acknowledgement within
+  7 days, whether the issue is confirmed within 30, and a released fix, or a
+  published advisory with a workaround, within 90.
 
 ## [0.2.2] — 2026-11-10 (security patch)
 

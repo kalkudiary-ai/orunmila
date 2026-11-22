@@ -160,7 +160,19 @@
  * `outcome_missing` (C3b, LD189) for each call with a `started` mark in the
  * group and no outcome when it seals, or an outcome its payload says was
  * interrupted: `ref` the call, `why` interrupted, gap (a Glove or intake capture
- * gap covers the call's wait) or null. The other conflicts come with C3c-C3e.
+ * gap covers the call's wait) or null.
+ *
+ * Phantom command claims (C3c, LD191; lines 431, 433, 441; tests 4b, 39): when
+ * the group holding a `claimed` mark seals, each command claim C2 reads in it
+ * (`claimsOf`) is checked against its turn's runs: for a claim about tests,
+ * its test runs (facts.js `isTestRun`); for any other, every command of the
+ * turn. A run's status is the gate from marks' (receipts.js): a pass through
+ * an unguarded pipe is `unknown`. Backed when the last run that settled
+ * passed; otherwise the claim is its own sealed record (`target.kind` claim)
+ * with a `phantom_claim` conflict (`why`: no_command, failed, unknown; the
+ * `runs` cited), high only when the Glove was healthy (line 352) and the
+ * claim had no run or the run failed, else low. The other conflicts come with
+ * C3d-C3e.
  *
  * Group records (LD142) use the odù's field names where they apply, and are
  * not odù records.
@@ -170,6 +182,9 @@ const path = require('path');
 const { keyOf, aliasPath } = require('../group/keys');
 const { isIgnored } = require('../../capture/fs-sentinel/ignore');
 const { concurrent } = require('../intake/overlap');
+const { claimsOf } = require('../corroborate/claims');
+const { isTestRun } = require('../../laws/facts');
+const { hasUnguardedPipe } = require('../../laws/evaluate');
 
 const NS_PER_MS = 1000000n;
 const DISK = new Set(['created', 'modified', 'deleted', 'renamed']);
@@ -230,6 +245,11 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
   const lastState = new Map(); // key -> the target's state at its last sealed group, or after a rename (N2)
   const calls = new Map(); // tool call id -> { keys, start, end }: the Glove's tool calls on files, for step 2 (A1b)
   const inFlight = new Map(); // tool call id -> { turn, start, done, interrupted, end }: every Glove call, for its outcome (C3b)
+  const claimsAt = new Map(); // a claimed mark's seq -> { turn, row, claims }: its command claims (C3c)
+  const commandsOf = new Map(); // turn -> Map(call id -> { ref, text, rows, outcome }): the turn's commands, for its claims (C3c)
+  const turnsSeen = new Set(); // turns with an agent's own Glove mark, and the turns that ended: the Glove's health (line 352; C3c)
+  const turnsEnded = new Set();
+  let hooksChanged = false; // the agent's hook settings changed: the Glove down from then (line 352)
   const exclusions = Array.isArray(config.exclusions) ? config.exclusions : [];
   const all = [];
   let now = null;
@@ -355,6 +375,36 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       const covered = gaps.some((x) => (x.who === 'both' || x.who === 'glove') && x.from <= t.end && x.to >= t.start);
       const why = t.done ? (t.interrupted ? 'interrupted' : undefined) : covered ? 'gap' : null;
       if (why !== undefined) out.push(conflictOf(g, 'outcome_missing', g.sources, { ref: id, why }));
+    }
+    return out;
+  }
+
+  /** Line 352 (C3c): the Glove was healthy up to `at`: no capture gap covering it, its hook settings unchanged, every turn ended. */
+  const gloveHealthy = (at) => !hooksChanged && !gaps.some((x) => (x.who === 'both' || x.who === 'glove') && x.from <= at) && [...turnsSeen].every((t) => turnsEnded.has(t));
+  /** C3c (LD191): a run's status as the gate from marks reads it (receipts.js); a pass through an unguarded pipe is unknown (line 433). */
+  const piped = (r) => r.outcome !== null && r.outcome.status === 'pass' && hasUnguardedPipe(r.text);
+  const runStatus = (r) => (r.outcome === null || piped(r) || !['pass', 'fail'].includes(r.outcome.status) ? 'unknown' : r.outcome.status);
+
+  /** C3c (LD191; lines 431, 433, 441): each command claim of g's `claimed` marks its turn's runs do not back, as a sealed record of its own. */
+  function phantomsOf(g) {
+    const out = [];
+    for (const [i, seq] of g.seqs.entries()) {
+      const at = g.says[i] === 'claimed' ? claimsAt.get(seq) : undefined;
+      for (const c of at ? at.claims : []) {
+        const tests = c.commands.some((p) => /\b(?:tests?|tested|suites?|specs?)\b/.test(p));
+        const runs = [...(commandsOf.get(at.turn) || new Map()).values()].filter((r) => !tests || isTestRun(r.text));
+        let backed = null; // the last run that settled: true a pass, false a fail
+        for (const r of runs) if (runStatus(r) !== 'unknown') backed = runStatus(r) === 'pass';
+        if (backed === true) continue;
+        const why = !runs.length ? 'no_command' : backed === false ? 'failed' : 'unknown';
+        const rows = [at.row, ...runs.flatMap((r) => r.rows)].sort((a, b) => a.seq - b.seq);
+        const cg = { id: id(++made), key: `claim:${seq}`, state: 'sealed', target: { kind: 'claim', turn: at.turn, text: c.text }, seqs: rows.map((r) => r.seq), says: rows.map((r) => r.says), realSays: ['claimed'], sources: rows.map((r) => r.source), slots: rows.map((r) => r.slot), hints: rows.map((r) => r.hint), first: g.first, last: g.last, settledAt: g.settledAt, sealedAt: g.sealedAt, forced: false, parentId: null, childIds: [], amends: null, continues: null, net: undefined, notCredited: undefined };
+        cg.attr = { attribution: 'explained', cause: { kind: 'turn', ref: at.turn } }; // line 413: made in its turn
+        cg.confidence = why !== 'unknown' && gloveHealthy(g.sealedAt) ? 'high' : 'low';
+        const cited = runs.map((r) => ({ ref: r.ref, text: r.text, status: runStatus(r), ...(r.outcome && Number.isInteger(r.outcome.exit_code) ? { exit_code: r.outcome.exit_code } : {}), ...(piped(r) ? { piped: true } : {}) }));
+        cg.conflicts = [conflictOf(cg, 'phantom_claim', cg.sources, { claim: 'command', phrases: [...c.commands], hedged: c.hedged, why, runs: cited })];
+        out.push(record(cg));
+      }
     }
     return out;
   }
@@ -495,7 +545,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       }
     }
     sealed.sort((a, b) => (a.sealedAt < b.sealedAt ? -1 : a.sealedAt > b.sealedAt ? 1 : a.n - b.n));
-    return sealed.map((g) => {
+    return sealed.flatMap((g) => {
       g.state = 'sealed';
       g.net = netChange(g);
       g.attr = attributionOf(g);
@@ -507,7 +557,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       sealedLast.set(g.key, { id: g.id, at: g.sealedAt, causes: g.causes, seen });
       if (live.get(g.key) === g) live.delete(g.key);
       unsealed.delete(g.id);
-      return record(g);
+      return [record(g), ...(g.isTurn ? phantomsOf(g) : [])]; // C3c: a phantom claim right after the group holding it
     });
   }
 
@@ -680,6 +730,23 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     if (real) g.realSays.push(m.says);
     if (!fingerprint) g.last = now;
     if (m.says === 'ended' && m.target && m.target.kind === 'turn') g.turnEnded = true;
+    if (GLOVE.has(m.source)) {
+      // C3c (LD191): a claim's command claims, its turn's commands, and the turns the Glove's health counts (line 352).
+      const row = { seq: m.seq, says: m.says, source: m.source, slot: slotsOf(m), hint: m.cause_hint || null };
+      const claims = m.says === 'claimed' && m.turn ? claimsOf(m).filter((c) => c.commands.length) : [];
+      if (claims.length) claimsAt.set(m.seq, { turn: m.turn, row, claims });
+      if (m.target && m.target.kind === 'command' && m.cause_hint && m.turn) {
+        const runs = commandsOf.get(m.turn) || new Map();
+        const r = runs.get(m.cause_hint) || { ref: m.cause_hint, text: String(m.target.text || ''), rows: [], outcome: null };
+        r.rows.push(row);
+        if (m.says !== 'started') r.outcome = { status: m.detail && m.detail.exit_status, exit_code: m.detail && m.detail.exit_code };
+        runs.set(m.cause_hint, r);
+        commandsOf.set(m.turn, runs);
+      }
+      if (m.turn && !m.sub_agent) turnsSeen.add(m.turn);
+    }
+    if (m.says === 'ended' && m.target && m.target.kind === 'turn' && (m.target.id || m.turn)) turnsEnded.add(m.target.id || m.turn);
+    if (m.says === 'tampered' && m.detail && m.detail.what === 'hook_settings') hooksChanged = true;
     if (GLOVE.has(m.source) && m.cause_hint) {
       // C3b (LD189): a call waits from its `started` until its outcome, its turn's end, the session's end or a gap.
       const c = inFlight.get(m.cause_hint) || { turn: null, start: null, done: false, interrupted: false, end: null };

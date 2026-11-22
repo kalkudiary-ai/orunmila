@@ -177,6 +177,135 @@ it('C3b: a call with its outcome has no outcome_missing, and the schema names th
   assert.ok(keys({ ...o, conflicts: [{ kind: 'outcome_missing', sources: ['hook'], said: { hook: ['started'] }, why: null }] }).length > 0, 'an outcome_missing names its call');
 });
 
+// C3c (LD191; lines 431, 433, 441; tests 4b, 39): a command claim with no run behind it is its own odù.
+const claimed = (ms, turn, text) => ({ ...M.claimed(ms, turn), detail: { text } });
+const ran = (ms, call, text, status, turn, extra = {}) => [M.started(ms, call, { kind: 'command', text }, 'Bash', turn), { ...M.exited(ms + 100, call, text, status, turn), detail: { tool: 'Bash', exit_status: status, output_excerpt: '', ...extra } }];
+const claimOdus = (odus, turn) => odus.filter((o) => o.target && o.target.kind === 'claim' && o.target.turn === turn);
+const phantom = (why, runs, said, phrases = ['tests pass']) => ({ kind: 'phantom_claim', sources: Object.keys(said).sort(), said, claim: 'command', phrases, hedged: false, why, runs });
+/** A backed claim has no odù of its own: assert its turn's odù sealed with it, so "none" is not a turn that never sealed. */
+const backed = (odus, turn, seq) => {
+  assert.strictEqual(claimOdus(odus, turn).length, 0, `${turn}: backed`);
+  assert.ok(odus.some((o) => !(o.target && o.target.turn) && o.mark_seqs.includes(seq)), `${turn}: its claim's group sealed`);
+};
+
+it('C3c test 4b: "tests pass" with no test run in its turn, the Glove healthy: one phantom-claim odù of its own, citing the absence, confidence high; the turn\'s own odù and the command\'s are unchanged', () => {
+  const odus = replay((append) => {
+    append(M.prompted(0));
+    for (const m of ran(100, 'c1', 'ls src', 'pass', 't1')) append(m); // a command, but no test run
+    append(claimed(2000, 't1', 'All tests pass.'));
+    append(M.turnEnded(2000));
+    append(M.tick(20000));
+  });
+  const [o] = claimOdus(odus, 't1');
+  assert.strictEqual(claimOdus(odus, 't1').length, 1);
+  assert.deepStrictEqual(
+    [o.target, o.action, witnesses(o), o.witness_status.sentinel.scope, o.witness_status.glove.says, o.mark_seqs, o.attribution, o.cause, o.confidence, o.conflicts],
+    [{ kind: 'claim', turn: 't1', text: 'All tests pass.' }, 'claimed', ['saw', 'out_of_scope'], 'not_a_disk_event', ['claimed'], [4], 'explained', { kind: 'turn', ref: 't1' }, 'high', [phantom('no_command', [], { agent_claim: ['claimed'] })]]
+  );
+  const turn = of(odus, (x) => x.target && x.target.kind === 'turn');
+  assert.deepStrictEqual([witnesses(turn), turn.witness_status.glove.says, turn.conflicts], [['saw', 'out_of_scope'], ['prompted', 'claimed', 'ended'], []]);
+  const cmd = of(odus, (x) => x.target && x.target.kind === 'command');
+  assert.deepStrictEqual([witnesses(cmd), cmd.conflicts], [['saw', 'out_of_scope'], []]);
+});
+
+it('C3c test 4b: "tests pass" after the tests ran and failed cites the run and its exit code, confidence high; a failed run after a passing one undoes it; a passing run after a failed one backs the claim', () => {
+  const s = {};
+  const odus = replay((append) => {
+    for (const m of ran(0, 'c1', 'npm test', 'fail', 't1', { exit_code: 1 })) append(m);
+    append(claimed(1000, 't1', 'All tests pass.'));
+    append(M.turnEnded(1000));
+    for (const m of [...ran(10000, 'c2', 'npm test', 'pass', 't2'), ...ran(10500, 'c3', 'npm test', 'fail', 't2')]) append(m);
+    append(claimed(11000, 't2', 'All tests pass.'));
+    append(M.turnEnded(11000, 't2'));
+    for (const m of [...ran(20000, 'c4', 'npm test', 'fail', 't3'), ...ran(20500, 'c5', 'npm test', 'pass', 't3')]) append(m);
+    s.t3 = append(claimed(21000, 't3', 'All tests pass.'));
+    append(M.turnEnded(21000, 't3'));
+    append(M.tick(40000));
+  });
+  const [one] = claimOdus(odus, 't1');
+  assert.deepStrictEqual([witnesses(one), one.mark_seqs, one.confidence, one.conflicts], [['saw', 'out_of_scope'], [1, 2, 3], 'high', [phantom('failed', [{ ref: 'c1', text: 'npm test', status: 'fail', exit_code: 1 }], { agent_claim: ['claimed'], hook: ['started', 'exited'] })]]);
+  const [two] = claimOdus(odus, 't2');
+  assert.deepStrictEqual([witnesses(two), two.confidence, two.conflicts.map((c) => [c.why, c.runs])], [['saw', 'out_of_scope'], 'high', [['failed', [{ ref: 'c2', text: 'npm test', status: 'pass' }, { ref: 'c3', text: 'npm test', status: 'fail' }]]]], 'a failure with no stated code has no exit_code');
+  backed(odus, 't3', s.t3); // the last run that settled passed
+});
+
+it('C3c test 39: "tests pass" backed only by `npm test | tail` without pipefail is not proven: status unknown, confidence low, and the gate from marks takes it as no receipt; with pipefail set first it backs the claim', () => {
+  const piped = ran(0, 'c1', 'npm test | tail -5', 'pass', 't1');
+  const s = {};
+  const odus = replay((append) => {
+    for (const m of piped) append(m);
+    append(claimed(1000, 't1', 'All tests pass.'));
+    append(M.turnEnded(1000));
+    for (const m of ran(10000, 'c2', 'set -o pipefail; npm test | tail -5', 'pass', 't2')) append(m);
+    s.t2 = append(claimed(11000, 't2', 'All tests pass.'));
+    append(M.turnEnded(11000, 't2'));
+    append(M.tick(30000));
+  });
+  const [o] = claimOdus(odus, 't1');
+  assert.deepStrictEqual([witnesses(o), o.confidence, o.conflicts], [['saw', 'out_of_scope'], 'low', [phantom('unknown', [{ ref: 'c1', text: 'npm test | tail -5', status: 'unknown', piped: true }], { agent_claim: ['claimed'], hook: ['started', 'exited'] })]]);
+  backed(odus, 't2', s.t2);
+  const { buildReceiptsFromMarks } = require('../src/opon/gate/receipts');
+  const r = buildReceiptsFromMarks(piped);
+  assert.deepStrictEqual([r.passingCommands.length, r.unreliableCommands.map((c) => c.command)], [0, ['npm test | tail -5']], 'line 433: the law gate treats it as no receipt');
+});
+
+it('C3c: a command claim not about tests is matched by any command of its turn; with no command at all it is phantom; a Glove gap before the claim lowers a phantom to low', () => {
+  const s = {};
+  const odus = replay((append) => {
+    for (const m of ran(0, 'c1', 'npm run build', 'pass', 't1')) append(m);
+    s.t1 = append(claimed(1000, 't1', 'The build succeeds.'));
+    append(M.turnEnded(1000));
+    append(claimed(10000, 't2', 'The build succeeds.'));
+    append(M.turnEnded(10000, 't2'));
+    append(M.gap(20000, 'hook payloads dropped'));
+    append(claimed(21000, 't3', 'All tests pass.'));
+    append(M.turnEnded(21000, 't3'));
+    append(M.tick(40000));
+  });
+  backed(odus, 't1', s.t1);
+  const [two] = claimOdus(odus, 't2');
+  assert.deepStrictEqual([witnesses(two), two.confidence, two.conflicts], [['saw', 'out_of_scope'], 'high', [phantom('no_command', [], { agent_claim: ['claimed'] }, ['build succeeds'])]]);
+  const [three] = claimOdus(odus, 't3');
+  assert.deepStrictEqual([witnesses(three), three.confidence, three.conflicts.map((c) => c.why)], [['saw', 'out_of_scope'], 'low', ['no_command']], 'line 441: high only when the Glove was healthy for the whole session');
+});
+
+it('C3c line 352: a turn of the agent\'s that never ended, or a change to its hook settings, leaves the Glove not shown healthy: a phantom claim after it is low', () => {
+  const unended = replay((append) => {
+    append(M.prompted(0, 't1')); // its Stop never came
+    append(claimed(40000, 't2', 'All tests pass.'));
+    append(M.turnEnded(40000, 't2'));
+    append(M.tick(60000));
+  });
+  const [a] = claimOdus(unended, 't2');
+  assert.deepStrictEqual([witnesses(a), a.confidence, a.conflicts.map((c) => c.why)], [['saw', 'out_of_scope'], 'low', ['no_command']]);
+  const changed = replay((append) => {
+    append({ ...M.gap(0), says: 'tampered', target: { kind: 'process', name: 'intake' }, detail: { what: 'hook_settings' } });
+    append(claimed(1000, 't1', 'All tests pass.'));
+    append(M.turnEnded(1000));
+    append(M.tick(20000));
+  });
+  const [b] = claimOdus(changed, 't1');
+  assert.deepStrictEqual([witnesses(b), b.confidence], [['saw', 'out_of_scope'], 'low']);
+});
+
+it('C3c: the schema asks a phantom_claim for its claim kind, phrases, hedged, why and runs; its why is no_command, failed or unknown', () => {
+  const odus = replay((append) => {
+    append(claimed(0, 't1', 'All tests pass.'));
+    append(M.turnEnded(0));
+    append(M.tick(20000));
+  });
+  const [o] = claimOdus(odus, 't1');
+  const keys = (r) => checkOdu(r).map((e) => `${e.path} ${e.keyword}`);
+  assert.deepStrictEqual(keys(o), []);
+  const c = o.conflicts[0];
+  for (const k of ['claim', 'phrases', 'hedged', 'why', 'runs']) {
+    const { [k]: _gone, ...less } = c;
+    assert.ok(keys({ ...o, conflicts: [less] }).length > 0, `a phantom_claim with no ${k}`);
+  }
+  assert.ok(keys({ ...o, conflicts: [{ ...c, why: 'gap' }] }).length > 0, 'gap is outcome_missing\'s, not a phantom claim\'s');
+  assert.ok(keys({ ...o, conflicts: [missing('e1', 'failed')] }).length > 0, 'failed is a phantom claim\'s, not outcome_missing\'s');
+});
+
 it('C3a: the odù schema requires conflicts, and each conflict its kind, sources and what each said', () => {
   const [o] = replay((append) => {
     append(M.edited(0, 'e1', 'src/a.ts'));

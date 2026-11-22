@@ -379,11 +379,54 @@
           "required": [
             "ref",
             "why"
-          ]
+          ],
+          "properties": {
+            "why": {
+              "enum": [
+                "interrupted",
+                "denied",
+                "gap",
+                null
+              ]
+            }
+          }
         },
+        "allOf": [
+          {
+            "$comment": "brief v4 lines 431-433, 441; the fields are the agent's proposal (LD191, Q15)",
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "phantom_claim"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "required": [
+                "claim",
+                "phrases",
+                "hedged",
+                "why",
+                "runs"
+              ],
+              "properties": {
+                "why": {
+                  "enum": [
+                    "no_command",
+                    "failed",
+                    "unknown"
+                  ]
+                }
+              }
+            }
+          }
+        ],
         "properties": {
           "kind": {
-            "description": "The conflict's kind. concurrent_sessions: a change during overlapping sessions that cannot be pinned to one session. unconfirmed_by_filesystem: an agent reported an edit inside the Sentinel's root that the Sentinel and git never saw. outcome_missing: a tool call's `started` mark with no outcome by the end of its turn, or an outcome its payload says was interrupted.",
+            "description": "The conflict's kind. concurrent_sessions: a change during overlapping sessions that cannot be pinned to one session. unconfirmed_by_filesystem: an agent reported an edit inside the Sentinel's root that the Sentinel and git never saw. outcome_missing: a tool call's `started` mark with no outcome by the end of its turn, or an outcome its payload says was interrupted. phantom_claim: on a claim's own odù, a claim the evidence does not support.",
             "type": "string",
             "minLength": 1
           },
@@ -394,14 +437,80 @@
             "minLength": 1
           },
           "why": {
-            "description": "For outcome_missing: interrupted or denied only when the agent's own hook payload says so; gap only when a capture gap mark covers the call from its start until it stopped waiting; null otherwise, since the record does not guess why.",
-            "$comment": "brief v4 line 439; the field is the agent's proposal (LD189, Q14). No adapter records a denial today, so `denied` is not yet written",
+            "description": "For outcome_missing: interrupted or denied only when the agent's own hook payload says so; gap only when a capture gap mark covers the call from its start until it stopped waiting; null otherwise, since the record does not guess why. For phantom_claim: no_command (no matching run in the claim's turn), failed (the last matching run that settled failed) or unknown (no matching run settled: a pipe, or an unknown status).",
+            "$comment": "brief v4 lines 433, 439; the field is the agent's proposal (LD189, Q14; LD191, Q15). No adapter records a denial today, so `denied` is not yet written",
             "enum": [
               "interrupted",
               "denied",
               "gap",
-              null
+              null,
+              "no_command",
+              "failed",
+              "unknown"
             ]
+          },
+          "claim": {
+            "description": "For phantom_claim: the claim's kind, command (\"tests pass\") or file (\"I updated config.ts\").",
+            "$comment": "brief v4 lines 431-433; agent's proposal (LD191, Q15)",
+            "enum": [
+              "command",
+              "file"
+            ]
+          },
+          "phrases": {
+            "description": "For a command phantom_claim: the execution phrases the rule-based reader found in the claim.",
+            "$comment": "brief v4 line 443; agent's proposal (LD191, Q15)",
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "hedged": {
+            "description": "For phantom_claim: the reader's hedge tag on the claim.",
+            "$comment": "agent's proposal (LD191, Q15)",
+            "type": "boolean"
+          },
+          "runs": {
+            "description": "For a command phantom_claim: every run in the claim's turn that matches it, in the order they started, each with its status as Orunmila reads it; empty when none ran.",
+            "$comment": "brief v4 line 433 and test 4b (\"citing the command's exit code or its absence\"); agent's proposal (LD191, Q15)",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "ref",
+                "text",
+                "status"
+              ],
+              "properties": {
+                "ref": {
+                  "description": "The command's tool call id.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "text": {
+                  "description": "The command as recorded.",
+                  "type": "string"
+                },
+                "status": {
+                  "description": "pass, fail, or unknown: no outcome recorded, an unknown exit status, or a pass through a pipe with no pipe-failure detection set (line 433).",
+                  "enum": [
+                    "pass",
+                    "fail",
+                    "unknown"
+                  ]
+                },
+                "exit_code": {
+                  "description": "Only when the record states it.",
+                  "type": "integer"
+                },
+                "piped": {
+                  "description": "True when a pipe is why a pass is read as unknown. Absent otherwise.",
+                  "const": true
+                }
+              }
+            }
           },
           "sources": {
             "description": "The mark sources behind the odù that bear on the conflict, sorted.",

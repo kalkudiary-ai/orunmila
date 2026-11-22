@@ -16,14 +16,18 @@
  * Translations:
  * - Before a tool runs (PreToolUse): `started`, with the call id and tool name.
  * - A command's result: `exited`, pass on PostToolUse and fail on
- *   PostToolUseFailure, with no exit_code (Claude Code reports pass or fail
- *   only, line 240). Launched in the background, or interrupted: `unknown`,
- *   never pass (NF66).
+ *   PostToolUseFailure. A passing command has no code (line 240). A failure
+ *   carries the code its failure text states ("Exit code N", NF22), with the
+ *   output after that line; one that states none has no exit_code (LD121).
+ *   Launched in the background, or interrupted: `unknown`, never pass (NF66).
  * - A write: created, modified or deleted from the measured facts; with no
  *   facts, modified with the before-state null.
- * - A Read with offset or limit is `range`; without, the adapter cannot show the
- *   tool returned the whole file, so `null` (open question 3). A search is
- *   `pattern`, targeting the folder searched (the project root when none).
+ * - A Read records the extent its own result states (`read_range`, LD94):
+ *   `full` only when the counts show the whole file came back, `range` when
+ *   fewer lines came back, the content was cut at a token cap, or, with no
+ *   counts, offset or limit was asked; with neither, the adapter cannot tell,
+ *   so `null` (open question 3; X1's rule, `readRange` in agents.js). A search
+ *   is `pattern`, targeting the folder searched (the project root when none).
  * - A failed tool call other than a command: `ended`.
  * - Stop: the `claimed` mark from the payload's own final text (N10), then
  *   the turn's `ended` mark. No final text: '' with claim_unconfirmed.
@@ -32,7 +36,7 @@
  *   Claude Code's reason when it gives one (LD55).
  */
 
-const { getAdapter } = require('../../../capture/agents');
+const { getAdapter, readRange } = require('../../../capture/agents');
 const { monoString } = require('../mono');
 
 const CC = getAdapter('claude-code');
@@ -140,9 +144,19 @@ function translatePayload(payload, ctx = {}) {
   let detail;
   if (kind === 'command') {
     const response = f.toolResponse(payload);
-    const out = f.stdout(response) + (f.stderr(response) ? '\n' + f.stderr(response) : '');
+    let out = f.stdout(response) + (f.stderr(response) ? '\n' + f.stderr(response) : '');
+    let code = null;
+    if (failed) {
+      // PostToolUseFailure has no tool_response: the code and output are in its text (NF22, LD121).
+      const stated = f.failureExit(payload);
+      if (stated) {
+        code = Number.isInteger(stated.code) ? stated.code : null;
+        if (!out) out = String(stated.output || '');
+      }
+    }
     says = 'exited';
     detail = { tool: toolName, exit_status: status, output_excerpt: out.slice(0, EXCERPT) };
+    if (code !== null) detail.exit_code = code;
     if (!failed && input.run_in_background) Object.assign(detail, { exit_status: 'unknown', background: true });
     else if (!failed && response.interrupted === true) Object.assign(detail, { exit_status: 'unknown', interrupted: true });
     if (out.length > EXCERPT) keep.push({ slot: 'output_ref', text: out });
@@ -159,7 +173,9 @@ function translatePayload(payload, ctx = {}) {
     detail = { tool: toolName, exit_status: status };
     if (kind === 'pattern_read') Object.assign(detail, { read_kind: 'pattern', pattern: String(f.pattern(input) || '') });
     else {
-      detail.read_kind = input.offset !== undefined || input.limit !== undefined ? 'range' : null;
+      const r = readRange(input, f.readExtent(f.toolResponse(payload)));
+      detail.read_kind = r ? r.kind : null;
+      if (r) detail.read_range = r.range;
       if (ctx.file && Number.isInteger(ctx.file.size)) detail.size = ctx.file.size;
       if (ctx.file && ctx.file.fingerprint !== undefined) detail.fingerprint = ctx.file.fingerprint;
     }

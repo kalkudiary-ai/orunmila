@@ -189,7 +189,13 @@
     {
       "$comment": "brief v3 lines 259, 261: a read targets the file, or the folder searched",
       "if": { "properties": { "says": { "const": "read" } } },
-      "then": { "properties": { "target": { "properties": { "kind": { "enum": ["file", "dir"] } } }, "detail": { "required": ["read_kind"] } } }
+      "then": { "properties": { "target": { "properties": { "kind": { "enum": ["file", "dir"] } } }, "detail": { "required": ["read_kind"] } } },
+      "else": { "properties": { "detail": { "not": { "required": ["read_range"] } } } }
+    },
+    {
+      "$comment": "agent's choice, LD121 (O's go, 2026-11-22): a folder listing reads the folder",
+      "if": { "properties": { "detail": { "required": ["read_kind"], "properties": { "read_kind": { "const": "listing" } } } } },
+      "then": { "properties": { "target": { "properties": { "kind": { "const": "dir" } } } } }
     },
     {
       "$comment": "brief v3 line 259: a network contact targets { kind: network, host, url }",
@@ -228,6 +234,12 @@
     "count": {
       "description": "A line count; null unless both states are known.",
       "$comment": "brief v3 line 264",
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "line_number": {
+      "description": "A line number or a number of lines, as the agent asked or the tool's result stated; null when not given.",
+      "$comment": "agent's choice, LD94",
       "type": ["integer", "null"],
       "minimum": 0
     },
@@ -330,8 +342,8 @@
           "enum": ["pass", "fail", "unknown"]
         },
         "exit_code": {
-          "description": "Only when it is truly known. Never invent a code. (Claude Code reports pass or fail only; exit 3 arrives as fail.) Only a command's outcome carries it.",
-          "$comment": "brief v3 lines 240, 258",
+          "description": "Only when it is truly known. Never invent a code. Only a command's outcome carries it. Claude Code gives a passing command no code, and states a failed one's only in its failure text (\"Exit code N\"); the code is carried when stated, and a failure that states none has no exit_code.",
+          "$comment": "brief v3 lines 240, 258; the stated code is LD121 (O's go, 2026-11-22), from X1's measurement (238 of 285 failure texts open with it)",
           "type": "integer"
         },
         "output_excerpt": { "description": "The first 2,000 characters of output.", "$comment": "brief v3 line 262", "type": "string", "maxLength": 2000 },
@@ -347,10 +359,28 @@
           "items": { "type": "object" }
         },
         "read_kind": {
-          "description": "`full` only when the adapter can show the tool returned the whole file, `range` when it returned only part, `pattern` when the agent only searched, `null` when the adapter cannot tell.",
-          "$comment": "brief v3 line 261 (open question 3)",
+          "description": "`full` only when the adapter can show the tool returned the whole file, `range` when it returned only part, `pattern` when the agent only searched, `listing` when the tool listed a folder's entries (their names, no file's content), `null` when the adapter cannot tell.",
+          "$comment": "brief v3 line 261 (open question 3); listing is LD121 (O's go, 2026-11-22)",
           "type": ["string", "null"],
-          "enum": ["full", "range", "pattern", null]
+          "enum": ["full", "range", "pattern", "listing", null]
+        },
+        "read_range": {
+          "description": "On a read: the lines the agent asked for and the lines the tool's own result says it returned, each null when not given. Its read_kind is `range` when the tool returned fewer lines than the file holds, or cut its content at a token cap; `full` when its counts show the whole file came back.",
+          "$comment": "agent's choice, LD94 and LD121 (format change, O's go 2026-11-22)",
+          "type": "object",
+          "required": ["asked_offset", "asked_limit", "start_line", "lines", "total_lines"],
+          "properties": {
+            "asked_offset": { "$ref": "#/definitions/line_number" },
+            "asked_limit": { "$ref": "#/definitions/line_number" },
+            "start_line": { "$ref": "#/definitions/line_number" },
+            "lines": { "$ref": "#/definitions/line_number" },
+            "total_lines": { "$ref": "#/definitions/line_number" },
+            "truncated_by_token_cap": {
+              "description": "True when the tool's result says it cut the file's content at its token cap. Absent otherwise.",
+              "$comment": "agent's choice, LD94 (Claude Code's Read result field truncatedByTokenCap)",
+              "const": true
+            }
+          }
         },
         "pattern": { "description": "The pattern, for a search.", "$comment": "brief v3 line 261", "type": "string" },
         "size": { "description": "The file's size in bytes.", "$comment": "brief v3 lines 228, 261, 264", "type": "integer", "minimum": 0 },

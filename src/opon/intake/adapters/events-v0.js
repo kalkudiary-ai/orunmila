@@ -14,13 +14,18 @@
  * quarantined with its reason. Nothing is dropped.
  *
  * Translations, each forced by what today's records hold:
- * - Claude Code reports pass or fail only: `exit_code` is never carried for it
- *   (today's `1` on a failed command is invented, NF22). Pass is `null`.
+ * - An integer `exit_code` is carried for any agent, except a failed row's
+ *   `1`: today's capture invents it with ORUNMILA_EXACT_CAPTURE off (NF22), and
+ *   it cannot be told from a real 1, so it is dropped (LD121). A pass recorded
+ *   as `null` has no code.
  * - A hook write is `modified`: today's record cannot tell a created file from
  *   a modified one, and its before-state is unknown (fingerprint_before and
  *   line counts null).
  * - Today's `read_kind: "full"` is not shown to be the whole file, so it is
- *   `null` (open question 3); `pattern` stays, targeting the project root.
+ *   `null` (open question 3), unless the row carries exact capture's
+ *   `read_range` (LD94): its own fields are carried, and `range` or `full`
+ *   re-derived from them by X1's rule (LD121). `pattern` stays, targeting the
+ *   project root. A `listing` stays a listing, of its folder.
  * - Today's write and read records name no tool: `detail.tool` is null. A
  *   command is the Bash tool for Claude Code.
  * - A failed tool call other than a command ends `ended`.
@@ -33,6 +38,7 @@
  */
 
 const { onRedactionList } = require('../redact');
+const { readRange, wholeNumber } = require('../../../capture/agents');
 
 const VCS_TYPES = new Set(['git_state', 'pr_state', 'ci_state']);
 const SENTINEL_VERB = { create: 'created', modify: 'modified', delete: 'deleted' };
@@ -46,6 +52,15 @@ function lineCounts(diff) {
     else if (l.startsWith('-') && !l.startsWith('---')) removed++;
   }
   return { added, removed };
+}
+
+/** Exact capture's read_range (LD94) re-read field by field: { kind, range } by X1's rule, or null. */
+function exactRead(e) {
+  const r = e.read_range;
+  if (!r || typeof r !== 'object' || Array.isArray(r)) return null;
+  const extent = { start_line: wholeNumber(r.start_line), lines: wholeNumber(r.lines), total_lines: wholeNumber(r.total_lines) };
+  if (r.truncated_by_token_cap === true) extent.truncated_by_token_cap = true;
+  return readRange({ offset: r.asked_offset, limit: r.asked_limit }, extent);
 }
 
 function common(e) {
@@ -76,7 +91,7 @@ function translateGlove(e) {
       m.target = { kind: 'command', text: e.command };
       m.says = 'exited';
       m.detail = { tool: e.agent === 'claude-code' ? 'Bash' : null, exit_status: status, output_excerpt: e.stdout_excerpt || '', ...redactions };
-      if (e.agent !== 'claude-code' && Number.isInteger(e.exit_code) && !(e.failed && e.exit_code === 1)) m.detail.exit_code = e.exit_code;
+      if (Number.isInteger(e.exit_code) && !(e.failed && e.exit_code === 1)) m.detail.exit_code = e.exit_code;
       if (e.output_path) keep.push({ slot: 'output_ref', fromFile: e.output_path });
       break;
     }
@@ -92,11 +107,14 @@ function translateGlove(e) {
     }
     case 'file_read': {
       const pattern = e.read_kind === 'pattern';
-      m.target = pattern ? { kind: 'dir', path: '.' } : { kind: 'file', path: e.path };
+      const listing = e.read_kind === 'listing';
+      const exact = pattern || listing ? null : exactRead(e);
+      m.target = pattern ? { kind: 'dir', path: '.' } : { kind: listing ? 'dir' : 'file', path: e.path };
       m.says = outcome(e, 'read');
-      m.detail = { tool: null, exit_status: status, read_kind: pattern ? 'pattern' : null, ...redactions };
+      m.detail = { tool: null, exit_status: status, read_kind: pattern ? 'pattern' : listing ? 'listing' : exact ? exact.kind : null, ...redactions };
+      if (exact) m.detail.read_range = exact.range;
       if (pattern) m.detail.pattern = e.path;
-      else {
+      else if (!listing) {
         if (Number.isInteger(e.bytes)) m.detail.size = e.bytes;
         m.detail.fingerprint = onRedactionList(e.path) ? null : fp(e.hash);
       }

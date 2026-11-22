@@ -129,6 +129,29 @@ function wholeNumber(v) {
   return Number.isInteger(v) && v >= 0 ? v : null;
 }
 
+// LD94: the range a read asked for and the range its result says it returned.
+// A read is 'range' when it returned fewer lines than the file holds or its
+// content was cut by a token cap; with no counts in the result, when it asked
+// for a bounded range. null when nothing about the extent is known. Shared by
+// capture (core.js, with ORUNMILA_EXACT_CAPTURE=1) and the mark adapters (LD121).
+function readRange(input, extent) {
+  const e = extent || {};
+  const range = {
+    asked_offset: wholeNumber(input && input.offset),
+    asked_limit: wholeNumber(input && input.limit),
+    start_line: e.start_line === undefined ? null : e.start_line,
+    lines: e.lines === undefined ? null : e.lines,
+    total_lines: e.total_lines === undefined ? null : e.total_lines,
+  };
+  const cut = e.truncated_by_token_cap === true;
+  if (cut) range.truncated_by_token_cap = true;
+  const counted = range.lines !== null && range.total_lines !== null;
+  const asked = range.asked_offset !== null || range.asked_limit !== null;
+  if (!counted && !asked && !cut && range.start_line === null) return null;
+  const partial = counted ? (range.lines < range.total_lines || cut) : (asked || cut);
+  return { range, kind: partial ? 'range' : 'full' };
+}
+
 function withDefaults(adapter) {
   return Object.assign({}, adapter, {
     fields: Object.assign({}, defaultFields, adapter.fields || {}),
@@ -342,4 +365,5 @@ module.exports = {
   withDefaults,
   LISTING_TOOLS,
   wholeNumber,
+  readRange,
 };

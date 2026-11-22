@@ -38,6 +38,33 @@ it('test 43: a Claude Code command that passed is exit_status pass with no exit_
   assert.ok(!('mono_ns' in pass), 'today\'s records have no monotonic clock: intake stamps it');
 });
 
+it('NF22, LD121: a row\'s integer exit code is carried for any agent, except a failed row\'s 1, which capture invents with exact capture off', () => {
+  const r = one([
+    g({ type: 'command_run', command: 'npm test', exit_code: 2, failed: true, stdout_excerpt: 'FAIL', output_path: null }),
+    g({ type: 'command_run', call_id: 'toolu_02', command: 'npm test', exit_code: 1, failed: true, stdout_excerpt: 'FAIL', output_path: null }),
+    g({ type: 'command_run', call_id: 'toolu_03', command: 'sleep 9', exit_code: null, failed: true, stdout_excerpt: 'timed out', output_path: null }),
+    g({ type: 'command_run', call_id: 'toolu_04', agent: 'cursor', command: 'make', exit_code: 0, stdout_excerpt: '', output_path: null }),
+  ]);
+  assert.deepStrictEqual(r.marks.map((x) => x.mark.detail.exit_code), [2, undefined, undefined, 0]);
+  assert.deepStrictEqual(r.marks.map((x) => x.mark.detail.exit_status), ['fail', 'fail', 'fail', 'pass']);
+});
+
+it('LD94, LD121: a read row with exact capture\'s read_range keeps its range or full and the extent; a listing is a listing of its folder', () => {
+  const range = { asked_offset: 1, asked_limit: 3, start_line: 1, lines: 3, total_lines: 891 };
+  const r = one([
+    g({ type: 'file_read', path: 'README.md', hash: H('a'), bytes: 10, read_kind: 'range', read_range: range }),
+    g({ type: 'file_read', call_id: 'toolu_02', path: 'a.js', hash: H('b'), bytes: 4, read_kind: 'full', read_range: { asked_offset: null, asked_limit: null, start_line: 1, lines: 2, total_lines: 2 } }),
+    g({ type: 'file_read', call_id: 'toolu_03', path: 'a.js', hash: H('b'), bytes: 4, read_kind: 'range', read_range: { ...range, truncated_by_token_cap: true, extra: 'x' } }),
+    g({ type: 'file_read', call_id: 'toolu_04', agent: 'cursor', path: 'src', hash: null, bytes: null, read_kind: 'listing' }),
+  ]);
+  assert.deepStrictEqual(r.rejects, []);
+  const [a, b, c, l] = r.marks.map((x) => x.mark);
+  assert.deepStrictEqual([a.detail.read_kind, a.detail.read_range, a.detail.fingerprint], ['range', range, 'sha256:' + H('a')]);
+  assert.deepStrictEqual([b.detail.read_kind, b.detail.read_range.total_lines], ['full', 2]);
+  assert.deepStrictEqual(c.detail.read_range, { ...range, truncated_by_token_cap: true }, 'only the extent\'s own fields are carried');
+  assert.deepStrictEqual([l.target, l.detail.read_kind, 'fingerprint' in l.detail, 'read_range' in l.detail], [{ kind: 'dir', path: 'src' }, 'listing', false, false]);
+});
+
 it('a command\'s full output kept beside today\'s log becomes a request to keep it; the excerpt stays', () => {
   const r = one([g({ type: 'command_run', command: 'make', exit_code: null, stdout_excerpt: 'x'.repeat(2000), output_path: '/home/u/.orunmila/output/s/toolu_01.txt' })]);
   assert.deepStrictEqual(r.marks[0].keep, [{ slot: 'output_ref', fromFile: '/home/u/.orunmila/output/s/toolu_01.txt' }]);
@@ -160,6 +187,9 @@ it('every translated mark is accepted by the session log (schema, keep requests,
     g({ type: 'command_run', command: 'npm test', exit_code: null, stdout_excerpt: 'ok', output_path: null }),
     g({ type: 'file_write', call_id: 'toolu_02', path: 'src/a.ts', diff: '-a\n+b\n' }),
     g({ type: 'file_read', call_id: 'toolu_03', path: 'src/a.ts', hash: H('a'), bytes: 1, read_kind: 'full' }),
+    g({ type: 'file_read', call_id: 'toolu_05', path: 'src/a.ts', hash: H('a'), bytes: 1, read_kind: 'range', read_range: { asked_offset: 2, asked_limit: null, start_line: 2, lines: 1, total_lines: 2, truncated_by_token_cap: true } }),
+    g({ type: 'file_read', call_id: 'toolu_06', path: 'src', hash: null, bytes: null, read_kind: 'listing' }),
+    g({ type: 'command_run', call_id: 'toolu_07', command: 'false', exit_code: 2, failed: true, stdout_excerpt: '', output_path: null }),
     g({ type: 'tool_call', call_id: 'toolu_04', tool_name: 'mcp__x', input: {} }),
     sentinel({ change_kind: 'modify', hash_before: H('1'), hash_after: H('2'), binary: false, diff: '-a\n+b\n' }),
     { ts: '2026-11-16T09:00:05.000Z', session_id: SID, turn_id: 't3', agent: 'claude-code', type: 'turn_end' },

@@ -753,6 +753,97 @@
       "cause_hint": "toolu_01",
       "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
       "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_read_counted": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "file",
+        "path": "src/auth.ts"
+      },
+      "says": "read",
+      "detail": {
+        "tool": "Read",
+        "exit_status": "pass",
+        "read_kind": "full",
+        "size": 4211,
+        "fingerprint": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "read_range": {
+          "asked_offset": null,
+          "asked_limit": null,
+          "start_line": 1,
+          "lines": 40,
+          "total_lines": 40
+        }
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_read_range_cut": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "file",
+        "path": "src/auth.ts"
+      },
+      "says": "read",
+      "detail": {
+        "tool": "Read",
+        "exit_status": "pass",
+        "read_kind": "range",
+        "size": 4211,
+        "fingerprint": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "read_range": {
+          "asked_offset": 1,
+          "asked_limit": 3,
+          "start_line": 1,
+          "lines": 3,
+          "total_lines": 891,
+          "truncated_by_token_cap": true
+        }
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_read_listing": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "cursor",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "dir",
+        "path": "src"
+      },
+      "says": "read",
+      "detail": {
+        "tool": "list_dir",
+        "exit_status": "pass",
+        "read_kind": "listing"
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
     }
   },
   "bad": [
@@ -2809,6 +2900,197 @@
       "from": "sentinel_modified",
       "set": {
         "/says": "called"
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/kind",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "read_range not an object (LD121)",
+      "from": "hook_read_counted",
+      "set": {
+        "/detail/read_range": [
+          1
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/read_range",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "read_range without asked_offset (LD121)",
+      "from": "hook_read_counted",
+      "set": {},
+      "unset": [
+        "/detail/read_range/asked_offset"
+      ],
+      "error": {
+        "path": "/detail/read_range/asked_offset",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "read_range asked_offset not a whole number (LD121)",
+      "from": "hook_read_counted",
+      "set": {
+        "/detail/read_range/asked_offset": "3"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/read_range/asked_offset",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "read_range without asked_limit (LD121)",
+      "from": "hook_read_counted",
+      "set": {},
+      "unset": [
+        "/detail/read_range/asked_limit"
+      ],
+      "error": {
+        "path": "/detail/read_range/asked_limit",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "read_range asked_limit not a whole number (LD121)",
+      "from": "hook_read_counted",
+      "set": {
+        "/detail/read_range/asked_limit": "3"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/read_range/asked_limit",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "read_range without start_line (LD121)",
+      "from": "hook_read_counted",
+      "set": {},
+      "unset": [
+        "/detail/read_range/start_line"
+      ],
+      "error": {
+        "path": "/detail/read_range/start_line",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "read_range start_line not a whole number (LD121)",
+      "from": "hook_read_counted",
+      "set": {
+        "/detail/read_range/start_line": "3"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/read_range/start_line",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "read_range without lines (LD121)",
+      "from": "hook_read_counted",
+      "set": {},
+      "unset": [
+        "/detail/read_range/lines"
+      ],
+      "error": {
+        "path": "/detail/read_range/lines",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "read_range lines not a whole number (LD121)",
+      "from": "hook_read_counted",
+      "set": {
+        "/detail/read_range/lines": "3"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/read_range/lines",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "read_range without total_lines (LD121)",
+      "from": "hook_read_counted",
+      "set": {},
+      "unset": [
+        "/detail/read_range/total_lines"
+      ],
+      "error": {
+        "path": "/detail/read_range/total_lines",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "read_range total_lines not a whole number (LD121)",
+      "from": "hook_read_counted",
+      "set": {
+        "/detail/read_range/total_lines": "3"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/read_range/total_lines",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "read_range lines below zero (LD121)",
+      "from": "hook_read_counted",
+      "set": {
+        "/detail/read_range/lines": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/read_range/lines",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "read_range truncated_by_token_cap false: only written when true (LD121)",
+      "from": "hook_read_range_cut",
+      "set": {
+        "/detail/read_range/truncated_by_token_cap": false
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/read_range/truncated_by_token_cap",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "read_range on a mark that is not a read (LD121)",
+      "from": "hook_exited_fail",
+      "set": {
+        "/detail/read_range": {
+          "asked_offset": null,
+          "asked_limit": null,
+          "start_line": null,
+          "lines": null,
+          "total_lines": null
+        }
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail",
+        "keyword": "not"
+      }
+    },
+    {
+      "name": "a listing read targets a folder, not a file (LD121)",
+      "from": "hook_read_listing",
+      "set": {
+        "/target": {
+          "kind": "file",
+          "path": "src"
+        }
       },
       "unset": [],
       "error": {

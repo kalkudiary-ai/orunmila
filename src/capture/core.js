@@ -26,35 +26,13 @@ const { reconcileAndPersist } = require('../reconcile');
 const { renderTurn } = require('../render/terminal');
 const { deriveVcsEvents } = require('./vcs-evidence');
 const defaultTranscript = require('./transcript');
-const { LISTING_TOOLS, wholeNumber } = require('./agents');
+const { LISTING_TOOLS, readRange } = require('./agents'); // readRange: LD94, shared with the mark adapters (LD121)
 
 // OFF BY DEFAULT: ORUNMILA_EXACT_CAPTURE=1 records a failed command's real exit
 // code and output (NF22) and how much of a file a read returned (LD94). Off,
 // capture writes exactly what it wrote before.
 function exactCapture() {
   return process.env.ORUNMILA_EXACT_CAPTURE === '1';
-}
-
-// LD94: the range a read asked for and the range its result says it returned.
-// A read is 'range' when it returned fewer lines than the file holds or its
-// content was cut by a token cap; with no counts in the result, when it asked
-// for a bounded range. null when nothing about the extent is known.
-function readRange(input, extent) {
-  const e = extent || {};
-  const range = {
-    asked_offset: wholeNumber(input && input.offset),
-    asked_limit: wholeNumber(input && input.limit),
-    start_line: e.start_line === undefined ? null : e.start_line,
-    lines: e.lines === undefined ? null : e.lines,
-    total_lines: e.total_lines === undefined ? null : e.total_lines,
-  };
-  const cut = e.truncated_by_token_cap === true;
-  if (cut) range.truncated_by_token_cap = true;
-  const counted = range.lines !== null && range.total_lines !== null;
-  const asked = range.asked_offset !== null || range.asked_limit !== null;
-  if (!counted && !asked && !cut && range.start_line === null) return null;
-  const partial = counted ? (range.lines < range.total_lines || cut) : (asked || cut);
-  return { range, kind: partial ? 'range' : 'full' };
 }
 
 // --- shared fs helpers (moved verbatim from the claude-code hooks) ----------

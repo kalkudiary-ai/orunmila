@@ -42,11 +42,36 @@ it('every tool call gets a started mark before it runs, with its call id and too
   }
 });
 
-it('test 43: a Bash result is exit_status pass with no exit_code; a PostToolUseFailure is fail with no code', () => {
+it('test 43: a Bash result is exit_status pass with no exit_code; a PostToolUseFailure that states no code is fail with no code', () => {
   const ok = only(post('Bash', { command: 'npm test' }, { stdout: 'ok', stderr: '', interrupted: false })).mark;
   assert.deepStrictEqual([ok.says, ok.detail.exit_status, 'exit_code' in ok.detail, ok.detail.output_excerpt], ['exited', 'pass', false, 'ok']);
-  const bad = only({ ...post('Bash', { command: 'false' }, {}), hook_event_name: 'PostToolUseFailure', error: 'Exit code 1' }).mark;
-  assert.deepStrictEqual([bad.says, bad.detail.exit_status, 'exit_code' in bad.detail], ['exited', 'fail', false]);
+  const none = only({ ...post('Bash', { command: 'sleep 999' }, {}), hook_event_name: 'PostToolUseFailure', error: 'Command timed out after 2m' }).mark;
+  assert.deepStrictEqual([none.says, none.detail.exit_status, 'exit_code' in none.detail, none.detail.output_excerpt], ['exited', 'fail', false, 'Command timed out after 2m']);
+});
+
+it('NF22, LD121: a failure that states its code ("Exit code N", either form) carries that code and the output after it; never an invented one', () => {
+  const fail = (error) => only({ ...post('Bash', { command: 'npm test' }, {}), hook_event_name: 'PostToolUseFailure', error }).mark.detail;
+  assert.deepStrictEqual([fail('Exit code 1').exit_code, fail('Exit code 1').output_excerpt], [1, '']);
+  assert.deepStrictEqual([fail('Error: Exit code 2\nFAIL test/a.js').exit_code, fail('Error: Exit code 2\nFAIL test/a.js').output_excerpt], [2, 'FAIL test/a.js']);
+  assert.strictEqual(fail('Exit code 3 (killed)').exit_code, undefined, 'a first line that is not exactly the code states none');
+  const long = fail('Exit code 4\n' + 'y'.repeat(2500));
+  assert.deepStrictEqual([long.exit_code, long.output_excerpt.length], [4, 2000]);
+  const r = translatePayload({ ...post('Bash', { command: 'x' }, {}), hook_event_name: 'PostToolUseFailure', error: 'Exit code 4\n' + 'y'.repeat(2500) }, ctx);
+  assert.deepStrictEqual(r.marks[0].keep, [{ slot: 'output_ref', text: 'y'.repeat(2500) }]);
+});
+
+it('LD94, LD121: a Read records the extent its own result states: full only when the counts show the whole file came back', () => {
+  const res = (file) => ({ type: 'text', file: { filePath: 'src/a.ts', content: 'x', ...file } });
+  const whole = only(post('Read', { file_path: 'src/a.ts' }, res({ numLines: 40, startLine: 1, totalLines: 40 }))).mark.detail;
+  assert.deepStrictEqual([whole.read_kind, whole.read_range], ['full', { asked_offset: null, asked_limit: null, start_line: 1, lines: 40, total_lines: 40 }]);
+  const part = only(post('Read', { file_path: 'src/a.ts', offset: 1, limit: 3 }, res({ numLines: 3, startLine: 1, totalLines: 891 }))).mark.detail;
+  assert.deepStrictEqual([part.read_kind, part.read_range], ['range', { asked_offset: 1, asked_limit: 3, start_line: 1, lines: 3, total_lines: 891 }]);
+  const cut = only(post('Read', { file_path: 'src/a.ts' }, res({ numLines: 40, startLine: 1, totalLines: 40, truncatedByTokenCap: true }))).mark.detail;
+  assert.deepStrictEqual([cut.read_kind, cut.read_range.truncated_by_token_cap], ['range', true]);
+  const asked = only(post('Read', { file_path: 'src/a.ts', limit: 5 }, {})).mark.detail;
+  assert.deepStrictEqual([asked.read_kind, asked.read_range], ['range', { asked_offset: null, asked_limit: 5, start_line: null, lines: null, total_lines: null }]);
+  const blind = only(post('Read', { file_path: 'src/a.ts' }, {})).mark.detail;
+  assert.deepStrictEqual([blind.read_kind, 'read_range' in blind], [null, false], 'no counts and no bounds: the adapter cannot tell');
 });
 
 it('NF66: a command launched in the background, or interrupted, is exit_status unknown, never pass', () => {
@@ -146,6 +171,9 @@ it('every translated mark is accepted by the session log', () => {
       [post('Bash', { command: 'npm test' }, { stdout: 'x'.repeat(2100), stderr: '' }), ctx],
       [post('Edit', { file_path: 'src/a.ts' }, {}), { ...ctx, file: { existedBefore: true, existsAfter: true, size: 2, fingerprintBefore: H('1'), fingerprint: H('2'), diff: '-a\n+b\n', linesAdded: 1, linesRemoved: 1 } }],
       [post('Read', { file_path: 'src/a.ts' }, {}), ctx],
+      [post('Read', { file_path: 'src/a.ts', offset: 1, limit: 3 }, { type: 'text', file: { numLines: 3, startLine: 1, totalLines: 9, truncatedByTokenCap: true } }), ctx],
+      [post('Read', { file_path: 'src/a.ts' }, { type: 'text', file: { numLines: 9, startLine: 1, totalLines: 9 } }), ctx],
+      [{ ...post('Bash', { command: 'false' }, {}), hook_event_name: 'PostToolUseFailure', error: 'Exit code 1\nno' }, ctx],
       [post('Grep', { pattern: 'x' }, {}), ctx],
       [post('WebSearch', { query: 'q' }, {}), ctx],
       [post('mcp__x', {}, {}), ctx],

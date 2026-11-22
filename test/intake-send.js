@@ -182,4 +182,11 @@ it('H2 CLI: install --intake registers HTTP hooks for UserPromptSubmit, PreToolU
   }
 });
 
+it('OW1: the help no longer says capture does not write the session logs (the intake does, B4/H2)', () => {
+  const r = run('bin/orunmila.js', { args: [] });
+  assert.strictEqual(r.status, 0);
+  assert.ok(!r.stdout.includes('capture does not write it yet'), 'stale help text');
+  assert.ok(r.stdout.includes('the per-session logs the intake writes'), r.stdout);
+});
+
 runAll('intake-send');

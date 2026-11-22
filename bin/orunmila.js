@@ -1085,8 +1085,8 @@ function cmdFeedbackImport() {
 /**
  * `orunmila verify <session-folder> [--json]` — check a session log folder end
  * to end (src/verify/session.js) and answer in plain words. Exit 0 intact,
- * 1 broken, 2 usage. The folder format is Phase 1's; capture does not write it
- * yet.
+ * 1 broken, 2 usage. The folder format is Phase 1's; the intake writes it
+ * (`orunmila intake`, `install --intake`).
  */
 function cmdVerify() {
   const dir = args[1] && !args[1].startsWith('--') ? args[1] : null;
@@ -1391,7 +1391,7 @@ Both lenses
   orunmila feedback-import [--dir path] [--force]  copy those cases into test/cases/precision/
   orunmila debug-transcript <path>                inspect why transcript parsing isn't matching your install
   orunmila verify <session-folder> [--json]       check a session log folder's hash chains, records and kept files
-                                                  (the new per-session format; capture does not write it yet)
+                                                  (the per-session logs the intake writes, in ~/.orunmila/sessions/)
   orunmila intake run|start|status|stop           the intake server, one per machine (install --intake sends to it)
   orunmila intake agent install|uninstall|status  keep the intake running at login with a launch agent (macOS)
 

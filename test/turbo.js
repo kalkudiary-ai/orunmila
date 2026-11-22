@@ -477,6 +477,10 @@ if (step.commit) {
   if (result) result.commits = [git(['rev-parse', 'HEAD'])];
 }
 if (step.dirty) fs.writeFileSync(step.dirty, 'dirty ' + n);
+if (step.checkoutAndBack) {
+  git(['checkout', '-q', '-b', 'side']);
+  git(['checkout', '-q', 'work']);
+}
 if (step.hang) setInterval(() => {}, 1000);
 else {
   if (result) process.stdout.write(JSON.stringify({ type: 'result', structured_output: result, total_cost_usd: 0.01 }));
@@ -769,29 +773,67 @@ it('sandbox: on, fail-closed, no unsandboxed retry, no network, nothing excluded
   assert.strictEqual(sb.network.strictAllowlist, true);
 });
 
-it('sandbox: commits can write the git common dir, but not main, packed-refs, HEADs, config or hooks', () => {
+it('sandbox: in the git common dir everything a commit does not need is denied by exact path (LD115)', () => {
   const root = path.join(__dirname, '..');
   const fsx = session.settings({ root }).sandbox.filesystem;
-  const common = fs.realpathSync(path.resolve(root, require('child_process').execFileSync('git', ['-C', root, 'rev-parse', '--git-common-dir'], { encoding: 'utf8' }).trim()));
-  const own = require('child_process').execFileSync('git', ['-C', root, 'rev-parse', '--absolute-git-dir'], { encoding: 'utf8' }).trim();
-  assert.ok(fsx.allowWrite.includes(common), `allowWrite lacks ${common}`);
-  const want = [
-    'refs/heads/main',
-    'refs/heads/main.lock',
-    'packed-refs',
-    'packed-refs.lock',
-    'HEAD',
-    'HEAD.lock',
-    'config',
-    'config.lock',
-    'hooks',
-  ].map((p) => path.join(common, p));
-  want.push(path.join(own, 'HEAD'), path.join(root, 'scripts', 'turbo'), path.join(root, '.claude'));
-  for (const w of want) assert.ok(fsx.denyWrite.includes(w), `denyWrite lacks ${w}`);
+  const { execFileSync: x } = require('child_process');
+  const common = fs.realpathSync(path.resolve(root, x('git', ['-C', root, 'rev-parse', '--git-common-dir'], { encoding: 'utf8' }).trim()));
+  const own = x('git', ['-C', root, 'rev-parse', '--absolute-git-dir'], { encoding: 'utf8' }).trim();
+  const branch = x('git', ['-C', root, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
+  // LD115: Claude Code opens the common dir itself (probe b4c091e8), and a deny beats any allow
+  // inside it (probe dd32b768), so it stays open and every entry a commit does not need is denied.
+  assert.deepStrictEqual(fsx.allowWrite, [common]);
+  const ls = (d) => (fs.existsSync(d) ? fs.readdirSync(d) : []);
+  const denied = (p) => assert.ok(fsx.denyWrite.includes(p), `denyWrite lacks ${p}`);
+  const keep = [branch, 'output-1'];
+  for (const e of ls(common)) if (!['objects', 'refs', 'logs', 'worktrees'].includes(e)) denied(path.join(common, e));
+  for (const n of ['HEAD', 'config', 'index', 'packed-refs', 'shallow', 'ORIG_HEAD', 'FETCH_HEAD', 'MERGE_HEAD', 'info', 'hooks']) denied(path.join(common, n));
+  for (const n of ['HEAD', 'config', 'index', 'packed-refs', 'shallow']) denied(path.join(common, `${n}.lock`));
+  for (const e of ls(path.join(common, 'refs'))) if (e !== 'heads') denied(path.join(common, 'refs', e));
+  for (const n of ['tags', 'remotes', 'stash', 'replace', 'notes']) denied(path.join(common, 'refs', n));
+  for (const e of ls(path.join(common, 'refs', 'heads'))) if (!keep.includes(e)) denied(path.join(common, 'refs', 'heads', e));
+  denied(path.join(common, 'refs', 'heads', 'main'));
+  denied(path.join(common, 'refs', 'heads', 'main.lock'));
+  denied(path.join(common, 'logs', 'HEAD'));
+  for (const e of ls(path.join(common, 'logs', 'refs'))) if (e !== 'heads') denied(path.join(common, 'logs', 'refs', e));
+  for (const e of ls(path.join(common, 'logs', 'refs', 'heads'))) if (!keep.includes(e)) denied(path.join(common, 'logs', 'refs', 'heads', e));
+  for (const e of ls(path.join(common, 'worktrees'))) if (path.join(common, 'worktrees', e) !== own) denied(path.join(common, 'worktrees', e));
+  denied(path.join(common, 'objects', 'info'));
+  // What a commit here needs is not denied.
+  const need = [path.join(common, 'objects'), own, path.join(own, 'index'), path.join(own, 'index.lock'), path.join(own, 'HEAD.lock'), path.join(own, 'logs')];
+  for (const b of keep) need.push(path.join(common, 'refs', 'heads', b), path.join(common, 'refs', 'heads', `${b}.lock`), path.join(common, 'logs', 'refs', 'heads', b));
+  for (const p of need) assert.ok(!fsx.denyWrite.includes(p), `a path a commit needs is denied: ${p}`);
+  for (const w of [
+    path.join(own, 'HEAD'),
+    path.join(own, 'gitdir'),
+    path.join(own, 'commondir'),
+    path.join(root, 'scripts', 'turbo'),
+    path.join(root, '.claude'),
+    `/private/tmp/claude-${require('os').userInfo().uid}/-*`,
+  ])
+    assert.ok(fsx.denyWrite.includes(w), `denyWrite lacks ${w}`);
+  // The wildcard alone did not deny (probe effb4a37 created a file in a scratchpad), so every
+  // session scratchpad folder that exists is also denied by its exact path.
+  const tmp = `/private/tmp/claude-${require('os').userInfo().uid}`;
+  const pads = fs.existsSync(tmp) ? fs.readdirSync(tmp).filter((n) => n.startsWith('-')).map((n) => path.join(tmp, n)) : [];
+  for (const p of pads) assert.ok(fsx.denyWrite.includes(p), `denyWrite lacks the scratchpad ${p}`);
   // A commit locks the worktree's HEAD (HEAD.lock, then removed): denying it broke git commit
   // in the sandboxed probe (session 2cacf12e, exit 128). A branch switch must rename the lock
   // onto HEAD, which stays denied.
   assert.ok(!fsx.denyWrite.includes(path.join(own, 'HEAD.lock')), "the worktree's HEAD.lock is denied, so no commit can be made");
+});
+
+it('driver: a HEAD reflog entry that is not a commit (a checkout, even one put back) makes the next session a recovery', async () => {
+  const steps = [{ result: R('nothing', null), checkoutAndBack: true }, { result: R('recovered', null) }];
+  const d = driverSetup(steps, { slices: [S('a')], maxSessions: 2 });
+  try {
+    const out = await turbo.run(d.opts);
+    assert.deepStrictEqual(out.sessions.map((s) => s.kind), ['strike', 'recover']);
+    assert.deepStrictEqual(out.sessions[0].headMoves, ['checkout', 'checkout']);
+    assert.ok(d.call(1).stdin.includes('checkout'), 'the recovery prompt names the HEAD movement');
+  } finally {
+    rmrf(d.base);
+  }
 });
 
 it('allowlist: git -C is gone (it let any git subcommand past layer 1)', () => {

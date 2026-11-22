@@ -59,6 +59,14 @@ function git(root, args) {
 }
 
 const branchOf = (root) => git(root, ['symbolic-ref', '-q', '--short', 'HEAD']).trim();
+
+/** HEAD's reflog actions, newest first: the part of each %gs before its first ':' ("commit", "checkout", ...). */
+function headActions(root) {
+  const r = spawnSync('git', ['-C', root, 'log', '-g', '--format=%gs', 'HEAD'], { encoding: 'utf8' });
+  if (r.status !== 0) return [];
+  return r.stdout.split('\n').filter(Boolean).map((l) => l.split(':')[0]);
+}
+const COMMIT_ACTIONS = new Set(['commit', 'commit (initial)']);
 const porcelain = (root) => git(root, ['status', '--porcelain=v1']).split('\n').filter(Boolean);
 
 function isCommit(root, s) {
@@ -328,6 +336,7 @@ async function run(opts) {
 
       const sid = crypto.randomUUID();
       const planBefore = sha(path.join(o.home, 'plan.json'));
+      const reflogBefore = headActions(o.root).length;
       const vars = session.promptVars({
         run: runId,
         session: sid,
@@ -353,6 +362,10 @@ async function run(opts) {
       const unverified = named.filter((c) => !verified.includes(c));
       const now = porcelain(o.root);
       const dirty = now.filter((l) => !baseline.includes(l));
+      // A refused checkout can rewrite the files before it fails on HEAD (T8's cold verify), and a
+      // later commit then carries the damage; any HEAD movement that is not a commit is a recovery.
+      const actions = headActions(o.root);
+      const headMoves = actions.slice(0, Math.max(0, actions.length - reflogBefore)).filter((a) => !COMMIT_ACTIONS.has(a));
       const row = {
         session: sid,
         kind: a.kind,
@@ -370,6 +383,7 @@ async function run(opts) {
         decisions: r ? r.decisions : [],
         cost: parsed.cost === undefined ? null : parsed.cost,
         dirty,
+        headMoves,
         referee: null,
       };
 
@@ -388,8 +402,13 @@ async function run(opts) {
       }
 
       const failed = Boolean(res.timedOut || res.spawnError || res.code !== 0 || parsed.error);
-      if (res.timedOut || dirty.length) {
-        state.recover = { reason: res.timedOut ? 'the last session was cut off at its time limit' : 'the last session left the tree dirty', dirty, last_session: sid, last_slice: row.slice };
+      if (res.timedOut || dirty.length || headMoves.length) {
+        const reason = res.timedOut
+          ? 'the last session was cut off at its time limit'
+          : headMoves.length
+            ? `the last session moved HEAD by a non-commit action (${headMoves.join(', ')}): check every file of its commits against what the slice meant to change`
+            : 'the last session left the tree dirty';
+        state.recover = { reason, dirty, head_moves: headMoves, last_session: sid, last_slice: row.slice, last_commits: verified };
       } else state.recover = null;
       const progress = verified.length > 0 || sha(path.join(o.home, 'plan.json')) !== planBefore;
       state.fails = failed ? state.fails + 1 : 0;

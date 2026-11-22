@@ -62,11 +62,17 @@ keeps or repeals them as a set (LD111).
 
 The base layer is the OS sandbox (LD113, after a cold verify got 14 of 20 bypasses past the guard
 and switched the git hooks off with `-c core.hooksPath=/dev/null`). Every Bash command and all its
-children (`node -e` and scripts included) run under macOS Seatbelt with no network at all and writes
-only to the worktree, TURBO_HOME and scratch, the temp dir, and the git common dir a commit needs,
-inside which `refs/heads/main`, `packed-refs`, the live copy's `HEAD`, `config` and `hooks`, and this
-worktree's `HEAD` are denied (checked live: probe sessions `4d03030b` and `351e371a`, EPERM on each,
-a commit going through, a branch switch by rename refused). There is no retry outside it
+children (`node -e` and scripts included) run under macOS Seatbelt with no network at all. Writes
+go to the worktree, TURBO_HOME and scratch, the temp dir, and the git common dir (the live copy's
+`.git`, which Claude Code opens for a worktree itself). In that dir, everything a commit here does
+not need is denied by exact path, rebuilt when each session starts (LD115): `main`, every other
+branch but `output-1`, tags and every other ref namespace, the live copy's `HEAD`, index, config,
+hooks, `packed-refs`, `info/`, `logs/HEAD` and other reflogs, other worktrees, `objects/info`, and this
+worktree's `HEAD`, `gitdir` and `commondir`. Every session scratchpad under
+`/private/tmp/claude-<uid>/` is denied too. Checked live with every path kept off the command line,
+so only the sandbox stood in the way: probe `40ebdabd` (19 of 20 denied paths EPERM, all 7 needed
+paths open) and probe `652a1d15` (a commit goes through; a branch switch by rename, a hooks-off
+update of `main` from a script, and a move of another branch all fail). There is no retry outside it
 (`allowUnsandboxedCommands: false`), and a session will not start without it (`failIfUnavailable`).
 The file tools (Edit, Write) are not sandboxed; the guard checks them by real path.
 
@@ -86,8 +92,13 @@ The layers below are second checks:
 No MCP servers are loaded. A refused action becomes a queue item.
 
 **Known limits:** the guard and the git hooks can be got round (variables, aliases, `send-pack`,
-`-c core.hooksPath=`); the sandbox is what holds. Inside the worktree a session can still write any
-file outside `scripts/turbo/` and `.claude/`, and move any branch but `main` (all reversible by git).
+`-c core.hooksPath=`); the sandbox is what holds. What a session can still write: any file in the
+worktree outside `scripts/turbo/` and `.claude/`; this worktree's branch and `output-1`; git objects;
+and a brand-new branch name (not `main`; it was the one denied path probe `40ebdabd` could create).
+All are reversible by git. A refused checkout can rewrite the worktree's files before it fails on
+`HEAD`; the driver reads `HEAD`'s reflog after each session, and any entry that is not a commit makes
+the next session a recovery. The deny list is built from git's layout as it is at session start: a
+special name git adds in a later version is not on it.
 
 ## Files
 

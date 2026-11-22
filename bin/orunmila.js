@@ -91,6 +91,9 @@ function findExistingClaudeHooks(settings) {
 // without the other, and "is the gate on?" must be answerable without guessing.
 const GATE_HOOK_BASENAME = 'law-gate.js';
 
+// The events the intake's router reads (slice B1d), each sent by intake-send.js (LD133).
+const INTAKE_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'Stop', 'SessionEnd'];
+
 // Find the registered Closeout Gate hook, if any. Same basename strategy as
 // findExistingClaudeHooks: a gate pointing at a different copy of orunmila is
 // still a gate.
@@ -251,6 +254,26 @@ function cmdInstall() {
   //
   // --with-laws is the original spelling of --with-gate. It keeps working
   // forever: it is in install instructions people have already followed.
+  // --intake (slice B2, LD133): the sender to the intake, for every event the
+  // intake's router reads and every tool, beside today's capture hooks, never in
+  // their place. Installing it is the switch (LD122); it does not start the intake.
+  if (args.includes('--intake')) {
+    if (adapter.id !== 'claude-code') {
+      console.error(`--intake is claude-code only for now; ${adapter.label} keeps its current capture.`);
+      process.exitCode = 1;
+      return;
+    }
+    const settings = readJson(p, {});
+    const sender = `node "${path.join(root, 'src/capture/claude-code', 'intake-send.js')}"`;
+    for (const ev of INTAKE_EVENTS) mergeClaudeHook(settings, ev, '*', sender);
+    fs.writeFileSync(p, JSON.stringify(settings, null, 2));
+    console.log(`The intake sender is registered for ${INTAKE_EVENTS.join(', ')} (every tool) in ${p},`);
+    console.log("beside any hooks already there. Nothing is recorded while no intake runs: start it with");
+    console.log('  orunmila intake start');
+    console.log(`\nRestart ${adapter.label} (or start a new session) for this to take effect.`);
+    return;
+  }
+
   const wantsGate = args.includes('--with-gate') || args.includes('--with-laws');
   const gateOnly = args.includes('--gate-only');
   let captureInstalled = true;
@@ -1277,6 +1300,7 @@ Install
   orunmila install [--agent ID] [--global]        the Stain Map alone (default agent: claude-code)
   orunmila install --with-gate [--agent ID]       both lenses (--with-laws is the original spelling, still works)
   orunmila install --gate-only                    add the Closeout Gate to an existing Stain Map install
+  orunmila install --intake                       send every hook payload to the intake too (claude-code; start it first)
   orunmila lenses [--agent ID] [--global]         the two lenses side by side + which are installed right now
   orunmila agents                                 list supported agents and their config locations
 

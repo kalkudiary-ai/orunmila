@@ -97,6 +97,19 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ### Added
 
+- **The intake, a preview, off until you install it.** `orunmila intake
+  run|start|status|stop` runs one intake per machine on a Unix socket in
+  Orunmila's data dir; it writes each session to its own hash-chained log in
+  `sessions/<id>/`, outside the project (`orunmila verify` checks one).
+  `orunmila install --intake` adds a small sender, `intake-send.js`, to Claude
+  Code's hooks for every event and every tool, beside the capture hooks you
+  already have, which keep working as before. The sender never blocks your
+  agent: **when no intake is running, it sends nothing and that session has no
+  intake record at all**, so start the intake first. A sender that cannot hand
+  its payload over within one second gives up, and that payload is lost. If
+  another process holds the intake's socket when it starts, the intake records
+  that and takes the socket back. Nothing reads these logs yet: reports still
+  come from the event log.
 - **Exact capture, off by default (`ORUNMILA_EXACT_CAPTURE=1`).** Claude Code
   sends a failed tool call with no `tool_response`; the exit code is the first
   line of its `error` text (`Exit code N`, or `Error: Exit code N`) and the

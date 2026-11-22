@@ -1160,6 +1160,32 @@ const MUTANTS = [
   { id: 'B1e-8 a socket path left by a crash blocks the start', file: 'src/opon/intake/server.js', test: 'test/intake-server.js',
     from: 'fs.rmSync(p.sock, { force: true });\n      const resumed', to: 'const resumed',
     fails: ['B1e: a stale lock (a dead pid)', 'test 83 (socket form)'] },
+  // Slice LC1 (LD135): leopard-check windows by shared files.
+  { id: 'LC1-1 every earlier Slice commit is a boundary', file: 'scripts/leopard-check.js', test: 'test/leopard-check.js',
+    from: 'const sharing = earlier.filter((p) => p.files.some((f) => files.includes(f)));', to: 'const sharing = earlier;',
+    fails: ['--pending (LD135)', 'report (LD135)'] },
+  { id: 'LC1-2 no commit is a boundary', file: 'scripts/leopard-check.js', test: 'test/leopard-check.js',
+    from: 'return sharing.length ? sharing[sharing.length - 1].t + 999 : span.from;', to: 'return span.from;',
+    fails: ["--pending: an earlier slice's red run of the same Test", 'report (LD135)'] },
+  // Slice B2: the hooks' sender and install --intake (LD133).
+  { id: 'B2-1 the sender has no deadline', file: 'src/capture/claude-code/intake-send.js', test: 'test/intake-send.js',
+    from: 'setTimeout(done, DEADLINE_MS).unref();', to: 'void DEADLINE_MS;',
+    fails: ['test 85: a listener that never takes the line'] },
+  { id: 'B2-2 a payload that is not JSON is dropped by the sender', file: 'src/capture/claude-code/intake-send.js', test: 'test/intake-send.js',
+    from: '      payload = text;', to: '      return done();',
+    fails: ['B2: a payload that is not JSON'] },
+  { id: 'B2-3 the sender prints when there is no intake', file: 'src/capture/claude-code/intake-send.js', test: 'test/intake-send.js',
+    from: "c.on('error', done); // no intake", to: "c.on('error', (e) => { console.log(e.code); done(); }); // no intake",
+    fails: ['test 85: with no intake running'] },
+  { id: 'B2-4 the sender loads a repo file', file: 'src/capture/claude-code/intake-send.js', test: 'test/intake-send.js',
+    from: "const net = require('net');", to: "const net = require('net');\nrequire('../agents');",
+    fails: ['LD122, LD133: the sender loads no repo file'] },
+  { id: 'B2-5 install --intake covers edits only', file: 'bin/orunmila.js', test: 'test/intake-send.js',
+    from: "for (const ev of INTAKE_EVENTS) mergeClaudeHook(settings, ev, '*', sender);", to: "for (const ev of INTAKE_EVENTS) mergeClaudeHook(settings, ev, 'Write|Edit|MultiEdit', sender);",
+    fails: ['B2 CLI: install --intake'] },
+  { id: 'B2-6 install --intake misses SessionEnd', file: 'bin/orunmila.js', test: 'test/intake-send.js',
+    from: "'PostToolUseFailure', 'Stop', 'SessionEnd'];", to: "'PostToolUseFailure', 'Stop'];",
+    fails: ['B2 CLI: install --intake'] },
 ];
 
 function copyRepo(root) {

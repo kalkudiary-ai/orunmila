@@ -25,6 +25,7 @@
     "cause",
     "attribution",
     "confidence",
+    "conflicts",
     "lease",
     "mark_seqs",
     "prev_hash",
@@ -354,19 +355,40 @@
       ]
     },
     "conflicts": {
-      "description": "A list of disagreements, each naming the sources and what each said. Never dropped.",
-      "$comment": "brief v4 lines 314, 328, 429-439; station 6 (slice C3). Until C3, only station 5's concurrent_sessions (line 405; slice A2, LD180), whose shape is the agent's proposal (Q11 (1))",
+      "description": "A list of disagreements, each naming the sources and what each said. Never dropped: on every odù, empty when there is none.",
+      "$comment": "brief v4 lines 314, 328, 405, 411, 429-439; station 6 (slices C3a-C3e). `sources` and `said` are the agent's names for line 328's \"naming the sources and what each said\" (LD188, Q13); concurrent_sessions's `sessions` (LD180, Q11 (1), approved LD184)",
       "type": "array",
       "items": {
         "type": "object",
         "required": [
-          "kind"
+          "kind",
+          "sources",
+          "said"
         ],
         "properties": {
           "kind": {
-            "description": "The conflict's kind; concurrent_sessions: a change during overlapping sessions that cannot be pinned to one session.",
+            "description": "The conflict's kind. concurrent_sessions: a change during overlapping sessions that cannot be pinned to one session. unconfirmed_by_filesystem: an agent reported an edit inside the Sentinel's root that the Sentinel and git never saw.",
             "type": "string",
             "minLength": 1
+          },
+          "sources": {
+            "description": "The mark sources behind the odù that bear on the conflict, sorted.",
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "enum": [
+                "agent_claim",
+                "hook",
+                "sentinel",
+                "git",
+                "process",
+                "law_gate"
+              ]
+            }
+          },
+          "said": {
+            "description": "For each source in `sources`: its verbs in this odù, in seq order; an empty list when it said nothing.",
+            "type": "object"
           },
           "sessions": {
             "description": "For concurrent_sessions: every session active in the folder when the change was first seen, this one included, sorted.",

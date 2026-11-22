@@ -144,8 +144,14 @@
  * and the sources of the marks behind the group, never lowered because one
  * witness recorded nothing (`confidenceOf`).
  *
+ * Conflicts (station 6, slice C3a, LD188; lines 328, 411, 438): every sealed
+ * group carries `conflicts`, empty when there is none; each names the sources
+ * that bear on it and what each said (`sources`, `said`). Station 5 gives
+ * `concurrent_sessions`; `conflictsOf` gives `unconfirmed_by_filesystem`. The
+ * other conflicts come with slices C3b-C3e.
+ *
  * Group records (LD142) use the odù's field names where they apply, and are
- * not odù records: conflicts other than concurrent_sessions come with C3.
+ * not odù records.
  */
 
 const path = require('path');
@@ -196,6 +202,8 @@ function explained(kind, ids) {
   return { attribution: 'explained', cause: ids.length > 1 ? { kind, ref: ids[0], also: ids.slice(1) } : { kind, ref: ids[0] } };
 }
 const UNEXPLAINED = { attribution: 'unexplained', cause: null };
+/** A conflict's copy, its lists copied too (C3a). */
+const copyConflict = (c) => ({ ...c, sources: [...c.sources], said: Object.fromEntries(Object.entries(c.said).map(([k, v]) => [k, [...v]])), ...(c.sessions ? { sessions: [...c.sessions] } : {}) });
 const CHANGES_A_FILE = new Set(['created', 'modified', 'deleted']);
 
 function createOpon({ sessionId, config, baseline = null, byproducts = null, root = null, others = null }) {
@@ -281,6 +289,26 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     return [...unsealed.values()].filter((c) => c.isCommand && c.startAt !== null && c.startAt <= seen && (c.exitAt === null || seen <= c.exitAt));
   }
 
+  /** C3a (LD188): a conflict naming the sources that bear on it and what each said, in seq order (`[]`: nothing). */
+  function conflictOf(g, kind, sources, extra = {}) {
+    const names = [...new Set(sources)].sort();
+    const said = {};
+    for (const s of names) said[s] = g.says.filter((v, i) => g.sources[i] === s);
+    return { kind, sources: names, said, ...extra };
+  }
+
+  /**
+   * Station 6's conflicts beside station 5's (C3a, LD188; lines 411, 438): a Glove edit of a file that no
+   * Sentinel or git mark shows, while the Sentinel's status is `saw_nothing` (inside the root, not
+   * excluded, no gap covering it), is `unconfirmed_by_filesystem`. Down or out of scope: no conflict.
+   */
+  function conflictsOf(g) {
+    const out = [];
+    const gloveEdit = g.says.some((v, i) => CHANGES_A_FILE.has(v) && g.sources[i] === 'hook');
+    if (g.key.startsWith('file:') && gloveEdit && !g.sources.includes('git') && witness(g, 'sentinel').status === 'saw_nothing') out.push(conflictOf(g, 'unconfirmed_by_filesystem', ['hook', 'sentinel']));
+    return out;
+  }
+
   /** Station 5 (A1b): one label and its cause, by the brief's steps in order. */
   function attributionOf(g) {
     const glove = (keep) => [...new Set(g.hints.filter((h, i) => h && GLOVE.has(g.sources[i]) && keep(g.says[i])))];
@@ -305,7 +333,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       const entry = byproducts.find((e) => isIgnored(g.target.path, [e]));
       if (entry !== undefined) return { attribution: 'byproduct', cause: { kind: 'byproduct', ref: entry } };
     }
-    if (during) return { ...UNEXPLAINED, conflicts: [{ kind: 'concurrent_sessions', sessions: [...new Set([sessionId, ...g.overlap])].sort() }] };
+    if (during) return { ...UNEXPLAINED, conflicts: [conflictOf(g, 'concurrent_sessions', g.sources, { sessions: [...new Set([sessionId, ...g.overlap])].sort() })] };
     return UNEXPLAINED;
   }
 
@@ -373,7 +401,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       continues: g.continues,
       ...(net === undefined ? {} : { net_change: { ...net } }),
       ...(g.attr ? { attribution: g.attr.attribution, cause: g.attr.cause, confidence: g.confidence } : {}),
-      ...(g.attr && g.attr.conflicts ? { conflicts: g.attr.conflicts.map((c) => ({ ...c, sessions: [...c.sessions] })) } : {}),
+      ...(g.conflicts ? { conflicts: g.conflicts.map(copyConflict) } : {}),
       ...(g.notCredited ? { not_credited: g.notCredited.map((e) => ({ ...e, ...(e.says ? { says: [...e.says] } : {}) })) } : {}),
     };
   }
@@ -418,6 +446,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       g.net = netChange(g);
       g.attr = attributionOf(g);
       g.confidence = confidenceOf(g, g.attr);
+      g.conflicts = [...(g.attr.conflicts || []), ...conflictsOf(g)];
       const disk = (g.key.startsWith('file:') || g.key.startsWith('dirchange:')) && g.says.some((v) => DISK.has(v));
       g.notCredited = disk && g.attr.attribution === 'unexplained' ? notCreditedOf(g) : undefined;
       sealedLast.set(g.key, { id: g.id, at: g.sealedAt, causes: g.causes });
@@ -535,7 +564,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       const continues = f && (f.held || now - f.at < quiet) ? f.id : null;
       const s = sealedLast.get(key);
       const amends = s && ((m.cause_hint && s.causes.has(m.cause_hint)) || BigInt(m.mono_ns) <= s.at) ? s.id : null;
-      g = { n: ++made, id: id(made), key, state: 'open', parentId: null, childIds: [], startAt: null, exitAt: null, lost: false, target, seqs: [], says: [], real: [], realSays: [], sources: [], slots: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues, amends, causes: new Set(), isCommand: key.startsWith('command:'), isTurn: key.startsWith('turn:'), turnEnded: false, fp: null, lastOther: 0, net: undefined, hints: [], changeSeen: [], atChange: null, besideExit: null, overlap: null, attr: null, confidence: null, notCredited: undefined };
+      g = { n: ++made, id: id(made), key, state: 'open', parentId: null, childIds: [], startAt: null, exitAt: null, lost: false, target, seqs: [], says: [], real: [], realSays: [], sources: [], slots: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues, amends, causes: new Set(), isCommand: key.startsWith('command:'), isTurn: key.startsWith('turn:'), turnEnded: false, fp: null, lastOther: 0, net: undefined, hints: [], changeSeen: [], atChange: null, besideExit: null, overlap: null, attr: null, confidence: null, conflicts: null, notCredited: undefined };
       live.set(key, g);
       unsealed.set(g.id, g);
       all.push(g);

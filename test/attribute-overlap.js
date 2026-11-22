@@ -49,7 +49,8 @@ const of = (odus, p) => {
 };
 const blame = (o) => [o.attribution, o.cause];
 const both = [B, SID].sort();
-const overlap = { kind: 'concurrent_sessions', sessions: both };
+// C3a (LD188): the conflict names the sources behind the change and what each said, beside the sessions.
+const overlap = { kind: 'concurrent_sessions', sources: ['sentinel'], said: { sentinel: ['modified'] }, sessions: both };
 
 // Session A runs a long command while session B edits a file in the same folder (test 37).
 const longCommand = (append) => {
@@ -75,7 +76,7 @@ it('A2 test 37: B\'s edit while A runs a long command is not credited to A: unex
   assert.strictEqual(inA.confidence, 'high', 'C1: the change is certain, and its label says it cannot be pinned (line 423)');
   const inB = of(b, 'src/b.ts');
   assert.deepStrictEqual(blame(inB), ['explained', { kind: 'agent_tool_call', ref: 'e9' }], 'a direct cause pins it to one session');
-  assert.ok(!('conflicts' in inB));
+  assert.deepStrictEqual(inB.conflicts, [], 'C3a: no conflict, and the list still written');
   // In B's, both witnesses saw it: B's Glove edit and the Sentinel's change, one odù.
   assert.deepStrictEqual([inB.witness_status.glove.status, inB.witness_status.sentinel.status], ['saw', 'saw']);
   assert.strictEqual(inB.confidence, 'high', 'C1: a direct cause');
@@ -85,7 +86,8 @@ it('A2 control: the same log of A alone credits the change to A\'s command (step
   const { a } = replayPair(longCommand, null);
   const o = of(a, 'src/b.ts');
   assert.deepStrictEqual(blame(o), ['explained', { kind: 'agent_command', ref: 'b1' }]);
-  assert.ok(!('conflicts' in o) && !('not_credited' in o));
+  assert.deepStrictEqual(o.conflicts, []);
+  assert.ok(!('not_credited' in o));
 });
 
 it('A2 test 38 (attribution half): A claims the change B made; A\'s record does not credit it to A and names both sessions', () => {
@@ -112,12 +114,12 @@ it('A2 line 404: during overlap a time match (step 2) does not credit, the call 
   }, bEdits);
   const c = of(a, 'src/c.ts');
   assert.deepStrictEqual(blame(c), ['unexplained', null]);
-  assert.deepStrictEqual(c.conflicts, [overlap]);
+  assert.deepStrictEqual(c.conflicts, [{ ...overlap, sources: ['hook', 'sentinel'], said: { hook: ['started', 'ended'], sentinel: ['modified'] } }], 'C3a: the Glove\'s call is in the odù too, so it names what that source said');
   assert.deepStrictEqual(c.not_credited, [{ kind: 'agent_tool_call', ref: 'e2', says: ['started', 'ended'], seen: 'inside' }]);
   assert.deepStrictEqual([c.witness_status.glove.status, c.witness_status.sentinel.status], ['saw', 'saw'], 'both witnesses, joined: the Glove\'s call, the Sentinel\'s change');
   const d = of(a, 'src/d.ts');
   assert.deepStrictEqual(blame(d), ['explained', { kind: 'agent_tool_call', ref: 'e3' }]);
-  assert.ok(!('conflicts' in d));
+  assert.deepStrictEqual(d.conflicts, []);
   assert.deepStrictEqual([d.witness_status.glove.status, d.witness_status.sentinel.status], ['saw', 'saw']);
 });
 
@@ -132,7 +134,7 @@ it('A2 line 407: the byproducts list (step 4) still applies during overlap, with
   );
   const o = of(a, 'dist/x.js');
   assert.deepStrictEqual(blame(o), ['byproduct', { kind: 'byproduct', ref: 'dist/' }]);
-  assert.ok(!('conflicts' in o));
+  assert.deepStrictEqual(o.conflicts, []);
 });
 
 it('A2: which sessions overlap: one in another folder does not, one in a folder inside this one does, one that ended before the change does not', () => {

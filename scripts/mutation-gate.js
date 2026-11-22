@@ -1741,7 +1741,7 @@ const MUTANTS = [
     from: 'if (!during && g.atChange && g.atChange.length)', to: 'if (g.atChange && g.atChange.length)',
     fails: ['A2 test 37'] },
   { id: 'A2-3 no concurrent_sessions conflict', file: 'src/opon/settle/engine.js', test: 'test/attribute-overlap.js',
-    from: "    if (during) return { ...UNEXPLAINED, conflicts: [{ kind: 'concurrent_sessions', sessions: [...new Set([sessionId, ...g.overlap])].sort() }] };\n", to: '',
+    from: "    if (during) return { ...UNEXPLAINED, conflicts: [conflictOf(g, 'concurrent_sessions', g.sources, { sessions: [...new Set([sessionId, ...g.overlap])].sort() })] };\n", to: '',
     fails: ['A2 test 37', 'A2 test 38'] },
   { id: 'A2-4 the conflict leaves this session out', file: 'src/opon/settle/engine.js', test: 'test/attribute-overlap.js',
     from: '[...new Set([sessionId, ...g.overlap])]', to: '[...new Set([...g.overlap])]',
@@ -1753,7 +1753,7 @@ const MUTANTS = [
     from: '      spans.push({ id: name, ...ALWAYS });\n', to: '',
     fails: ['A2 LD179'] },
   { id: 'A2-7 the odù log drops conflicts', file: 'src/opon/ledger/odu-log.js', test: 'test/attribute-overlap.js',
-    from: '    ...(g.conflicts ? { conflicts: g.conflicts.map((c) => ({ ...c, ...(c.sessions ? { sessions: [...c.sessions] } : {}) })) } : {}),\n', to: '',
+    from: '    conflicts: g.conflicts.map((c) => ({ ...c, sources: [...c.sources], said: Object.fromEntries(Object.entries(c.said).map(([k, v]) => [k, [...v]])), ...(c.sessions ? { sessions: [...c.sessions] } : {}) })),\n', to: '',
     fails: ['A2 test 37'] },
   { id: 'A2-8 the commands running at an overlapped change not named', file: 'src/opon/settle/engine.js', test: 'test/attribute-overlap.js',
     from: "    for (const ref of g.overlap && g.overlap.length ? g.atChange || [] : []) out.push({ kind: 'agent_command', ref, seen: 'while_running' });\n", to: '',
@@ -1778,7 +1778,7 @@ const MUTANTS = [
     from: '    confidence: g.confidence,\n', to: '',
     fails: ['C1 test 44', 'C1 test 67', 'C1 test 68'] },
   { id: 'C1-7 the schema does not require confidence', file: 'spec/odu.schema.json', test: 'test/confidence.js',
-    from: '"attribution",\n    "confidence",\n    "lease",', to: '"attribution",\n    "lease",',
+    from: '"confidence",\n    "conflicts",', to: '"conflicts",',
     fails: ['C1: the odù schema requires confidence'] },
   // Slice C2: claim capture without AI (LD186).
   { id: 'C2-1 a path lent by an earlier sentence makes a file claim', file: 'src/opon/corroborate/claims.js', test: 'test/claims.js',
@@ -1796,6 +1796,19 @@ const MUTANTS = [
   { id: 'C2-5 every target is a file', file: 'src/opon/corroborate/claims.js', test: 'test/claims.js',
     from: "c.targets.filter((t) => t.kind === 'path')", to: 'c.targets',
     fails: ['C2 file claims and command claims'] },
+  // Slice C3a: the fields every conflict shares, and unconfirmed_by_filesystem (LD188).
+  { id: 'C3a-1 no unconfirmed_by_filesystem conflict', file: 'src/opon/settle/engine.js', test: 'test/conflicts.js',
+    from: "if (g.key.startsWith('file:') && gloveEdit &&", to: 'if (false && gloveEdit &&',
+    fails: ['C3a test 44'] },
+  { id: 'C3a-2 unconfirmed while the Sentinel was down or out of scope', file: 'src/opon/settle/engine.js', test: 'test/conflicts.js',
+    from: "witness(g, 'sentinel').status === 'saw_nothing'", to: "witness(g, 'sentinel').status !== 'saw'",
+    fails: ['C3a test 69'] },
+  { id: 'C3a-3 a conflict says nothing of what each source said', file: 'src/opon/settle/engine.js', test: 'test/conflicts.js',
+    from: 'for (const s of names) said[s] = g.says.filter((v, i) => g.sources[i] === s);', to: 'for (const s of names) said[s] = [];',
+    fails: ['C3a test 44'] },
+  { id: 'C3a-4 the schema does not require conflicts', file: 'spec/odu.schema.json', test: 'test/conflicts.js',
+    from: '"conflicts",\n    "lease",', to: '"lease",',
+    fails: ['C3a: the odù schema requires conflicts'] },
 ];
 
 function copyRepo(root) {

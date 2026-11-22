@@ -22,10 +22,9 @@
  * the group (station 4, slice N2), and only where the group has one;
  * `attribution` and `cause` from station 5 (slice A1b), and on an unexplained
  * change `not_credited`, the agent activity beside it (A1c). `confidence` from
- * station 6 (slice C1, LD185). `conflicts` holds, until C3, only station 5's
- * `concurrent_sessions` (A2, LD180), and is written only when it has one; the
- * other conflicts are left out until C3: a field is never written as a guess.
- * Plain code, no clock.
+ * station 6 (slice C1, LD185). `conflicts` is on every odù, `[]` when there is
+ * none (C3a, LD188), each naming its sources and what each said. Plain code, no
+ * clock.
  */
 
 const { seal } = require('../../verify/chain');
@@ -65,7 +64,7 @@ function oduRecord(g, bySeq) {
     cause: g.cause === null ? null : { ...g.cause, ...(g.cause.also ? { also: [...g.cause.also] } : {}) },
     attribution: g.attribution,
     confidence: g.confidence,
-    ...(g.conflicts ? { conflicts: g.conflicts.map((c) => ({ ...c, ...(c.sessions ? { sessions: [...c.sessions] } : {}) })) } : {}),
+    conflicts: g.conflicts.map((c) => ({ ...c, sources: [...c.sources], said: Object.fromEntries(Object.entries(c.said).map(([k, v]) => [k, [...v]])), ...(c.sessions ? { sessions: [...c.sessions] } : {}) })),
     ...(g.not_credited ? { not_credited: g.not_credited.map((e) => ({ ...e, ...(e.says ? { says: [...e.says] } : {}) })) } : {}),
     lease: { checked: false, inside: null },
     mark_seqs: [...g.mark_seqs],

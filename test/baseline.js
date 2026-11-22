@@ -86,6 +86,25 @@ it('N1a: the snapshot file is canonical JSON lines, the same text twice, and its
   }
 });
 
+it('N1c: a file or folder that cannot be read is listed as unreadable, with its error code, and the walk goes on (cold pass of N1b)', () => {
+  const root = tree();
+  try {
+    fs.writeFileSync(path.join(root, 'src', 'locked.txt'), 'x');
+    fs.chmodSync(path.join(root, 'src', 'locked.txt'), 0o000);
+    fs.mkdirSync(path.join(root, 'shut'));
+    fs.writeFileSync(path.join(root, 'shut', 'in.txt'), 'y');
+    fs.chmodSync(path.join(root, 'shut'), 0o000);
+    const b = snapshot(root, { exclusions: ['node_modules/'], key: KEY });
+    assert.deepStrictEqual(b.entries.find((e) => e.path === 'src/locked.txt'), { path: 'src/locked.txt', kind: 'unreadable', error: 'EACCES' });
+    assert.deepStrictEqual(b.entries.find((e) => e.path === 'shut'), { path: 'shut', kind: 'unreadable', error: 'EACCES' });
+    assert.ok(b.entries.some((e) => e.path === 'src/a.js'), 'the rest is still walked');
+    assert.strictEqual(b.files, 3, 'an unreadable file is not counted as a file read');
+  } finally {
+    fs.chmodSync(path.join(root, 'shut'), 0o700);
+    rmrf(root);
+  }
+});
+
 // ---- N1b: the snapshot written beside the log, its fingerprint in the header (LD170)
 
 const net = require('net');
@@ -146,6 +165,21 @@ it(
       const v = verifySessionLog(dir);
       assert.strictEqual(v.ok, true, v.words);
       assert.match(v.words, /; the baseline snapshot of 3 entries matches the header\.$/);
+    },
+    { baseline: true },
+  ),
+);
+
+it(
+  'N1c: with the baseline on, a file that cannot be read never stops the session log being made',
+  withProject(
+    ({ router, start, project, dir }) => {
+      fs.writeFileSync(path.join(project, 'src', 'locked.txt'), 'x');
+      fs.chmodSync(path.join(project, 'src', 'locked.txt'), 0o000);
+      const r = router.payload(start, { channel: 'command' });
+      assert.strictEqual(r.ok, true, JSON.stringify(r));
+      assert.ok(readLines(path.join(dir, 'baseline.jsonl')).some((e) => e.path === 'src/locked.txt' && e.kind === 'unreadable'));
+      assert.strictEqual(verifySessionLog(dir).ok, true);
     },
     { baseline: true },
   ),

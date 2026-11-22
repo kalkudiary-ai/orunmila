@@ -26,9 +26,15 @@
       "pattern": "^(sha256|hmac-sha256):[0-9a-f]{64}$"
     },
     "kind": {
-      "description": "Present for an entry that is not a regular file: `link` for a symbolic link (never followed), `other` for anything else that is not a folder. Nothing seen is left out.",
-      "$comment": "agent's choice, LD169",
-      "enum": ["link", "other"]
+      "description": "Present for an entry that is not a regular file read whole: `link` for a symbolic link (never followed), `other` for anything else that is not a folder, `unreadable` for a file or folder the walk could not read (its `error` says why). Nothing seen is left out.",
+      "$comment": "agent's choice, LD169; `unreadable` LD172",
+      "enum": ["link", "other", "unreadable"]
+    },
+    "error": {
+      "description": "On an `unreadable` entry: the operating system's error code (for example `EACCES`, or `ENOENT` for a file gone mid-walk).",
+      "$comment": "agent's choice, LD172",
+      "type": "string",
+      "minLength": 1
     },
     "redactions": {
       "description": "The kinds of secret redacted from `path`, when any was.",

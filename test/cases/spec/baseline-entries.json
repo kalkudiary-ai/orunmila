@@ -25,6 +25,11 @@
       "redactions": [
         "env_value"
       ]
+    },
+    "unreadable": {
+      "path": "src/locked.txt",
+      "kind": "unreadable",
+      "error": "EACCES"
     }
   },
   "bad": [
@@ -170,6 +175,30 @@
       "error": {
         "path": "/redactions",
         "keyword": "minItems"
+      }
+    },
+    {
+      "name": "an error code that is not a string",
+      "from": "unreadable",
+      "set": {
+        "/error": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/error",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "an empty error code",
+      "from": "unreadable",
+      "set": {
+        "/error": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/error",
+        "keyword": "minLength"
       }
     }
   ]

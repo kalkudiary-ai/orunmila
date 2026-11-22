@@ -1496,6 +1496,16 @@ const MUTANTS = [
   { id: 'N1b-14 verify does not say the baseline matched', file: 'src/verify/session.js', test: 'test/baseline.js',
     from: "const base = baseline ? [`the baseline snapshot of", to: "const base = false ? [`the baseline snapshot of",
     fails: ['N1b: with the baseline on'] },
+  // Slice N1c: an unreadable entry is listed, never fatal (LD172; the cold pass of N1b).
+  { id: 'N1c-1 an unreadable file stops the walk', file: 'src/opon/net/baseline.js', test: 'test/baseline.js',
+    from: "      if (!err || typeof err.code !== 'string') throw err;", to: '      throw err;',
+    fails: ['N1c: a file or folder that cannot be read', 'N1c: with the baseline on'] },
+  { id: 'N1c-2 a missing install key is swallowed', file: 'src/opon/net/baseline.js', test: 'test/baseline.js',
+    from: "      if (!err || typeof err.code !== 'string') throw err;", to: '      if (false) throw err;',
+    fails: ['N1a: a file on the redaction list'] },
+  { id: 'N1c-3 an unreadable entry is left out', file: 'src/opon/net/baseline.js', test: 'test/baseline.js',
+    from: "      push(rel, { kind: 'unreadable', error: err.code });\n", to: '',
+    fails: ['N1c: a file or folder that cannot be read'] },
   // Slice N2: net change in the engine, through replay (LD171).
   { id: 'N2-2 a fingerprint moves its group\'s clock', file: 'src/opon/settle/engine.js', test: 'test/net.js',
     from: '    if (!fingerprint) g.last = now;', to: '    g.last = now;',

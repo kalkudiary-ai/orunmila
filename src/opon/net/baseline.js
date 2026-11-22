@@ -16,7 +16,10 @@
  * install key (HMAC-SHA-256, line 250), as the marks do, so the two compare. A
  * symbolic link is { path, kind: 'link' }, never followed: its target may be
  * outside the project. Anything else that is not a folder is
- * { path, kind: 'other' }. Nothing seen is left out. Paths are relative to the
+ * { path, kind: 'other' }. A file or folder the walk cannot read (no
+ * permission, gone mid-walk) is { path, kind: 'unreadable', error: <code> }
+ * and the walk goes on (slice N1c, LD172): one unreadable entry never stops a
+ * session being recorded. Nothing seen is left out. Paths are relative to the
  * root with `/`, lower-cased on a case-insensitive file system, as intake
  * normalises a mark's path (line 345), then redacted as every string of a mark
  * is (`envValues`, the project's `.env` values, held in memory only; slice N1b,
@@ -65,8 +68,24 @@ function snapshot(root, { exclusions = [], key = null, envValues = [], caseInsen
   const top = fs.realpathSync(root);
   const ci = caseInsensitive === undefined ? isCaseInsensitive(top) : caseInsensitive;
   const entries = [];
+  const push = (rel, fields) => {
+    const r = redactText(ci ? rel.toLowerCase() : rel, envValues);
+    entries.push({ path: r.text, ...fields, ...(r.kinds.length ? { redactions: r.kinds } : {}) });
+  };
+  // A system error (it has a code) is the entry's fact; anything else (no install key) is the caller's to see.
+  const attempt = (rel, fn) => {
+    try {
+      return fn();
+    } catch (err) {
+      if (!err || typeof err.code !== 'string') throw err;
+      push(rel, { kind: 'unreadable', error: err.code });
+      return null;
+    }
+  };
   const walk = (dir) => {
-    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const rel0 = path.relative(top, dir).split(path.sep).join('/');
+    const list = attempt(rel0 || '.', () => fs.readdirSync(dir, { withFileTypes: true }));
+    for (const e of list || []) {
       const abs = path.join(dir, e.name);
       const rel = path.relative(top, abs).split(path.sep).join('/');
       if (isIgnored(e.isDirectory() ? rel + '/' : rel, exclusions)) continue;
@@ -78,7 +97,10 @@ function snapshot(root, { exclusions = [], key = null, envValues = [], caseInsen
       const r = redactText(name, envValues);
       const noted = r.kinds.length ? { redactions: r.kinds } : {};
       if (e.isSymbolicLink()) entries.push({ path: r.text, kind: 'link', ...noted });
-      else if (e.isFile()) entries.push({ path: r.text, ...hashFile(abs, rel, key, chunkBytes), ...noted });
+      else if (e.isFile()) {
+        const h = attempt(rel, () => hashFile(abs, rel, key, chunkBytes));
+        if (h) entries.push({ path: r.text, ...h, ...noted });
+      }
       else entries.push({ path: r.text, kind: 'other', ...noted });
     }
   };

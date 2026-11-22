@@ -64,7 +64,18 @@
  * downtime for both, a Sentinel watch gap for the Sentinel, any other capture
  * gap for the Glove); otherwise `saw_nothing`, which does not say it was
  * healthy. A gap is taken into account before time moves on, so a group it
- * covers knows it before it seals. A mark for a settled group (in its
+ * covers knows it before it seals.
+ *
+ * Parents and children (station 3, G2, LD159; test 2): a file change no Glove
+ * mark made (the Sentinel's), observed while exactly one command is running
+ * (between its `started` and its exit), becomes that command's child
+ * (`parent_id`, the parent's `children`). With two or more running, it has no
+ * parent: who made it is attribution's question (Phase 3). A Glove edit
+ * joining a child ties it to a direct edit tool call and detaches it. A child
+ * is held while its parent runs, then waits one quiet window after the exit;
+ * a parent settles only once it has exited and every child has settled, at the
+ * later of the two moments (groups with children are settled after the rest
+ * at each step, so the moment is event time, not the order of a loop). A mark for a settled group (in its
  * grace) joins it and opens it again, its timer restarted: the grace is there
  * for a slow source's marks of the same event. A sealed group is never
  * reopened (rule 8, slice S6). Ticks only move time.
@@ -126,6 +137,10 @@ function createOpon({ sessionId, config }) {
 
   /** Why a group may not settle yet (rule 3): 'process', 'turn' or null. */
   function holdOf(g) {
+    if (g.parentId !== null) {
+      const p = unsealed.get(g.parentId);
+      if (p && holdOf(p) === 'process') return 'process'; // a child of a running command (G2)
+    }
     if (g.isCommand && g.says.includes('started') && !g.says.some((v) => v === 'exited' || v === 'ended')) return 'process';
     if (g.isTurn && !g.turnEnded) return 'turn';
     return null;
@@ -166,8 +181,8 @@ function createOpon({ sessionId, config }) {
       sealed_at_ns: g.sealedAt === null ? null : String(g.sealedAt),
       ceiling: g.forced,
       witness_status: { glove: witness(g, 'glove'), sentinel: witness(g, 'sentinel') },
-      parent_id: null,
-      children: [],
+      parent_id: g.parentId,
+      children: [...g.childIds],
       amends: g.amends,
       continues: g.continues,
     };
@@ -175,10 +190,19 @@ function createOpon({ sessionId, config }) {
 
   function advance(t) {
     const sealed = [];
-    for (const g of unsealed.values()) {
+    const parentsLast = [...unsealed.values()].sort((a, b) => (a.childIds.length > 0) - (b.childIds.length > 0) || a.n - b.n);
+    for (const g of parentsLast) {
       if (g.state === 'open') {
         const hold = holdOf(g);
-        const byQuiet = hold ? null : g.last + quiet;
+        const parent = g.parentId !== null ? unsealed.get(g.parentId) : null;
+        const from = parent && parent.exitAt !== null && parent.exitAt > g.last ? parent.exitAt : g.last; // a child waits from its parent's exit
+        let byQuiet = hold ? null : from + quiet;
+        if (byQuiet !== null && g.childIds.length) {
+          // A parent settles only once every child has settled, at the later moment (G2).
+          const kids = g.childIds.map((c) => unsealed.get(c)).filter(Boolean);
+          if (kids.some((k) => k.state === 'open')) byQuiet = null;
+          else for (const k of kids) if (k.settledAt > byQuiet) byQuiet = k.settledAt;
+        }
         // A command that was seen starting is held until it exits, never cut by the ceiling (rule 3).
         const byCeiling = g.isCommand && g.says.includes('started') ? null : g.first + ceiling;
         const at = byQuiet === null ? byCeiling : byCeiling === null || byQuiet <= byCeiling ? byQuiet : byCeiling;
@@ -300,10 +324,19 @@ function createOpon({ sessionId, config }) {
       const continues = f && (f.held || now - f.at < quiet) ? f.id : null;
       const s = sealedLast.get(key);
       const amends = s && ((m.cause_hint && s.causes.has(m.cause_hint)) || BigInt(m.mono_ns) <= s.at) ? s.id : null;
-      g = { n: ++made, id: id(made), key, state: 'open', target, seqs: [], says: [], real: [], realSays: [], sources: [], slots: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues, amends, causes: new Set(), isCommand: key.startsWith('command:'), isTurn: key.startsWith('turn:'), turnEnded: false };
+      g = { n: ++made, id: id(made), key, state: 'open', parentId: null, childIds: [], startAt: null, exitAt: null, target, seqs: [], says: [], real: [], realSays: [], sources: [], slots: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues, amends, causes: new Set(), isCommand: key.startsWith('command:'), isTurn: key.startsWith('turn:'), turnEnded: false };
       live.set(key, g);
       unsealed.set(g.id, g);
       all.push(g);
+      if (key.startsWith('file:') && !GLOVE.has(m.source)) {
+        // G2: a change no Glove mark made, while exactly one command runs, is that command's child.
+        const seen = BigInt(m.mono_ns);
+        const running = [...unsealed.values()].filter((c) => c.isCommand && c.startAt !== null && c.startAt <= seen && (c.exitAt === null || seen <= c.exitAt));
+        if (running.length === 1) {
+          g.parentId = running[0].id;
+          running[0].childIds.push(g.id);
+        }
+      }
       if (key.startsWith('file:')) {
         // Rule 6: a folder change still waiting above this file folds into it.
         for (const d of [...live.values()]) {
@@ -326,6 +359,14 @@ function createOpon({ sessionId, config }) {
     if (real) g.realSays.push(m.says);
     g.last = now;
     if (m.says === 'ended' && m.target && m.target.kind === 'turn') g.turnEnded = true;
+    if (g.isCommand && m.says === 'started' && g.startAt === null) g.startAt = now;
+    if (g.isCommand && (m.says === 'exited' || m.says === 'ended')) g.exitAt = now;
+    if (g.parentId !== null && GLOVE.has(m.source) && m.cause_hint) {
+      // G2: a Glove edit ties this change to a direct edit tool call: not the command's child.
+      const p = unsealed.get(g.parentId);
+      if (p) p.childIds = p.childIds.filter((c) => c !== g.id);
+      g.parentId = null;
+    }
     return out;
   }
 

@@ -1554,7 +1554,7 @@ const MUTANTS = [
     fails: ['N2 test 3:', 'N2 test 13:'] },
   // Slice O1: the odù record and log (LD167).
   { id: 'O1-1 an unsealed group written to the odù log', file: 'src/opon/ledger/odu-log.js', test: 'test/odu.js',
-    from: "    if (g.state !== 'sealed') continue;\n", to: "",
+    from: "    if (g.state !== 'sealed') return null;\n", to: "",
     fails: ['O1: a continuation names'] },
   { id: "O1-2 the odù log not tied to its raw log", file: 'src/opon/ledger/odu-log.js', test: 'test/odu.js',
     from: 'raw_header: header.hash }', to: 'raw_header: header.prev_hash }',
@@ -1954,6 +1954,13 @@ const MUTANTS = [
   { id: "C3e-3 a temp file's or a folder's mark counts as the file's account", file: 'src/opon/settle/engine.js', test: 'test/conflicts.js',
     from: 'g.real[i] && g.sources[i] === s && DISK.has(v)', to: 'g.sources[i] === s && DISK.has(v)',
     fails: ['C3e: accounts that follow'] },
+  // Slice L1a: the odù log one record at a time (LD200).
+  { id: 'L1a-1 the writer writes a group not sealed', file: 'src/opon/ledger/odu-log.js', test: 'test/opon-live.js',
+    from: "if (g.state !== 'sealed') return null;", to: '',
+    fails: ['L1a'] },
+  { id: "L1a-2 the writer's seq skips", file: 'src/opon/ledger/odu-log.js', test: 'test/opon-live.js',
+    from: 'seal({ ...oduRecord(g, sourceOf), seq: prev.seq + 1 }, prev.hash);', to: 'seal({ ...oduRecord(g, sourceOf), seq: prev.seq + 2 }, prev.hash);',
+    fails: ['L1a'] },
 ];
 
 function copyRepo(root) {

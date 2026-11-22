@@ -6,6 +6,8 @@
  * canonically serialised like the raw log (spec/hash-chain.md). The judge reads
  * only this log.
  *
+ *   createOduWriter(header) -> { head, add(group, sourceOf) }: the same log one
+ *                 odù at a time, for the live intake (slice L1a)
  *   oduLog({ header, marks, groups }) -> { records, text }
  *     header  the raw log's sealed session header
  *     marks   the raw log's marks (for each odù's `witnesses`: the sources of
@@ -42,8 +44,8 @@ function witnessEntry(w) {
   return e;
 }
 
-function oduRecord(g, bySeq) {
-  const witnesses = [...new Set(g.mark_seqs.map((s) => bySeq.get(s).source))].sort();
+function oduRecord(g, sourceOf) {
+  const witnesses = [...new Set(g.mark_seqs.map(sourceOf))].sort();
   return {
     schema_version: 1,
     record: 'odu',
@@ -71,16 +73,28 @@ function oduRecord(g, bySeq) {
   };
 }
 
+/**
+ * The odù log one record at a time (slice L1a, for the live intake): `head` is its header line,
+ * and `add(group, sourceOf)` seals the next odù of a sealed group (null for any other), `sourceOf`
+ * giving a mark's source by its seq. Fed the groups in the order they sealed, its records are
+ * oduLog's, byte for byte.
+ */
+function createOduWriter(header) {
+  let prev = seal({ schema_version: 1, record: 'odu_header', seq: 0, session_id: header.session_id, raw_header: header.hash }, null);
+  const head = prev;
+  const add = (g, sourceOf) => {
+    if (g.state !== 'sealed') return null;
+    prev = seal({ ...oduRecord(g, sourceOf), seq: prev.seq + 1 }, prev.hash);
+    return prev;
+  };
+  return { head, add };
+}
+
 function oduLog({ header, marks, groups }) {
   const bySeq = new Map(marks.map((m) => [m.seq, m]));
-  let prev = seal({ schema_version: 1, record: 'odu_header', seq: 0, session_id: header.session_id, raw_header: header.hash }, null);
-  const records = [prev];
-  for (const g of groups) {
-    if (g.state !== 'sealed') continue;
-    prev = seal({ ...oduRecord(g, bySeq), seq: prev.seq + 1 }, prev.hash);
-    records.push(prev);
-  }
+  const w = createOduWriter(header);
+  const records = [w.head, ...groups.map((g) => w.add(g, (s) => bySeq.get(s).source)).filter(Boolean)];
   return { records, text: records.map((r) => canonicalize(r) + '\n').join('') };
 }
 
-module.exports = { oduLog, oduId };
+module.exports = { oduLog, oduId, createOduWriter };

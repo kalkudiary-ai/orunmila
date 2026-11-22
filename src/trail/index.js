@@ -40,14 +40,25 @@ function sentinelWritesForTurn(hookEvents, allSentinel) {
 function trailForSession(sessionId) {
   const events = readSession(sessionId);
   const allSentinel = readSentinelWrites(); // one read, reused across every turn
+  return buildTrail(sessionId, events, (turnId, hookEvents) => sentinelWritesForTurn(hookEvents, allSentinel));
+}
+
+/**
+ * The trail model from a session's events, with `sentinelFor(turnId,
+ * hookEvents, index, turnIds)` giving each turn's Sentinel writes: today's
+ * time window for the event log, the next turn's start for the intake's logs
+ * (src/trail/from-marks.js, NF25).
+ */
+function buildTrail(sessionId, events, sentinelFor) {
   const byTurn = groupByTurn(events.filter((e) => e.turn_id)); // sentinel events (turn_id:null) folded per-turn below
 
   const turns = [];
   const sessionArtifacts = new Map(); // key -> aggregated artifact across the session
   let sentinelWriteCount = 0; // how many independently-observed disk writes fell inside this session's turn windows
+  const turnIds = [...byTurn.keys()];
 
   for (const [turnId, hookEvents] of byTurn) {
-    const sentinel = sentinelWritesForTurn(hookEvents, allSentinel);
+    const sentinel = sentinelFor(turnId, hookEvents, turnIds.indexOf(turnId), turnIds);
     sentinelWriteCount += sentinel.length;
     const turnEvents = hookEvents.concat(sentinel);
     const lineage = lineageForTurn(turnEvents);
@@ -113,4 +124,4 @@ function trailForSession(sessionId) {
   };
 }
 
-module.exports = { trailForSession, sentinelWritesForTurn };
+module.exports = { trailForSession, buildTrail, sentinelWritesForTurn };

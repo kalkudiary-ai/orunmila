@@ -592,6 +592,9 @@ function cmdHtml() {
 }
 
 function cmdTrail() {
+  // --marks (slice B7, LD149): the trail from the intake's session log in
+  // <home>/sessions/<id>/, both witnesses on every row. --json only.
+  if (args.includes('--marks')) return cmdTrailMarks();
   // The unified report: orunmila's skeptical stain PLUS the glove's complete
   // trail + lineage, both built from the one events.jsonl — one global truth.
   const sessionId = flag('session', eventlog.latestSessionId());
@@ -632,6 +635,51 @@ function cmdTrail() {
   if (fromArchive) console.log(`(archived snapshot: ${fromArchive})`);
   console.log(`Wrote ${outPath}`);
   console.log(`Trail (the glove): ${t.touches} touches across ${t.artifacts} artifacts in ${t.turns} turns.`);
+}
+
+function cmdTrailMarks() {
+  const { trailFromSessionFolder } = require('../src/trail/from-marks');
+  const { sessionFolderName } = require('../src/opon/intake/paths');
+  const home = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
+  const sessions = path.join(home, 'sessions');
+  let id = flag('session', null);
+  if (!id) {
+    // The session whose raw log was written last.
+    let best = null;
+    for (const name of fs.existsSync(sessions) ? fs.readdirSync(sessions) : []) {
+      try {
+        const m = fs.statSync(path.join(sessions, name, 'raw.jsonl')).mtimeMs;
+        if (!best || m > best.m) best = { name, m };
+      } catch {
+        /* not a session folder */
+      }
+    }
+    id = best && best.name;
+  }
+  let dir;
+  try {
+    dir = id && path.join(sessions, sessionFolderName(id));
+  } catch {
+    dir = null; // an id unsafe as a folder name has no session log
+  }
+  if (!dir || !fs.existsSync(path.join(dir, 'raw.jsonl'))) {
+    console.log(`orunmila trail --marks: no session log for ${id ? JSON.stringify(id) : 'any session'} in ${sessions}`);
+    process.exitCode = 1;
+    return;
+  }
+  if (!args.includes('--json')) {
+    console.log('orunmila trail --marks: only --json is built for the session logs so far');
+    process.exitCode = 2;
+    return;
+  }
+  const home2 = !args.includes('--no-redact-home');
+  const { trail } = redactForRender([], trailFromSessionFolder(dir), { home: home2, root: process.cwd() });
+  const json = renderTrailJson(trail, { factsOnly: args.includes('--facts-only') });
+  const out = flag('out', null);
+  if (out) {
+    fs.writeFileSync(out, json);
+    console.log(`Wrote ${out}`);
+  } else process.stdout.write(json + '\n');
 }
 
 function cmdDemo() {
@@ -1364,6 +1412,8 @@ The Stain Map — read what happened
                                                   THE REPORT: complete trail (the glove) + lineage + stains
   orunmila trail --json [--facts-only] [--session ID] [--out path]
                                                   machine-readable trail; --facts-only drops the inferred lineage layer
+  orunmila trail --json --marks [--facts-only] [--session ID]
+                                                  the same, from the intake's session log: both witnesses on every row
   orunmila report [--session ID] [--turn ID] [--archive STAMP]   terminal stain report (live, or a pinned snapshot)
   orunmila html [--session ID] [--out path] [--archive STAMP]    mismatch-only HTML report
   orunmila json [--session ID] [--turn ID] [--include claim_text]   per-turn stain output (schema_version 1.0)

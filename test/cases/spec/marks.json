@@ -746,9 +746,10 @@
         "kind": "command",
         "text": "npm test"
       },
-      "says": "fingerprinted",
+      "says": "gap",
       "detail": {
-        "tool": "Bash"
+        "tool": "Bash",
+        "lost": "the generated fixture of LD83, moved off fingerprinted by LD171"
       },
       "cause_hint": "toolu_01",
       "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
@@ -842,6 +843,76 @@
         "read_kind": "listing"
       },
       "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_fingerprinted": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "file",
+        "path": "src/auth.ts"
+      },
+      "says": "fingerprinted",
+      "detail": {
+        "exists": true,
+        "size": 4211,
+        "fingerprint": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_fingerprinted_absent": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "file",
+        "path": "src/auth.ts"
+      },
+      "says": "fingerprinted",
+      "detail": {
+        "exists": false
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_fingerprinted_unknown": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "file",
+        "path": "src/auth.ts"
+      },
+      "says": "fingerprinted",
+      "detail": {
+        "exists": true,
+        "size": 0,
+        "fingerprint": null
+      },
+      "cause_hint": null,
       "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
       "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
     }
@@ -3155,6 +3226,90 @@
       "unset": [],
       "error": {
         "path": "/detail/law_errors/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "fingerprinted by a source that is not the Opon (N2, LD171)",
+      "from": "process_fingerprinted",
+      "set": {
+        "/source": "sentinel"
+      },
+      "unset": [],
+      "error": {
+        "path": "/source",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "fingerprinted a folder (N2)",
+      "from": "process_fingerprinted",
+      "set": {
+        "/target/kind": "dir"
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/kind",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "fingerprinted with no exists (N2)",
+      "from": "process_fingerprinted",
+      "set": {},
+      "unset": [
+        "/detail/exists"
+      ],
+      "error": {
+        "path": "/detail/exists",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "fingerprinted an existing file with no fingerprint (N2)",
+      "from": "process_fingerprinted",
+      "set": {},
+      "unset": [
+        "/detail/fingerprint"
+      ],
+      "error": {
+        "path": "/detail/fingerprint",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "fingerprinted an existing file with no size (N2)",
+      "from": "process_fingerprinted",
+      "set": {},
+      "unset": [
+        "/detail/size"
+      ],
+      "error": {
+        "path": "/detail/size",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "a fingerprint for a file that is not there (N2)",
+      "from": "process_fingerprinted_absent",
+      "set": {
+        "/detail/fingerprint": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail",
+        "keyword": "not"
+      }
+    },
+    {
+      "name": "exists that is not a boolean (N2)",
+      "from": "process_fingerprinted",
+      "set": {
+        "/detail/exists": "yes"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/exists",
         "keyword": "type"
       }
     }

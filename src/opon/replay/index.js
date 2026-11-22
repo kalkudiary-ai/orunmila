@@ -14,7 +14,10 @@
  * record, and refuses with the verifier's words. Settings come from the
  * session header, never from today's defaults (test 35); nothing is read from
  * the files the marks name, so a file changed on disk after the session
- * changes nothing (test 34). A file kept beside the log that is missing or
+ * changes nothing (test 34). The baseline snapshot the header names (slice N2,
+ * LD171) is read from the session folder, as a kept file: if it is missing or
+ * changed it is lost evidence, and every target's first `before` is unknown.
+ * A file kept beside the log that is missing or
  * changed is named as lost evidence in the first line (open question 4), and
  * replay goes on: stations 2-3 read no diff, and nothing is ever read as an
  * empty one.
@@ -31,6 +34,20 @@ const { canonicalize } = require('../../verify/canonical');
 const { configFromHeader } = require('../intake/header');
 const { createOpon } = require('../settle/engine');
 const { oduLog } = require('../ledger/odu-log');
+const fs = require('fs');
+const path = require('path');
+
+/** The baseline the header names, as path -> fingerprint (null for a link or other), or null when there is none to trust. */
+function baselineOf(dir, header, v) {
+  if (!header.baseline || v.files.bad.some((b) => b.baseline)) return null;
+  const map = new Map();
+  for (const line of fs.readFileSync(path.join(dir, 'baseline.jsonl'), 'utf8').split('\n')) {
+    if (!line) continue;
+    const e = JSON.parse(line);
+    map.set(e.path, typeof e.fingerprint === 'string' ? e.fingerprint : null);
+  }
+  return map;
+}
 
 function replayFolder(dir) {
   const raw = checkLog(dir, 'raw');
@@ -39,7 +56,7 @@ function replayFolder(dir) {
   const recs = raw.records.filter((r) => !(r.part > 1 && r.line === 1)).map((r) => r.rec);
   const header = recs[0];
   const config = configFromHeader(header);
-  const opon = createOpon({ sessionId: header.session_id, config });
+  const opon = createOpon({ sessionId: header.session_id, config, baseline: baselineOf(dir, header, v) });
   const groups = [];
   for (const m of recs.slice(1)) groups.push(...opon.push(m));
   const odu = oduLog({ header, marks: recs.slice(1), groups }).text;

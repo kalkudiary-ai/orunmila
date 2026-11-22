@@ -12,6 +12,8 @@ const os = require('os');
 const path = require('path');
 const { createSessionLog } = require('../src/opon/ledger/session-log');
 const { buildHeader } = require('../src/opon/intake/header');
+const crypto = require('crypto');
+const { canonicalize } = require('../src/verify/canonical');
 
 const SID = 'ses_replay_test';
 const NS = 1000000n;
@@ -29,12 +31,21 @@ function tinyCode() {
   return codeDir;
 }
 
-/** A new session folder under `base` with `config` in its header; returns { dir, root, append(mark), seqs }. */
-function makeLog(base, config = {}) {
+/**
+ * A new session folder under `base` with `config` in its header; returns { dir, root, append(mark), seqs }.
+ * `baseline`: entries for a baseline snapshot kept beside the log (slice N2), sorted and written as
+ * src/opon/net/baseline.js writes them, its fingerprint in the header.
+ */
+function makeLog(base, config = {}, { baseline = null } = {}) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'orunmila-root-')));
   const dir = path.join(base, SID);
   const header = buildHeader({ sessionId: SID, root, agent: { name: 'claude-code', version: null }, orunmilaVersion: '0.0.0-test', codeRoot: tinyCode(), lawPacks: {}, hookSettings: [], config, observedAt: wall(0), monoNs: ns(0) });
-  const log = createSessionLog(dir, header);
+  let text = null;
+  if (baseline) {
+    text = [...baseline].sort((a, b) => (a.path < b.path ? -1 : 1)).map((e) => canonicalize(e) + '\n').join('');
+    header.baseline = { fingerprint: 'sha256:' + crypto.createHash('sha256').update(text, 'utf8').digest('hex') };
+  }
+  const log = createSessionLog(dir, header, { baseline: text });
   const append = (m, files = []) => {
     const r = log.append(m, files);
     if (!r.ok) throw new Error(`the test's mark was refused: ${JSON.stringify(r)}`);
@@ -71,6 +82,9 @@ const M = {
   prompted: (ms, turn = 't1') => base(ms, { source: 'hook', agent: 'claude-code', turn, target: { kind: 'turn', id: turn }, says: 'prompted', detail: { prompt: 'go', from_human: true } }),
   claimed: (ms, turn = 't1') => base(ms, { source: 'agent_claim', agent: 'claude-code', turn, target: { kind: 'claim' }, says: 'claimed', detail: { text: 'done' } }),
   turnEnded: (ms, turn = 't1') => base(ms, { source: 'hook', agent: 'claude-code', turn, target: { kind: 'turn', id: turn }, says: 'ended', detail: {} }),
+  // Station 4 (N2, LD171): the Opon's own fingerprint of a target at settle time; 'absent' when no file is there.
+  fingerprinted: (ms, file, fp) =>
+    base(ms, { source: 'process', target: { kind: 'file', path: file }, says: 'fingerprinted', detail: fp === 'absent' ? { exists: false } : { exists: true, size: 4, fingerprint: fp } }),
 };
 
 module.exports = { makeLog, M, ns, wall, SID, FP };

@@ -159,25 +159,35 @@
     },
     "net_change": {
       "description": "Whether anything actually changed: the target's fingerprint before and after, and whether they differ. Odùs of marks that change nothing on disk leave it out: nothing on disk was meant to change, and null would mean unknown.",
-      "$comment": "brief v4 lines 301-305, 381-390; station 4 (slice N2)",
+      "$comment": "brief v4 lines 301-305, 381-390; station 4 (slice N2). `absent` for a known absence is the agent's proposal (LD171, Q8): null means unknown and nothing else (line 241), so a created file's before and a deleted file's after need a value of their own",
       "type": "object",
       "required": [
+        "before",
+        "after",
         "changed"
       ],
       "properties": {
         "before": {
+          "description": "The target's state before the event: its fingerprint at its last sealed odù, else the baseline snapshot's; `absent` when no file was there; null when unknown (no baseline, a path the baseline does not cover, a link).",
+          "$comment": "brief v4 lines 302, 386; LD171",
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "pattern": "^((sha256|hmac-sha256):[0-9a-f]{64}|absent)$"
         },
         "after": {
+          "description": "The target's state after the event: the fingerprint the Opon recorded when the group settled (a `fingerprinted` mark); `absent` when no file was there; null when unknown (no fingerprint taken, or a mark came after it).",
+          "$comment": "brief v4 lines 303, 386; LD171",
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "pattern": "^((sha256|hmac-sha256):[0-9a-f]{64}|absent)$"
         },
         "changed": {
+          "description": "Same fingerprint = `changed: false` (the record is still sealed and kept, just hidden from the judge's default view); different = true; null when before or after is unknown.",
+          "$comment": "brief v4 lines 304, 388; LD171",
           "type": [
             "boolean",
             "null"

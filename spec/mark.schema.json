@@ -216,6 +216,22 @@
       "$comment": "brief v4 line 265: a renamed mark also carries from, the old path",
       "if": { "properties": { "says": { "const": "renamed" } } },
       "then": { "properties": { "detail": { "required": ["from"] } } }
+    },
+    {
+      "$comment": "brief v4 lines 245, 386: the Opon records a file's fingerprint at settle time; the mark's shape is the agent's proposal (LD171, Q8): a file that exists has its size and fingerprint, null only when unknown; a file that does not has none",
+      "if": { "properties": { "says": { "const": "fingerprinted" } } },
+      "then": {
+        "properties": {
+          "source": { "const": "process" },
+          "target": { "properties": { "kind": { "const": "file" } } },
+          "detail": {
+            "required": ["exists"],
+            "if": { "properties": { "exists": { "const": true } } },
+            "then": { "required": ["size", "fingerprint"] },
+            "else": { "not": { "required": ["fingerprint"] } }
+          }
+        }
+      }
     }
   ],
   "definitions": {
@@ -528,6 +544,11 @@
           "$comment": "brief v4 line 247; the name is the agent's choice, B1b, wording approved by O 2026-11-17",
           "type": "integer",
           "minimum": 0
+        },
+        "exists": {
+          "description": "On a fingerprinted mark: whether a file was at the target's path when the Opon fingerprinted it. False is a known absence, never an unknown.",
+          "$comment": "agent's choice, LD171 (Q8): brief v4 line 241, null means unknown and nothing else, so an absence needs a value of its own",
+          "type": "boolean"
         },
         "received": {
           "description": "On a tampered mark for a foreign sender: the payload as it arrived, kept as text for evidence and redacted like any mark. It is never the session's own mark.",

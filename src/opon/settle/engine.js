@@ -6,7 +6,9 @@
  * deterministic code (guarantee 8): marks in, group records out, nothing read
  * from disk or the clock.
  *
- *   createOpon({ sessionId, config })   config from the session header (test 35)
+ *   createOpon({ sessionId, config, baseline? })   config from the session header
+ *                 (test 35); baseline: path -> fingerprint (null for a link or
+ *                 other non-file) from the snapshot beside the log, or null
  *     .push(mark)   one mark, in seq order; returns the records it sealed
  *     .end()        the groups not yet sealed, in the order they opened, as
  *                   they stand (the closeout's force-settle is Phase 4)
@@ -86,8 +88,22 @@
  * for a slow source's marks of the same event. A sealed group is never
  * reopened (rule 8, slice S6). Ticks only move time.
  *
+ * Net change (station 4, slice N2, LD171; lines 381-390): the intake writes a
+ * `fingerprinted` mark when a group settles (source process; detail.exists, and
+ * for a file that exists its size and fingerprint). It joins its key's group
+ * (one the ceiling settled too) and never moves its clock, so the group settles
+ * and seals when it would have without it; it never counts for the action. A
+ * file group with a change on disk seals with `net_change`: `before` is the
+ * target's state at its last sealed group, else the baseline's (a path the
+ * baseline does not list is `absent`; a path outside the root or among the
+ * header's exclusions, a link, or no baseline, is null); `after` is the group's
+ * latest fingerprinted mark, if no other mark came after it, else null; each is
+ * a fingerprint, `absent`, or null for unknown, and `changed` compares them
+ * when both are known (null otherwise). A rename leaves its old path absent.
+ * Groups of marks that change nothing on disk leave `net_change` out (line 389).
+ *
  * Group records (LD142) use the odù's field names where they apply, and are
- * not odù records: no net change, attribution, confidence or conflicts yet.
+ * not odù records: no attribution, confidence or conflicts yet.
  */
 
 const path = require('path');
@@ -125,7 +141,14 @@ function actionOf(says) {
   return done.length ? done[done.length - 1] : says[says.length - 1];
 }
 
-function createOpon({ sessionId, config }) {
+/** A fingerprinted mark's state of its target: a fingerprint, 'absent', or null for unknown (N2). */
+function fingerprintedState(m) {
+  const d = m.detail && typeof m.detail === 'object' ? m.detail : {};
+  if (d.exists === false) return 'absent';
+  return d.exists === true && typeof d.fingerprint === 'string' ? d.fingerprint : null;
+}
+
+function createOpon({ sessionId, config, baseline = null }) {
   const quiet = BigInt(config.quiet_window_ms) * NS_PER_MS;
   const grace = BigInt(config.lag_grace_ms) * NS_PER_MS;
   const ceiling = BigInt(config.ceiling_ms) * NS_PER_MS;
@@ -134,6 +157,7 @@ function createOpon({ sessionId, config }) {
   const forcedLast = new Map(); // key -> { id, at }: the last group of the key force-settled at its ceiling
   const sealedLast = new Map(); // key -> { id, at, causes }: the key's last sealed group (rule 8)
   const gaps = []; // { from, to, who: 'both' | 'sentinel' | 'glove' } (G1)
+  const lastState = new Map(); // key -> the target's state at its last sealed group, or after a rename (N2)
   const exclusions = Array.isArray(config.exclusions) ? config.exclusions : [];
   const all = [];
   let now = null;
@@ -184,7 +208,25 @@ function createOpon({ sessionId, config }) {
     }
   }
 
+  /** The target's state before a group (N2): its last sealed group's after, else the baseline's. */
+  function stateBefore(g) {
+    if (lastState.has(g.key)) return lastState.get(g.key);
+    const t = g.target;
+    if (!baseline || !t || t.outside || isIgnored(t.path, exclusions)) return null;
+    return baseline.has(t.path) ? baseline.get(t.path) : 'absent';
+  }
+
+  /** A sealed group's net change, or undefined for marks that change nothing on disk (line 389). */
+  function netChange(g) {
+    if (!g.key.startsWith('file:') || !g.says.some((v) => DISK.has(v))) return undefined;
+    const before = stateBefore(g);
+    const after = g.fp && g.fp.seq > g.lastOther ? g.fp.state : null;
+    lastState.set(g.key, after);
+    return { before, after, changed: before === null || after === null ? null : before !== after };
+  }
+
   function record(g) {
+    const net = g.net; // set when the group seals
     return {
       group_id: g.id,
       session_id: sessionId,
@@ -201,6 +243,7 @@ function createOpon({ sessionId, config }) {
       children: [...g.childIds],
       amends: g.amends,
       continues: g.continues,
+      ...(net === undefined ? {} : { net_change: { ...net } }),
     };
   }
 
@@ -241,6 +284,7 @@ function createOpon({ sessionId, config }) {
     sealed.sort((a, b) => (a.sealedAt < b.sealedAt ? -1 : a.sealedAt > b.sealedAt ? 1 : a.n - b.n));
     return sealed.map((g) => {
       g.state = 'sealed';
+      g.net = netChange(g);
       sealedLast.set(g.key, { id: g.id, at: g.sealedAt, causes: g.causes });
       if (live.get(g.key) === g) live.delete(g.key);
       unsealed.delete(g.id);
@@ -270,6 +314,7 @@ function createOpon({ sessionId, config }) {
 
   /** Rule 4: the old path's open group goes to the new path, merged with the new path's own. */
   function rename(fromKey, toKey, target) {
+    lastState.set(fromKey, 'absent'); // N2: nothing is at the old path after a rename
     const a = live.get(fromKey);
     if (!a || a.state !== 'open') return;
     live.delete(fromKey);
@@ -309,6 +354,7 @@ function createOpon({ sessionId, config }) {
     let key = keyOf(m);
     let target = m.target;
     let real = true;
+    const fingerprint = m.says === 'fingerprinted'; // N2: joins its group and never moves its clock, so it settles when it would have
     if (m.target && m.target.kind === 'file' && typeof m.target.path === 'string') {
       const p = m.target.path;
       if (path.posix.basename(p) === '4913') {
@@ -334,13 +380,18 @@ function createOpon({ sessionId, config }) {
       }
     }
     let g = live.get(key);
+    if (!g && fingerprint) {
+      // A group the ceiling settled is out of `live`, but its fingerprint is still its own (N2).
+      const f = forcedLast.get(key);
+      if (f && unsealed.has(f.id)) g = unsealed.get(f.id);
+    }
     if (!g) {
       const f = forcedLast.get(key);
       forcedLast.delete(key);
       const continues = f && (f.held || now - f.at < quiet) ? f.id : null;
       const s = sealedLast.get(key);
       const amends = s && ((m.cause_hint && s.causes.has(m.cause_hint)) || BigInt(m.mono_ns) <= s.at) ? s.id : null;
-      g = { n: ++made, id: id(made), key, state: 'open', parentId: null, childIds: [], startAt: null, exitAt: null, lost: false, target, seqs: [], says: [], real: [], realSays: [], sources: [], slots: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues, amends, causes: new Set(), isCommand: key.startsWith('command:'), isTurn: key.startsWith('turn:'), turnEnded: false };
+      g = { n: ++made, id: id(made), key, state: 'open', parentId: null, childIds: [], startAt: null, exitAt: null, lost: false, target, seqs: [], says: [], real: [], realSays: [], sources: [], slots: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues, amends, causes: new Set(), isCommand: key.startsWith('command:'), isTurn: key.startsWith('turn:'), turnEnded: false, fp: null, lastOther: 0, net: undefined };
       live.set(key, g);
       unsealed.set(g.id, g);
       all.push(g);
@@ -366,6 +417,10 @@ function createOpon({ sessionId, config }) {
       g.state = 'open';
       g.settledAt = null;
     }
+    if (fingerprint) {
+      real = false;
+      g.fp = { seq: m.seq, state: fingerprintedState(m) };
+    } else g.lastOther = m.seq;
     g.seqs.push(m.seq);
     g.says.push(m.says);
     g.real.push(real);
@@ -373,7 +428,7 @@ function createOpon({ sessionId, config }) {
     g.slots.push(slotsOf(m));
     if (m.cause_hint) g.causes.add(m.cause_hint);
     if (real) g.realSays.push(m.says);
-    g.last = now;
+    if (!fingerprint) g.last = now;
     if (m.says === 'ended' && m.target && m.target.kind === 'turn') g.turnEnded = true;
     if (g.isCommand && m.says === 'started' && g.startAt === null) g.startAt = now;
     if (g.isCommand && (m.says === 'exited' || m.says === 'ended')) g.exitAt = now;

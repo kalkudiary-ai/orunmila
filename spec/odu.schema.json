@@ -356,7 +356,7 @@
     },
     "conflicts": {
       "description": "A list of disagreements, each naming the sources and what each said. Never dropped: on every odù, empty when there is none.",
-      "$comment": "brief v4 lines 314, 328, 405, 411, 429-439; station 6 (slices C3a-C3e). `sources` and `said` are the agent's names for line 328's \"naming the sources and what each said\" (LD188, Q13); concurrent_sessions's `sessions` (LD180, Q11 (1), approved LD184); outcome_missing's `ref` and `why` (LD189, Q14)",
+      "$comment": "brief v4 lines 314, 328, 405, 411, 429-439; station 6 (slices C3a-C3e). `sources` and `said` are the agent's names for line 328's \"naming the sources and what each said\" (LD188, Q13); concurrent_sessions's `sessions` (LD180, Q11 (1), approved LD184); outcome_missing's `ref` and `why` (LD189, Q14); silent_change's `turns` and `claim_seqs` (LD194, Q16)",
       "type": "array",
       "items": {
         "type": "object",
@@ -451,11 +451,30 @@
                 }
               }
             }
+          },
+          {
+            "$comment": "brief v4 line 434; test 5; the fields are the agent's proposal (LD194, Q16)",
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "silent_change"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "required": [
+                "turns",
+                "claim_seqs"
+              ]
+            }
           }
         ],
         "properties": {
           "kind": {
-            "description": "The conflict's kind. concurrent_sessions: a change during overlapping sessions that cannot be pinned to one session. unconfirmed_by_filesystem: an agent reported an edit inside the Sentinel's root that the Sentinel and git never saw. outcome_missing: a tool call's `started` mark with no outcome by the end of its turn, or an outcome its payload says was interrupted. phantom_claim: on a claim's own odù, a claim the evidence does not support.",
+            "description": "The conflict's kind. concurrent_sessions: a change during overlapping sessions that cannot be pinned to one session. unconfirmed_by_filesystem: an agent reported an edit inside the Sentinel's root that the Sentinel and git never saw. outcome_missing: a tool call's `started` mark with no outcome by the end of its turn, or an outcome its payload says was interrupted. phantom_claim: on a claim's own odù, a claim the evidence does not support. silent_change: an agent-caused change of a file that its turn's claims never mention.",
             "type": "string",
             "minLength": 1
           },
@@ -494,6 +513,26 @@
             "items": {
               "type": "string",
               "minLength": 1
+            }
+          },
+          "turns": {
+            "description": "For silent_change: the turns whose claims judged the change (those its cause's tool calls name), sorted.",
+            "$comment": "agent's proposal (LD194, Q16)",
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "claim_seqs": {
+            "description": "For silent_change: the seq of each claimed mark read for those turns (claims that could not be confirmed are not read), in order; none of them mentions the change's path.",
+            "$comment": "brief v4 line 330 (every verdict audited down to its marks); agent's proposal (LD194, Q16)",
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "integer",
+              "minimum": 1
             }
           },
           "claim": {

@@ -30,6 +30,7 @@ it(
       s.append(M.edited(100, 'e1', 'src/a.ts')),
       s.append(M.disk(300, 'src/a.ts')),
     ];
+    s.append(M.turnEnded(300)); // C3d2: the agent's edit waits for its turn's end
     s.append(M.tick(1000));
     s.append(M.tick(1799)); // 1,499 ms after the last mark: still open
     s.append(M.tick(4799)); // settled at 1,800; the grace ends at 4,800
@@ -37,8 +38,7 @@ it(
     const out = replayFolder(s.dir);
     assert.strictEqual(out.ok, true, out.words);
     const g = groups(out);
-    assert.strictEqual(g.length, 1);
-    assert.strictEqual(g[0].state, 'sealed');
+    assert.deepStrictEqual(g.map((x) => [x.target.kind, x.state]), [['file', 'sealed'], ['turn', 'sealed']], 'the edit, then its turn, sealed at one moment');
     assert.deepStrictEqual(g[0].target, { kind: 'file', path: 'src/a.ts' });
     assert.strictEqual(g[0].action, 'modified');
     assert.deepStrictEqual(g[0].mark_seqs, seqs);

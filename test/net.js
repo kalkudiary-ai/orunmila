@@ -60,6 +60,7 @@ it('N2: a fingerprint that arrives while its group is still open neither delays 
   const { groups, odus } = replay((append) => {
     append(M.edited(0, 'c1', 'src/a.js'));
     append(M.fingerprinted(1000, 'src/a.js', FP('b')));
+    append(M.turnEnded(1000)); // C3d2: the agent's change waits for its turn's end
     append(M.tick(9000));
   });
   const g = groups.find((x) => x.target && x.target.path === 'src/a.js');
@@ -82,9 +83,11 @@ it("N2: before is the baseline's for the target's first group, then the last sea
   const { odus } = replay((append) => {
     append(M.edited(0, 'c1', 'src/a.js'));
     append(M.fingerprinted(1600, 'src/a.js', FP('b')));
+    append(M.turnEnded(1600));
     append(M.tick(5000)); // the first group seals at 4,500 ms
-    append(M.edited(10000, 'c2', 'src/a.js'));
+    append(M.edited(10000, 'c2', 'src/a.js', 'modified', 't2'));
     append(M.fingerprinted(11600, 'src/a.js', FP('c')));
+    append(M.turnEnded(11600, 't2'));
     append(M.tick(20000));
   });
   const [one, two] = fileOdus(odus, 'src/a.js');
@@ -101,6 +104,7 @@ it('N2: a file not in the baseline was absent before; a deleted file is absent a
     append(M.fingerprinted(1600, 'src/new.js', FP('e')));
     append(M.fingerprinted(1700, 'src/a.js', 'absent'));
     append(M.fingerprinted(1900, 'src/brief.js', 'absent'));
+    append(M.turnEnded(1900));
     append(M.tick(9000));
   });
   assert.deepStrictEqual(fileOdus(odus, 'src/new.js')[0].net_change, { before: 'absent', after: FP('e'), changed: true });
@@ -119,6 +123,7 @@ it('N2: unknown is null: no fingerprint at settle, a mark after the last fingerp
       append(M.fingerprinted(1600, 'src/link', FP('f')));
       append(M.fingerprinted(1600, 'vendor/x.js', FP('9')));
       append(M.disk(2000, 'src/b.js')); // a slow Sentinel mark in the grace: reopens it; no fingerprint after it
+      append(M.turnEnded(2000));
       append(M.tick(20000));
     },
     { config: { exclusions: ['vendor/'] } },
@@ -131,6 +136,7 @@ it('N2: unknown is null: no fingerprint at settle, a mark after the last fingerp
     (append) => {
       append(M.edited(0, 'c1', 'src/a.js'));
       append(M.fingerprinted(1600, 'src/a.js', FP('a')));
+      append(M.turnEnded(1600));
       append(M.tick(9000));
     },
     { baseline: null },
@@ -159,6 +165,7 @@ it('N2: after a rename the old path is absent; the new path takes its own before
     append(M.tick(9000));
     append(M.edited(10000, 'c1', 'src/a.js', 'created'));
     append(M.fingerprinted(11600, 'src/a.js', FP('7')));
+    append(M.turnEnded(11600));
     append(M.tick(20000));
   });
   assert.deepStrictEqual(fileOdus(odus, 'src/b.js')[0].net_change, { before: 'absent', after: FP('a'), changed: true });
@@ -171,9 +178,11 @@ it("N2b: a rename while the old path's group is still in its grace: that group k
     append(M.fingerprinted(1600, 'src/a.js', FP('b'))); // settled at 1,500 ms; seals at 4,500 ms
     append(M.disk(2000, 'src/b.js', 'renamed', { from: 'src/a.js' }));
     append(M.fingerprinted(3600, 'src/b.js', FP('b')));
+    append(M.turnEnded(3600));
     append(M.tick(9000));
-    append(M.edited(10000, 'c2', 'src/a.js', 'created'));
+    append(M.edited(10000, 'c2', 'src/a.js', 'created', 't2'));
     append(M.fingerprinted(11600, 'src/a.js', FP('e')));
+    append(M.turnEnded(11600, 't2'));
     append(M.tick(20000));
   });
   const [first, again] = fileOdus(odus, 'src/a.js');
@@ -187,6 +196,7 @@ it('N2: a baseline beside the log that was changed is named as lost evidence, an
     (append) => {
       append(M.edited(0, 'c1', 'src/a.js'));
       append(M.fingerprinted(1600, 'src/a.js', FP('b')));
+      append(M.turnEnded(1600));
       append(M.tick(9000));
     },
     { after: (dir) => fs.appendFileSync(path.join(dir, 'baseline.jsonl'), '{"path":"planted"}\n') },
@@ -202,6 +212,7 @@ it('N2 test 13: the same log replayed twice gives byte-identical odù logs, net 
     const log = makeLog(base, {}, { baseline: BASE });
     log.append(M.edited(0, 'c1', 'src/a.js'));
     log.append(M.fingerprinted(1600, 'src/a.js', FP('b')));
+    log.append(M.turnEnded(1600));
     log.append(M.tick(9000));
     const a = replayFolder(log.dir);
     const b = replayFolder(log.dir);

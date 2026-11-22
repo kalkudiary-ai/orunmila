@@ -57,11 +57,13 @@ const longCommand = (append) => {
   append(M.started(1000, 'b1', cmd('npm run long'), 'Bash'));
   append(M.disk(2000, 'src/b.ts'));
   append(M.exited(5000, 'b1', 'npm run long'));
+  append(M.turnEnded(5000)); // C3d2: the agent's changes wait for their turn's end
   append(M.tick(15000));
 };
 const bEdits = (append) => {
   append(M.edited(1990, 'e9', 'src/b.ts'));
   append(M.disk(2000, 'src/b.ts'));
+  append(M.turnEnded(2000));
   append(M.tick(15000));
 };
 
@@ -130,6 +132,7 @@ it('A2 line 404: during overlap a time match (step 2) does not credit, the call 
     append(M.failed(3200, 'e2', { kind: 'file', path: 'src/c.ts' }));
     append(M.edited(3300, 'e3', 'src/d.ts'));
     append(M.disk(3400, 'src/d.ts'));
+    append(M.turnEnded(3400));
     append(M.tick(15000));
   }, bEdits);
   const c = of(a, 'src/c.ts');
@@ -162,6 +165,7 @@ it('A2: which sessions overlap: one in another folder does not, one in a folder 
     append(M.started(1000, 'b1', cmd('npm run long'), 'Bash'));
     append(M.disk(8000, 'src/b.ts'));
     append(M.exited(9000, 'b1', 'npm run long'));
+    append(M.turnEnded(9000));
     append(M.tick(20000));
   };
   const bBrief = (append) => {

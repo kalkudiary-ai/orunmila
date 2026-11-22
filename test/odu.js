@@ -24,7 +24,7 @@ const withBase = (fn) => () => {
 };
 const records = (text) => text.split('\n').slice(0, -1).map((l) => JSON.parse(l));
 
-/** An edit both witnesses saw, a read, and a command with one child, all sealed. */
+/** An edit both witnesses saw, a read, and a command with one child, in a turn that ended (C3d2), all sealed. */
 function busyLog(base) {
   const s = makeLog(base);
   const seq = {};
@@ -33,6 +33,7 @@ function busyLog(base) {
   seq.cmd = [s.append(M.started(500, 'c1', { kind: 'command', text: 'npm install' }, 'Bash'))];
   seq.child = s.append(M.disk(700, 'node_modules/x.js', 'created'));
   seq.cmd.push(s.append(M.exited(900, 'c1', 'npm install')));
+  s.append(M.turnEnded(900));
   s.append(M.tick(10000));
   return { s, seq };
 }
@@ -43,7 +44,7 @@ it(
     const { s } = busyLog(base);
     const out = replayFolder(s.dir);
     assert.strictEqual(out.ok, true, out.words);
-    assert.deepStrictEqual(verifyText(out.odu), { ok: true, lines: 5 });
+    assert.deepStrictEqual(verifyText(out.odu), { ok: true, lines: 6 }, 'the header, then the edit, the read, the command, its child and the turn');
     const [head, ...odus] = records(out.odu);
     assert.deepStrictEqual(schemaOf('odu-header.schema.json')(head), []);
     assert.strictEqual(head.record, 'odu_header');

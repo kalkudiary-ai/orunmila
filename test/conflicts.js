@@ -42,6 +42,7 @@ it('C3a test 44: an agent edit the hook reported inside the root, which the Sent
   const odus = replay((append) => {
     append(M.started(0, 'e1', { kind: 'file', path: 'src/unseen.ts' }));
     append(M.edited(100, 'e1', 'src/unseen.ts'));
+    append(M.turnEnded(100)); // C3d2: the agent's change waits for its turn's end
     append(M.tick(9000));
   });
   const o = of(odus, file('src/unseen.ts'));
@@ -55,6 +56,7 @@ it('C3a test 69 and line 411: a Glove write outside the root, or while the Senti
     append({ ...M.edited(0, 'e1', '/elsewhere/x.ts'), target: { kind: 'file', path: '/elsewhere/x.ts', outside: true } });
     append({ ...M.gap(3000, 'watch dropped'), detail: { lost: 'watch dropped', root: '/r', until: { observed_at: wall(3500), mono_ns: ns(3500) } } });
     append(M.edited(3100, 'e2', 'src/down.ts'));
+    append(M.turnEnded(3100));
     append(M.tick(12000));
   });
   const out = of(odus, file('/elsewhere/x.ts'));
@@ -69,6 +71,7 @@ it('C3a: the same change seen by both witnesses, a human edit, and marks that ch
     append(M.disk(50, 'src/both.ts'));
     append(M.disk(100, 'src/hand.ts'));
     append(M.read(200, 'r1', 'src/a.ts'));
+    append(M.turnEnded(200));
     append(M.tick(9000));
   });
   for (const [p, w] of [['src/both.ts', ['saw', 'saw']], ['src/hand.ts', ['saw_nothing', 'saw']], ['src/a.ts', ['saw', 'out_of_scope']]]) {
@@ -392,11 +395,161 @@ it('C3d1: the schema asks a file phantom_claim for its path and targets, and its
   assert.ok(keys({ ...o, conflicts: [{ ...c, why: 'no_command' }] }).length > 0, 'no_command is a command claim\'s');
 });
 
-it('C3a: the odù schema requires conflicts, and each conflict its kind, sources and what each said', () => {
-  const [o] = replay((append) => {
-    append(M.edited(0, 'e1', 'src/a.ts'));
-    append(M.tick(9000));
+// C3d2 (LD194; lines 324, 434; test 5): an agent-caused change its turn's claims never mention.
+const silent = (said, turns, claimSeqs) => ({ kind: 'silent_change', sources: Object.keys(said).sort(), said, turns, claim_seqs: claimSeqs });
+const filesIn = (odus) => odus.filter((o) => o.target && o.target.kind === 'file');
+
+it('C3d2 test 5: an agent edit its turn\'s claims never mention is 1 odù, explained, with a silent_change conflict naming both witnesses and the claim that said nothing of it; it seals at its turn\'s end, not 4.5 s after quiet', () => {
+  const s = {};
+  const odus = replay((append) => {
+    append(M.prompted(0));
+    append(M.started(100, 'e1', { kind: 'file', path: 'src/quiet.ts' }));
+    append(M.edited(200, 'e1', 'src/quiet.ts'));
+    append(M.disk(250, 'src/quiet.ts'));
+    append(M.disk(1000, 'src/hand.ts')); // a person's edit: sealed at 5,500; the agent's would have sealed at 4,750
+    s.claim = append(claimed(20000, 't1', 'All done.'));
+    append(M.turnEnded(20000));
+    append(M.tick(40000));
   });
+  const files = filesIn(odus);
+  assert.deepStrictEqual(files.map((o) => o.target.path), ['src/hand.ts', 'src/quiet.ts'], 'the agent edit waits for its turn\'s end');
+  const [hand, o] = files;
+  assert.deepStrictEqual(
+    [witnesses(o), o.witness_status.glove.says, o.attribution, o.cause, o.confidence, o.conflicts],
+    [['saw', 'saw'], ['started', 'modified'], 'explained', { kind: 'agent_tool_call', ref: 'e1' }, 'high', [silent({ agent_claim: [], hook: ['started', 'modified'], sentinel: ['modified'] }, ['t1'], [s.claim])]]
+  );
+  assert.deepStrictEqual([witnesses(hand), hand.attribution, hand.conflicts], [['saw_nothing', 'saw'], 'unexplained', []], 'a change with no agent cause is never silent');
+});
+
+it('C3d2: a change its turn\'s claims mention is not silent: the repo path, a bare name, ./path, an absolute path under the root, or a path in a claim with no action verb', () => {
+  const odus = replay((append, log) => {
+    const texts = ['I updated src/a.ts.', 'I updated b.ts.', 'I updated ./src/c.ts.', `I updated ${log.root}/src/d.ts.`, 'All tests pass in src/e.ts.'];
+    for (const [i, f] of ['src/a.ts', 'src/deep/b.ts', 'src/c.ts', 'src/d.ts', 'src/e.ts'].entries()) {
+      const t = `t${i + 1}`;
+      append(M.edited(i * 10000, `e${i + 1}`, f, 'modified', t));
+      append(M.disk(i * 10000 + 50, f));
+      append(claimed(i * 10000 + 1000, t, texts[i]));
+      append(M.turnEnded(i * 10000 + 1000, t));
+    }
+    append(M.tick(80000));
+  });
+  const files = filesIn(odus);
+  assert.strictEqual(files.length, 5);
+  for (const o of files) assert.deepStrictEqual([o.target.path, witnesses(o), o.attribution, o.conflicts], [o.target.path, ['saw', 'saw'], 'explained', []]);
+});
+
+it('C3d2: no verdict without a claim to read: a claim that could not be confirmed (N10), a turn with no claim, a turn cut by the session\'s end or the intake\'s downtime; a turn still running keeps its change unsealed', () => {
+  const unread = replay((append) => {
+    append(M.edited(0, 'e1', 'src/f.ts'));
+    append(M.disk(50, 'src/f.ts'));
+    append({ ...M.claimed(1000, 't1'), detail: { text: '', claim_unconfirmed: true } });
+    append(M.turnEnded(1000));
+    append(M.edited(10000, 'e2', 'src/g.ts', 'modified', 't2'));
+    append(M.disk(10050, 'src/g.ts'));
+    append(M.turnEnded(11000, 't2'));
+    append(M.edited(20000, 'e3', 'src/h.ts', 'modified', 't3'));
+    append(M.disk(20050, 'src/h.ts'));
+    append(M.sessionEnded(30000));
+    append(M.tick(50000));
+  });
+  const files = filesIn(unread);
+  assert.deepStrictEqual(files.map((o) => [o.target.path, witnesses(o), o.attribution, o.conflicts]), ['src/f.ts', 'src/g.ts', 'src/h.ts'].map((p) => [p, ['saw', 'saw'], 'explained', []]));
+  const down = replay((append) => {
+    append(M.edited(0, 'e1', 'src/i.ts'));
+    append(M.disk(50, 'src/i.ts'));
+    append(DOWN(10000, 20000));
+    append(M.tick(40000));
+  });
+  assert.deepStrictEqual(filesIn(down).map((o) => [o.target.path, witnesses(o), o.conflicts]), [['src/i.ts', ['saw', 'saw'], []]]);
+  const running = replay((append) => {
+    append(M.edited(0, 'e1', 'src/j.ts'));
+    append(M.disk(50, 'src/j.ts'));
+    append(M.tick(60000));
+  });
+  assert.strictEqual(filesIn(running).length, 0, 'not sealed before its turn is over');
+});
+
+it('C3d2: grouping is unchanged while a change waits: a second edit of the file later in its turn is its own odù, each judged; a change with a net change of false is never silent and does not wait', () => {
+  const odus = replay((append) => {
+    append(M.edited(0, 'e1', 'src/twice.ts'));
+    append(M.disk(50, 'src/twice.ts'));
+    append(M.edited(0, 'b1', 'src/back.ts'));
+    append(M.fingerprinted(1600, 'src/back.ts', FP('b')));
+    append(M.edited(10000, 'e2', 'src/twice.ts'));
+    append(M.disk(10050, 'src/twice.ts'));
+    append(M.turnEnded(11000));
+    append(M.prompted(20000, 't2'));
+    append(M.edited(20100, 'b2', 'src/back.ts', 'modified', 't2'));
+    append(M.disk(20150, 'src/back.ts'));
+    append(M.fingerprinted(21700, 'src/back.ts', FP('b'))); // back to what its last odù left: changed false
+    append(M.disk(22000, 'src/hand.ts')); // sealed at 26,500, after the reverted edit's 25,200
+    append(claimed(40000, 't2', 'All done.'));
+    append(M.turnEnded(40000, 't2'));
+    append(M.tick(60000));
+  });
+  const twice = filesIn(odus).filter(file('src/twice.ts'));
+  assert.deepStrictEqual(twice.map((o) => [witnesses(o), o.cause.ref, o.conflicts]), [[['saw', 'saw'], 'e1', []], [['saw', 'saw'], 'e2', []]], 'two events, as before; t1 has no claim, so no verdict');
+  const paths = filesIn(odus).map((o) => [o.target.path, o.net_change && o.net_change.changed]);
+  const reverted = paths.findIndex(([p, c]) => p === 'src/back.ts' && c === false);
+  assert.ok(reverted >= 0 && reverted < paths.findIndex(([p]) => p === 'src/hand.ts'), JSON.stringify(paths));
+  const back = filesIn(odus).filter(file('src/back.ts'))[1];
+  assert.deepStrictEqual([witnesses(back), back.conflicts], [['saw', 'saw'], []]);
+});
+
+it('C3d2: an odù that amends a waiting one comes after it, as a late Sentinel mark\'s does; a command\'s children wait for its turn, each judged, while their parent, no change on disk, does not', () => {
+  const odus = replay((append) => {
+    append(M.edited(100, 'e1', 'src/late.ts'));
+    append(M.disk(150, 'src/late.ts'));
+    append(M.tick(5000));
+    append(M.disk(4600, 'src/late.ts')); // seen before that odù closed (4,650), arriving after: amends it
+    append(M.started(10000, 'c1', { kind: 'command', text: 'npm install' }, 'Bash'));
+    append(M.disk(10100, 'node_modules/x/a.js', 'created'));
+    append(M.disk(10120, 'node_modules/x/b.js', 'created'));
+    append(M.exited(10500, 'c1', 'npm install'));
+    append(claimed(30000, 't1', 'All done.'));
+    append(M.turnEnded(30000));
+    append(M.tick(50000));
+  });
+  const at = (pred) => odus.findIndex(pred);
+  const first = of(odus, (o) => file('src/late.ts')(o) && o.amends === null);
+  const amending = of(odus, (o) => file('src/late.ts')(o) && o.amends === first.odu_id);
+  assert.ok(at((o) => o === first) < at((o) => o === amending));
+  assert.deepStrictEqual([witnesses(first), first.conflicts.map((c) => c.kind), witnesses(amending), amending.attribution, amending.conflicts], [['saw', 'saw'], ['silent_change'], ['saw_nothing', 'saw'], 'unexplained', []]);
+  const parent = of(odus, (o) => o.target && o.target.kind === 'command');
+  const kids = odus.filter((o) => o.parent_id === parent.odu_id);
+  assert.strictEqual(kids.length, 2);
+  for (const k of kids) assert.deepStrictEqual([witnesses(k), k.cause, k.conflicts.map((c) => c.kind)], [['saw_nothing', 'saw'], { kind: 'agent_command', ref: 'c1' }, ['silent_change']]);
+  assert.deepStrictEqual([witnesses(parent), parent.children, parent.conflicts], [['saw', 'out_of_scope'], kids.map((k) => k.odu_id), []]);
+});
+
+it('C3d2: the schema asks a silent_change for its turns and the claims it read', () => {
+  const odus = replay((append) => {
+    append(M.edited(0, 'e1', 'src/a.ts'));
+    append(M.disk(50, 'src/a.ts'));
+    append(claimed(1000, 't1', 'All done.'));
+    append(M.turnEnded(1000));
+    append(M.tick(20000));
+  });
+  const o = of(odus, file('src/a.ts'));
+  const keys = (r) => checkOdu(r).map((e) => `${e.path} ${e.keyword}`);
+  assert.deepStrictEqual(keys(o), []);
+  const c = o.conflicts[0];
+  assert.strictEqual(c.kind, 'silent_change');
+  for (const k of ['turns', 'claim_seqs']) {
+    const { [k]: _gone, ...less } = c;
+    assert.ok(keys({ ...o, conflicts: [less] }).length > 0, `a silent_change with no ${k}`);
+  }
+});
+
+it('C3a: the odù schema requires conflicts, and each conflict its kind, sources and what each said', () => {
+  const o = of(
+    replay((append) => {
+      append(M.edited(0, 'e1', 'src/a.ts'));
+      append(M.turnEnded(0));
+      append(M.tick(9000));
+    }),
+    file('src/a.ts'),
+  );
   const keys = (r) => checkOdu(r).map((e) => `${e.path} ${e.keyword}`);
   const { conflicts: _c, ...none } = o;
   assert.ok(keys(none).includes('/conflicts required'));

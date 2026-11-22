@@ -171,8 +171,22 @@
  * passed; otherwise the claim is its own sealed record (`target.kind` claim)
  * with a `phantom_claim` conflict (`why`: no_command, failed, unknown; the
  * `runs` cited), high only when the Glove was healthy (line 352) and the
- * claim had no run or the run failed, else low. The other conflicts come with
- * C3d-C3e.
+ * claim had no run or the run failed, else low. Phantom file claims are
+ * C3d1's (`fileVerdict`); contradiction is C3e's.
+ *
+ * Silent change (C3d2, LD194; lines 324, 369, 434; test 5): a change of a file
+ * whose net change is not false and whose cause is the agent's (steps 1-3),
+ * naming calls of a turn, is judged against that turn's claims, so its seal
+ * waits, settled, until each such turn is over (its `ended`, the session's
+ * `ended`, or the intake's downtime from after the turn began, as C3b). It is
+ * closed when it would have sealed: decided, its record fixed, a later mark of
+ * its target a new group, as after a seal; only the seal waits. A group whose
+ * `amends` or `continues` names a waiting one waits for it, so those still name
+ * an earlier odù (a parent's `children` may name later ones, as before). At its
+ * seal, when its turns' confirmed claims were read and none mentions its path
+ * (claims.js `mentionsOf`, matched as file claims are), it gets
+ * `silent_change`: `turns`, `claim_seqs` (the claims read), and `agent_claim`
+ * among its sources, having said nothing of it. No claim read: no verdict.
  *
  * Group records (LD142) use the odù's field names where they apply, and are
  * not odù records.
@@ -182,7 +196,7 @@ const path = require('path');
 const { keyOf, aliasPath } = require('../group/keys');
 const { isIgnored } = require('../../capture/fs-sentinel/ignore');
 const { concurrent } = require('../intake/overlap');
-const { claimsOf } = require('../corroborate/claims');
+const { claimsOf, mentionsOf } = require('../corroborate/claims');
 const { isTestRun } = require('../../laws/facts');
 const { hasUnguardedPipe } = require('../../laws/evaluate');
 
@@ -254,6 +268,11 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
   const callTurn = new Map(); // tool call id -> the turn its Glove marks name (C3d1)
   const turnStart = new Map(); // turn -> when its first Glove mark came (C3d1)
   let hooksChanged = false; // the agent's hook settings changed: the Glove down from then (line 352)
+  const turnOver = new Map(); // turn -> when it was over: its `ended`, or the intake's downtime (C3d2)
+  let sessionOver = null; // when the session's `ended` came: every turn over from then (C3d2)
+  const heard = new Map(); // turn -> [{ seq, paths }]: its confirmed claimed marks and the paths they mention (C3d2)
+  const waiting = []; // closed groups whose seal waits for their turns or a group they name, in the order they closed (C3d2)
+  const freedAt = new Map(); // a waiting group's id -> when it sealed (C3d2)
   const exclusions = Array.isArray(config.exclusions) ? config.exclusions : [];
   const all = [];
   let now = null;
@@ -329,6 +348,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
         }
       }
       endCalls((t) => t.start <= from, from); // C3b: so may any call's outcome
+      for (const [t, at] of turnStart) if (at <= from && !turnOver.has(t)) turnOver.set(t, from); // C3d2: and any turn's end
     }
   }
 
@@ -399,6 +419,30 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     return record(cg);
   }
 
+  /** C3d1 (LD192 (2)): a path as the agent wrote it, made comparable with targets: less a leading ./, an absolute path under the root relative. */
+  function asWritten(w) {
+    let p = w.replace(/^\.\//, '');
+    if (root && p.startsWith(root + '/')) p = p.slice(root.length + 1);
+    return p;
+  }
+  /** C3d1: target path `t` is the path written as `p`, or ends with `/` and it (a bare name matches every file of that name). */
+  const named = (t, p) => typeof t === 'string' && (t === p || t.endsWith('/' + p));
+
+  /** C3d2 (LD194): when turn `t` was over, or null while it runs. */
+  const overAt = (t) => (turnOver.has(t) ? turnOver.get(t) : sessionOver);
+  /** C3d2 (LD194; line 434): the turns whose claims judge group g: those its cause's calls name, for an agent-caused change of a file not shown unchanged. */
+  function turnsOf(g) {
+    const c = g.attr.cause;
+    if (!g.key.startsWith('file:') || g.net === undefined || g.net.changed === false || !c || !AGENT_CAUSES.has(c.kind)) return [];
+    return [...new Set([c.ref, ...(c.also || [])].map((h) => callTurn.get(h)).filter(Boolean))].sort();
+  }
+  /** C3d2 (LD194; line 434): a silent_change when its turns' confirmed claims were read and none mentions its path; else null. */
+  function silentOf(g) {
+    const read = g.judged.flatMap((t) => heard.get(t) || []);
+    if (!read.length || read.some((c) => c.paths.some((w) => named(g.target.path, asWritten(w))))) return null;
+    return conflictOf(g, 'silent_change', [...g.sources, 'agent_claim'], { turns: [...g.judged], claim_seqs: read.map((c) => c.seq).sort((a, b) => a - b) });
+  }
+
   /**
    * C3d1 (LD192; lines 406, 432): what backs a file claim of `turn` written as `w`, or null when it is backed: a
    * change on a matching path credited to a call of this turn, its net change not false, or one still settling.
@@ -406,9 +450,8 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
    * time that this session's steps did not credit), `no_event`; with the changes cited and their overlap's sessions.
    */
   function fileVerdict(turn, w) {
-    let p = w.replace(/^\.\//, '');
-    if (root && p.startsWith(root + '/')) p = p.slice(root.length + 1);
-    const matches = (t) => typeof t === 'string' && (t === p || t.endsWith('/' + p));
+    const p = asWritten(w);
+    const matches = (t) => named(t, p);
     const ofTurn = (h) => Boolean(h) && callTurn.get(h) === turn;
     if ([...unsealed.values()].some((u) => u.key.startsWith('file:') && matches(u.target.path) && u.hints.some((h, i) => ofTurn(h) && u.sources[i] === 'hook' && CHANGES_A_FILE.has(u.says[i])))) return null;
     const seen = changes.filter((ch) => matches(ch.path));
@@ -587,21 +630,65 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       }
     }
     sealed.sort((a, b) => (a.sealedAt < b.sealedAt ? -1 : a.sealedAt > b.sealedAt ? 1 : a.n - b.n));
-    return sealed.flatMap((g) => {
-      g.state = 'sealed';
-      g.net = netChange(g);
-      g.attr = attributionOf(g);
-      g.confidence = confidenceOf(g, g.attr);
-      g.conflicts = [...(g.attr.conflicts || []), ...conflictsOf(g)];
-      const disk = (g.key.startsWith('file:') || g.key.startsWith('dirchange:')) && g.says.some((v) => DISK.has(v));
-      g.notCredited = disk && g.attr.attribution === 'unexplained' ? notCreditedOf(g) : undefined;
-      if (g.net !== undefined) changes.push({ path: g.target.path, first: g.first, attr: g.attr, changed: g.net.changed, rows: g.seqs.map((s, k) => ({ seq: s, says: g.says[k], source: g.sources[k], slot: g.slots[k], hint: g.hints[k] })), sessions: g.conflicts.filter((c) => c.kind === 'concurrent_sessions').flatMap((c) => c.sessions) }); // C3d1
-      const seen = g.says.some((v, i) => DISK.has(v) && (g.sources[i] === 'sentinel' || g.sources[i] === 'git')); // C3a2
-      sealedLast.set(g.key, { id: g.id, at: g.sealedAt, causes: g.causes, seen });
-      if (live.get(g.key) === g) live.delete(g.key);
-      unsealed.delete(g.id);
-      return [record(g), ...(g.isTurn ? phantomsOf(g) : [])]; // C3c: a phantom claim right after the group holding it
-    });
+    const ready = [];
+    for (const g of sealed) {
+      close(g);
+      // C3d2 (LD194): its seal waits while a turn that judges it runs, or an earlier odù it names waits.
+      g.judged = turnsOf(g);
+      g.after = [g.amends, g.continues].filter((x) => x !== null && waiting.some((w) => w.id === x));
+      if (g.after.length || g.judged.some((x) => overAt(x) === null)) {
+        g.sealedAt = null;
+        waiting.push(g);
+      } else ready.push(g);
+    }
+    // Sealed in event-time order; a group freed with one it names, at the same moment, after it (a stable sort).
+    const freed = release();
+    const out = [];
+    while (ready.length || freed.length) out.push(...emit(!freed.length || (ready.length && ready[0].sealedAt <= freed[0].sealedAt) ? ready.shift() : freed.shift()));
+    return out;
+  }
+
+  /** A group decided where it would have sealed (rule 7): stations 4-6, its record fixed; only its seal may wait (C3d2). */
+  function close(g) {
+    g.net = netChange(g);
+    g.attr = attributionOf(g);
+    g.confidence = confidenceOf(g, g.attr);
+    g.conflicts = [...(g.attr.conflicts || []), ...conflictsOf(g)];
+    const disk = (g.key.startsWith('file:') || g.key.startsWith('dirchange:')) && g.says.some((v) => DISK.has(v));
+    g.notCredited = disk && g.attr.attribution === 'unexplained' ? notCreditedOf(g) : undefined;
+    if (g.net !== undefined) changes.push({ path: g.target.path, first: g.first, attr: g.attr, changed: g.net.changed, rows: g.seqs.map((s, k) => ({ seq: s, says: g.says[k], source: g.sources[k], slot: g.slots[k], hint: g.hints[k] })), sessions: g.conflicts.filter((c) => c.kind === 'concurrent_sessions').flatMap((c) => c.sessions) }); // C3d1
+    const seen = g.says.some((v, i) => DISK.has(v) && (g.sources[i] === 'sentinel' || g.sources[i] === 'git')); // C3a2
+    sealedLast.set(g.key, { id: g.id, at: g.sealedAt, causes: g.causes, seen });
+    if (live.get(g.key) === g) live.delete(g.key);
+    unsealed.delete(g.id);
+    g.extra = g.isTurn ? phantomsOf(g) : []; // C3c: a phantom claim right after the group holding it
+    g.rec = record(g);
+  }
+
+  /** C3d2 (LD194): the waiting groups whose turns are over and whose named groups have sealed, each at the latest of those moments, in that order. */
+  function release() {
+    const freed = [];
+    for (let moved = true; moved; ) {
+      moved = false;
+      for (const g of [...waiting]) {
+        const overs = g.judged.map(overAt);
+        if (overs.includes(null) || g.after.some((x) => waiting.some((w) => w.id === x))) continue;
+        waiting.splice(waiting.indexOf(g), 1);
+        g.sealedAt = [g.settledAt + grace, ...overs, ...g.after.map((x) => freedAt.get(x))].reduce((a, b) => (b > a ? b : a));
+        freedAt.set(g.id, g.sealedAt);
+        freed.push(g);
+        moved = true;
+      }
+    }
+    return freed.sort((a, b) => (a.sealedAt < b.sealedAt ? -1 : a.sealedAt > b.sealedAt ? 1 : 0));
+  }
+
+  /** A closed group sealed: its fixed record, with its silent-change verdict (C3d2), then any phantom claims it holds. */
+  function emit(g) {
+    g.state = 'sealed';
+    const silent = g.judged.length ? silentOf(g) : null;
+    if (silent) g.conflicts.push(silent);
+    return [{ ...g.rec, state: 'sealed', sealed_at_ns: String(g.sealedAt), conflicts: g.conflicts.map(copyConflict) }, ...g.extra];
   }
 
   /** The open file group in `dir` that had a mark last (vim's 4913 joins it), or null. */
@@ -780,6 +867,8 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       if (m.cause_hint && m.turn && !callTurn.has(m.cause_hint)) callTurn.set(m.cause_hint, m.turn);
       if (m.turn && !turnStart.has(m.turn)) turnStart.set(m.turn, now);
       if (claims.length) claimsAt.set(m.seq, { turn: m.turn, row, claims });
+      const d = m.detail && typeof m.detail === 'object' ? m.detail : {};
+      if (m.says === 'claimed' && m.turn && typeof d.text === 'string' && d.claim_unconfirmed !== true) heard.set(m.turn, [...(heard.get(m.turn) || []), { seq: m.seq, paths: mentionsOf(m) }]); // C3d2
       if (m.target && m.target.kind === 'command' && m.cause_hint && m.turn) {
         const runs = commandsOf.get(m.turn) || new Map();
         const r = runs.get(m.cause_hint) || { ref: m.cause_hint, text: String(m.target.text || ''), rows: [], outcome: null };
@@ -790,7 +879,11 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       }
       if (m.turn && !m.sub_agent) turnsSeen.add(m.turn);
     }
-    if (m.says === 'ended' && m.target && m.target.kind === 'turn' && (m.target.id || m.turn)) turnsEnded.add(m.target.id || m.turn);
+    if (m.says === 'ended' && m.target && m.target.kind === 'turn' && (m.target.id || m.turn)) {
+      turnsEnded.add(m.target.id || m.turn);
+      if (!turnOver.has(m.target.id || m.turn)) turnOver.set(m.target.id || m.turn, now); // C3d2
+    }
+    if (m.says === 'ended' && m.target && m.target.kind === 'session' && sessionOver === null) sessionOver = now; // C3d2
     if (m.says === 'tampered' && m.detail && m.detail.what === 'hook_settings') hooksChanged = true;
     if (GLOVE.has(m.source) && m.cause_hint) {
       // C3b (LD189): a call waits from its `started` until its outcome, its turn's end, the session's end or a gap.

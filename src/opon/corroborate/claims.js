@@ -20,21 +20,39 @@
  * - Only claims of either kind are returned; `hedged` is the reader's tag.
  * - A claim whose text could not be confirmed (`claim_unconfirmed`, N10) gives
  *   none: text that may be another turn's is never read as this turn's.
+ *
+ *   mentionsOf(mark, { strictProof }) -> [path as written]
+ *
+ * For a silent change (line 434: a change "the agent never mentioned in its
+ * claims"; slice C3d2, LD194): every path target in every claim the same reader
+ * reads in the text, with or without an action verb, as the agent wrote it.
+ * None for a claim that could not be confirmed.
  */
 
 const { extractClaims } = require('../../reconcile/claim-extractor');
 const { findExecutionClaims } = require('../../reconcile/verification-claim');
 
-function claimsOf(mark, { strictProof = false } = {}) {
+/** The claims the shared reader reads in a `claimed` mark's text; none for one that could not be confirmed (N10). */
+function readClaims(mark, strictProof) {
   const d = mark && mark.detail && typeof mark.detail === 'object' ? mark.detail : {};
   if (!mark || mark.says !== 'claimed' || d.claim_unconfirmed === true || typeof d.text !== 'string') return [];
+  return extractClaims(d.text, { strictProof });
+}
+/** A claim's path targets, as written. */
+const pathsOf = (c) => c.targets.filter((t) => t.kind === 'path').map((t) => t.raw);
+
+function claimsOf(mark, { strictProof = false } = {}) {
   const out = [];
-  for (const c of extractClaims(d.text, { strictProof })) {
-    const files = c.verbs.length && !c.inheritedTargets ? [...new Set(c.targets.filter((t) => t.kind === 'path').map((t) => t.raw))] : [];
+  for (const c of readClaims(mark, strictProof)) {
+    const files = c.verbs.length && !c.inheritedTargets ? [...new Set(pathsOf(c))] : [];
     const commands = [...new Set(findExecutionClaims(c.text))];
     if (files.length || commands.length) out.push({ claim: c.id, text: c.text, files, commands, hedged: c.hedged });
   }
   return out;
 }
 
-module.exports = { claimsOf };
+function mentionsOf(mark, { strictProof = false } = {}) {
+  return [...new Set(readClaims(mark, strictProof).flatMap(pathsOf))];
+}
+
+module.exports = { claimsOf, mentionsOf };

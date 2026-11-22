@@ -44,6 +44,7 @@ it('C1 test 44: an agent edit the hook reported and the Sentinel never saw: Glov
   const odus = replay((append) => {
     append(M.started(0, 'e1', { kind: 'file', path: 'src/unseen.ts' }));
     append(M.edited(100, 'e1', 'src/unseen.ts'));
+    append(M.turnEnded(100)); // C3d2: the agent's change waits for its turn's end
     append(M.tick(9000));
   });
   assert.deepStrictEqual(facts(of(odus, file('src/unseen.ts'))), ['saw', 'saw_nothing', 'explained', 'agent_tool_call', 'high']);
@@ -54,6 +55,7 @@ it('C1 line 427: confidence is never lowered because one witness recorded nothin
     // A Sentinel watch gap (G1: `root` names it the Sentinel's) covering the edit.
     append({ ...M.gap(0, 'watch dropped'), detail: { lost: 'watch dropped', root: '/r', until: { observed_at: wall(500), mono_ns: ns(500) } } });
     append(M.edited(100, 'e1', 'src/down.ts'));
+    append(M.turnEnded(100));
     append(M.tick(9000));
   });
   assert.deepStrictEqual(facts(of(odus, file('src/down.ts'))), ['saw', 'down', 'explained', 'agent_tool_call', 'high']);
@@ -76,6 +78,7 @@ it('C1 test 68: the same change seen by both witnesses: 1 odù, both saw, each w
   const odus = replay((append) => {
     glove = [append(M.started(0, 'e1', { kind: 'file', path: 'src/both.ts' })), append(M.edited(100, 'e1', 'src/both.ts'))];
     sentinel = [append(M.disk(150, 'src/both.ts'))];
+    append(M.turnEnded(150));
     append(M.tick(9000));
   });
   const o = of(odus, file('src/both.ts'));
@@ -90,10 +93,12 @@ it('C1 line 423: a byproduct the Sentinel saw is high; a time match and a runnin
       append(M.started(100, 'e1', { kind: 'file', path: 'src/in.ts' }));
       append(M.disk(200, 'src/in.ts'));
       append(M.failed(300, 'e1', { kind: 'file', path: 'src/in.ts' }));
+      append(M.turnEnded(300));
       append(M.tick(9000));
-      append(M.started(10000, 'b1', { kind: 'command', text: 'npm run gen' }, 'Bash'));
+      append(M.started(10000, 'b1', { kind: 'command', text: 'npm run gen' }, 'Bash', 't2'));
       append(M.disk(10100, 'src/gen.ts', 'created'));
-      append(M.exited(10200, 'b1', 'npm run gen'));
+      append(M.exited(10200, 'b1', 'npm run gen', 'pass', 't2'));
+      append(M.turnEnded(10200, 't2'));
       append(M.tick(20000));
     },
     { byproducts: { text: 'dist/\n', inHeader: true } },
@@ -146,10 +151,14 @@ it('C1 LD185 (5): a change on disk that only a Glove mark step 1 does not credit
 });
 
 it('C1: the odù schema requires confidence, high, medium or low', () => {
-  const [o] = replay((append) => {
-    append(M.edited(0, 'e1', 'src/a.ts'));
-    append(M.tick(9000));
-  });
+  const o = of(
+    replay((append) => {
+      append(M.edited(0, 'e1', 'src/a.ts'));
+      append(M.turnEnded(0));
+      append(M.tick(9000));
+    }),
+    file('src/a.ts'),
+  );
   assert.strictEqual(o.session_id, SID);
   const keys = (r) => checkOdu(r).map((e) => `${e.path} ${e.keyword}`);
   const { confidence: _c, ...none } = o;

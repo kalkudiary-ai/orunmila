@@ -98,6 +98,7 @@ it('test 2: a command that changes 300 files is one parent with 300 children, se
     for (let i = 0; i < 300; i++) s.append(M.disk(100 + i * 10, `vendor/pkg${i}.js`, 'created'));
     if (withExit) {
       s.append(M.exited(4000, 'c1', 'npm install'));
+      s.append(M.turnEnded(4000)); // C3d2: the children, the agent's changes, wait for their turn's end
       s.append(M.tick(10000));
     } else s.append(M.tick(3500));
     return s;

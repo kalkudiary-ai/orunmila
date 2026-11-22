@@ -41,6 +41,7 @@ const blame = (o) => [o.attribution, o.cause];
 it('A1 test 1: an agent edit, the editor saving through a temp file and a rename, a formatter 1 s later: 1 odù, modified, explained by its tool call (step 1), every mark listed', () => {
   const { odus, seqs } = replay((append) => {
     const s = [append(M.started(0, 'e1', { kind: 'file', path: 'src/a.ts' })), append(M.disk(50, 'src/a.ts.tmp', 'created')), append(M.disk(60, 'src/a.ts', 'renamed', { from: 'src/a.ts.tmp' })), append(M.edited(100, 'e1', 'src/a.ts')), append(M.disk(1100, 'src/a.ts'))];
+    append(M.turnEnded(1100)); // C3d2: the agent's change waits for its turn's end
     append(M.tick(9000));
     return { s };
   });
@@ -174,12 +175,14 @@ it('A1 step 3, command child: a change while an agent command runs is explained 
     append(M.started(0, 'b1', cmd('npm run build'), 'Bash'));
     append(M.disk(200, 'out/app.js', 'created'));
     append(M.exited(400, 'b1', 'npm run build'));
+    append(M.turnEnded(400));
     append(M.tick(9000));
-    append(M.started(10000, 'b2', cmd('npm run a'), 'Bash'));
-    append(M.started(10100, 'b3', cmd('npm run b'), 'Bash'));
+    append(M.started(10000, 'b2', cmd('npm run a'), 'Bash', 't2'));
+    append(M.started(10100, 'b3', cmd('npm run b'), 'Bash', 't2'));
     append(M.disk(10200, 'out/both.js', 'created'));
-    append(M.exited(10300, 'b2', 'npm run a'));
-    append(M.exited(10400, 'b3', 'npm run b'));
+    append(M.exited(10300, 'b2', 'npm run a', 'pass', 't2'));
+    append(M.exited(10400, 'b3', 'npm run b', 'pass', 't2'));
+    append(M.turnEnded(10400, 't2'));
     append(M.tick(20000));
   });
   assert.deepStrictEqual(blame(of(odus, file('out/app.js'))), ['explained', { kind: 'agent_command', ref: 'b1' }]);
@@ -196,6 +199,7 @@ it('A1 test 9: a build writing to dist/ (no agent command running) is a byproduc
       append(M.disk(10100, 'dist/cmd.js', 'created'));
       append(M.exited(10200, 'b1', 'npm run build'));
       append({ ...M.disk(10300, '/elsewhere/dist/x.js', 'created'), target: { kind: 'file', path: '/elsewhere/dist/x.js', outside: true } });
+      append(M.turnEnded(10300));
       append(M.tick(20000));
     },
     { byproducts: { text: '# build output\ndist/\n', inHeader: true } },
@@ -245,9 +249,10 @@ it('A1 line 413: odùs of marks that change nothing: a tool call with an outcome
 it('A1: the odù schema requires attribution and cause, and holds them together: unexplained has no cause, every other label has one', () => {
   const { odus } = replay((append) => {
     append(M.edited(0, 'e1', 'src/a.ts'));
+    append(M.turnEnded(0));
     append(M.tick(9000));
   });
-  const [o] = odus;
+  const o = of(odus, file('src/a.ts'));
   const keys = (r) => checkOdu(r).map((e) => `${e.path} ${e.keyword}`);
   const { attribution: _a, ...noLabel } = o;
   const { cause: _c, ...noCause } = o;
@@ -266,6 +271,7 @@ it('A1 test 13: the same log replayed twice gives byte-identical odù logs, attr
     log.append(M.edited(0, 'e1', 'src/a.ts'));
     log.append(M.disk(0, 'dist/x.js', 'created'));
     log.append(M.disk(100, 'src/b.ts'));
+    log.append(M.turnEnded(100));
     log.append(M.tick(9000));
     const a = replayFolder(log.dir);
     const b = replayFolder(log.dir);

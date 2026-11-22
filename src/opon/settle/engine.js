@@ -232,6 +232,7 @@ const UNEXPLAINED = { attribution: 'unexplained', cause: null };
 /** A conflict's copy, its lists copied too (C3a). */
 const copyConflict = (c) => ({ ...c, sources: [...c.sources], said: Object.fromEntries(Object.entries(c.said).map(([k, v]) => [k, [...v]])), ...(c.sessions ? { sessions: [...c.sessions] } : {}) });
 const CHANGES_A_FILE = new Set(['created', 'modified', 'deleted']);
+const AGENT_CAUSES = new Set(['agent_tool_call', 'time_match', 'agent_command']); // station 5's credits to this session (C3d1)
 
 function createOpon({ sessionId, config, baseline = null, byproducts = null, root = null, others = null }) {
   const quiet = BigInt(config.quiet_window_ms) * NS_PER_MS;
@@ -249,6 +250,9 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
   const commandsOf = new Map(); // turn -> Map(call id -> { ref, text, rows, outcome }): the turn's commands, for its claims (C3c)
   const turnsSeen = new Set(); // turns with an agent's own Glove mark, and the turns that ended: the Glove's health (line 352; C3c)
   const turnsEnded = new Set();
+  const changes = []; // { path, first, attr, changed, rows, sessions }: each sealed change on disk, for file claims (C3d1)
+  const callTurn = new Map(); // tool call id -> the turn its Glove marks name (C3d1)
+  const turnStart = new Map(); // turn -> when its first Glove mark came (C3d1)
   let hooksChanged = false; // the agent's hook settings changed: the Glove down from then (line 352)
   const exclusions = Array.isArray(config.exclusions) ? config.exclusions : [];
   const all = [];
@@ -385,25 +389,63 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
   const piped = (r) => r.outcome !== null && r.outcome.status === 'pass' && hasUnguardedPipe(r.text);
   const runStatus = (r) => (r.outcome === null || piped(r) || !['pass', 'fail'].includes(r.outcome.status) ? 'unknown' : r.outcome.status);
 
-  /** C3c (LD191; lines 431, 433, 441): each command claim of g's `claimed` marks its turn's runs do not back, as a sealed record of its own. */
+  /** C3c, C3d1: a claim's own sealed record (line 431): its claimed mark and the marks it cites, explained by its turn. */
+  function claimRecord(g, at, c, cited, confidence, conflictsFor) {
+    const rows = [...new Map([at.row, ...cited].map((r) => [r.seq, r])).values()].sort((a, b) => a.seq - b.seq);
+    const cg = { id: id(++made), key: `claim:${at.row.seq}`, state: 'sealed', target: { kind: 'claim', turn: at.turn, text: c.text }, seqs: rows.map((r) => r.seq), says: rows.map((r) => r.says), realSays: ['claimed'], sources: rows.map((r) => r.source), slots: rows.map((r) => r.slot), hints: rows.map((r) => r.hint), first: g.first, last: g.last, settledAt: g.settledAt, sealedAt: g.sealedAt, forced: false, parentId: null, childIds: [], amends: null, continues: null, net: undefined, notCredited: undefined };
+    cg.attr = { attribution: 'explained', cause: { kind: 'turn', ref: at.turn } }; // line 413: made in its turn
+    cg.confidence = confidence;
+    cg.conflicts = conflictsFor(cg);
+    return record(cg);
+  }
+
+  /**
+   * C3d1 (LD192; lines 406, 432): what backs a file claim of `turn` written as `w`, or null when it is backed: a
+   * change on a matching path credited to a call of this turn, its net change not false, or one still settling.
+   * Else `unchanged` (every such change has a net change of false), `not_credited` (a change seen in the turn's
+   * time that this session's steps did not credit), `no_event`; with the changes cited and their overlap's sessions.
+   */
+  function fileVerdict(turn, w) {
+    let p = w.replace(/^\.\//, '');
+    if (root && p.startsWith(root + '/')) p = p.slice(root.length + 1);
+    const matches = (t) => typeof t === 'string' && (t === p || t.endsWith('/' + p));
+    const ofTurn = (h) => Boolean(h) && callTurn.get(h) === turn;
+    if ([...unsealed.values()].some((u) => u.key.startsWith('file:') && matches(u.target.path) && u.hints.some((h, i) => ofTurn(h) && u.sources[i] === 'hook' && CHANGES_A_FILE.has(u.says[i])))) return null;
+    const seen = changes.filter((ch) => matches(ch.path));
+    const mine = seen.filter((ch) => ch.attr.cause && AGENT_CAUSES.has(ch.attr.cause.kind) && [ch.attr.cause.ref, ...(ch.attr.cause.also || [])].some(ofTurn));
+    if (mine.some((ch) => ch.changed !== false)) return null;
+    const others = seen.filter((ch) => !mine.includes(ch) && turnStart.has(turn) && ch.first >= turnStart.get(turn));
+    const why = mine.length ? 'unchanged' : others.length ? 'not_credited' : 'no_event';
+    const cited = why === 'unchanged' ? mine : others;
+    return { why, cited, sessions: [...new Set(cited.flatMap((ch) => ch.sessions))].sort() };
+  }
+
+  /** C3c (LD191; lines 431, 433, 441) and C3d1 (LD192): each claim of g's `claimed` marks the evidence does not back, as a sealed record of its own. */
   function phantomsOf(g) {
     const out = [];
     for (const [i, seq] of g.seqs.entries()) {
       const at = g.says[i] === 'claimed' ? claimsAt.get(seq) : undefined;
       for (const c of at ? at.claims : []) {
-        const tests = c.commands.some((p) => /\b(?:tests?|tested|suites?|specs?)\b/.test(p));
-        const runs = [...(commandsOf.get(at.turn) || new Map()).values()].filter((r) => !tests || isTestRun(r.text));
-        let backed = null; // the last run that settled: true a pass, false a fail
-        for (const r of runs) if (runStatus(r) !== 'unknown') backed = runStatus(r) === 'pass';
-        if (backed === true) continue;
-        const why = !runs.length ? 'no_command' : backed === false ? 'failed' : 'unknown';
-        const rows = [at.row, ...runs.flatMap((r) => r.rows)].sort((a, b) => a.seq - b.seq);
-        const cg = { id: id(++made), key: `claim:${seq}`, state: 'sealed', target: { kind: 'claim', turn: at.turn, text: c.text }, seqs: rows.map((r) => r.seq), says: rows.map((r) => r.says), realSays: ['claimed'], sources: rows.map((r) => r.source), slots: rows.map((r) => r.slot), hints: rows.map((r) => r.hint), first: g.first, last: g.last, settledAt: g.settledAt, sealedAt: g.sealedAt, forced: false, parentId: null, childIds: [], amends: null, continues: null, net: undefined, notCredited: undefined };
-        cg.attr = { attribution: 'explained', cause: { kind: 'turn', ref: at.turn } }; // line 413: made in its turn
-        cg.confidence = why !== 'unknown' && gloveHealthy(g.sealedAt) ? 'high' : 'low';
-        const cited = runs.map((r) => ({ ref: r.ref, text: r.text, status: runStatus(r), ...(r.outcome && Number.isInteger(r.outcome.exit_code) ? { exit_code: r.outcome.exit_code } : {}), ...(piped(r) ? { piped: true } : {}) }));
-        cg.conflicts = [conflictOf(cg, 'phantom_claim', cg.sources, { claim: 'command', phrases: [...c.commands], hedged: c.hedged, why, runs: cited })];
-        out.push(record(cg));
+        if (c.commands.length) {
+          const tests = c.commands.some((p) => /\b(?:tests?|tested|suites?|specs?)\b/.test(p));
+          const runs = [...(commandsOf.get(at.turn) || new Map()).values()].filter((r) => !tests || isTestRun(r.text));
+          let backed = null; // the last run that settled: true a pass, false a fail
+          for (const r of runs) if (runStatus(r) !== 'unknown') backed = runStatus(r) === 'pass';
+          if (backed !== true) {
+            const why = !runs.length ? 'no_command' : backed === false ? 'failed' : 'unknown';
+            const confidence = why !== 'unknown' && gloveHealthy(g.sealedAt) ? 'high' : 'low';
+            const cited = runs.map((r) => ({ ref: r.ref, text: r.text, status: runStatus(r), ...(r.outcome && Number.isInteger(r.outcome.exit_code) ? { exit_code: r.outcome.exit_code } : {}), ...(piped(r) ? { piped: true } : {}) }));
+            out.push(claimRecord(g, at, c, runs.flatMap((r) => r.rows), confidence, (cg) => [conflictOf(cg, 'phantom_claim', cg.sources, { claim: 'command', phrases: [...c.commands], hedged: c.hedged, why, runs: cited })]));
+          }
+        }
+        for (const w of c.files) {
+          const f = fileVerdict(at.turn, w);
+          if (!f) continue;
+          // Line 441: high only when git or the closeout rescan saw the target unchanged (Phase 4); a change that is not this session's: medium (test 38).
+          const confidence = f.why === 'not_credited' ? 'medium' : 'low';
+          const targets = [...new Set(f.cited.map((ch) => ch.path))].sort();
+          out.push(claimRecord(g, at, c, f.cited.flatMap((ch) => ch.rows), confidence, (cg) => [conflictOf(cg, 'phantom_claim', cg.sources, { claim: 'file', path: w, hedged: c.hedged, why: f.why, targets }), ...(f.sessions.length ? [conflictOf(cg, 'concurrent_sessions', cg.sources, { sessions: f.sessions })] : [])]));
+        }
       }
     }
     return out;
@@ -553,6 +595,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       g.conflicts = [...(g.attr.conflicts || []), ...conflictsOf(g)];
       const disk = (g.key.startsWith('file:') || g.key.startsWith('dirchange:')) && g.says.some((v) => DISK.has(v));
       g.notCredited = disk && g.attr.attribution === 'unexplained' ? notCreditedOf(g) : undefined;
+      if (g.net !== undefined) changes.push({ path: g.target.path, first: g.first, attr: g.attr, changed: g.net.changed, rows: g.seqs.map((s, k) => ({ seq: s, says: g.says[k], source: g.sources[k], slot: g.slots[k], hint: g.hints[k] })), sessions: g.conflicts.filter((c) => c.kind === 'concurrent_sessions').flatMap((c) => c.sessions) }); // C3d1
       const seen = g.says.some((v, i) => DISK.has(v) && (g.sources[i] === 'sentinel' || g.sources[i] === 'git')); // C3a2
       sealedLast.set(g.key, { id: g.id, at: g.sealedAt, causes: g.causes, seen });
       if (live.get(g.key) === g) live.delete(g.key);
@@ -733,7 +776,9 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     if (GLOVE.has(m.source)) {
       // C3c (LD191): a claim's command claims, its turn's commands, and the turns the Glove's health counts (line 352).
       const row = { seq: m.seq, says: m.says, source: m.source, slot: slotsOf(m), hint: m.cause_hint || null };
-      const claims = m.says === 'claimed' && m.turn ? claimsOf(m).filter((c) => c.commands.length) : [];
+      const claims = m.says === 'claimed' && m.turn ? claimsOf(m).filter((c) => c.commands.length || c.files.length) : [];
+      if (m.cause_hint && m.turn && !callTurn.has(m.cause_hint)) callTurn.set(m.cause_hint, m.turn);
+      if (m.turn && !turnStart.has(m.turn)) turnStart.set(m.turn, now);
       if (claims.length) claimsAt.set(m.seq, { turn: m.turn, row, claims });
       if (m.target && m.target.kind === 'command' && m.cause_hint && m.turn) {
         const runs = commandsOf.get(m.turn) || new Map();

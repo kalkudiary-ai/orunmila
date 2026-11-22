@@ -407,18 +407,47 @@
             "then": {
               "required": [
                 "claim",
-                "phrases",
                 "hedged",
-                "why",
-                "runs"
+                "why"
               ],
-              "properties": {
-                "why": {
-                  "enum": [
-                    "no_command",
-                    "failed",
-                    "unknown"
-                  ]
+              "if": {
+                "properties": {
+                  "claim": {
+                    "const": "file"
+                  }
+                },
+                "required": [
+                  "claim"
+                ]
+              },
+              "then": {
+                "required": [
+                  "path",
+                  "targets"
+                ],
+                "properties": {
+                  "why": {
+                    "enum": [
+                      "no_event",
+                      "unchanged",
+                      "not_credited"
+                    ]
+                  }
+                }
+              },
+              "else": {
+                "required": [
+                  "phrases",
+                  "runs"
+                ],
+                "properties": {
+                  "why": {
+                    "enum": [
+                      "no_command",
+                      "failed",
+                      "unknown"
+                    ]
+                  }
                 }
               }
             }
@@ -437,8 +466,8 @@
             "minLength": 1
           },
           "why": {
-            "description": "For outcome_missing: interrupted or denied only when the agent's own hook payload says so; gap only when a capture gap mark covers the call from its start until it stopped waiting; null otherwise, since the record does not guess why. For phantom_claim: no_command (no matching run in the claim's turn), failed (the last matching run that settled failed) or unknown (no matching run settled: a pipe, or an unknown status).",
-            "$comment": "brief v4 lines 433, 439; the field is the agent's proposal (LD189, Q14; LD191, Q15). No adapter records a denial today, so `denied` is not yet written",
+            "description": "For outcome_missing: interrupted or denied only when the agent's own hook payload says so; gap only when a capture gap mark covers the call from its start until it stopped waiting; null otherwise, since the record does not guess why. For a command phantom_claim: no_command (no matching run in the claim's turn), failed (the last matching run that settled failed) or unknown (no matching run settled: a pipe, or an unknown status). For a file phantom_claim: no_event (no change on a matching path), unchanged (every change of the claim's turn on it has a net change of false) or not_credited (a change on it in the turn's time that was not credited to this session).",
+            "$comment": "brief v4 lines 406, 432, 433, 439; the field is the agent's proposal (LD189, Q14; LD191 and LD192, Q15). No adapter records a denial today, so `denied` is not yet written",
             "enum": [
               "interrupted",
               "denied",
@@ -446,8 +475,26 @@
               null,
               "no_command",
               "failed",
-              "unknown"
+              "unknown",
+              "no_event",
+              "unchanged",
+              "not_credited"
             ]
+          },
+          "path": {
+            "description": "For a file phantom_claim: the path as the agent wrote it.",
+            "$comment": "brief v4 line 432; agent's proposal (LD192, Q15)",
+            "type": "string",
+            "minLength": 1
+          },
+          "targets": {
+            "description": "For a file phantom_claim: the targets of the changes it cites (unchanged, not_credited), sorted; empty for no_event.",
+            "$comment": "agent's proposal (LD192, Q15)",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
           },
           "claim": {
             "description": "For phantom_claim: the claim's kind, command (\"tests pass\") or file (\"I updated config.ts\").",

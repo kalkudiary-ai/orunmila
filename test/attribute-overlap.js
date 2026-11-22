@@ -103,6 +103,26 @@ it('A2 test 38 (attribution half): A claims the change B made; A\'s record does 
   assert.deepStrictEqual(o.conflicts, [overlap]);
 });
 
+it('C3d1 test 38: A claims the change B made: a phantom file claim for A at medium confidence, plus a concurrent_sessions note naming both sessions', () => {
+  const { a } = replayPair((append) => {
+    append(M.prompted(0));
+    append(M.disk(2000, 'src/b.ts'));
+    append({ ...M.claimed(3000), detail: { text: 'I updated src/b.ts.' } });
+    append(M.turnEnded(3100));
+    append(M.tick(15000));
+  }, bEdits);
+  const claims = a.filter((o) => o.target && o.target.kind === 'claim' && o.target.turn === 't1');
+  assert.strictEqual(claims.length, 1);
+  const [o] = claims;
+  const said = { agent_claim: ['claimed'], sentinel: ['modified'] };
+  assert.deepStrictEqual([o.witness_status.glove.status, o.witness_status.sentinel.status], ['saw', 'saw'], 'the Glove\'s claim, the Sentinel\'s change on its target');
+  assert.strictEqual(o.confidence, 'medium');
+  assert.deepStrictEqual(o.conflicts, [
+    { kind: 'phantom_claim', sources: ['agent_claim', 'sentinel'], said, claim: 'file', path: 'src/b.ts', hedged: false, why: 'not_credited', targets: ['src/b.ts'] },
+    { kind: 'concurrent_sessions', sources: ['agent_claim', 'sentinel'], said, sessions: both },
+  ]);
+});
+
 it('A2 line 404: during overlap a time match (step 2) does not credit, the call is named in not_credited as inside; a direct cause (step 1) still does', () => {
   const { a } = replayPair((append) => {
     append(M.started(3000, 'e2', { kind: 'file', path: 'src/c.ts' }));

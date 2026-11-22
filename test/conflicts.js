@@ -10,7 +10,7 @@
  */
 
 const { assert, fs, path, tmpDir, rmrf, it, runAll } = require('./helpers');
-const { makeLog, M, ns, wall } = require('./helpers-opon');
+const { makeLog, M, ns, wall, FP } = require('./helpers-opon');
 const { replayFolder } = require('../src/opon/replay');
 const { compile } = require('../src/verify/schema');
 
@@ -20,7 +20,7 @@ function replay(build) {
   const base = tmpDir();
   try {
     const log = makeLog(base);
-    build(log.append);
+    build(log.append, log);
     const r = replayFolder(log.dir);
     assert.strictEqual(r.ok, true, r.words);
     const odus = r.odu.split('\n').slice(1, -1).map((l) => JSON.parse(l));
@@ -304,6 +304,81 @@ it('C3c: the schema asks a phantom_claim for its claim kind, phrases, hedged, wh
   }
   assert.ok(keys({ ...o, conflicts: [{ ...c, why: 'gap' }] }).length > 0, 'gap is outcome_missing\'s, not a phantom claim\'s');
   assert.ok(keys({ ...o, conflicts: [missing('e1', 'failed')] }).length > 0, 'failed is a phantom claim\'s, not outcome_missing\'s');
+});
+
+// C3d1 (LD192; lines 406, 432, 441; test 4's replay half): a file claim with no change of this session behind it.
+const filePhantom = (path, why, targets, said) => ({ kind: 'phantom_claim', sources: Object.keys(said).sort(), said, claim: 'file', path, hedged: false, why, targets });
+
+it('C3d1 test 4 (replay half): "I updated src/config.ts" with no event on it is a phantom file claim, its own odù; low until git or the closeout rescan can see the target (Phase 4), as line 441 says the Sentinel\'s silence alone never makes it high', () => {
+  const odus = replay((append) => {
+    append(M.prompted(0));
+    append(claimed(1000, 't1', 'I updated src/config.ts.'));
+    append(M.turnEnded(1000));
+    append(M.tick(20000));
+  });
+  const [o] = claimOdus(odus, 't1');
+  assert.strictEqual(claimOdus(odus, 't1').length, 1);
+  assert.deepStrictEqual(
+    [o.target, o.action, witnesses(o), o.witness_status.sentinel.scope, o.mark_seqs, o.cause, o.confidence, o.conflicts],
+    [{ kind: 'claim', turn: 't1', text: 'I updated src/config.ts.' }, 'claimed', ['saw', 'out_of_scope'], 'not_a_disk_event', [2], { kind: 'turn', ref: 't1' }, 'low', [filePhantom('src/config.ts', 'no_event', [], { agent_claim: ['claimed'] })]]
+  );
+});
+
+it('C3d1: a change this session\'s turn made backs the claim, written as the repo path, a bare name, ./path or an absolute path under the root; a change still settling at the claim backs it too', () => {
+  const s = {};
+  const odus = replay((append, log) => {
+    append(M.edited(0, 'e1', 'src/config.ts'));
+    append(M.disk(50, 'src/config.ts'));
+    s.t1 = append(claimed(1000, 't1', `I updated src/config.ts. I updated config.ts. I updated ./src/config.ts. I updated ${log.root}/src/config.ts.`));
+    append(M.turnEnded(1000));
+    s.t2 = append(claimed(10000, 't2', 'I updated src/late.ts.'));
+    append(M.edited(10000, 'e2', 'src/late.ts', 'modified', 't2'));
+    append(M.turnEnded(10000, 't2')); // the turn's group opened first, and both seal at one moment: the edit's is still unsealed when the claim is judged
+    append(M.tick(30000));
+  });
+  backed(odus, 't1', s.t1);
+  backed(odus, 't2', s.t2);
+  const edit = of(odus, file('src/config.ts'));
+  assert.deepStrictEqual([witnesses(edit), edit.conflicts], [['saw', 'saw'], []], 'the change\'s own odù is unchanged');
+});
+
+it('C3d1 line 432: a file claim whose only change of this turn has a net change of false is phantom, unchanged, citing it; a change only the Sentinel saw is not this session\'s and gives not_credited, medium; an earlier turn\'s change does not back this turn\'s claim', () => {
+  const odus = replay((append) => {
+    append(M.edited(0, 'e1', 'src/a.ts'));
+    append(M.fingerprinted(1600, 'src/a.ts', FP('b')));
+    append(M.turnEnded(2000));
+    append(M.prompted(10000, 't2'));
+    append(M.edited(10100, 'e2', 'src/a.ts', 'modified', 't2'));
+    append(M.fingerprinted(11700, 'src/a.ts', FP('b'))); // back to what the last odù left: changed false
+    append(M.disk(12000, 'src/hand.ts'));
+    append(claimed(20000, 't2', 'I updated src/a.ts. I updated src/hand.ts.'));
+    append(M.turnEnded(20000, 't2'));
+    append(claimed(30000, 't3', 'I updated src/a.ts.'));
+    append(M.turnEnded(30000, 't3'));
+    append(M.tick(50000));
+  });
+  const [a, hand] = claimOdus(odus, 't2');
+  assert.deepStrictEqual([a.target.text, witnesses(a), a.confidence, a.conflicts], ['I updated src/a.ts.', ['saw', 'out_of_scope'], 'low', [filePhantom('src/a.ts', 'unchanged', ['src/a.ts'], { agent_claim: ['claimed'], hook: ['modified'], process: ['fingerprinted'] })]]);
+  assert.deepStrictEqual([hand.target.text, witnesses(hand), hand.confidence, hand.conflicts], ['I updated src/hand.ts.', ['saw', 'saw'], 'medium', [filePhantom('src/hand.ts', 'not_credited', ['src/hand.ts'], { agent_claim: ['claimed'], sentinel: ['modified'] })]]);
+  const [three] = claimOdus(odus, 't3');
+  assert.deepStrictEqual([witnesses(three), three.confidence, three.conflicts.map((c) => c.why)], [['saw', 'out_of_scope'], 'low', ['no_event']]);
+});
+
+it('C3d1: the schema asks a file phantom_claim for its path and targets, and its why is no_event, unchanged or not_credited', () => {
+  const odus = replay((append) => {
+    append(claimed(0, 't1', 'I updated src/config.ts.'));
+    append(M.turnEnded(0));
+    append(M.tick(20000));
+  });
+  const [o] = claimOdus(odus, 't1');
+  const keys = (r) => checkOdu(r).map((e) => `${e.path} ${e.keyword}`);
+  assert.deepStrictEqual(keys(o), []);
+  const c = o.conflicts[0];
+  for (const k of ['path', 'targets']) {
+    const { [k]: _gone, ...less } = c;
+    assert.ok(keys({ ...o, conflicts: [less] }).length > 0, `a file phantom_claim with no ${k}`);
+  }
+  assert.ok(keys({ ...o, conflicts: [{ ...c, why: 'no_command' }] }).length > 0, 'no_command is a command claim\'s');
 });
 
 it('C3a: the odù schema requires conflicts, and each conflict its kind, sources and what each said', () => {

@@ -543,6 +543,46 @@ it('C3d2: the schema asks a silent_change for its turns and the claims it read',
   }
 });
 
+// C3e (LD199; line 435): the witnesses disagree on what happened to a file, rather than follow one another.
+const contradiction = (said) => ({ kind: 'contradiction', sources: ['hook', 'sentinel'], said });
+
+it('C3e line 435: the Glove says modified and the Sentinel only deleted, or the Glove deleted and the Sentinel only modified: a contradiction naming both and what each said; label and confidence follow the cause', () => {
+  const odus = replay((append) => {
+    append(M.edited(0, 'e1', 'src/said.ts'));
+    append(M.disk(50, 'src/said.ts', 'deleted'));
+    append(M.edited(0, 'e2', 'src/gone.ts', 'deleted'));
+    append(M.disk(50, 'src/gone.ts'));
+    append(M.turnEnded(100));
+    append(M.tick(20000));
+  });
+  const said = of(odus, file('src/said.ts'));
+  assert.deepStrictEqual([witnesses(said), said.attribution, said.cause, said.confidence, said.conflicts], [['saw', 'saw'], 'explained', { kind: 'agent_tool_call', ref: 'e1' }, 'high', [contradiction({ hook: ['modified'], sentinel: ['deleted'] })]]);
+  const gone = of(odus, file('src/gone.ts'));
+  assert.deepStrictEqual([witnesses(gone), gone.confidence, gone.conflicts], [['saw', 'saw'], 'high', [contradiction({ hook: ['deleted'], sentinel: ['modified'] })]]);
+});
+
+it('C3e: accounts that follow one another are no contradiction: the Sentinel sees the agent\'s edit, then a deletion; a save as delete then recreate; created and modified; a temp file and a folder do not count', () => {
+  const odus = replay((append) => {
+    append(M.edited(0, 'e1', 'src/then.ts'));
+    append(M.disk(50, 'src/then.ts'));
+    append(M.disk(1000, 'src/then.ts', 'deleted')); // a hand deletion after the edit, inside its window: a sequence
+    append(M.edited(0, 'e2', 'src/save.ts'));
+    append(M.disk(50, 'src/save.ts', 'deleted'));
+    append(M.disk(60, 'src/save.ts', 'created'));
+    append(M.edited(0, 'e3', 'src/new.ts', 'created'));
+    append(M.disk(50, 'src/new.ts'));
+    append(M.edited(0, 'e4', 'lib/x.ts'));
+    append(M.disk(40, 'lib/x.ts.tmp', 'deleted')); // the editor's temp file: not the file's own account
+    append({ ...M.disk(45, 'lib', 'deleted'), target: { kind: 'dir', path: 'lib' } }); // a folder's mark folds in, uncounted
+    append(M.turnEnded(1100));
+    append(M.tick(30000));
+  });
+  for (const [p, said] of [['src/then.ts', { hook: ['modified'], sentinel: ['modified', 'deleted'] }], ['src/save.ts', { hook: ['modified'], sentinel: ['deleted', 'created'] }], ['src/new.ts', { hook: ['created'], sentinel: ['modified'] }], ['lib/x.ts', { hook: ['modified'], sentinel: ['deleted', 'deleted'] }]]) {
+    const o = of(odus, file(p));
+    assert.deepStrictEqual([p, witnesses(o), o.witness_status.glove.says, o.witness_status.sentinel.says, o.conflicts], [p, ['saw', 'saw'], said.hook, said.sentinel, []]);
+  }
+});
+
 it('C3a: the odù schema requires conflicts, and each conflict its kind, sources and what each said', () => {
   const o = of(
     replay((append) => {

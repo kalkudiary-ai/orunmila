@@ -474,7 +474,7 @@
         ],
         "properties": {
           "kind": {
-            "description": "The conflict's kind. concurrent_sessions: a change during overlapping sessions that cannot be pinned to one session. unconfirmed_by_filesystem: an agent reported an edit inside the Sentinel's root that the Sentinel and git never saw. outcome_missing: a tool call's `started` mark with no outcome by the end of its turn, or an outcome its payload says was interrupted. phantom_claim: on a claim's own odù, a claim the evidence does not support. silent_change: an agent-caused change of a file that its turn's claims never mention.",
+            "description": "The conflict's kind. concurrent_sessions: a change during overlapping sessions that cannot be pinned to one session. unconfirmed_by_filesystem: an agent reported an edit inside the Sentinel's root that the Sentinel and git never saw. outcome_missing: a tool call's `started` mark with no outcome by the end of its turn, or an outcome its payload says was interrupted. phantom_claim: on a claim's own odù, a claim the evidence does not support. silent_change: an agent-caused change of a file that its turn's claims never mention. contradiction: the Glove's and the Sentinel's own marks of a file disagree on whether it is there at the end, one saying only that it is (created, modified, renamed) and the other only that it is gone (deleted).",
             "type": "string",
             "minLength": 1
           },

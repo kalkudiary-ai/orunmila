@@ -1944,6 +1944,16 @@ const MUTANTS = [
   { id: 'C3d2-11 the schema does not ask a silent_change for its turns', file: 'spec/odu.schema.json', test: 'test/conflicts.js',
     from: '"turns",\n                "claim_seqs"', to: '"claim_seqs"',
     fails: ['C3d2: the schema asks'] },
+  // Slice C3e: contradiction (LD199).
+  { id: 'C3e-1 a contradiction is never recorded', file: 'src/opon/settle/engine.js', test: 'test/conflicts.js',
+    from: "out.push(conflictOf(g, 'contradiction', ['hook', 'sentinel']));", to: 'void 0;',
+    fails: ['C3e line 435'] },
+  { id: 'C3e-2 an account holding the other\'s still contradicts it', file: 'src/opon/settle/engine.js', test: 'test/conflicts.js',
+    from: '![...hookEnds].some((e) => sentinelEnds.has(e))', to: "[...hookEnds].join() !== [...sentinelEnds].join()",
+    fails: ['C3e: accounts that follow'] },
+  { id: "C3e-3 a temp file's or a folder's mark counts as the file's account", file: 'src/opon/settle/engine.js', test: 'test/conflicts.js',
+    from: 'g.real[i] && g.sources[i] === s && DISK.has(v)', to: 'g.sources[i] === s && DISK.has(v)',
+    fails: ['C3e: accounts that follow'] },
 ];
 
 function copyRepo(root) {

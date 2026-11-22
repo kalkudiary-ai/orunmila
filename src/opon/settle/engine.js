@@ -156,7 +156,9 @@
  * that bear on it and what each said (`sources`, `said`). Station 5 gives
  * `concurrent_sessions`; `conflictsOf` gives `unconfirmed_by_filesystem` (not
  * for a late edit of a call whose earlier odù, the one it amends, the Sentinel
- * or git saw change: C3a2, LD190), and
+ * or git saw change: C3a2, LD190), `contradiction` (C3e, LD199) when the Glove's
+ * and the Sentinel's own marks of a file disagree on whether it is there at the
+ * end, neither holding the other's account (one saw more: a sequence), and
  * `outcome_missing` (C3b, LD189) for each call with a `started` mark in the
  * group and no outcome when it seals, or an outcome its payload says was
  * interrupted: `ref` the call, `why` interrupted, gap (a Glove or intake capture
@@ -172,7 +174,7 @@
  * with a `phantom_claim` conflict (`why`: no_command, failed, unknown; the
  * `runs` cited), high only when the Glove was healthy (line 352) and the
  * claim had no run or the run failed, else low. Phantom file claims are
- * C3d1's (`fileVerdict`); contradiction is C3e's.
+ * C3d1's (`fileVerdict`).
  *
  * Silent change (C3d2, LD194; lines 324, 369, 434; test 5): a change of a file
  * whose net change is not false and whose cause is the agent's (steps 1-3),
@@ -393,6 +395,10 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     // C3a2 (LD190): a late edit of a call whose earlier odù the Sentinel or git saw change was seen, in the odù it amends.
     const seenBefore = g.amended && g.amended.seen && g.hints.some((h, i) => h && CHANGES_A_FILE.has(g.says[i]) && g.sources[i] === 'hook' && g.amended.causes.has(h));
     if (g.key.startsWith('file:') && gloveEdit && !seenBefore && !g.sources.includes('git') && witness(g, 'sentinel').status === 'saw_nothing') out.push(conflictOf(g, 'unconfirmed_by_filesystem', ['hook', 'sentinel']));
+    // C3e (LD199; line 435): the witnesses' own marks of the file end it apart, one only there, the other only gone; an account holding the other's is a sequence.
+    const ends = (s) => new Set(g.says.filter((v, i) => g.real[i] && g.sources[i] === s && DISK.has(v)).map((v) => v === 'deleted'));
+    const [hookEnds, sentinelEnds] = [ends('hook'), ends('sentinel')];
+    if (g.key.startsWith('file:') && hookEnds.size && sentinelEnds.size && ![...hookEnds].some((e) => sentinelEnds.has(e))) out.push(conflictOf(g, 'contradiction', ['hook', 'sentinel']));
     // C3b (LD189; line 439, test 71): a started call with no outcome by the end of its turn, or one its payload says was interrupted.
     for (const id of startedIn(g)) {
       const t = inFlight.get(id);

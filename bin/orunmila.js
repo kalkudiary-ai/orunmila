@@ -1275,7 +1275,40 @@ async function cmdIntake() {
     if (!gone) process.exitCode = 1;
     return;
   }
-  console.log('Usage: orunmila intake run|start|status|stop');
+  if (sub === 'agent') {
+    // The per-user launch agent (slice LA, LD143). ORUNMILA_LAUNCH_AGENTS_DIR and
+    // ORUNMILA_LAUNCHCTL exist for tests: they never touch the real launchd.
+    const { createLaunchAgent } = require('../src/opon/intake/launch-agent');
+    const launchctl = process.env.ORUNMILA_LAUNCHCTL || '/bin/launchctl';
+    const agent = createLaunchAgent({
+      uid: process.getuid ? process.getuid() : null,
+      dir: process.env.ORUNMILA_LAUNCH_AGENTS_DIR || path.join(os.homedir(), 'Library', 'LaunchAgents'),
+      run: (a) => require('child_process').spawnSync(launchctl, a, { encoding: 'utf8' }),
+    });
+    const act = args[2];
+    let r;
+    if (act === 'install') r = agent.install({ node: process.execPath, script: __filename, home, env: process.env });
+    else if (act === 'uninstall') r = agent.uninstall();
+    else if (act === 'status') r = agent.status();
+    else {
+      console.log('Usage: orunmila intake agent install|uninstall|status');
+      process.exitCode = 2;
+      return;
+    }
+    if (!r.ok) {
+      console.error(`orunmila intake agent: ${r.reason}`);
+      process.exitCode = 1;
+      return;
+    }
+    if (act === 'install') console.log(`orunmila intake agent: installed ${r.plist} and loaded it (${agent.service}); remove with: orunmila intake agent uninstall (launchctl bootout ${agent.service})`);
+    else if (act === 'uninstall') console.log(r.removed ? `orunmila intake agent: booted out ${agent.service} and removed ${r.removed}` : `orunmila intake agent: none installed (${agent.plist} is absent); booted out ${agent.service} if it was loaded`);
+    else {
+      console.log(r.loaded ? `orunmila intake agent: loaded (${agent.service}), state ${r.state || 'unknown'}${r.pid ? `, pid ${r.pid}` : ''}` : `orunmila intake agent: not loaded (${agent.service})`);
+      if (!r.loaded) process.exitCode = 1;
+    }
+    return;
+  }
+  console.log('Usage: orunmila intake run|start|status|stop|agent');
   process.exitCode = 2;
 }
 
@@ -1358,7 +1391,8 @@ Both lenses
   orunmila debug-transcript <path>                inspect why transcript parsing isn't matching your install
   orunmila verify <session-folder> [--json]       check a session log folder's hash chains, records and kept files
                                                   (the new per-session format; capture does not write it yet)
-  orunmila intake run|start|status|stop           the intake server, one per machine (nothing sends to it yet)
+  orunmila intake run|start|status|stop           the intake server, one per machine (install --intake sends to it)
+  orunmila intake agent install|uninstall|status  keep the intake running at login with a launch agent (macOS)
 
 Docs: README.md · known issues with status: review/ISSUES.md
 `);

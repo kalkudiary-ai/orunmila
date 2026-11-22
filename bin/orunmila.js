@@ -93,6 +93,9 @@ const GATE_HOOK_BASENAME = 'law-gate.js';
 
 // The events the intake's router reads (slice B1d), each sent by intake-send.js (LD133).
 const INTAKE_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'Stop', 'SessionEnd'];
+// H2 (LD140): which of them go over Claude Code's HTTP hooks, and which keep the command sender.
+const INTAKE_HTTP_EVENTS = ['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop'];
+const INTAKE_COMMAND_EVENTS = ['SessionStart', 'PostToolUseFailure', 'SessionEnd'];
 
 // Find the registered Closeout Gate hook, if any. Same basename strategy as
 // findExistingClaudeHooks: a gate pointing at a different copy of orunmila is
@@ -265,10 +268,25 @@ function cmdInstall() {
     }
     const settings = readJson(p, {});
     const sender = `node "${path.join(root, 'src/capture/claude-code', 'intake-send.js')}"`;
-    for (const ev of INTAKE_EVENTS) mergeClaudeHook(settings, ev, '*', sender);
+    const url = `http://127.0.0.1:${require('../src/opon/intake/server').intakePort()}/hook`;
+    // One channel per event (H2, LD140): Claude Code's own HTTP hooks where they are
+    // known to fire, so each session is pinned to the claude process; the command
+    // sender for SessionStart (command-only) and the two not yet measured over HTTP.
+    // Any earlier intake hook, sender or HTTP, is replaced, never doubled.
+    const ours = (h) => h && ((h.type === 'command' && String(h.command || '').includes('intake-send.js')) || (h.type === 'http' && /^http:\/\/127\.0\.0\.1:[0-9]+\/hook$/.test(String(h.url || ''))));
+    settings.hooks = settings.hooks || {};
+    for (const ev of INTAKE_EVENTS) {
+      const kept = (settings.hooks[ev] || []).map((e) => ({ ...e, hooks: (e.hooks || []).filter((h) => !ours(h)) })).filter((e) => e.hooks.length);
+      if (kept.length) settings.hooks[ev] = kept;
+      else delete settings.hooks[ev];
+    }
+    for (const ev of INTAKE_COMMAND_EVENTS) mergeClaudeHook(settings, ev, '*', sender);
+    for (const ev of INTAKE_HTTP_EVENTS) (settings.hooks[ev] = settings.hooks[ev] || []).push({ matcher: '*', hooks: [{ type: 'http', url, timeout: 2 }] });
     fs.writeFileSync(p, JSON.stringify(settings, null, 2));
-    console.log(`The intake sender is registered for ${INTAKE_EVENTS.join(', ')} (every tool) in ${p},`);
-    console.log("beside any hooks already there. Nothing is recorded while no intake runs: start it with");
+    console.log(`The intake is registered in ${p}, beside any hooks already there:`);
+    console.log(`  HTTP hooks to ${url} for ${INTAKE_HTTP_EVENTS.join(', ')} (every tool; each session pinned to the claude process)`);
+    console.log(`  the command sender for ${INTAKE_COMMAND_EVENTS.join(', ')}`);
+    console.log("Nothing is recorded while no intake runs: start it with");
     console.log('  orunmila intake start');
     console.log(`\nRestart ${adapter.label} (or start a new session) for this to take effect.`);
     return;
@@ -1170,7 +1188,7 @@ function leakCheck() {
  * Nothing sends to it yet: the hooks' sender is slice B2.
  */
 async function cmdIntake() {
-  const { createServer, intakePaths, readInstallKey, statusOf } = require('../src/opon/intake/server');
+  const { createServer, intakePaths, readInstallKey, statusOf, intakePort } = require('../src/opon/intake/server');
   const home = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
   const p = intakePaths(home);
   const sub = args[1];
@@ -1187,18 +1205,19 @@ async function cmdIntake() {
     const router = createRouter({
       home,
       clock: () => ({ mono: nowMono(), wall: new Date().toISOString() }),
-      checkSender: () => false, // no HTTP channel yet: nothing may pin (LD132)
+      checkSender: require('../src/opon/intake/peer').isAgentProgram, // the pid runs claude (LD139)
       codeRoot: path.join(__dirname, '..', 'src'),
       orunmilaVersion: require('../package.json').version,
       installKey: readInstallKey(home),
     });
-    const server = createServer({ home, router });
+    const server = createServer({ home, router, httpPort: intakePort() });
     const r = await server.start();
     if (!r.ok) {
       console.error(`orunmila intake: ${r.reason}`);
       process.exit(r.code === 'running' ? 3 : 1);
     }
     console.log(`orunmila intake: listening on ${r.sock} (pid ${process.pid})` + (r.squat ? `; another process held the socket: recorded in ${p.errors}` : ''));
+    console.log(r.http.listening ? `orunmila intake: HTTP on 127.0.0.1:${r.http.port}` : `orunmila intake: HTTP port 127.0.0.1:${r.http.port} is held by another process (recorded in ${p.errors}); tried again every second`);
     let stopping = false;
     for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) {
       process.on(sig, async () => {
@@ -1238,7 +1257,9 @@ async function cmdIntake() {
       process.exitCode = 1;
       return;
     }
-    console.log(`orunmila intake: running (pid ${st.pid}) since ${st.started_at} on ${st.socket}; ${st.held.length} session(s) held`);
+    const h = st.http;
+    const web = h ? `; http 127.0.0.1:${h.port}${h.listening ? '' : ' (not listening: another process holds it)'}` : '; no HTTP';
+    console.log(`orunmila intake: running (pid ${st.pid}) since ${st.started_at} on ${st.socket}${web}; ${st.held.length} session(s) held`);
     return;
   }
   if (sub === 'stop') {

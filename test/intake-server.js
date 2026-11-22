@@ -194,7 +194,7 @@ it('B1e: the install key is made once, 32 bytes, private, and read back the same
 it(
   'B1e CLI: intake start, status and stop; a stop writes the closing note and removes the socket and the lock (LD56)',
   withHome(async ({ home, project, p }) => {
-    const env = { ORUNMILA_HOME: home };
+    const env = { ORUNMILA_HOME: home, ORUNMILA_INTAKE_PORT: '0' }; // never the real default port (LD140)
     assert.strictEqual(run('bin/orunmila.js', { args: ['intake', 'status'], env }).status, 1, 'not running yet');
     const started = run('bin/orunmila.js', { args: ['intake', 'start'], env });
     assert.strictEqual(started.status, 0, started.stdout + started.stderr);
@@ -474,5 +474,45 @@ it('H1: the agent-program check accepts a process whose program is named claude 
     srv.close();
   }
 });
+
+it(
+  'H2 CLI: intake run listens on ORUNMILA_INTAKE_PORT with the real agent check: a program named claude pins the session, status names the port',
+  withHome(async ({ home, project, p }) => {
+    const free = await new Promise((res) => {
+      const t = net.createServer();
+      t.listen(0, '127.0.0.1', () => {
+        const port = t.address().port;
+        t.close(() => res(port));
+      });
+    });
+    const env = { ORUNMILA_HOME: home, ORUNMILA_INTAKE_PORT: String(free) };
+    const started = run('bin/orunmila.js', { args: ['intake', 'start'], env });
+    assert.strictEqual(started.status, 0, started.stdout + started.stderr);
+    const base = tmpDir();
+    try {
+      const st = run('bin/orunmila.js', { args: ['intake', 'status'], env });
+      assert.ok(st.stdout.includes(`http 127.0.0.1:${free}`), st.stdout);
+      const link = path.join(base, 'claude');
+      fs.symlinkSync(process.execPath, link);
+      const body = JSON.stringify(cc(project).prompt('from claude'));
+      const code = `const h=require('http');const d=process.argv[1];const r=h.request({host:'127.0.0.1',port:${free},path:'/hook',method:'POST',headers:{'content-length':Buffer.byteLength(d)}},(s)=>{s.resume();s.on('end',()=>process.stdout.write(String(process.pid)))});r.end(d);`;
+      const { spawn } = require('child_process');
+      const pid = await new Promise((resolve) => {
+        const c = spawn(link, ['-e', code, body], { stdio: ['ignore', 'pipe', 'ignore'] });
+        let out = '';
+        c.stdout.on('data', (d) => (out += d));
+        c.on('exit', () => resolve(Number(out)));
+      });
+      assert.ok(await until(() => raw(home, 'ses_s1').length >= 2, 5000));
+      const mark = raw(home, 'ses_s1')[1];
+      assert.deepStrictEqual([mark.says, mark.detail.channel, mark.detail.sender_pid], ['prompted', 'http', pid], JSON.stringify(mark));
+    } finally {
+      rmrf(base);
+      const stopped = run('bin/orunmila.js', { args: ['intake', 'stop'], env });
+      assert.strictEqual(stopped.status, 0, stopped.stdout + stopped.stderr);
+    }
+    void p;
+  }),
+);
 
 runAll('intake-server');

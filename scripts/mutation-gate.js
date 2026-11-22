@@ -1203,6 +1203,19 @@ const MUTANTS = [
   { id: "H1-7 the lookup takes the server's end of the connection", file: 'src/opon/intake/peer.js', test: 'test/intake-server.js',
     from: 'r.names.includes(`${client}->${server}`)', to: 'r.names.includes(`${server}->${client}`)',
     fails: ['test 82 (over HTTP)'] },
+  // Slice H2 (LD140): intake run's port and agent check; install --intake's HTTP hooks.
+  { id: 'H2-1 an HTTP event keeps its old command sender', file: 'bin/orunmila.js', test: 'test/intake-send.js',
+    from: 'const kept = (settings.hooks[ev] || []).map((e) => ({ ...e, hooks: (e.hooks || []).filter((h) => !ours(h)) })).filter((e) => e.hooks.length);', to: 'const kept = settings.hooks[ev] || [];',
+    fails: ['H2 CLI: install --intake registers HTTP hooks'] },
+  { id: 'H2-2 intake run refuses every sender', file: 'bin/orunmila.js', test: 'test/intake-server.js',
+    from: "checkSender: require('../src/opon/intake/peer').isAgentProgram,", to: 'checkSender: () => false,',
+    fails: ['H2 CLI: intake run listens on ORUNMILA_INTAKE_PORT'] },
+  { id: 'H2-3 ORUNMILA_INTAKE_PORT ignored', file: 'src/opon/intake/server.js', test: 'test/intake-send.js',
+    from: "if (v === undefined || v === '') return DEFAULT_HTTP_PORT;", to: 'return DEFAULT_HTTP_PORT;',
+    fails: ['H2 CLI: install --intake registers HTTP hooks'] },
+  { id: 'H2-4 the HTTP hook has no timeout (Claude Code waits 600 s)', file: 'bin/orunmila.js', test: 'test/intake-send.js',
+    from: "{ type: 'http', url, timeout: 2 }", to: "{ type: 'http', url }",
+    fails: ['H2 CLI: install --intake registers HTTP hooks'] },
   // Slice LC2 (LD137): only this session's Slice commits are judged.
   { id: "LC2-1 another session's Slice commit is judged", file: 'scripts/leopard-check.js', test: 'test/leopard-check.js',
     from: 'if (owner !== session) {', to: 'if (false) {',
@@ -1236,11 +1249,11 @@ const MUTANTS = [
     from: "const net = require('net');", to: "const net = require('net');\nrequire('../agents');",
     fails: ['LD122, LD133: the sender loads no repo file'] },
   { id: 'B2-5 install --intake covers edits only', file: 'bin/orunmila.js', test: 'test/intake-send.js',
-    from: "for (const ev of INTAKE_EVENTS) mergeClaudeHook(settings, ev, '*', sender);", to: "for (const ev of INTAKE_EVENTS) mergeClaudeHook(settings, ev, 'Write|Edit|MultiEdit', sender);",
-    fails: ['B2 CLI: install --intake'] },
+    from: "for (const ev of INTAKE_COMMAND_EVENTS) mergeClaudeHook(settings, ev, '*', sender);", to: "for (const ev of INTAKE_COMMAND_EVENTS) mergeClaudeHook(settings, ev, 'Write|Edit|MultiEdit', sender);",
+    fails: ['H2 CLI: install --intake registers HTTP hooks'] },
   { id: 'B2-6 install --intake misses SessionEnd', file: 'bin/orunmila.js', test: 'test/intake-send.js',
-    from: "'PostToolUseFailure', 'Stop', 'SessionEnd'];", to: "'PostToolUseFailure', 'Stop'];",
-    fails: ['B2 CLI: install --intake'] },
+    from: "const INTAKE_COMMAND_EVENTS = ['SessionStart', 'PostToolUseFailure', 'SessionEnd'];", to: "const INTAKE_COMMAND_EVENTS = ['SessionStart', 'PostToolUseFailure'];",
+    fails: ['H2 CLI: install --intake registers HTTP hooks'] },
 ];
 
 function copyRepo(root) {

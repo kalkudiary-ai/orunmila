@@ -472,4 +472,15 @@ function createServer({ home, router, pollMs = 100, statusTimeoutMs = 1000, maxL
   return { start, stop, status, paths: p };
 }
 
-module.exports = { createServer, intakePaths, readInstallKey, statusOf, MAX_LINE };
+const DEFAULT_HTTP_PORT = 47390; // LD140: free on this machine when chosen (lsof, 2026-11-22)
+
+/** The intake's HTTP port: ORUNMILA_INTAKE_PORT, or the default; a value that is not a port throws. */
+function intakePort(env = process.env) {
+  const v = env.ORUNMILA_INTAKE_PORT;
+  if (v === undefined || v === '') return DEFAULT_HTTP_PORT;
+  const n = Number(v);
+  if (!/^[0-9]+$/.test(String(v)) || n > 65535) throw new Error(`ORUNMILA_INTAKE_PORT is ${JSON.stringify(v)}, not a port number`);
+  return n;
+}
+
+module.exports = { createServer, intakePaths, readInstallKey, statusOf, intakePort, DEFAULT_HTTP_PORT, MAX_LINE };

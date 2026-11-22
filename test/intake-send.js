@@ -142,23 +142,35 @@ it(
   }),
 );
 
-it('B2 CLI: install --intake adds the sender for seven events, every tool, beside today\'s hooks; a second run adds nothing', () => {
+it('H2 CLI: install --intake registers HTTP hooks for UserPromptSubmit, PreToolUse, PostToolUse and Stop, the sender for SessionStart, PostToolUseFailure and SessionEnd; an old all-command install moves over; a second run adds nothing', () => {
   const base = tmpDir();
   try {
     const work = path.join(base, 'w');
     fs.mkdirSync(path.join(work, '.claude'), { recursive: true });
     const cfg = path.join(work, '.claude', 'settings.json');
-    const mine = { hooks: { Stop: [{ matcher: '*', hooks: [{ type: 'command', command: 'echo mine' }] }] } };
-    fs.writeFileSync(cfg, JSON.stringify(mine));
-    const env = { ORUNMILA_HOME: path.join(base, 'h') };
+    const sender = `node "${path.join(__dirname, '..', 'src', 'capture', 'claude-code', 'intake-send.js')}"`;
+    const old = { hooks: { Stop: [{ matcher: '*', hooks: [{ type: 'command', command: 'echo mine' }] }] } };
+    for (const ev of ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'Stop', 'SessionEnd']) {
+      old.hooks[ev] = [...(old.hooks[ev] || []), { matcher: '*', hooks: [{ type: 'command', command: sender }] }]; // what B2 installed
+    }
+    fs.writeFileSync(cfg, JSON.stringify(old));
+    const env = { ORUNMILA_HOME: path.join(base, 'h'), ORUNMILA_INTAKE_PORT: '47999' };
     const first = run('bin/orunmila.js', { args: ['install', '--intake'], env, cwd: work });
     assert.strictEqual(first.status, 0, first.stdout + first.stderr);
     assert.ok(first.stdout.includes('orunmila intake start'), 'says the intake must be started');
     const after = JSON.parse(fs.readFileSync(cfg, 'utf8'));
-    const senders = (ev) => (after.hooks[ev] || []).filter((e) => e.hooks.some((h) => h.command.includes('intake-send.js')));
-    for (const ev of ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'Stop', 'SessionEnd']) {
-      assert.strictEqual(senders(ev).length, 1, `${ev}: one sender`);
-      assert.strictEqual(senders(ev)[0].matcher, '*', `${ev}: every tool`);
+    const hooksOf = (ev) => (after.hooks[ev] || []).flatMap((e) => e.hooks.map((h) => ({ matcher: e.matcher, ...h })));
+    const isSender = (h) => h.type === 'command' && String(h.command).includes('intake-send.js');
+    for (const ev of ['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop']) {
+      const hs = hooksOf(ev);
+      assert.deepStrictEqual(hs.filter((h) => h.type === 'http'), [{ matcher: '*', type: 'http', url: 'http://127.0.0.1:47999/hook', timeout: 2 }], `${ev}: one HTTP hook to the intake`);
+      assert.strictEqual(hs.filter(isSender).length, 0, `${ev}: the command sender is gone (one channel per event)`);
+    }
+    for (const ev of ['SessionStart', 'PostToolUseFailure', 'SessionEnd']) {
+      const hs = hooksOf(ev);
+      assert.strictEqual(hs.filter(isSender).length, 1, `${ev}: one sender`);
+      assert.strictEqual(hs.filter((h) => h.type === 'http').length, 0, `${ev}: no HTTP hook`);
+      assert.strictEqual(hs.find(isSender).matcher, '*');
     }
     assert.ok(after.hooks.Stop.some((e) => e.hooks.some((h) => h.command === 'echo mine')), 'existing hooks kept');
     assert.ok(!JSON.stringify(after).includes('post-tool-use.js'), 'the old capture hooks are not added by --intake');

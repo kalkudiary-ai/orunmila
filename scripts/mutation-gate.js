@@ -1780,6 +1780,22 @@ const MUTANTS = [
   { id: 'C1-7 the schema does not require confidence', file: 'spec/odu.schema.json', test: 'test/confidence.js',
     from: '"attribution",\n    "confidence",\n    "lease",', to: '"attribution",\n    "lease",',
     fails: ['C1: the odù schema requires confidence'] },
+  // Slice C2: claim capture without AI (LD186).
+  { id: 'C2-1 a path lent by an earlier sentence makes a file claim', file: 'src/opon/corroborate/claims.js', test: 'test/claims.js',
+    from: 'c.verbs.length && !c.inheritedTargets ?', to: 'c.verbs.length ?',
+    fails: ['C2 file claims and command claims'] },
+  { id: 'C2-2 a mentioned path makes a file claim with no verb used', file: 'src/opon/corroborate/claims.js', test: 'test/claims.js',
+    from: 'c.verbs.length && !c.inheritedTargets ?', to: '!c.inheritedTargets ?',
+    fails: ['C2: a path only mentioned'] },
+  { id: 'C2-3 an unconfirmed claim is read', file: 'src/opon/corroborate/claims.js', test: 'test/claims.js',
+    from: " || d.claim_unconfirmed === true || typeof d.text !== 'string'", to: " || typeof d.text !== 'string'",
+    fails: ['C2 guarantee 10'] },
+  { id: 'C2-4 every verification word is a command claim', file: 'src/opon/corroborate/claims.js', test: 'test/claims.js',
+    from: 'const commands = [...new Set(findExecutionClaims(c.text))];', to: 'const commands = [...new Set(c.verificationWords)];',
+    fails: ['C2 file claims and command claims'] },
+  { id: 'C2-5 every target is a file', file: 'src/opon/corroborate/claims.js', test: 'test/claims.js',
+    from: "c.targets.filter((t) => t.kind === 'path')", to: 'c.targets',
+    fails: ['C2 file claims and command claims'] },
 ];
 
 function copyRepo(root) {

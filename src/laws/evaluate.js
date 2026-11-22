@@ -276,11 +276,17 @@ function covers(receiptText, target) {
   return hay.includes(needle);
 }
 
-/** 'full' | 'weak' | 'none' — the best receipt the turn holds for one target. */
+/**
+ * 'full' | 'weak' | 'none' — the best receipt the turn holds for one target.
+ * Receipts built from marks (src/opon/gate/receipts.js, B9) also grade a path
+ * by the folders listed or searched (`pathGrade`); the better of the two wins.
+ */
 function receiptStrength(target, receipts) {
   if (receipts.full.some((r) => covers(r.text, target))) return 'full';
+  const byPath = typeof receipts.pathGrade === 'function' && target.kind === 'path' ? receipts.pathGrade(target) : 'none';
+  if (byPath === 'full') return 'full';
   if (receipts.weak.some((r) => covers(r.text, target))) return 'weak';
-  return 'none';
+  return byPath;
 }
 
 function finding(law, assertion, detail) {
@@ -453,8 +459,8 @@ function lexicalHits(law, { claimText, promptText, turnEvents }) {
  *                                     a green claim; the caller reads the switch
  * @returns {{ findings: object[], blocking: object[], assertions: object[] }}
  */
-function evaluateTurn({ claimText = '', promptText = '', turnEvents = [], laws = [], strictProof = false } = {}) {
-  const receipts = buildReceipts(turnEvents);
+function evaluateTurn({ claimText = '', promptText = '', turnEvents = [], laws = [], strictProof = false, receipts: given = null } = {}) {
+  const receipts = given || buildReceipts(turnEvents); // from marks with ORUNMILA_GATE_FROM_MARKS=1 (B9)
   const assertions = extractAssertions(claimText);
   const proof = strictProof ? proofOfPass(turnEvents) : null;
   const findings = [];
@@ -491,4 +497,4 @@ function evaluateTurn({ claimText = '', promptText = '', turnEvents = [], laws =
   };
 }
 
-module.exports = { evaluateTurn, buildReceipts, receiptStrength, readStrength, covers, hasUnguardedPipe, RULES, SHELL_PATTERN_RE };
+module.exports = { evaluateTurn, buildReceipts, receiptStrength, readStrength, covers, hasUnguardedPipe, classifyShellLine, RULES, SHELL_PATTERN_RE };

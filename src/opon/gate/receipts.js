@@ -66,4 +66,52 @@ function receiptFor({ files, dirs }, p) {
   return best;
 }
 
-module.exports = { receiptsOf, receiptFor };
+/**
+ * The receipts the law gate's rules join against (src/laws/evaluate.js
+ * buildReceipts' shape), from a turn's marks (slice B9, LD148), graded as
+ * above: only the Glove's marks (`hook`) count, and only those that passed.
+ * Commands from `exited` marks: `pass` without an unguarded pipe is a passing
+ * command, `fail` a failed one with its code when stated, and a pipe or an
+ * `unknown` status (background, interrupted) proves nothing; their command
+ * lines and output are content receipts as today. A tool call or a network
+ * contact that passed is a full receipt of its name and input. `pathGrade`
+ * gives the folder-level grades (a listing or a search: weak).
+ */
+function buildReceiptsFromMarks(marks) {
+  const { classifyShellLine, hasUnguardedPipe } = require('../../laws/evaluate');
+  const full = [];
+  const weak = [];
+  const passingCommands = [];
+  const failedCommands = [];
+  const unreliableCommands = [];
+  const glove = marks.filter((m) => isObject(m) && m.source === 'hook' && isObject(m.target));
+  for (const m of glove) {
+    const d = isObject(m.detail) ? m.detail : {};
+    const t = m.target;
+    if (m.says === 'exited' && t.kind === 'command') {
+      const command = String(t.text || '');
+      const out = String(d.output_excerpt || '');
+      const laundered = hasUnguardedPipe(command);
+      if (d.exit_status === 'pass' && !laundered) passingCommands.push({ command, out });
+      else if (d.exit_status === 'fail') failedCommands.push({ command, exit_code: Number.isInteger(d.exit_code) ? d.exit_code : null });
+      else unreliableCommands.push({ command });
+      const segments = classifyShellLine(command);
+      for (const seg of segments.full) full.push({ text: seg, kind: 'command' });
+      for (const seg of segments.weak) weak.push({ text: seg, kind: 'shell_pattern' });
+      if (out) (segments.weak.length ? weak : full).push({ text: out, kind: segments.weak.length ? 'shell_pattern' : 'command' });
+      continue;
+    }
+    if (!(d.exit_status === 'pass')) continue; // NF26, NF69: a call that did not pass is no receipt
+    if (m.says === 'read' && t.kind === 'file') full.push({ text: String(t.path), kind: 'read' });
+    else if (m.says === 'read' && t.kind === 'dir' && d.read_kind === 'pattern') weak.push({ text: `${t.path} ${d.pattern || ''}`, kind: 'pattern_read' });
+    else if (WRITES.includes(m.says) && t.kind === 'file') full.push({ text: String(t.path), kind: 'write' });
+    else if (m.says === 'called') full.push({ text: `${d.tool || t.name || 'tool'} ${JSON.stringify(d.tool_input === undefined ? {} : d.tool_input)}${d.tool_result_excerpt ? '\n' + d.tool_result_excerpt : ''}`, kind: 'tool_call' });
+    else if (m.says === 'contacted') full.push({ text: `${d.tool || 'network'} ${t.host || ''} ${t.url || t.query || ''}`, kind: 'network_call' });
+  }
+  const graded = receiptsOf(glove);
+  // A path target's value is its basename (assert-extractor); the path as written is `raw`.
+  const pathGrade = (target) => receiptFor(graded, String(target.raw || target.value || '').replace(/^\.\//, ''));
+  return { full, weak, passingCommands, failedCommands, unreliableCommands, pathGrade };
+}
+
+module.exports = { receiptsOf, receiptFor, buildReceiptsFromMarks };

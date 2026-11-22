@@ -254,7 +254,7 @@ function renderFindings(findings, { blocking }) {
  * null when there is nothing to say — the overwhelmingly common case, and the
  * one that must cost nothing.
  */
-function decideForTurn({ sessionId, turnId, promptId, claimText, promptText, turnEvents, sentinelWrites = [], root, onCheck = () => {} }) {
+function decideForTurn({ sessionId, turnId, promptId, claimText, promptText, turnEvents, sentinelWrites = [], root, onCheck = () => {}, receipts = null }) {
   // With the switch on, the facts line comes first, ahead of any finding, and
   // stands alone on a turn with none. Everything after it is unchanged, and a
   // fault in the facts line drops the line, never a finding.
@@ -274,7 +274,7 @@ function decideForTurn({ sessionId, turnId, promptId, claimText, promptText, tur
     return factsOnly;
   }
 
-  const res = evaluateTurn({ claimText, promptText, turnEvents, laws: active, strictProof: strictProofEnabled() });
+  const res = evaluateTurn({ claimText, promptText, turnEvents, laws: active, strictProof: strictProofEnabled(), receipts });
   if (!res.findings.length) {
     onCheck({ findings: [], lawErrors });
     return factsOnly;
@@ -358,19 +358,38 @@ function runGate(payload, adapter, { root, onCheck } = {}) {
 
     writeState(sessionId, turn, Object.assign({}, readState(sessionId, turn), { claim_fp: claimFingerprint(claimText) }));
 
-    const turnEvents = readTurn(sessionId, turn);
+    let turnEvents = readTurn(sessionId, turn);
     const promptEvent = turnEvents.find((e) => e.type === 'user_prompt');
+    let promptText = promptEvent ? String(promptEvent.text || '') : '';
+    let receipts = null;
+    // B9 (LD148), off by default: the turn's receipts and prompts from the
+    // intake's marks (open questions 2 and 3); no log for the session, or no
+    // turn in it, judges from the event log as before.
+    if (process.env.ORUNMILA_GATE_FROM_MARKS === '1') {
+      const { readSessionMarks, turnFromMarks } = require('../opon/gate/turn-marks');
+      const all = readSessionMarks(dataDir(), sessionId);
+      const t = all && turnFromMarks(all);
+      if (t) {
+        receipts = require('../opon/gate/receipts').buildReceiptsFromMarks(t.marks);
+        promptText = t.promptText;
+        // The lexical laws and strict proof read commands: the turn's, from its marks.
+        turnEvents = t.marks
+          .filter((m) => m.source === 'hook' && m.says === 'exited' && m.target && m.target.kind === 'command')
+          .map((m) => ({ type: 'command_run', command: String(m.target.text || ''), exit_code: Number.isInteger(m.detail && m.detail.exit_code) ? m.detail.exit_code : null, failed: (m.detail || {}).exit_status === 'fail', stdout_excerpt: String((m.detail || {}).output_excerpt || '') }));
+      }
+    }
 
     return decideForTurn({
       sessionId,
       turnId: turn,
       promptId: promptId(sessionId),
       claimText: String(claimText),
-      promptText: promptEvent ? String(promptEvent.text || '') : '',
+      promptText,
       turnEvents,
       sentinelWrites: factsLineEnabled() ? sentinelWritesSince(turnEvents) : [],
       root: root || process.cwd(),
       onCheck: report,
+      receipts,
     });
   } catch (e) {
     // A broken law engine may stop enforcing. It may never stop the agent.

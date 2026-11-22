@@ -17,7 +17,12 @@
  * is moved on to now: an open group whose last mark is a quiet window old is
  * settled at that moment (rule 1), and a settled group a lag grace older is
  * sealed (rule 7); groups sealed at one step are emitted in the order they
- * sealed, then the order they opened. A mark for a settled group (in its
+ * sealed, then the order they opened. A group that never goes quiet is
+ * force-settled at its first mark plus the ceiling, whichever comes first
+ * (rule 2, `ceiling: true`); it takes no more marks, and the target's next
+ * mark, if it comes within a quiet window of that moment (the target is still
+ * busy), opens a continuation group that names it (`continues`, LD153); a mark
+ * later than that is a new event. A mark for a settled group (in its
  * grace) joins it and opens it again, its timer restarted: the grace is there
  * for a slow source's marks of the same event. A sealed group is never
  * reopened (rule 8, slice S6). Ticks only move time.
@@ -52,7 +57,10 @@ function actionOf(says) {
 function createOpon({ sessionId, config }) {
   const quiet = BigInt(config.quiet_window_ms) * NS_PER_MS;
   const grace = BigInt(config.lag_grace_ms) * NS_PER_MS;
-  const live = new Map(); // key -> group, open or settled
+  const ceiling = BigInt(config.ceiling_ms) * NS_PER_MS;
+  const live = new Map(); // key -> the group a new mark for it joins: open, or settled by quiet
+  const unsealed = new Map(); // id -> group, in the order they opened
+  const forcedLast = new Map(); // key -> { id, at }: the last group of the key force-settled at its ceiling
   const all = [];
   let now = null;
   let made = 0;
@@ -70,19 +78,31 @@ function createOpon({ sessionId, config }) {
       mark_seqs: [...g.seqs],
       settled_at_ns: g.settledAt === null ? null : String(g.settledAt),
       sealed_at_ns: g.sealedAt === null ? null : String(g.sealedAt),
+      ceiling: g.forced,
       parent_id: null,
       children: [],
       amends: null,
-      continues: null,
+      continues: g.continues,
     };
   }
 
   function advance(t) {
     const sealed = [];
-    for (const g of live.values()) {
-      if (g.state === 'open' && t - g.last >= quiet) {
-        g.state = 'settled';
-        g.settledAt = g.last + quiet;
+    for (const g of unsealed.values()) {
+      if (g.state === 'open') {
+        const byQuiet = g.last + quiet;
+        const byCeiling = g.first + ceiling;
+        const at = byQuiet <= byCeiling ? byQuiet : byCeiling;
+        if (t >= at) {
+          g.state = 'settled';
+          g.settledAt = at;
+          if (byCeiling < byQuiet) {
+            // Rule 2: force-settled; the target's next marks go to a continuation.
+            g.forced = true;
+            if (live.get(g.key) === g) live.delete(g.key);
+            forcedLast.set(g.key, { id: g.id, at });
+          }
+        }
       }
       if (g.state === 'settled' && t - g.settledAt >= grace) {
         g.sealedAt = g.settledAt + grace;
@@ -92,7 +112,8 @@ function createOpon({ sessionId, config }) {
     sealed.sort((a, b) => (a.sealedAt < b.sealedAt ? -1 : a.sealedAt > b.sealedAt ? 1 : a.n - b.n));
     return sealed.map((g) => {
       g.state = 'sealed';
-      live.delete(g.key);
+      if (live.get(g.key) === g) live.delete(g.key);
+      unsealed.delete(g.id);
       return record(g);
     });
   }
@@ -105,8 +126,12 @@ function createOpon({ sessionId, config }) {
     const key = keyOf(m);
     let g = live.get(key);
     if (!g) {
-      g = { n: ++made, id: id(made), key, state: 'open', target: m.target, seqs: [], says: [], last: now, settledAt: null, sealedAt: null };
+      const f = forcedLast.get(key);
+      forcedLast.delete(key);
+      const continues = f && now - f.at < quiet ? f.id : null;
+      g = { n: ++made, id: id(made), key, state: 'open', target: m.target, seqs: [], says: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues };
       live.set(key, g);
+      unsealed.set(g.id, g);
       all.push(g);
     } else if (g.state === 'settled') {
       g.state = 'open';

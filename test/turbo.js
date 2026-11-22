@@ -324,4 +324,58 @@ it('guard: the hook refuses with exit 2 and a reason on stderr, allows with exit
   }
 });
 
+// --- T3: the git hooks --------------------------------------------------------
+
+const { spawnSync } = require('child_process');
+const HOOKS_DIR = path.join(__dirname, '..', 'scripts', 'turbo', 'githooks');
+const HOOK_ENV = { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.hooksPath', GIT_CONFIG_VALUE_0: HOOKS_DIR };
+
+function gitIn(repo, args, env = {}) {
+  return spawnSync('git', ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { encoding: 'utf8', env: { ...process.env, ...env } });
+}
+
+function hookRepo() {
+  const base = fs.realpathSync(tmpDir());
+  const repo = path.join(base, 'r');
+  fs.mkdirSync(repo);
+  gitIn(repo, ['init', '-q', '-b', 'work']);
+  fs.writeFileSync(path.join(repo, 'a'), 'a\n');
+  gitIn(repo, ['add', 'a']);
+  gitIn(repo, ['commit', '-q', '-m', 'a']);
+  spawnSync('git', ['init', '-q', '--bare', path.join(base, 'remote.git')]);
+  return { base, repo, remote: path.join(base, 'remote.git') };
+}
+
+it('githooks: with TURBO\'s env, any update to main is refused and other refs move', () => {
+  const { base, repo } = hookRepo();
+  try {
+    const main = gitIn(repo, ['update-ref', 'refs/heads/main', 'HEAD'], HOOK_ENV);
+    assert.notStrictEqual(main.status, 0, 'update-ref main was allowed');
+    assert.ok(main.stderr.includes('TURBO'), main.stderr);
+    assert.notStrictEqual(gitIn(repo, ['branch', 'main'], HOOK_ENV).status, 0, 'git branch main was allowed');
+    assert.strictEqual(gitIn(repo, ['rev-parse', '--verify', '-q', 'refs/heads/main']).status, 1, 'main exists after the refusals');
+    assert.strictEqual(gitIn(repo, ['update-ref', 'refs/heads/output-1', 'HEAD'], HOOK_ENV).status, 0, 'another branch could not move');
+    fs.writeFileSync(path.join(repo, 'b'), 'b\n');
+    gitIn(repo, ['add', 'b'], HOOK_ENV);
+    assert.strictEqual(gitIn(repo, ['commit', '-q', '-m', 'b'], HOOK_ENV).status, 0, 'a commit on the work branch was refused');
+    // Control: without the env the same update goes through, so the hook is what refused it.
+    assert.strictEqual(gitIn(repo, ['update-ref', 'refs/heads/main', 'HEAD']).status, 0);
+  } finally {
+    rmrf(base);
+  }
+});
+
+it('githooks: with TURBO\'s env, every push is refused; without it, the same push goes through', () => {
+  const { base, repo, remote } = hookRepo();
+  try {
+    const push = gitIn(repo, ['push', '-q', remote, 'HEAD:refs/heads/x'], HOOK_ENV);
+    assert.notStrictEqual(push.status, 0, 'a push was allowed');
+    assert.ok(push.stderr.includes('TURBO'), push.stderr);
+    assert.strictEqual(spawnSync('git', ['-C', remote, 'rev-parse', '--verify', '-q', 'refs/heads/x']).status, 1, 'the remote got the ref');
+    assert.strictEqual(gitIn(repo, ['push', '-q', remote, 'HEAD:refs/heads/x']).status, 0);
+  } finally {
+    rmrf(base);
+  }
+});
+
 runAll('turbo');

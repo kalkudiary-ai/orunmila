@@ -1,0 +1,6 @@
+#!/bin/sh
+# TURBO (LD109, layer 3): refuse every push from a TURBO session. A push needs
+# O (CLAUDE.md "How to work" 9). A TURBO session gets this folder as
+# core.hooksPath through GIT_CONFIG_COUNT in its environment.
+echo "TURBO: refused a push to $1 ($2). A push needs O: queue it with node scripts/turbo/plan.js queue." >&2
+exit 1

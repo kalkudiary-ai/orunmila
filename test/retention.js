@@ -4,10 +4,10 @@
  * test/retention.js — src/opon/ledger/retention.js: old sessions are removed
  * only whole, each removal written first to a hash-chained retention log
  * (brief v4 line 348; test 45; N4, NF7; Phase 1 slice B6, pure part; LD66).
- * Not wired. Fixtures are synthetic.
+ * Wired as `orunmila retention` (slice B6w, LD165). Fixtures are synthetic.
  */
 
-const { assert, fs, path, ROOT, tmpDir, rmrf, it, runAll } = require('./helpers');
+const { assert, fs, path, ROOT, tmpDir, rmrf, run, it, runAll } = require('./helpers');
 const { createSessionLog } = require('../src/opon/ledger/session-log');
 const { verifySession } = require('../src/verify/session');
 const { verifyText } = require('../src/verify/chain');
@@ -226,6 +226,46 @@ it(
 it('plan refuses a setting that is not a whole number of days, at least 1', () => {
   for (const keepDays of [0, -1, 1.5, '30', undefined]) {
     assert.throws(() => plan({ sessionsDir: '/nowhere', keepDays, now: NOW }), /keepDays/);
+  }
+});
+
+it(
+  'B6w: orunmila retention lists old session logs, removes them only with --yes, records each first, and keeps what the intake holds (test 45, LD165)',
+  withHome(({ base, sessions }) => {
+    makeSession(sessions, 'ses_old', '2026-01-01T00:00:00.000Z', '2026-01-01T01:00:00.000Z');
+    makeSession(sessions, 'ses_held', '2026-01-01T00:00:00.000Z');
+    const fresh = makeSession(sessions, 'ses_new', new Date().toISOString());
+    fs.mkdirSync(path.join(base, 'intake'));
+    fs.writeFileSync(path.join(base, 'intake', 'held.json'), JSON.stringify(['ses_held']));
+    const cli = (...args) => run('bin/orunmila.js', { args: ['retention', ...args], env: { ORUNMILA_HOME: base, ORUNMILA_RETENTION_DAYS: '' } });
+    const none = cli();
+    assert.strictEqual(none.status, 2, 'no period: nothing is removed');
+    assert.deepStrictEqual(fs.readdirSync(sessions).sort(), ['ses_held', 'ses_new', 'ses_old']);
+    const dry = cli('--keep-days', '30');
+    assert.strictEqual(dry.status, 1, dry.stdout + dry.stderr);
+    assert.match(dry.stdout, /ses_old/);
+    assert.match(dry.stdout, /Kept ses_held: the running intake holds it/);
+    assert.deepStrictEqual(fs.readdirSync(sessions).sort(), ['ses_held', 'ses_new', 'ses_old'], 'nothing removed without --yes');
+    const done = cli('--keep-days', '30', '--yes');
+    assert.strictEqual(done.status, 0, done.stdout + done.stderr);
+    assert.deepStrictEqual(fs.readdirSync(sessions).sort(), ['ses_held', 'ses_new']);
+    const log = readRetentionLog(path.join(base, 'retention.jsonl'));
+    assert.strictEqual(log.ok, true);
+    assert.deepStrictEqual(log.removed.map((r) => [r.session_id, r.reason]), [['ses_old', 'older than 30 day(s)']]);
+    assert.strictEqual(verifySession(fresh).ok, true, 'the other sessions verify intact');
+    const env = run('bin/orunmila.js', { args: ['retention'], env: { ORUNMILA_HOME: base, ORUNMILA_RETENTION_DAYS: '30' } });
+    assert.strictEqual(env.status, 0, 'the setting from the environment; nothing left to remove');
+  }),
+);
+
+it('B6w: orunmila prune names retention as what replaces it for the session logs (Ship item 5)', () => {
+  const home = tmpDir();
+  try {
+    const r = run('bin/orunmila.js', { args: ['prune'], env: { ORUNMILA_HOME: home } });
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /orunmila retention/);
+  } finally {
+    rmrf(home);
   }
 });
 

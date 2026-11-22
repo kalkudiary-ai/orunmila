@@ -768,6 +768,8 @@ function cmdPrune() {
   // Explicit, opt-in log rotation. The flat JSONL log is the forensic trail, so
   // we NEVER trim it automatically — only when the user runs this, and only by
   // whole sessions (keeping a partial session would corrupt its turn lineage).
+  // Ship item 5 (B6w, LD165): the per-session logs are removed whole by retention instead.
+  console.log('prune trims the old event log (~/.orunmila/events.jsonl). The per-session logs the intake writes are removed whole, and recorded, by `orunmila retention`, which replaces prune for them.');
   const keep = Math.max(1, parseInt(flag('keep', '20'), 10) || 20);
   const before = logSizeKB();
   const res = eventlog.pruneToRecentSessions(keep);
@@ -779,6 +781,68 @@ function cmdPrune() {
   console.log(`Events: ${res.before} -> ${res.after}.  Log: ${before} KB -> ${logSizeKB()} KB.`);
   console.log('Per-session reports/cache/output sidecars for removed sessions can be deleted from');
   console.log(`  ${eventlog.dataDir()}  (reports/, cache/, output/) if you no longer need them.`);
+}
+
+/**
+ * `orunmila retention --keep-days N [--yes]` — retention replaces `prune` for the
+ * per-session logs (slice B6w, LD165; brief v4 line 348; test 45; N4). It lists
+ * the session folders in <home>/sessions/ whose last record is older than N
+ * days, and with --yes removes each whole, the removal written first to
+ * <home>/retention.jsonl (src/opon/ledger/retention.js). A session the running
+ * intake holds is never removed. N comes from --keep-days, else
+ * ORUNMILA_RETENTION_DAYS; with neither nothing is removed. Exit 0 done or
+ * nothing due, 1 something due without --yes or a removal refused, 2 no period.
+ */
+function cmdRetention() {
+  const { plan, retire, readRetentionLog } = require('../src/opon/ledger/retention');
+  const home = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
+  const sessionsDir = path.join(home, 'sessions');
+  const logFile = path.join(home, 'retention.jsonl');
+  const given = flag('keep-days', process.env.ORUNMILA_RETENTION_DAYS || null);
+  if (given === null || !/^[1-9][0-9]*$/.test(String(given))) {
+    console.error('Usage: orunmila retention --keep-days N [--yes]   (or ORUNMILA_RETENTION_DAYS=N), N whole days, at least 1.');
+    console.error('Nothing is removed until you choose a period.');
+    process.exitCode = 2;
+    return;
+  }
+  const keepDays = Number(given);
+  const log = readRetentionLog(logFile);
+  if (!log.ok) {
+    console.log(`Nothing removed: ${log.words}. Retention stops until the log is looked at.`);
+    process.exitCode = 1;
+    return;
+  }
+  let held = [];
+  try {
+    held = JSON.parse(fs.readFileSync(path.join(home, 'intake', 'held.json'), 'utf8'));
+  } catch {
+    /* no held list: the intake holds nothing */
+  }
+  const holding = new Set(Array.isArray(held) ? held : []);
+  const old = fs.existsSync(sessionsDir) ? plan({ sessionsDir, keepDays, now: new Date().toISOString() }) : [];
+  for (const id of old.filter((x) => holding.has(x))) console.log(`Kept ${id}: the running intake holds it.`);
+  const due = old.filter((x) => !holding.has(x));
+  if (!due.length) {
+    console.log(`No session log is older than ${keepDays} day(s) in ${sessionsDir}.`);
+    return;
+  }
+  if (!args.includes('--yes')) {
+    console.log(`These session logs are older than ${keepDays} day(s); --yes removes each one whole, recorded first in ${logFile}:`);
+    for (const id of due) console.log(`  ${id}`);
+    process.exitCode = 1;
+    return;
+  }
+  let refused = 0;
+  for (const id of due) {
+    const r = retire({ sessionsDir, id, logFile, reason: `older than ${keepDays} day(s)` });
+    if (r.ok) console.log(`Removed ${id} (retention record ${r.seq}${r.finished ? ', a removal cut short, finished' : ''}).`);
+    else {
+      refused++;
+      console.log(`Kept ${id}: ${r.reason}`);
+    }
+  }
+  console.log(`Retention log: ${readRetentionLog(logFile).words}.`);
+  if (refused) process.exitCode = 1;
 }
 
 function cmdLog() {
@@ -1412,6 +1476,7 @@ const COMMANDS = {
   stats: cmdStats,
   status: cmdStatus,
   prune: cmdPrune,
+  retention: cmdRetention,
   log: cmdLog,
   lenses: cmdLenses,
   report: cmdReport,
@@ -1481,6 +1546,7 @@ Both lenses
   orunmila status [--agent ID]                    which lenses are live, event log location, size, counts
   orunmila stats                                  cross-agent reliability scores, phantom rates, comparisons
   orunmila prune [--keep N]                       cap the log to the N most-recent sessions (explicit, never automatic)
+  orunmila retention --keep-days N [--yes]        remove session logs older than N days, each whole and recorded first
   orunmila log redact                             scrub known secret formats from everything already stored
   orunmila log delete [--yes]                     delete stored session data (lists it first; --yes to delete)
   orunmila leak-check [--root dir] [--path p]     search stored data and report files for this project's .env

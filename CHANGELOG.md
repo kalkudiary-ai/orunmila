@@ -183,6 +183,11 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   The test suite fails if the gate or the Stain Map reads any of them
   differently from its label; `node scripts/laws-corpus.js` lists every
   sentence a change gets wrong.
+- **`orunmila retention --keep-days N [--yes]`** removes the intake's session logs
+  older than N days, each folder whole and only if it verifies, the removal
+  written first to a hash-chained `retention.jsonl`. Without `--yes` it only
+  lists them; with no period it removes nothing; a session the running intake
+  holds is kept. `prune` still trims the old event log and now says so.
 - **SECURITY.md says how fast a report is answered:** an acknowledgement within
   7 days, whether the issue is confirmed within 30, and a released fix, or a
   published advisory with a workaround, within 90.

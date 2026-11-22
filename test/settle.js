@@ -208,4 +208,42 @@ it('rule 6: a folder\'s changes fold into the file changes beneath it, before or
   ]);
 }));
 
+it('test 8 (rule 8): a mark that arrives after its group sealed never reopens it: a new group amends it; a later unrelated change amends nothing', withBase((base) => {
+  const s = makeLog(base);
+  const a = s.append(M.started(0, 'e1', { kind: 'file', path: 'src/a.ts' }));
+  const b = s.append(M.disk(100, 'src/a.ts'));
+  s.append(M.tick(5000)); // settled at 1,600, sealed at 4,600
+  const late = s.append(M.edited(5100, 'e1', 'src/a.ts')); // the hook's outcome, for the same tool call
+  const stale = s.append(M.disk(4000, 'src/b.ts')); // a slow source: seen at 4,000, arrives now
+  s.append(M.tick(9000));
+  const fresh = s.append(M.edited(20000, 'e2', 'src/a.ts')); // a new tool call, long after
+  s.append(M.tick(40000));
+  const g = groups(s.dir);
+  const byPath = (p) => g.filter((x) => x.target.path === p);
+  const [first, amend, again] = byPath('src/a.ts');
+  assert.deepStrictEqual(first.mark_seqs, [a, b], 'the sealed record is untouched');
+  assert.strictEqual(first.amends, null);
+  assert.deepStrictEqual(amend.mark_seqs, [late]);
+  assert.strictEqual(amend.amends, first.group_id);
+  assert.deepStrictEqual(again.mark_seqs, [fresh]);
+  assert.strictEqual(again.amends, null);
+  assert.strictEqual(byPath('src/b.ts')[0].mark_seqs[0], stale);
+  assert.strictEqual(byPath('src/b.ts')[0].amends, null, 'no sealed group of its own to amend');
+}));
+
+it('rule 8: a slow source\'s mark, observed before its target\'s group sealed but arriving after, amends it', withBase((base) => {
+  const s = makeLog(base);
+  const a = s.append(M.disk(0, 'x.txt'));
+  s.append(M.tick(6000)); // sealed at 4,500
+  const slow = s.append(M.disk(4400, 'x.txt')); // seen at 4,400, before the seal
+  const after = s.append(M.disk(7000, 'x.txt')); // the amending group is open: it joins it (rule 1)
+  s.append(M.tick(30000));
+  const g = groups(s.dir);
+  assert.deepStrictEqual(g.map((x) => [x.mark_seqs, x.amends === null]), [
+    [[a], true],
+    [[slow, after], false],
+  ]);
+  assert.strictEqual(g[1].amends, g[0].group_id);
+}));
+
 runAll('settle');

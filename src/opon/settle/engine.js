@@ -45,7 +45,13 @@
  * when nothing beneath it changed while it was open (created or deleted while
  * empty, as the brief says, or a lone change: kept, never dropped). Delete then
  * recreate inside one window is `modified` (rule 5): the action reads whether
- * the target existed before its first change and after its last. A mark for a settled group (in its
+ * the target existed before its first change and after its last.
+ *
+ * Late marks (rule 8, LD157): a sealed group never changes. A mark for a
+ * target whose last group is sealed is late for it when it carries a tool
+ * call id that group has, or was itself observed (its own mono_ns) at or
+ * before the seal: it opens a new group whose `amends` names the sealed one.
+ * Any other mark for that target is a new event. A mark for a settled group (in its
  * grace) joins it and opens it again, its timer restarted: the grace is there
  * for a slow source's marks of the same event. A sealed group is never
  * reopened (rule 8, slice S6). Ticks only move time.
@@ -85,6 +91,7 @@ function createOpon({ sessionId, config }) {
   const live = new Map(); // key -> the group a new mark for it joins: open, or settled by quiet
   const unsealed = new Map(); // id -> group, in the order they opened
   const forcedLast = new Map(); // key -> { id, at }: the last group of the key force-settled at its ceiling
+  const sealedLast = new Map(); // key -> { id, at, causes }: the key's last sealed group (rule 8)
   const all = [];
   let now = null;
   let made = 0;
@@ -112,7 +119,7 @@ function createOpon({ sessionId, config }) {
       ceiling: g.forced,
       parent_id: null,
       children: [],
-      amends: null,
+      amends: g.amends,
       continues: g.continues,
     };
   }
@@ -145,6 +152,7 @@ function createOpon({ sessionId, config }) {
     sealed.sort((a, b) => (a.sealedAt < b.sealedAt ? -1 : a.sealedAt > b.sealedAt ? 1 : a.n - b.n));
     return sealed.map((g) => {
       g.state = 'sealed';
+      sealedLast.set(g.key, { id: g.id, at: g.sealedAt, causes: g.causes });
       if (live.get(g.key) === g) live.delete(g.key);
       unsealed.delete(g.id);
       return record(g);
@@ -237,7 +245,9 @@ function createOpon({ sessionId, config }) {
       const f = forcedLast.get(key);
       forcedLast.delete(key);
       const continues = f && (f.held || now - f.at < quiet) ? f.id : null;
-      g = { n: ++made, id: id(made), key, state: 'open', target, seqs: [], says: [], real: [], realSays: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues, isCommand: key.startsWith('command:'), isTurn: key.startsWith('turn:'), turnEnded: false };
+      const s = sealedLast.get(key);
+      const amends = s && ((m.cause_hint && s.causes.has(m.cause_hint)) || BigInt(m.mono_ns) <= s.at) ? s.id : null;
+      g = { n: ++made, id: id(made), key, state: 'open', target, seqs: [], says: [], real: [], realSays: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues, amends, causes: new Set(), isCommand: key.startsWith('command:'), isTurn: key.startsWith('turn:'), turnEnded: false };
       live.set(key, g);
       unsealed.set(g.id, g);
       all.push(g);
@@ -257,6 +267,7 @@ function createOpon({ sessionId, config }) {
     g.seqs.push(m.seq);
     g.says.push(m.says);
     g.real.push(real);
+    if (m.cause_hint) g.causes.add(m.cause_hint);
     if (real) g.realSays.push(m.says);
     g.last = now;
     if (m.says === 'ended' && m.target && m.target.kind === 'turn') g.turnEnded = true;

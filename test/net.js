@@ -165,6 +165,23 @@ it('N2: after a rename the old path is absent; the new path takes its own before
   assert.deepStrictEqual(fileOdus(odus, 'src/a.js')[0].net_change, { before: 'absent', after: FP('7'), changed: true });
 });
 
+it("N2b: a rename while the old path's group is still in its grace: that group keeps its own before, and the path is absent after it seals", () => {
+  const { odus } = replay((append) => {
+    append(M.edited(0, 'c1', 'src/a.js'));
+    append(M.fingerprinted(1600, 'src/a.js', FP('b'))); // settled at 1,500 ms; seals at 4,500 ms
+    append(M.disk(2000, 'src/b.js', 'renamed', { from: 'src/a.js' }));
+    append(M.fingerprinted(3600, 'src/b.js', FP('b')));
+    append(M.tick(9000));
+    append(M.edited(10000, 'c2', 'src/a.js', 'created'));
+    append(M.fingerprinted(11600, 'src/a.js', FP('e')));
+    append(M.tick(20000));
+  });
+  const [first, again] = fileOdus(odus, 'src/a.js');
+  assert.deepStrictEqual(first.net_change, { before: FP('a'), after: FP('b'), changed: true });
+  assert.deepStrictEqual(fileOdus(odus, 'src/b.js')[0].net_change, { before: 'absent', after: FP('b'), changed: true });
+  assert.deepStrictEqual(again.net_change, { before: 'absent', after: FP('e'), changed: true });
+});
+
 it('N2: a baseline beside the log that was changed is named as lost evidence, and replay goes on with every first before unknown', () => {
   const { odus, r } = replay(
     (append) => {

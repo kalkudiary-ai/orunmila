@@ -99,7 +99,8 @@
  * header's exclusions, a link, or no baseline, is null); `after` is the group's
  * latest fingerprinted mark, if no other mark came after it, else null; each is
  * a fingerprint, `absent`, or null for unknown, and `changed` compares them
- * when both are known (null otherwise). A rename leaves its old path absent.
+ * when both are known (null otherwise). A rename leaves its old path absent
+ * (once any group of that path still in its grace has sealed: N2b, LD173).
  * Groups of marks that change nothing on disk leave `net_change` out (line 389).
  *
  * Group records (LD142) use the odù's field names where they apply, and are
@@ -221,7 +222,7 @@ function createOpon({ sessionId, config, baseline = null }) {
     if (!g.key.startsWith('file:') || !g.says.some((v) => DISK.has(v))) return undefined;
     const before = stateBefore(g);
     const after = g.fp && g.fp.seq > g.lastOther ? g.fp.state : null;
-    lastState.set(g.key, after);
+    lastState.set(g.key, g.renamedAway ? 'absent' : after);
     return { before, after, changed: before === null || after === null ? null : before !== after };
   }
 
@@ -314,7 +315,11 @@ function createOpon({ sessionId, config, baseline = null }) {
 
   /** Rule 4: the old path's open group goes to the new path, merged with the new path's own. */
   function rename(fromKey, toKey, target) {
-    lastState.set(fromKey, 'absent'); // N2: nothing is at the old path after a rename
+    // N2, N2b (LD173): nothing is at the old path after a rename. A group of it that the rename does not
+    // move (settled, in its grace) keeps its own before and leaves the path absent when it seals.
+    const waiting = [...unsealed.values()].filter((g) => g.key === fromKey && g.state !== 'open');
+    for (const g of waiting) g.renamedAway = true;
+    if (!waiting.length) lastState.set(fromKey, 'absent');
     const a = live.get(fromKey);
     if (!a || a.state !== 'open') return;
     live.delete(fromKey);

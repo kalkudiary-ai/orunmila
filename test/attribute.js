@@ -145,6 +145,11 @@ it('A1c: an unexplained change beside agent activity says, from recorded facts, 
   const nc = (p) => of(odus, file(p)).not_credited;
   assert.deepStrictEqual(blame(of(odus, file('src/late.ts'))), ['unexplained', null], 'the label stays: a failed call is never credited (LD177)');
   assert.deepStrictEqual(nc('src/late.ts'), [{ kind: 'agent_tool_call', ref: 'e2', says: ['started', 'ended'], seen: 'after_end', gap_ms: 200 }]);
+  // Glove and Sentinel joined on one odù: the Glove's failed call and the Sentinel's change, each witness's own marks.
+  const late = of(odus, file('src/late.ts'));
+  assert.deepStrictEqual([late.witness_status.glove.says, late.witness_status.sentinel.says], [['started', 'ended'], ['modified']]);
+  assert.deepStrictEqual(blame(of(odus, file('src/hand.ts'))), ['unexplained', null]);
+  assert.deepStrictEqual([of(odus, file('src/hand.ts')).witness_status.glove.status, of(odus, file('src/hand.ts')).witness_status.sentinel.status], ['saw_nothing', 'saw'], 'nothing beside it: the Glove saw nothing, the Sentinel saw the change');
   assert.deepStrictEqual(nc('src/seen.ts'), [{ kind: 'agent_tool_call', ref: 'r2', says: ['read'], seen: 'after_end', gap_ms: 200 }]);
   assert.deepStrictEqual(nc('src/open.ts'), [{ kind: 'agent_tool_call', ref: 'e3', says: ['started'], seen: 'no_end' }]);
   assert.deepStrictEqual(nc('src/early.ts'), [{ kind: 'agent_tool_call', ref: 'e4', says: ['started', 'ended'], seen: 'before_start', gap_ms: 500 }]);

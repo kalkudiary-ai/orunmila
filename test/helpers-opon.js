@@ -37,15 +37,17 @@ function tinyCode() {
  * src/opon/net/baseline.js writes them, its fingerprint in the header.
  * `byproducts`: { text, inHeader } writes the project's `.orunmila/byproducts` before the header is
  * built (its fingerprint is then frozen), and with `inHeader` the header carries the list (A1a).
+ * `sessionId`, `root` and `startMs` build a second session beside the first (A2): its own id, the
+ * same or another project folder, and when its header was written.
  */
-function makeLog(base, config = {}, { baseline = null, byproducts = null } = {}) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'orunmila-root-')));
-  const dir = path.join(base, SID);
+function makeLog(base, config = {}, { baseline = null, byproducts = null, sessionId = SID, root: rootIn = null, startMs = 0 } = {}) {
+  const root = rootIn || fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'orunmila-root-')));
+  const dir = path.join(base, sessionId);
   if (byproducts) {
     fs.mkdirSync(path.join(root, '.orunmila'));
     fs.writeFileSync(path.join(root, '.orunmila', 'byproducts'), byproducts.text);
   }
-  const header = buildHeader({ sessionId: SID, root, agent: { name: 'claude-code', version: null }, orunmilaVersion: '0.0.0-test', codeRoot: tinyCode(), lawPacks: {}, hookSettings: [], config, observedAt: wall(0), monoNs: ns(0), byproducts: Boolean(byproducts && byproducts.inHeader) });
+  const header = buildHeader({ sessionId, root, agent: { name: 'claude-code', version: null }, orunmilaVersion: '0.0.0-test', codeRoot: tinyCode(), lawPacks: {}, hookSettings: [], config, observedAt: wall(startMs), monoNs: ns(startMs), byproducts: Boolean(byproducts && byproducts.inHeader) });
   let text = null;
   if (baseline) {
     text = [...baseline].sort((a, b) => (a.path < b.path ? -1 : 1)).map((e) => canonicalize(e) + '\n').join('');
@@ -98,4 +100,7 @@ const M = {
     base(ms, { source: 'process', target: { kind: 'file', path: file }, says: 'fingerprinted', detail: fp === 'absent' ? { exists: false } : { exists: true, size: 4, fingerprint: fp } }),
 };
 
-module.exports = { makeLog, M, ns, wall, SID, FP };
+/** A mark of another session (A2): the same mark, its session id swapped, and a session end naming that session. */
+const as = (sid, m) => ({ ...m, session_id: sid, ...(m.target && m.target.kind === 'session' ? { target: { kind: 'session', id: sid } } : {}) });
+
+module.exports = { makeLog, M, ns, wall, SID, FP, as };

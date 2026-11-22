@@ -287,14 +287,16 @@
             }
           },
           "seen": {
-            "description": "Where the change was seen against the call's recorded start and end: after_end, before_start, partly_inside, no_start (no start recorded), no_end (no outcome recorded); after_exit for a command; null when the change has no Sentinel sighting to place.",
+            "description": "Where the Sentinel's sighting of the change falls against the Glove's record of the call: after_end, before_start, partly_inside, no_start (no start recorded), no_end (no outcome recorded), inside (only while sessions overlap, when a time match does not credit); for a command, after_exit, or while_running (only while sessions overlap); null when the change has no Sentinel sighting to place.",
             "enum": [
               "after_end",
               "before_start",
               "partly_inside",
+              "inside",
               "no_start",
               "no_end",
               "after_exit",
+              "while_running",
               null
             ]
           },
@@ -352,10 +354,29 @@
     },
     "conflicts": {
       "description": "A list of disagreements, each naming the sources and what each said. Never dropped.",
-      "$comment": "brief v4 lines 314, 328, 429-439; station 6 (slice C3)",
+      "$comment": "brief v4 lines 314, 328, 429-439; station 6 (slice C3). Until C3, only station 5's concurrent_sessions (line 405; slice A2, LD180), whose shape is the agent's proposal (Q11 (1))",
       "type": "array",
       "items": {
-        "type": "object"
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "description": "The conflict's kind; concurrent_sessions: a change during overlapping sessions that cannot be pinned to one session.",
+            "type": "string",
+            "minLength": 1
+          },
+          "sessions": {
+            "description": "For concurrent_sessions: every session active in the folder when the change was first seen, this one included, sorted.",
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
       }
     },
     "lease": {

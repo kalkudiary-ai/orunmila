@@ -6,10 +6,13 @@
  * deterministic code (guarantee 8): marks in, group records out, nothing read
  * from disk or the clock.
  *
- *   createOpon({ sessionId, config, baseline?, byproducts? })   config from the
- *                 session header (test 35); baseline: path -> fingerprint (null
- *                 for a link or other non-file) from the snapshot beside the
- *                 log, or null; byproducts: the header's list (A1a), or null
+ *   createOpon({ sessionId, config, baseline?, byproducts?, root?, others? })
+ *                 config from the session header (test 35); baseline: path ->
+ *                 fingerprint (null for a link or other non-file) from the
+ *                 snapshot beside the log, or null; byproducts: the header's
+ *                 list (A1a), or null; root: the header's project_root; others:
+ *                 the other sessions' spans (src/opon/intake/overlap.js
+ *                 spanOf), or null when none are known (A2)
  *     .push(mark)   one mark, in seq order; returns the records it sealed
  *     .end()        the groups not yet sealed, in the order they opened, as
  *                   they stand (the closeout's force-settle is Phase 4)
@@ -118,7 +121,15 @@
  * marks that change nothing: a tool call with an outcome mark is explained by
  * its own call, a turn by its turn, the session's end by the session; anything
  * else is unexplained. When several tool calls qualify at one step, `ref` is
- * the first and `also` names the rest. Overlapping sessions are slice A2.
+ * the first and `also` names the rest.
+ *
+ * Overlapping sessions (slice A2, LD179-LD181; lines 402-407): when another
+ * session sharing this folder (overlap.js `concurrent`) was active at the
+ * change's first sighting, only steps 1 and 4 credit; otherwise the change is
+ * unexplained with a `concurrent_sessions` conflict naming every session active
+ * then, this one included (LD180). Its `not_credited` then also names a tool
+ * call the change fell `inside` and the commands running at it
+ * (`while_running`): the agent was there, and so was another session.
  *
  * What was not credited (slice A1c, LD178): an unexplained change on disk
  * lists the agent activity beside it that the steps did not credit, from
@@ -136,6 +147,7 @@
 const path = require('path');
 const { keyOf, aliasPath } = require('../group/keys');
 const { isIgnored } = require('../../capture/fs-sentinel/ignore');
+const { concurrent } = require('../intake/overlap');
 
 const NS_PER_MS = 1000000n;
 const DISK = new Set(['created', 'modified', 'deleted', 'renamed']);
@@ -182,7 +194,7 @@ function explained(kind, ids) {
 const UNEXPLAINED = { attribution: 'unexplained', cause: null };
 const CHANGES_A_FILE = new Set(['created', 'modified', 'deleted']);
 
-function createOpon({ sessionId, config, baseline = null, byproducts = null }) {
+function createOpon({ sessionId, config, baseline = null, byproducts = null, root = null, others = null }) {
   const quiet = BigInt(config.quiet_window_ms) * NS_PER_MS;
   const grace = BigInt(config.lag_grace_ms) * NS_PER_MS;
   const ceiling = BigInt(config.ceiling_ms) * NS_PER_MS;
@@ -277,17 +289,19 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null }) {
     }
     const direct = glove((v) => CHANGES_A_FILE.has(v));
     if (direct.length) return explained('agent_tool_call', direct);
-    if (g.changeSeen.length) {
+    const during = g.overlap && g.overlap.length > 0; // A2: only steps 1 and 4 credit (line 404)
+    if (!during && g.changeSeen.length) {
       const lo = g.changeSeen.reduce((a, b) => (b < a ? b : a));
       const hi = g.changeSeen.reduce((a, b) => (b > a ? b : a));
       const inside = [...calls].filter(([, c]) => c.keys.has(g.key) && c.start !== null && c.end !== null && c.start <= lo && hi <= c.end).map(([id]) => id);
       if (inside.length) return explained('time_match', inside);
     }
-    if (g.atChange && g.atChange.length) return explained('agent_command', g.atChange);
+    if (!during && g.atChange && g.atChange.length) return explained('agent_command', g.atChange);
     if (byproducts && g.target && !g.target.outside) {
       const entry = byproducts.find((e) => isIgnored(g.target.path, [e]));
       if (entry !== undefined) return { attribution: 'byproduct', cause: { kind: 'byproduct', ref: entry } };
     }
+    if (during) return { ...UNEXPLAINED, conflicts: [{ kind: 'concurrent_sessions', sessions: [...new Set([sessionId, ...g.overlap])].sort() }] };
     return UNEXPLAINED;
   }
 
@@ -307,10 +321,12 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null }) {
         else if (c.start !== null && hi < c.start) rel = { seen: 'before_start', gap_ms: ms(c.start - hi) };
         else if (c.start === null) rel = { seen: 'no_start' };
         else if (c.end === null) rel = { seen: 'no_end' };
+        else if (c.start <= lo && hi <= c.end) rel = { seen: 'inside' }; // only while sessions overlap (A2)
         else rel = { seen: 'partly_inside' };
       }
       out.push({ kind: 'agent_tool_call', ref, says, ...rel });
     }
+    for (const ref of g.overlap && g.overlap.length ? g.atChange || [] : []) out.push({ kind: 'agent_command', ref, seen: 'while_running' });
     for (const x of g.besideExit || []) out.push({ kind: 'agent_command', ref: x.ref, seen: 'after_exit', gap_ms: ms(x.gap) });
     return out.length ? out : undefined;
   }
@@ -335,6 +351,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null }) {
       continues: g.continues,
       ...(net === undefined ? {} : { net_change: { ...net } }),
       ...(g.attr ? { attribution: g.attr.attribution, cause: g.attr.cause } : {}),
+      ...(g.attr && g.attr.conflicts ? { conflicts: g.attr.conflicts.map((c) => ({ ...c, sessions: [...c.sessions] })) } : {}),
       ...(g.notCredited ? { not_credited: g.notCredited.map((e) => ({ ...e, ...(e.says ? { says: [...e.says] } : {}) })) } : {}),
     };
   }
@@ -441,6 +458,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null }) {
     b.changeSeen = [...b.changeSeen, ...a.changeSeen];
     if (b.atChange === null) b.atChange = a.atChange;
     if (b.besideExit === null) b.besideExit = a.besideExit;
+    if (b.overlap === null) b.overlap = a.overlap;
     for (const c of a.causes) b.causes.add(c);
     if (a.first < b.first) b.first = a.first;
     if (a.last > b.last) b.last = a.last;
@@ -494,7 +512,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null }) {
       const continues = f && (f.held || now - f.at < quiet) ? f.id : null;
       const s = sealedLast.get(key);
       const amends = s && ((m.cause_hint && s.causes.has(m.cause_hint)) || BigInt(m.mono_ns) <= s.at) ? s.id : null;
-      g = { n: ++made, id: id(made), key, state: 'open', parentId: null, childIds: [], startAt: null, exitAt: null, lost: false, target, seqs: [], says: [], real: [], realSays: [], sources: [], slots: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues, amends, causes: new Set(), isCommand: key.startsWith('command:'), isTurn: key.startsWith('turn:'), turnEnded: false, fp: null, lastOther: 0, net: undefined, hints: [], changeSeen: [], atChange: null, besideExit: null, attr: null, notCredited: undefined };
+      g = { n: ++made, id: id(made), key, state: 'open', parentId: null, childIds: [], startAt: null, exitAt: null, lost: false, target, seqs: [], says: [], real: [], realSays: [], sources: [], slots: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues, amends, causes: new Set(), isCommand: key.startsWith('command:'), isTurn: key.startsWith('turn:'), turnEnded: false, fp: null, lastOther: 0, net: undefined, hints: [], changeSeen: [], atChange: null, besideExit: null, overlap: null, attr: null, notCredited: undefined };
       live.set(key, g);
       unsealed.set(g.id, g);
       all.push(g);
@@ -537,6 +555,8 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null }) {
       if (g.atChange === null) {
         g.atChange = runningAt(seen).map((c) => c.key.slice('command:'.length));
         // A1c: the commands that exited within one quiet window before it, for an unexplained change's `not_credited`.
+        // A2: the other sessions sharing this folder that were active when the change was first seen.
+        g.overlap = others && root !== null ? concurrent(others, root, seen).filter((s) => s !== sessionId) : [];
         g.besideExit = [...unsealed.values()].filter((c) => c.isCommand && !c.lost && c.exitAt !== null && c.exitAt < seen && seen - c.exitAt <= quiet).map((c) => ({ ref: c.key.slice('command:'.length), gap: seen - c.exitAt }));
       }
     }

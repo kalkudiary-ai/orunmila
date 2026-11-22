@@ -136,4 +136,192 @@ it('plan: the CLI adds, queues, answers and reports next, exit 2 on a usage erro
   }
 });
 
+// --- T2: the guard ------------------------------------------------------------
+
+const guard = require('../scripts/turbo/guard');
+
+/** A throwaway layout: base/dev (the worktree), base/live (the live copy), base/scr (scratch). */
+function guardCtx() {
+  const base = fs.realpathSync(tmpDir());
+  const root = path.join(base, 'dev');
+  const live = path.join(base, 'live');
+  for (const d of [root, live, path.join(base, 'scr'), path.join(root, 'scripts', 'turbo'), path.join(root, 'src')]) fs.mkdirSync(d, { recursive: true });
+  fs.writeFileSync(path.join(live, 'CLAUDE.md'), 'rules\n');
+  fs.symlinkSync(path.join(live, 'CLAUDE.md'), path.join(root, 'CLAUDE.md'));
+  return { base, ctx: { root, live, home: path.join(root, '.turbo'), scratch: [path.join(base, 'scr')], self: path.join(root, 'scripts', 'turbo') } };
+}
+
+const bash = (command) => ({ tool_name: 'Bash', tool_input: { command } });
+const write = (file_path) => ({ tool_name: 'Write', tool_input: { file_path, content: 'x' } });
+
+function expectGuard(ctx, payload, kind) {
+  const d = guard.decide({ cwd: ctx.root, ...payload }, ctx);
+  const what = JSON.stringify(payload.tool_input);
+  if (kind === 'allow') assert.ok(d.allow, `${what} refused: ${d.kind} ${d.reason}`);
+  else {
+    assert.ok(!d.allow, `${what} allowed, wanted ${kind}`);
+    assert.strictEqual(d.kind, kind, `${what}: ${d.reason}`);
+  }
+}
+
+it('guard: the commands a slice needs are allowed', () => {
+  const { base, ctx } = guardCtx();
+  try {
+    for (const c of [
+      'npm test > out.txt',
+      'npm run lint',
+      `cd ${ctx.root} && npm run coverage > c.txt 2>&1`,
+      'node scripts/leopard-check.js --session s --pending --test "node test/a.js"',
+      'git status --short',
+      'git add src/a.js test/a.js',
+      'git commit -q -F .turbo/msg.txt',
+      'git commit -m "$(cat <<\'EOF\'\nfix: never git push here\nEOF\n)"',
+      'git show --stat HEAD',
+      'git diff --cached --name-only',
+      'git restore --staged src/a.js',
+      'git reset -q HEAD src/a.js',
+      'export GIT_INDEX_FILE=/tmp/i && git read-tree output-1 && git update-ref refs/heads/output-1 abc def',
+      'python3 -I review/witness-join.py --session s --trail trail.json',
+      `rm -rf ${path.join(base, 'scr', 'x')}`,
+      'rm src/old.js',
+      `echo hi > ${path.join(base, 'scr', 'o.txt')}`,
+      'ps -axo pid,args',
+      'sed -n 1,40p src/a.js',
+    ])
+      expectGuard(ctx, bash(c), 'allow');
+  } finally {
+    rmrf(base);
+  }
+});
+
+it('guard: hard stops are refused, each with its kind', () => {
+  const { base, ctx } = guardCtx();
+  try {
+    const cases = [
+      ['git push origin n10-redo', 'push'],
+      ['git -C . push', 'push'],
+      ['git merge output-1', 'merge'],
+      ['git pull', 'merge'],
+      ['git switch main', 'branch-switch'],
+      ['git checkout -- src/a.js', 'branch-switch'],
+      ['git symbolic-ref HEAD refs/heads/main', 'branch-switch'],
+      ['git update-ref refs/heads/main abc', 'merge'],
+      ['git reset --hard HEAD~1', 'destructive'],
+      ['git reset HEAD~1', 'destructive'],
+      ['git stash push -m x', 'destructive'],
+      ['git clean -fd', 'destructive'],
+      ['git branch -D old', 'destructive'],
+      ['git commit --amend -m x', 'destructive'],
+      ['git restore src/a.js', 'destructive'],
+      ['git worktree remove ../x', 'destructive'],
+      ['git config core.hooksPath /dev/null', 'hook-settings'],
+      ['npm publish', 'publish'],
+      ['npm version patch', 'publish'],
+      ['npm install left-pad', 'network'],
+      ['sudo ls', 'admin'],
+      ['curl https://example.com', 'network'],
+      ['gh pr merge 9', 'outward'],
+      ['rm -rf src', 'destructive'],
+      ['pkill -f turbo', 'destructive'],
+      ['cat .env', 'secret'],
+      ['printenv', 'secret'],
+      ['env', 'secret'],
+      ['grep -r foo src', 'no-grep'],
+      ['git grep foo', 'no-grep'],
+      ['rg foo', 'no-grep'],
+      [`cat ${path.join(ctx.live, 'CLAUDE.md')}`, 'live-copy'],
+      ['echo x > CLAUDE.md', 'live-copy'],
+      ['cp a.js ../live/src/a.js', 'live-copy'],
+      ['echo x > scripts/turbo/guard.js', 'self-edit'],
+      ['echo "unclosed', 'unparsed'],
+    ];
+    for (const [c, kind] of cases) expectGuard(ctx, bash(c), kind);
+  } finally {
+    rmrf(base);
+  }
+});
+
+it('guard: a hard stop hidden in a wrapper, a substitution or a later step is still found', () => {
+  const { base, ctx } = guardCtx();
+  try {
+    for (const c of [
+      'bash -c "git push"',
+      "sh -c 'cd /x && git push origin main'",
+      'eval git push',
+      'echo $(git push)',
+      'echo `git push`',
+      'npm test && git push',
+      'npm test; git push',
+      'true | git push',
+      '(git push)',
+      'FOO=1 git push',
+      'env FOO=1 git push',
+      'nohup git push',
+      'timeout 10 git push',
+      'xargs -n1 git push < refs.txt',
+      'command git push',
+      'bash <<EOF\ngit push\nEOF',
+    ])
+      expectGuard(ctx, bash(c), 'push');
+  } finally {
+    rmrf(base);
+  }
+});
+
+it('guard: file tools may write in the worktree, TURBO_HOME and scratch, and nowhere else', () => {
+  const { base, ctx } = guardCtx();
+  try {
+    expectGuard(ctx, write(path.join(ctx.root, 'src', 'a.js')), 'allow');
+    expectGuard(ctx, write(path.join(ctx.root, 'src', 'new', 'deep', 'b.js')), 'allow');
+    expectGuard(ctx, write(path.join(ctx.home, 'msg.txt')), 'allow');
+    expectGuard(ctx, write(path.join(base, 'scr', 'x.md')), 'allow');
+    expectGuard(ctx, { tool_name: 'Edit', tool_input: { file_path: path.join(ctx.root, 'CLAUDE.md') } }, 'live-copy');
+    expectGuard(ctx, write(path.join(ctx.live, 'src', 'a.js')), 'live-copy');
+    expectGuard(ctx, write(path.join(ctx.root, 'scripts', 'turbo', 'guard.js')), 'self-edit');
+    expectGuard(ctx, write(path.join(ctx.root, '.claude', 'settings.local.json')), 'hook-settings');
+    expectGuard(ctx, write(path.join(ctx.root, '.git', 'config')), 'destructive');
+    expectGuard(ctx, write(path.join(base, 'elsewhere.txt')), 'outside-tree');
+    expectGuard(ctx, { tool_name: 'MultiEdit', tool_input: { file_path: '/etc/hosts' } }, 'outside-tree');
+    expectGuard(ctx, { tool_name: 'NotebookEdit', tool_input: { notebook_path: path.join(ctx.live, 'n.ipynb') } }, 'live-copy');
+  } finally {
+    rmrf(base);
+  }
+});
+
+it('guard: reads are allowed except secrets; grep tools and the network are refused', () => {
+  const { base, ctx } = guardCtx();
+  try {
+    expectGuard(ctx, { tool_name: 'Read', tool_input: { file_path: path.join(ctx.live, 'CLAUDE.md') } }, 'allow');
+    expectGuard(ctx, { tool_name: 'Read', tool_input: { file_path: path.join(ctx.root, '.env') } }, 'secret');
+    expectGuard(ctx, { tool_name: 'Read', tool_input: { file_path: path.join(ctx.root, '.env.local') } }, 'secret');
+    expectGuard(ctx, { tool_name: 'Read', tool_input: { file_path: path.join(ctx.root, '.env.example') } }, 'allow');
+    expectGuard(ctx, { tool_name: 'Read', tool_input: { file_path: path.join(ctx.root, '.npmrc') } }, 'secret');
+    expectGuard(ctx, { tool_name: 'Grep', tool_input: { pattern: 'x' } }, 'no-grep');
+    expectGuard(ctx, { tool_name: 'Glob', tool_input: { pattern: '**/*.js' } }, 'no-grep');
+    expectGuard(ctx, { tool_name: 'WebFetch', tool_input: { url: 'https://x' } }, 'network');
+    expectGuard(ctx, { tool_name: 'WebSearch', tool_input: { query: 'x' } }, 'network');
+    expectGuard(ctx, { tool_name: 'Agent', tool_input: { prompt: 'x' } }, 'allow');
+  } finally {
+    rmrf(base);
+  }
+});
+
+it('guard: the hook refuses with exit 2 and a reason on stderr, allows with exit 0, and fails closed on bad input', () => {
+  const { run } = require('./helpers');
+  const { base, ctx } = guardCtx();
+  try {
+    const env = { TURBO_ROOT: ctx.root, TURBO_LIVE: ctx.live, TURBO_HOME: ctx.home, TURBO_SCRATCH: ctx.scratch.join(path.delimiter) };
+    const hook = (payload) => run('scripts/turbo/guard.js', { input: typeof payload === 'string' ? payload : JSON.stringify({ cwd: ctx.root, ...payload }), env });
+    const no = hook(bash('git push'));
+    assert.strictEqual(no.status, 2, no.stderr);
+    assert.ok(no.stderr.includes('push'), no.stderr);
+    assert.ok(no.stderr.includes('plan.js queue'), 'tells the session how to queue it');
+    assert.strictEqual(hook(bash('npm test')).status, 0);
+    assert.strictEqual(hook('not json').status, 2);
+    assert.strictEqual(hook({ tool_name: 'Bash', tool_input: {} }).status, 2, 'a Bash call with no command fails closed');
+  } finally {
+    rmrf(base);
+  }
+});
+
 runAll('turbo');

@@ -1160,6 +1160,19 @@ const MUTANTS = [
   { id: 'B1e-8 a socket path left by a crash blocks the start', file: 'src/opon/intake/server.js', test: 'test/intake-server.js',
     from: 'fs.rmSync(p.sock, { force: true });\n      const resumed', to: 'const resumed',
     fails: ['B1e: a stale lock (a dead pid)', 'test 83 (socket form)'] },
+  // Slice B1f: the lock race (LD136). The whole-file placement itself and the
+  // takeover's same-pid recheck are timing races: only the silence tests (eight
+  // starters, twelve key readers) can see them, and not every run, so they have
+  // no mutant here.
+  { id: 'B1f-1 a lock with no pid is taken as dead', file: 'src/opon/intake/server.js', test: 'test/intake-server.js',
+    from: 'if (pid === null) return {', to: 'if (false) return {',
+    fails: ['B1f: a lock with no pid in it'] },
+  { id: 'B1f-2 the takeover lock is not taken', file: 'src/opon/intake/server.js', test: 'test/intake-server.js',
+    from: 'if (!placeWhole(p.takeover, mine)) {', to: 'if (false) {',
+    fails: ["B1f: a dead pid's lock is not taken while another starter holds the takeover lock"] },
+  { id: "B1f-3 a dead takeover holder's lock is cleared", file: 'src/opon/intake/server.js', test: 'test/intake-server.js',
+    from: "return { ok: false, code: 'error', reason: `${p.takeover} is left by", to: "fs.rmSync(p.takeover, { force: true }); return null; void { ok: false, code: 'error', reason: `${p.takeover} is left by",
+    fails: ["B1f: a dead pid's lock is not taken while another starter holds the takeover lock"] },
   // Slice LC1 (LD135): leopard-check windows by shared files.
   { id: 'LC1-1 every earlier Slice commit is a boundary', file: 'scripts/leopard-check.js', test: 'test/leopard-check.js',
     from: 'const sharing = earlier.filter((p) => p.files.some((f) => files.includes(f)));', to: 'const sharing = earlier;',

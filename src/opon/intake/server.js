@@ -7,17 +7,19 @@
  * only thing that writes session logs. Command hooks reach it through a small
  * sender (slice B2); HTTP hooks with pid pinning are a later slice.
  *
- *   intakePaths(home)   { dir, sock, lock, key, errors, held, out } under <home>/intake
+ *   intakePaths(home)   { dir, sock, lock, takeover, key, errors, held, out } under <home>/intake
  *   readInstallKey(home) the install's key for keyed `.env` fingerprints (line
  *                       249): 32 random bytes in <home>/intake/install.key, 0600,
- *                       made once; a key of any other length is refused, never
- *                       replaced (fingerprints would stop comparing)
+ *                       made once and placed whole (B1f); a key of any other
+ *                       length is refused, never replaced (fingerprints would
+ *                       stop comparing)
  *   statusOf(sock, ms)  the running intake's status, or null when none answers
  *   createServer({ home, router, pollMs = 100, statusTimeoutMs = 1000,
  *                  maxLine = 32 MiB })
  *     .start()  -> { ok: true, squat, resumed, sock } or { ok: false, code, reason }
- *               In order: the lock (<home>/intake/intake.lock holds the pid; a
- *               live pid refuses, code `running`; a dead one is taken); the
+ *               In order: the lock (<home>/intake/intake.lock holds the pid,
+ *               placed whole; a live pid refuses, code `running`; a dead one is
+ *               taken under the takeover lock; no pid refuses, code `error`); the
  *               socket (an intake already answering refuses; any other listener
  *               is a squat (test 83): written to the error log, the path removed
  *               and the address taken back; a path nobody listens on is removed
@@ -49,6 +51,7 @@ function intakePaths(home) {
     dir,
     sock: path.join(dir, 'intake.sock'),
     lock: path.join(dir, 'intake.lock'),
+    takeover: path.join(dir, 'intake.lock.takeover'),
     key: path.join(dir, 'install.key'),
     errors: path.join(dir, 'errors.jsonl'),
     held: path.join(dir, 'held.json'),
@@ -59,6 +62,33 @@ function intakePaths(home) {
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   fs.chmodSync(dir, 0o700);
+}
+
+/**
+ * Put `content` at `target` whole, or not at all (B1f, LD136): written to a temp
+ * file beside it, then hard-linked into place, which fails with EEXIST when the
+ * target exists. A reader never sees the target empty or half written, so an
+ * empty lock or key is never "a writer in progress"; it is damage, for a person.
+ * Returns true when placed, false when the target already existed.
+ */
+function placeWhole(target, content) {
+  const tmp = `${target}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
+  const fd = fs.openSync(tmp, 'wx', 0o600);
+  try {
+    fs.writeSync(fd, content);
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+  try {
+    fs.linkSync(tmp, target);
+    return true;
+  } catch (e) {
+    if (e.code === 'EEXIST') return false;
+    throw e;
+  } finally {
+    fs.rmSync(tmp, { force: true });
+  }
 }
 
 function readInstallKey(home) {
@@ -72,18 +102,21 @@ function readInstallKey(home) {
     } catch (e) {
       if (e.code !== 'ENOENT') throw e;
     }
-    try {
-      const fd = fs.openSync(p.key, 'wx', 0o600);
-      try {
-        fs.writeSync(fd, crypto.randomBytes(KEY_BYTES));
-      } finally {
-        fs.closeSync(fd);
-      }
-    } catch (e) {
-      if (e.code !== 'EEXIST') throw e; // made by another process meanwhile: read it
-    }
+    placeWhole(p.key, crypto.randomBytes(KEY_BYTES)); // false: made by another process meanwhile, read it
   }
   return fs.readFileSync(p.key);
+}
+
+/** The pid a lock file names, `null` when it names none, `undefined` when the file is gone. */
+function lockPid(file) {
+  let text;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch (e) {
+    if (e.code === 'ENOENT') return undefined;
+    throw e;
+  }
+  return /^[1-9][0-9]*\n$/.test(text) ? Number(text.slice(0, -1)) : null;
 }
 
 /** Who listens on `sock`: { listening, status } (status: the intake's answer, or null). */
@@ -144,37 +177,54 @@ function createServer({ home, router, pollMs = 100, statusTimeoutMs = 1000, maxL
   let lockHeld = false;
   const conns = new Set();
 
+  // The lock (B1f, LD136). It is placed whole, so it always names its holder. A
+  // dead holder's lock is removed only by the starter holding the takeover lock
+  // (<lock>.takeover, placed the same way), and only if it still names that same
+  // dead pid; without that, two starters that both read the dead pid could each
+  // remove the other's fresh lock, and two intakes would run (seen in a probe:
+  // 1 round of 8). A lock or takeover lock that names no pid, or a takeover lock
+  // whose holder died, is never cleared here: the start refuses and a person
+  // removes it. That costs a manual step after a rare crash; it never costs two
+  // intakes.
+  const mine = `${process.pid}\n`;
   function acquire() {
-    for (let i = 0; i < 2; i++) {
-      try {
-        const fd = fs.openSync(p.lock, 'wx', 0o600);
-        try {
-          fs.writeSync(fd, `${process.pid}\n`);
-        } finally {
-          fs.closeSync(fd);
-        }
+    for (let i = 0; i < 5; i++) {
+      if (placeWhole(p.lock, mine)) {
         lockHeld = true;
         return { ok: true };
-      } catch (e) {
-        if (e.code !== 'EEXIST') throw e;
       }
-      const pid = parseInt(fs.readFileSync(p.lock, 'utf8'), 10);
+      const pid = lockPid(p.lock);
+      if (pid === undefined) continue; // removed meanwhile: try again
+      if (pid === null) return { ok: false, code: 'error', reason: `${p.lock} holds no pid, so its holder is unknown; it is never taken as dead: remove it by hand if no intake runs` };
       if (alive(pid)) {
         return { ok: false, code: 'running', reason: `another intake holds ${p.lock} (pid ${pid}); if that pid is not an intake (a reused pid), remove the lock by hand` };
       }
-      fs.rmSync(p.lock, { force: true }); // a dead holder's lock: taken
+      const t = takeOver(pid);
+      if (t) return t;
     }
     return { ok: false, code: 'error', reason: `${p.lock} could not be taken` };
+  }
+
+  /** Remove a dead holder's lock under the takeover lock; a refusal, or null to try again. */
+  function takeOver(deadPid) {
+    if (!placeWhole(p.takeover, mine)) {
+      const holder = lockPid(p.takeover);
+      if (holder === undefined) return null;
+      if (holder !== null && alive(holder)) return { ok: false, code: 'running', reason: `another starter (pid ${holder}) is taking over a dead intake's lock (${p.takeover})` };
+      return { ok: false, code: 'error', reason: `${p.takeover} is left by a starter that died taking over a dead intake's lock (or names no pid); remove it by hand if no intake runs` };
+    }
+    try {
+      if (lockPid(p.lock) === deadPid) fs.rmSync(p.lock, { force: true });
+    } finally {
+      fs.rmSync(p.takeover, { force: true });
+    }
+    return null;
   }
 
   function releaseLock() {
     if (!lockHeld) return;
     lockHeld = false;
-    try {
-      if (parseInt(fs.readFileSync(p.lock, 'utf8'), 10) === process.pid) fs.rmSync(p.lock, { force: true });
-    } catch {
-      /* already gone */
-    }
+    if (lockPid(p.lock) === process.pid) fs.rmSync(p.lock, { force: true });
   }
 
   const status = () => ({ intake: 'orunmila', pid: process.pid, started_at: startedAt, held: router.held(), socket: p.sock });

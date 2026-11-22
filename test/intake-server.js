@@ -214,4 +214,124 @@ it(
   }),
 );
 
+// B1f (LD136): the lock and the install key are placed whole, a dead pid's lock is
+// taken only under the takeover lock, and a lock with no pid in it is never dead.
+
+it(
+  'B1f: a lock with no pid in it (empty, or not a number) is never taken as dead: the start refuses and the lock is untouched',
+  withHome(async ({ serve, p }) => {
+    fs.mkdirSync(path.dirname(p.lock), { recursive: true, mode: 0o700 });
+    for (const text of ['', 'not a pid\n']) {
+      fs.writeFileSync(p.lock, text);
+      const r = await serve().start();
+      assert.strictEqual(r.ok, false, `a lock holding ${JSON.stringify(text)} was taken: ${JSON.stringify(r)}`);
+      assert.strictEqual(r.code, 'error');
+      assert.ok(r.reason.includes(p.lock) && r.reason.includes('no pid'), r.reason);
+      assert.strictEqual(fs.readFileSync(p.lock, 'utf8'), text, 'the lock is left as it was');
+      assert.ok(!fs.existsSync(p.sock), 'nothing listens');
+    }
+  }),
+);
+
+it(
+  "B1f: a dead pid's lock is not taken while another starter holds the takeover lock; a dead takeover holder is refused, never cleared",
+  withHome(async ({ serve, p }) => {
+    fs.mkdirSync(path.dirname(p.lock), { recursive: true, mode: 0o700 });
+    const takeover = `${p.lock}.takeover`;
+    fs.writeFileSync(p.lock, '999999999\n');
+    fs.writeFileSync(takeover, `${process.pid}\n`); // a live starter, mid-takeover
+    const r = await serve().start();
+    assert.strictEqual(r.ok, false, `taken under another's takeover: ${JSON.stringify(r)}`);
+    assert.strictEqual(r.code, 'running');
+    assert.ok(r.reason.includes(takeover), r.reason);
+    assert.strictEqual(fs.readFileSync(p.lock, 'utf8'), '999999999\n', 'the dead lock is left for the takeover holder');
+    fs.writeFileSync(takeover, '999999998\n'); // a starter that died mid-takeover
+    const r2 = await serve().start();
+    assert.strictEqual(r2.ok, false, JSON.stringify(r2));
+    assert.strictEqual(r2.code, 'error');
+    assert.ok(r2.reason.includes(takeover) && r2.reason.includes('by hand'), r2.reason);
+    assert.ok(fs.existsSync(takeover), 'a dead takeover lock is not cleared by the next starter');
+    fs.rmSync(takeover);
+    const r3 = await serve().start();
+    assert.strictEqual(r3.ok, true, JSON.stringify(r3));
+    assert.strictEqual(fs.readFileSync(p.lock, 'utf8'), `${process.pid}\n`);
+    assert.ok(!fs.existsSync(takeover), 'the takeover lock is released after a takeover');
+  }),
+);
+
+/** Start `n` children at once on one home; resolve when all but one exited (or ms passed). */
+function startMany(n, argv, env, ms = 6000) {
+  const { spawn } = require('child_process');
+  return new Promise((resolve) => {
+    const kids = [];
+    for (let i = 0; i < n; i++) {
+      const c = spawn(process.execPath, argv, { env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
+      const k = { c, out: '', code: undefined };
+      c.stdout.on('data', (d) => (k.out += d));
+      c.stderr.on('data', (d) => (k.out += d));
+      c.on('exit', (code) => {
+        k.code = code;
+        check();
+      });
+      kids.push(k);
+    }
+    const timer = setTimeout(() => done(), ms);
+    let finished = false;
+    function check() {
+      if (kids.filter((k) => k.code === undefined).length <= 1) setTimeout(done, 300); // a second survivor would show by then
+    }
+    function done() {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      resolve(kids);
+    }
+  });
+}
+
+it(
+  "B1f (silence): eight intakes started at once on one home holding a dead pid's lock, three times: exactly one runs, the rest refuse (exit 3), none crashes",
+  withHome(async ({ home, p }) => {
+    const bin = path.join(__dirname, '..', 'bin', 'orunmila.js');
+    for (let round = 0; round < 3; round++) {
+      fs.mkdirSync(path.dirname(p.lock), { recursive: true, mode: 0o700 });
+      fs.writeFileSync(p.lock, '999999999\n');
+      fs.rmSync(p.key, { force: true }); // each round races to make the install key too
+      const kids = await startMany(8, [bin, 'intake', 'run'], { ORUNMILA_HOME: home });
+      const alive = kids.filter((k) => k.code === undefined);
+      try {
+        assert.strictEqual(alive.length, 1, `round ${round}: ${alive.length} intakes running; exits ${JSON.stringify(kids.map((k) => k.code))}`);
+        const others = kids.filter((k) => k.code !== undefined);
+        assert.deepStrictEqual(others.map((k) => k.code), Array(7).fill(3), `round ${round}: ${others.filter((k) => k.code !== 3).map((k) => k.out.slice(0, 300)).join(' | ')}`);
+        const st = await statusOf(p.sock);
+        assert.strictEqual(st && st.pid, alive[0].c.pid, 'the one running intake is the one answering');
+      } finally {
+        for (const k of kids) if (k.code === undefined) k.c.kill('SIGTERM');
+        await until(() => kids.every((k) => k.code !== undefined), 5000);
+        for (const k of kids) if (k.code === undefined) k.c.kill('SIGKILL');
+      }
+    }
+  }),
+);
+
+it('B1f (silence): twelve processes reading the install key at once, three times, all get the same 32 bytes and none fails', async () => {
+  const base = tmpDir();
+  try {
+    const home = path.join(base, 'h');
+    const server = path.join(__dirname, '..', 'src', 'opon', 'intake', 'server.js');
+    const code = `try { process.stdout.write(require(${JSON.stringify(server)}).readInstallKey(process.env.H).toString('hex')) } catch (e) { process.stdout.write('ERR ' + e.message); process.exitCode = 9 }`;
+    for (let round = 0; round < 3; round++) {
+      rmrf(home);
+      const kids = await startMany(12, ['-e', code], { H: home }, 8000);
+      await until(() => kids.every((k) => k.code !== undefined), 5000);
+      assert.deepStrictEqual(kids.map((k) => k.code), Array(12).fill(0), `round ${round}: ${kids.filter((k) => k.code !== 0).map((k) => k.out).join(' | ')}`);
+      const keys = new Set(kids.map((k) => k.out));
+      assert.strictEqual(keys.size, 1, `round ${round}: ${keys.size} different keys`);
+      assert.strictEqual([...keys][0].length, 64);
+    }
+  } finally {
+    rmrf(base);
+  }
+});
+
 runAll('intake-server');

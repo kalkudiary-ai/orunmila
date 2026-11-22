@@ -13,8 +13,11 @@
  *     openLog(sessionId)  the session's log ({ append }), opened on its first mark
  *     clock()             { mono: '<decimal ns>', wall: '<ISO time>' }, the intake's
  *                         own time of arrival
- *   intake.receive(mark, { channel, pid })
- *                         routes the mark to its session's log, by its
+ *   intake.receive(mark, { channel, pid }, files = [])
+ *                         `files` are the files kept with the mark (an
+ *                         adapter's keep list, [{ slot, text }]), passed to the
+ *                         log's append with it (LD59, LD124).
+ *                         Routes the mark to its session's log, by its
  *                         session_id; a mark with no mono_ns is stamped with the
  *                         arrival time and says so (detail.stamped_by, line 238).
  *                         Glove marks (source hook or agent_claim) carry
@@ -44,6 +47,12 @@
  *   intake.stop(reason)   a planned stop: a closing note in each session not
  *                         yet ended, then nothing more (LD56); returns
  *                         { notes: [{ id, seq }], failed: [{ id, reason }] }
+ *   intake.release(id, reason)
+ *                         stops holding one session (LD123): the same closing
+ *                         note in it, then no tick; the next mark for it opens
+ *                         its log again through openLog. Returns the log's
+ *                         answer, or { ok: false, reason } when it is not held
+ *   intake.held()         the ids of the sessions held, sorted
  *
  * Silence is measured on the intake's clock from the last mark written to the
  * session (a tick included), not from a source's own mono_ns. The caller's mark
@@ -62,8 +71,8 @@ function createIntake({ openLog, clock, checkSender, tickMs = TICK_MS }) {
   const quiet = BigInt(tickMs) * NS_PER_MS;
   let stopped = false;
 
-  function write(s, m, now) {
-    const r = s.log.append(m);
+  function write(s, m, now, files = []) {
+    const r = s.log.append(m, files);
     if (r.ok) s.last = BigInt(now.mono);
     return r;
   }
@@ -101,7 +110,7 @@ function createIntake({ openLog, clock, checkSender, tickMs = TICK_MS }) {
     };
   }
 
-  function receive(input, from = {}) {
+  function receive(input, from = {}, files = []) {
     if (stopped) return { ok: false, reason: 'intake has stopped: nothing more is written until it restarts, and the restart gap covers this mark' };
     const m = JSON.parse(JSON.stringify(input));
     const id = m && m.session_id;
@@ -109,7 +118,9 @@ function createIntake({ openLog, clock, checkSender, tickMs = TICK_MS }) {
     const now = clock();
     let s = sessions.get(id);
     if (!s) {
-      s = { log: openLog(id), last: BigInt(now.mono), pin: null };
+      const log = openLog(id);
+      // A log held again after a release keeps its pin, from the record (LD58, LD123).
+      s = { log, last: BigInt(now.mono), pin: typeof log.pin === 'function' ? log.pin() : null, ended: typeof log.ended === 'function' && log.ended() };
       sessions.set(id, s);
     }
     const glove = GLOVE_SOURCES.includes(m.source);
@@ -135,10 +146,39 @@ function createIntake({ openLog, clock, checkSender, tickMs = TICK_MS }) {
       m.mono_ns = now.mono;
       if (isObject(m.detail)) m.detail = { ...m.detail, stamped_by: 'intake' };
     }
-    const r = write(s, m, now);
+    const r = write(s, m, now, files);
     if (r.ok && m.says === 'ended' && isObject(m.target) && m.target.kind === 'session') s.ended = true;
     return r;
   }
+
+  /** The intake's closing note in one session (LD56, LD123): an exited mark on the intake process. */
+  function note(id, reason, now) {
+    return {
+      schema_version: 1,
+      session_id: id,
+      source: 'process',
+      agent: null,
+      turn: null,
+      sub_agent: null,
+      observed_at: now.wall,
+      mono_ns: now.mono,
+      target: { kind: 'process', name: 'intake' },
+      says: 'exited',
+      detail: { exit_status: 'pass', reason: String(reason) },
+      cause_hint: null,
+    };
+  }
+
+  function release(id, reason) {
+    const s = sessions.get(id);
+    if (!s) return { ok: false, reason: `session ${id} is not held` };
+    const now = clock();
+    const r = s.ended ? { ok: true, seq: null } : write(s, note(id, reason, now), now);
+    sessions.delete(id);
+    return r;
+  }
+
+  const held = () => [...sessions.keys()].sort();
 
   function poll() {
     if (stopped) return 0;
@@ -224,28 +264,14 @@ function createIntake({ openLog, clock, checkSender, tickMs = TICK_MS }) {
     const now = clock();
     for (const [id, s] of sessions) {
       if (s.ended) continue;
-      const note = {
-        schema_version: 1,
-        session_id: id,
-        source: 'process',
-        agent: null,
-        turn: null,
-        sub_agent: null,
-        observed_at: now.wall,
-        mono_ns: now.mono,
-        target: { kind: 'process', name: 'intake' },
-        says: 'exited',
-        detail: { exit_status: 'pass', reason: String(reason) },
-        cause_hint: null,
-      };
-      const r = write(s, note, now);
+      const r = write(s, note(id, reason, now), now);
       if (r.ok) out.notes.push({ id, seq: r.seq });
       else out.failed.push({ id, reason: (r.reasons || [r.reason]).join('; ') });
     }
     return out;
   }
 
-  return { receive, poll, resume, stop };
+  return { receive, poll, resume, stop, release, held };
 }
 
 module.exports = { createIntake, TICK_MS };

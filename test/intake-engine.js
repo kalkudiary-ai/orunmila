@@ -487,4 +487,33 @@ it('LD58: an intake built without a sender check throws, so the wiring cannot fo
   assert.throws(() => createIntake({ openLog: noNewLog, clock: fakeClock() }), /checkSender/);
 });
 
+it(
+  'LD124: files kept with a mark reach the log with it: the slot names the kept file, and the log verifies',
+  withIntake(({ intake, dir }) => {
+    const m = mark('hook_exited_fail');
+    delete m.detail.output_ref;
+    const r = intake.receive(m, {}, [{ slot: 'output_ref', text: 'whole output\n'.repeat(300) }]);
+    assert.strictEqual(r.ok, true, JSON.stringify(r));
+    const written = rawLines(dir(SID)).find((x) => x.seq === r.seq);
+    assert.match(written.detail.output_ref, /^sha256:[0-9a-f]{64}$/);
+    assert.ok(fs.existsSync(path.join(dir(SID), 'files', written.detail.output_ref.slice(7))));
+    assert.strictEqual(verifySessionLog(dir(SID)).ok, true);
+  }),
+);
+
+it(
+  'LD123: release writes one closing note, then the session gets no tick and is no longer held',
+  withIntake(({ intake, clock, dir }) => {
+    assert.strictEqual(intake.receive(mark('hook_started')).ok, true);
+    const r = intake.release(SID, 'released: no payload for 30 minutes');
+    assert.strictEqual(r.ok, true, JSON.stringify(r));
+    const note = rawLines(dir(SID)).find((x) => x.seq === r.seq);
+    assert.deepStrictEqual([note.source, note.says, note.target, note.detail], ['process', 'exited', { kind: 'process', name: 'intake' }, { exit_status: 'pass', reason: 'released: no payload for 30 minutes' }]);
+    clock.advance(5000);
+    assert.strictEqual(intake.poll(), 0, 'a released session is not ticked');
+    assert.deepStrictEqual(intake.release(SID, 'again'), { ok: false, reason: `session ${SID} is not held` });
+    assert.deepStrictEqual(intake.held(), []);
+  }),
+);
+
 runAll('intake-engine');

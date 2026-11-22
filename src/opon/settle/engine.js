@@ -383,8 +383,8 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     return out;
   }
 
-  /** Line 352 (C3c): the Glove was healthy up to `at`: no capture gap covering it, its hook settings unchanged, every turn ended. */
-  const gloveHealthy = (at) => !hooksChanged && !gaps.some((x) => (x.who === 'both' || x.who === 'glove') && x.from <= at) && [...turnsSeen].every((t) => turnsEnded.has(t));
+  /** Line 352 (C3c, C3c2): the Glove was healthy up to `at`: no capture gap covering it, its hook settings unchanged, every turn begun by `by` ended. */
+  const gloveHealthy = (at, by) => !hooksChanged && !gaps.some((x) => (x.who === 'both' || x.who === 'glove') && x.from <= at) && [...turnsSeen].every((t) => turnsEnded.has(t) || turnStart.get(t) > by);
   /** C3c (LD191): a run's status as the gate from marks reads it (receipts.js); a pass through an unguarded pipe is unknown (line 433). */
   const piped = (r) => r.outcome !== null && r.outcome.status === 'pass' && hasUnguardedPipe(r.text);
   const runStatus = (r) => (r.outcome === null || piped(r) || !['pass', 'fail'].includes(r.outcome.status) ? 'unknown' : r.outcome.status);
@@ -433,7 +433,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
           for (const r of runs) if (runStatus(r) !== 'unknown') backed = runStatus(r) === 'pass';
           if (backed !== true) {
             const why = !runs.length ? 'no_command' : backed === false ? 'failed' : 'unknown';
-            const confidence = why !== 'unknown' && gloveHealthy(g.sealedAt) ? 'high' : 'low';
+            const confidence = why !== 'unknown' && gloveHealthy(g.sealedAt, g.last) ? 'high' : 'low';
             const cited = runs.map((r) => ({ ref: r.ref, text: r.text, status: runStatus(r), ...(r.outcome && Number.isInteger(r.outcome.exit_code) ? { exit_code: r.outcome.exit_code } : {}), ...(piped(r) ? { piped: true } : {}) }));
             out.push(claimRecord(g, at, c, runs.flatMap((r) => r.rows), confidence, (cg) => [conflictOf(cg, 'phantom_claim', cg.sources, { claim: 'command', phrases: [...c.commands], hedged: c.hedged, why, runs: cited })]));
           }

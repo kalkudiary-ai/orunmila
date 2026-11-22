@@ -288,6 +288,17 @@ it('C3c line 352: a turn of the agent\'s that never ended, or a change to its ho
   assert.deepStrictEqual([witnesses(b), b.confidence], [['saw', 'out_of_scope'], 'low']);
 });
 
+it('C3c2: the next turn starting before a turn\'s group seals (a quick prompt, a continuation) does not lower that turn\'s phantom claim: only turns begun by its end count', () => {
+  const odus = replay((append) => {
+    append(claimed(1000, 't1', 'All tests pass.'));
+    append(M.turnEnded(1000));
+    append(M.prompted(2000, 't2')); // t1's group seals at 5,500 ms, t2 is still running then
+    append(M.tick(9000));
+  });
+  const [o] = claimOdus(odus, 't1');
+  assert.deepStrictEqual([witnesses(o), o.confidence, o.conflicts.map((c) => c.why)], [['saw', 'out_of_scope'], 'high', ['no_command']]);
+});
+
 it('C3c: the schema asks a phantom_claim for its claim kind, phrases, hedged, why and runs; its why is no_command, failed or unknown', () => {
   const odus = replay((append) => {
     append(claimed(0, 't1', 'All tests pass.'));

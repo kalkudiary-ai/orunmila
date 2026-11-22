@@ -466,7 +466,7 @@
             "minLength": 1
           },
           "why": {
-            "description": "For outcome_missing: interrupted or denied only when the agent's own hook payload says so; gap only when a capture gap mark covers the call from its start until it stopped waiting; null otherwise, since the record does not guess why. For a command phantom_claim: no_command (no matching run in the claim's turn), failed (the last matching run that settled failed) or unknown (no matching run settled: a pipe, or an unknown status). For a file phantom_claim: no_event (no change on a matching path), unchanged (every change of the claim's turn on it has a net change of false) or not_credited (a change on it in the turn's time that was not credited to this session).",
+            "description": "For outcome_missing: interrupted or denied only when the agent's own hook payload says so; gap only when a capture gap mark overlaps the call's wait, from its start until it stopped waiting; null otherwise, since the record does not guess why. For a command phantom_claim: no_command (no matching run in the claim's turn), failed (the last matching run that settled failed) or unknown (no matching run settled: a pipe, or an unknown status). For a file phantom_claim: no_event (no change on a matching path), unchanged (every change of the claim's turn on it has a net change of false) or not_credited (a change on it in the turn's time that was not credited to this session).",
             "$comment": "brief v4 lines 406, 432, 433, 439; the field is the agent's proposal (LD189, Q14; LD191 and LD192, Q15). No adapter records a denial today, so `denied` is not yet written",
             "enum": [
               "interrupted",

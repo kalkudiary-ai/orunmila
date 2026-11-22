@@ -378,4 +378,73 @@ it('githooks: with TURBO\'s env, every push is refused; without it, the same pus
   }
 });
 
+// --- T4: one session ----------------------------------------------------------
+
+const session = require('../scripts/turbo/session');
+
+it('session: settings deny by default, allow a closed list, and put the guard before every tool', () => {
+  const st = session.settings({ root: '/r' });
+  assert.strictEqual(st.permissions.defaultMode, 'dontAsk');
+  assert.ok(!st.permissions.allow.includes('Bash'), 'bare Bash would allow every command');
+  for (const t of ['Read', 'Edit', 'Write', 'Agent', 'Bash(npm test:*)', 'Bash(node:*)', 'Bash(git commit:*)']) assert.ok(st.permissions.allow.includes(t), t);
+  for (const t of ['Bash(git push:*)', 'Bash(npm publish:*)', 'Bash(git checkout:*)', 'WebFetch', 'Grep', 'Glob']) assert.ok(st.permissions.deny.includes(t), t);
+  const pre = st.hooks.PreToolUse;
+  assert.strictEqual(pre.length, 1);
+  assert.strictEqual(pre[0].matcher, '*');
+  assert.ok(pre[0].hooks[0].command.includes(path.join('scripts', 'turbo', 'guard.js')), pre[0].hooks[0].command);
+});
+
+it('session: the env turns on the git hooks and npm dry-run, names the run, and leaves the base env alone', () => {
+  const baseEnv = { PATH: '/bin', GIT_CONFIG_COUNT: '3' };
+  const e = session.env({ base: baseEnv, root: '/r', home: '/h', run: 'R1', session: 'S1', scratch: '/s' });
+  assert.deepStrictEqual([e.GIT_CONFIG_COUNT, e.GIT_CONFIG_KEY_0, e.GIT_CONFIG_VALUE_0], ['1', 'core.hooksPath', path.join(session.ROOT, 'scripts', 'turbo', 'githooks')]);
+  assert.ok(fs.existsSync(path.join(e.GIT_CONFIG_VALUE_0, 'pre-push')));
+  assert.strictEqual(e.NPM_CONFIG_DRY_RUN, 'true');
+  assert.deepStrictEqual([e.TURBO_HOME, e.TURBO_RUN, e.TURBO_SESSION, e.TURBO_ROOT, e.TURBO_SCRATCH], ['/h', 'R1', 'S1', '/r', '/s']);
+  assert.strictEqual(e.PATH, '/bin');
+  assert.strictEqual(baseEnv.GIT_CONFIG_COUNT, '3', 'the base env was changed');
+});
+
+it('session: argv runs print mode, pinned session id, dontAsk, no MCP servers, JSON with the result schema', () => {
+  const a = session.argv({ sessionId: 'S1', settingsFile: '/h/settings.json', model: 'opus' });
+  const val = (f) => a[a.indexOf(f) + 1];
+  assert.ok(a.includes('-p'));
+  assert.strictEqual(val('--session-id'), 'S1');
+  assert.strictEqual(val('--permission-mode'), 'dontAsk');
+  assert.strictEqual(val('--settings'), '/h/settings.json');
+  assert.strictEqual(val('--output-format'), 'json');
+  assert.strictEqual(val('--model'), 'opus');
+  assert.ok(a.includes('--strict-mcp-config'));
+  assert.deepStrictEqual(JSON.parse(val('--mcp-config')), { mcpServers: {} });
+  assert.deepStrictEqual(JSON.parse(val('--json-schema')), session.RESULT_SCHEMA);
+  assert.ok(!a.includes('--max-budget-usd'));
+  const b = session.argv({ sessionId: 'S1', settingsFile: '/s', model: 'opus', maxBudgetUsd: 5, effort: 'high' });
+  assert.strictEqual(b[b.indexOf('--max-budget-usd') + 1], '5');
+  assert.strictEqual(b[b.indexOf('--effort') + 1], 'high');
+});
+
+it('session: render() fills every placeholder and refuses a missing one', () => {
+  assert.strictEqual(session.render('a {{X}} b {{Y}}', { X: 1, Y: 'two' }), 'a 1 b two');
+  assert.throws(() => session.render('a {{X}} {{Z}}', { X: 1 }), /Z/);
+});
+
+it('session: the prompt template renders with no placeholder left', () => {
+  const text = session.prompt(session.promptVars({ run: 'R1', session: 'S1', home: '/h', assignment: { kind: 'strike', slice: { id: 'a' } } }));
+  assert.ok(!/\{\{[A-Z_]+\}\}/.test(text), 'a placeholder is left');
+  assert.ok(text.includes('S1') && text.includes('"id": "a"'), 'the assignment is in the prompt');
+});
+
+it('session: parseResult reads structured_output, a JSON result string, and refuses everything else', () => {
+  const good = { outcome: 'done', slice: 'a', commits: ['abc'], queued: [], decisions: ['LD200'], summary: 's' };
+  assert.deepStrictEqual(session.parseResult(JSON.stringify({ type: 'result', structured_output: good })).result, good);
+  assert.deepStrictEqual(session.parseResult(JSON.stringify({ type: 'result', result: JSON.stringify(good) })).result, good);
+  assert.ok(session.parseResult('not json').error);
+  assert.ok(session.parseResult('').error);
+  assert.ok(session.parseResult(JSON.stringify({ type: 'result', is_error: true, result: 'boom' })).error);
+  assert.ok(session.parseResult(JSON.stringify({ structured_output: { ...good, outcome: 'great' } })).error, 'an unknown outcome');
+  const { commits: _c, ...noCommits } = good;
+  assert.ok(session.parseResult(JSON.stringify({ structured_output: noCommits })).error, 'a missing field');
+  assert.strictEqual(session.parseResult(JSON.stringify({ structured_output: good, total_cost_usd: 1.5 })).cost, 1.5);
+});
+
 runAll('turbo');

@@ -109,7 +109,9 @@ the sandbox does not, and it broke every test that commits to `main` in a temp r
 No MCP servers are loaded. A refused action becomes a queue item.
 
 **Known limits:** the guard can be got round (variables, aliases, `send-pack`); the sandbox is what
-holds. Inside the clone a session can write anything but
+holds. For the test suite to run in a session, the sandbox opens FSEvents (read-only file events) and
+local binding: a session can listen on, and reach, ports on 127.0.0.1, so a service listening only
+there is reachable from a session (T14). Inside the clone a session can write anything but
 the paths above, including its branches and its object store: damage there stays in the clone, and
 reaches the worktree only through your fetch. A refused checkout can rewrite the clone's files before
 it fails on `HEAD`; the driver reads `HEAD`'s reflog after each session, and any entry that is not a

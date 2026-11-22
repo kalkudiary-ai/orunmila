@@ -175,7 +175,9 @@ function sandbox(root, home = null) {
     allowUnsandboxedCommands: false,
     autoAllowBashIfSandboxed: false,
     excludedCommands: [],
-    network: { allowedDomains: [], strictAllowlist: true },
+    // No host at all. FSEvents (read-only file events) and local binding are open so the suite runs
+    // in a session: without them fs.watch never delivered and the dashboard could not listen (T14).
+    network: { allowedDomains: [], strictAllowlist: true, allowLocalBinding: true, allowMachLookup: ['com.apple.FSEvents'] },
     filesystem: { allowWrite, denyWrite },
   };
 }

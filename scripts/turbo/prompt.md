@@ -37,7 +37,8 @@ Your state is in `{{HOME}}`: `plan.json` (edit it only through `node scripts/tur
 **strike**: do the assigned slice and nothing else, under Leopard rule 2: red, smallest change, green,
 a planted fault where the check could stay green, `node scripts/hook-reach.js --check`, each gate alone
 in its own call with no redirect, pipe or `;` (dontAsk refuses every redirect, LD117; read the whole
-output the tool returns, and never `; echo $?` after it: the call's own exit is the proof, `CLAUDE.md` "How to work" 5), `node scripts/leopard-check.js --session {{SESSION}} --pending --test "<command>"`
+output the tool returns; never in the background (a background run is recorded as passed when it starts,
+NF66), so give the call a timeout of up to 10 minutes; and never `; echo $?` after it: the call's own exit is the proof, `CLAUDE.md` "How to work" 5), `node scripts/leopard-check.js --session {{SESSION}} --pending --test "<command>"`
 alone, then one commit staged by path. Trailers: `Slice:`, `Test:`, `Decision:` per LD, `Turbo-Run: {{RUN}}`,
 and `Turbo-Provisional: Q<n>` when provisional. Then `node scripts/turbo/plan.js status <id> done
 --session {{SESSION}} --commit <sha>`. When provisional, the work rests on a phase report O has not

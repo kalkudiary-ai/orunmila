@@ -956,6 +956,21 @@ it('T13 prompt: gates run alone with no redirect (dontAsk refuses every redirect
   assert.ok(!flat.includes('> {{HOME}}') && !flat.includes('> /h/test.txt'), 'the prompt still shows a redirect');
 });
 
+it('T14 sandbox: FSEvents and local binding are open so the suite runs in a session; the network stays closed', () => {
+  // Under the sandbox without them npm test gave 36/40 suites: fs.watch never delivered, the
+  // dashboard could not listen (run 20261122T024855Z); with them the four failing suites passed (825dcaf5).
+  const n = session.settings({ root: path.join(__dirname, '..') }).sandbox.network;
+  assert.deepStrictEqual(n.allowMachLookup, ['com.apple.FSEvents']);
+  assert.strictEqual(n.allowLocalBinding, true);
+  assert.deepStrictEqual(n.allowedDomains, []);
+  assert.strictEqual(n.strictAllowlist, true);
+});
+
+it('T14 prompt: never run a gate in the background (NF66: it is recorded as passed at launch)', () => {
+  const flat = session.prompt(session.promptVars({ run: 'R', session: 'S', home: '/h', assignment: { kind: 'strike' } })).replace(/\s+/g, ' ');
+  assert.ok(flat.includes('never in the background'), 'the prompt does not forbid background gate runs');
+});
+
 it('driver: a HEAD reflog entry that is not a commit (a checkout, even one put back) makes the next session a recovery', async () => {
   const steps = [{ result: R('nothing', null), checkoutAndBack: true }, { result: R('recovered', null) }];
   const d = driverSetup(steps, { slices: [S('a')], maxSessions: 2 });

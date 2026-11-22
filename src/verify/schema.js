@@ -25,7 +25,7 @@
 
 const SUPPORTED = [
   'type', 'enum', 'const', 'required', 'properties', 'additionalProperties', 'items',
-  'minimum', 'minLength', 'maxLength', 'pattern',
+  'minimum', 'minLength', 'maxLength', 'pattern', 'minItems',
   'allOf', 'anyOf', 'oneOf', 'not', 'if', 'then', 'else', '$ref', 'definitions',
 ];
 const ANNOTATIONS = ['$schema', '$id', '$comment', 'title', 'description', 'examples', 'default'];
@@ -121,6 +121,7 @@ function validate(root, s, v, path, errs) {
     }
   }
   if (t === 'array' && 'items' in s) v.forEach((x, i) => validate(root, s.items, x, `${path}/${i}`, errs));
+  if (t === 'array' && 'minItems' in s && v.length < s.minItems) err('minItems', `must have at least ${s.minItems} items`);
   if (t === 'number' && 'minimum' in s && v < s.minimum) err('minimum', `must be >= ${s.minimum}`);
   if (t === 'string') {
     const len = [...v].length;

@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:orunmila:spec:v1:odu-header",
+  "title": "Orunmila odù log header, schema version 1: DRAFT",
+  "description": "The odù log's first line, where its hash chain starts. It names the session and the raw log it was reconciled from.",
+  "$comment": "agent's choice, LD167: the hash chain checks seq from 0 (spec/hash-chain.md), as the retention log's header does. Unknown fields are allowed (brief v4 line 209).",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "record",
+    "seq",
+    "session_id",
+    "raw_header",
+    "prev_hash",
+    "hash"
+  ],
+  "properties": {
+    "schema_version": {
+      "description": "All carry a schema_version.",
+      "$comment": "brief v4 line 209",
+      "const": 1
+    },
+    "record": {
+      "description": "Marks this line as the odù log's header.",
+      "$comment": "agent's choice, LD167",
+      "const": "odu_header"
+    },
+    "seq": {
+      "description": "The header is the first record of the odù log; odùs follow from seq 1.",
+      "$comment": "agent's choice, LD167",
+      "const": 0
+    },
+    "session_id": {
+      "description": "The session.",
+      "$comment": "brief v4 line 293",
+      "type": "string",
+      "minLength": 1
+    },
+    "raw_header": {
+      "description": "The hash of the raw log's session header, so the odù log is tied to the raw log it came from.",
+      "$comment": "agent's choice, LD167",
+      "$ref": "#/definitions/fingerprint"
+    },
+    "prev_hash": {
+      "description": "null: the chain starts here.",
+      "$comment": "spec/hash-chain.md",
+      "type": "null"
+    },
+    "hash": {
+      "description": "This record's hash.",
+      "$comment": "spec/hash-chain.md",
+      "$ref": "#/definitions/fingerprint"
+    }
+  },
+  "definitions": {
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

@@ -6,7 +6,9 @@
  * 4). It feeds a recorded raw log into a fresh Ọpọ́n and gives back its output,
  * so every settling rule is built and tested through it.
  *
- *   replayFolder(dir) -> { ok, words, lines, text }
+ *   replayFolder(dir) -> { ok, words, lines, text, odu }
+ *     odu: the odù log the sealed groups make (src/opon/ledger/odu-log.js,
+ *     Phase 3 slice O1)
  *
  * The raw log must verify (chain and records): replay never judges an altered
  * record, and refuses with the verifier's words. Settings come from the
@@ -28,6 +30,7 @@ const { verifySession, checkLog } = require('../../verify/session');
 const { canonicalize } = require('../../verify/canonical');
 const { configFromHeader } = require('../intake/header');
 const { createOpon } = require('../settle/engine');
+const { oduLog } = require('../ledger/odu-log');
 
 function replayFolder(dir) {
   const raw = checkLog(dir, 'raw');
@@ -39,6 +42,7 @@ function replayFolder(dir) {
   const opon = createOpon({ sessionId: header.session_id, config });
   const groups = [];
   for (const m of recs.slice(1)) groups.push(...opon.push(m));
+  const odu = oduLog({ header, marks: recs.slice(1), groups }).text;
   groups.push(...opon.end());
   const head = {
     record: 'replay',
@@ -49,7 +53,7 @@ function replayFolder(dir) {
     lost_evidence: v.files.bad.map((b) => ({ seq: b.seq, ref: b.ref, problem: b.problem })),
   };
   const lines = [head, ...groups].map(canonicalize);
-  return { ok: true, words: `replayed ${recs.length - 1} marks into ${groups.length} groups`, lines, text: lines.join('\n') + '\n' };
+  return { ok: true, words: `replayed ${recs.length - 1} marks into ${groups.length} groups`, lines, text: lines.join('\n') + '\n', odu };
 }
 
 module.exports = { replayFolder };

@@ -1,0 +1,356 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:orunmila:spec:v1:odu",
+  "title": "Orunmila odù record, schema version 1: DRAFT",
+  "description": "The single trustworthy record of one real event. The Ọpọ́n writes one odù record per real event to a second log, hash-chained and canonically serialised like the raw log. The judge reads only this log.",
+  "$comment": "brief v4 lines 285-333. Fields the brief names keep its names; `record` and `seq` are the agent's choice (the hash chain checks seq, spec/hash-chain.md), and so is `continues`, rule 2's link back (line 364), which the brief requires and names no field for (LD167; proposed to O, Q6). Phase 3 slice O1 builds the fields replay can fill from a group; net_change, cause, attribution, confidence and conflicts come with stations 4-6 and are optional until then. Unknown fields are allowed (line 209).",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "record",
+    "seq",
+    "odu_id",
+    "session_id",
+    "parent_id",
+    "children",
+    "amends",
+    "state",
+    "target",
+    "action",
+    "window",
+    "witnesses",
+    "witness_status",
+    "lease",
+    "mark_seqs",
+    "prev_hash",
+    "hash"
+  ],
+  "properties": {
+    "schema_version": {
+      "description": "All carry a `schema_version`.",
+      "$comment": "brief v4 line 209",
+      "const": 1
+    },
+    "record": {
+      "description": "Marks this line as an odù record, so a reader tells it from the log's header without guessing.",
+      "$comment": "agent's choice, LD167",
+      "const": "odu"
+    },
+    "seq": {
+      "description": "The record's place in the odù log: the log's header is 0, records follow from 1.",
+      "$comment": "agent's choice, LD167 (spec/hash-chain.md)",
+      "type": "integer",
+      "minimum": 1
+    },
+    "odu_id": {
+      "description": "The record's id, unique in its session.",
+      "$comment": "brief v4 line 292",
+      "type": "string",
+      "pattern": "^odu_[0-9]{4,}$"
+    },
+    "session_id": {
+      "description": "The session the event happened in.",
+      "$comment": "brief v4 line 293",
+      "type": "string",
+      "minLength": 1
+    },
+    "parent_id": {
+      "description": "One command that touches many files becomes one parent odù with child odùs: a child names its parent; null for none.",
+      "$comment": "brief v4 lines 294, 325",
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^odu_[0-9]{4,}$"
+    },
+    "children": {
+      "description": "A parent's child odùs, in the order they opened.",
+      "$comment": "brief v4 lines 295, 325",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^odu_[0-9]{4,}$"
+      }
+    },
+    "amends": {
+      "description": "An earlier sealed odù this one amends, when late marks arrived after sealing (station 2, rule 8); null for none.",
+      "$comment": "brief v4 lines 296, 325, 370",
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^odu_[0-9]{4,}$"
+    },
+    "continues": {
+      "description": "The odù this one continues, when the target never went quiet and the earlier one was force-settled at the ceiling (station 2, rule 2); null for none.",
+      "$comment": "brief v4 line 364 (\"a continuation group opens and links back to it\"); the field name is the agent's choice, LD153, LD167; Q6",
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^odu_[0-9]{4,}$"
+    },
+    "state": {
+      "description": "open (still collecting), settled (quiet, decided), sealed (final, hashed, never changes). Only sealed records reach the judge.",
+      "$comment": "brief v4 lines 297, 324",
+      "enum": [
+        "open",
+        "settled",
+        "sealed"
+      ]
+    },
+    "target": {
+      "description": "The thing the event is about: usually a file path; can also be a folder, a command, a process, a claim, a turn, a tool or a network host. null when the marks behind it name no target (a gap mark), as the mark itself.",
+      "$comment": "brief v4 lines 298, 244; null as the mark's target is (LD167)",
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "action": {
+      "description": "What happened to the target. `action` takes the mark verbs.",
+      "$comment": "brief v4 lines 299, 377",
+      "enum": [
+        "created",
+        "modified",
+        "deleted",
+        "renamed",
+        "started",
+        "exited",
+        "ended",
+        "prompted",
+        "read",
+        "contacted",
+        "called",
+        "claimed",
+        "checked",
+        "fingerprinted",
+        "gap",
+        "tampered"
+      ]
+    },
+    "window": {
+      "description": "The first and last seq of the marks behind the event.",
+      "$comment": "brief v4 line 300",
+      "type": "object",
+      "required": [
+        "first_seq",
+        "last_seq"
+      ],
+      "properties": {
+        "first_seq": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "last_seq": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "net_change": {
+      "description": "Whether anything actually changed: the target's fingerprint before and after, and whether they differ. Odùs of marks that change nothing on disk leave it out: nothing on disk was meant to change, and null would mean unknown.",
+      "$comment": "brief v4 lines 301-305, 381-390; station 4 (slice N2)",
+      "type": "object",
+      "required": [
+        "changed"
+      ],
+      "properties": {
+        "before": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "after": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "changed": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "cause": {
+      "description": "The cause attribution found, for example the agent's tool call; null for none.",
+      "$comment": "brief v4 line 306; station 5 (slice A1)",
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ref": {}
+      }
+    },
+    "attribution": {
+      "description": "Exactly one of explained, byproduct, unexplained.",
+      "$comment": "brief v4 lines 307, 326; station 5 (slice A1)",
+      "enum": [
+        "explained",
+        "byproduct",
+        "unexplained"
+      ]
+    },
+    "witnesses": {
+      "description": "The sources whose marks are behind the event.",
+      "$comment": "brief v4 line 308",
+      "type": "array",
+      "items": {
+        "enum": [
+          "agent_claim",
+          "hook",
+          "sentinel",
+          "git",
+          "process",
+          "law_gate"
+        ]
+      }
+    },
+    "witness_status": {
+      "description": "One entry for each witness, glove and sentinel, always present, plus git when Orunmila ran git for that target. A status is set only from recorded facts; Orunmila never guesses why a witness recorded nothing.",
+      "$comment": "brief v4 lines 309-312, 331 (the G2b amendment)",
+      "type": "object",
+      "required": [
+        "glove",
+        "sentinel"
+      ],
+      "properties": {
+        "glove": {
+          "$ref": "#/definitions/witness"
+        },
+        "sentinel": {
+          "$ref": "#/definitions/witness"
+        },
+        "git": {
+          "$ref": "#/definitions/witness"
+        }
+      }
+    },
+    "confidence": {
+      "description": "high, medium or low, by the rules in station 6.",
+      "$comment": "brief v4 lines 313, 327, 419-427; station 6 (slice C1)",
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "conflicts": {
+      "description": "A list of disagreements, each naming the sources and what each said. Never dropped.",
+      "$comment": "brief v4 lines 314, 328, 429-439; station 6 (slice C3)",
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "lease": {
+      "description": "Present from day one with `checked: false`. Ọ̀pẹ̀lẹ̀ fills it later.",
+      "$comment": "brief v4 lines 315, 329",
+      "type": "object",
+      "required": [
+        "checked",
+        "inside"
+      ],
+      "properties": {
+        "checked": {
+          "const": false
+        },
+        "inside": {
+          "const": null
+        }
+      }
+    },
+    "mark_seqs": {
+      "description": "The receipt. Every odù points back to every mark behind it, so any verdict can be audited down to the raw evidence. An odù with no marks cannot exist.",
+      "$comment": "brief v4 lines 316, 330; guarantee 2 (line 489)",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      }
+    },
+    "prev_hash": {
+      "description": "The previous line's hash.",
+      "$comment": "brief v4 line 287; spec/hash-chain.md",
+      "$ref": "#/definitions/fingerprint"
+    },
+    "hash": {
+      "description": "This record's hash.",
+      "$comment": "brief v4 line 287; spec/hash-chain.md",
+      "$ref": "#/definitions/fingerprint"
+    }
+  },
+  "definitions": {
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "witness": {
+      "type": "object",
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "description": "saw (the witness has marks in this odù); saw_nothing (it recorded nothing, and no recorded fact gives out_of_scope or down; this does not say the witness was healthy); out_of_scope, with `scope` naming the recorded fact; down (a gap mark, a heartbeat gap or a health finding covers the window).",
+          "$comment": "brief v4 line 331",
+          "enum": [
+            "saw",
+            "saw_nothing",
+            "out_of_scope",
+            "down"
+          ]
+        },
+        "scope": {
+          "description": "For out_of_scope: the recorded fact.",
+          "$comment": "brief v4 line 331",
+          "enum": [
+            "outside_root",
+            "excluded",
+            "not_a_disk_event",
+            "no_hook_for_tool"
+          ]
+        },
+        "mark_seqs": {
+          "description": "That witness's own marks in this odù.",
+          "$comment": "brief v4 line 331",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "says": {
+          "description": "For saw: its verbs.",
+          "$comment": "brief v4 lines 310-311, 331; the key detail slots stay in the group record until O answers Q6 (LD167)",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

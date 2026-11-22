@@ -33,10 +33,10 @@ the allowed form, or an allowed tool for the same job.
    but not the hard stops. Apply each answer with `node scripts/turbo/plan.js answer Q<n> '<O's words>'`,
    and each instruction as plan changes (`add`, `status <id> dropped`, `note`).
 2. Read `{{HOME}}/approvals.md` in full.
-3. Check for a live peer session (memory: check-for-a-live-peer-session): `git status`, `git log -1`
-   of `n10-redo` and `output-1`, `ps -axo pid,args` read by exact argv tokens. If a peer owns
-   uncommitted work or a running suite, touch nothing: queue it (kind `peer-session`) and end with
-   outcome `blocked`.
+3. Check the tree: `git status`, `git log -1` of `n10-redo` and `output-1`. This is TURBO's own clone,
+   and the driver holds its lock, so no peer session works here (the sandbox also refuses `ps`). If
+   tracked files are modified that no slice of yours explains, touch nothing: queue it (kind
+   `recover`) and end with outcome `blocked`.
 
 ## The work, by kind
 

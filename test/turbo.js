@@ -981,6 +981,28 @@ it('T15 prompt: lists the allowed Bash commands from the allowlist itself, and s
   assert.ok(flat.includes('covers that one command'), 'the prompt does not say a refusal covers one command');
 });
 
+it('T16 clone: links the source\'s node_modules (lint and coverage need its tools); the prompt\'s peer check uses no ps', () => {
+  // Run 20261122T030120Z: eslint and c8 "command not found" in the clone, so the session queued Q1.
+  const base = fs.realpathSync(tmpDir());
+  try {
+    const src = path.join(base, 'src');
+    fs.mkdirSync(path.join(src, 'node_modules', '.bin'), { recursive: true });
+    gitIn(src, ['init', '-q', '-b', 'work']);
+    fs.writeFileSync(path.join(src, '.gitignore'), 'node_modules/\n');
+    gitIn(src, ['add', '.gitignore']);
+    gitIn(src, ['commit', '-q', '-m', 'base']);
+    const dest = path.join(base, 'turbo-clone');
+    turbo.cloneRepo({ source: src, dest, branch: 'work', claudeHome: path.join(base, 'ch') });
+    assert.strictEqual(fs.readlinkSync(path.join(dest, 'node_modules')), path.join(src, 'node_modules'));
+    assert.strictEqual(gitIn(dest, ['status', '--porcelain']).stdout, '', 'the link dirties the clone');
+  } finally {
+    rmrf(base);
+  }
+  // The sandbox refuses ps ("operation not permitted", same run); in a clone the driver's lock rules out a peer.
+  const flat = session.prompt(session.promptVars({ run: 'R', session: 'S', home: '/h', assignment: { kind: 'strike' } })).replace(/\s+/g, ' ');
+  assert.ok(!flat.includes('ps -axo'), 'the prompt still asks for ps');
+});
+
 it('driver: a HEAD reflog entry that is not a commit (a checkout, even one put back) makes the next session a recovery', async () => {
   const steps = [{ result: R('nothing', null), checkoutAndBack: true }, { result: R('recovered', null) }];
   const d = driverSetup(steps, { slices: [S('a')], maxSessions: 2 });

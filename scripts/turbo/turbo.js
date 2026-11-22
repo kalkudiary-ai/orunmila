@@ -96,6 +96,15 @@ function cloneRepo({ source, dest, branch, ledger = 'output-1', claudeHome = pat
     fs.mkdirSync(path.join(dest, '.claude'), { recursive: true });
     fs.copyFileSync(settings, path.join(dest, '.claude', 'settings.local.json'));
   }
+  // The source's node_modules (gitignored, so not cloned): lint and coverage need its tools. A write
+  // through the link lands in the source, which the sandbox refuses (it checks real paths).
+  const nm = path.join(source, 'node_modules');
+  if (fs.existsSync(nm) && !fs.existsSync(path.join(dest, 'node_modules'))) {
+    fs.symlinkSync(fs.realpathSync(nm), path.join(dest, 'node_modules'));
+    // `node_modules/` in .gitignore matches a directory, not a link: exclude it in this clone only.
+    fs.mkdirSync(path.join(dest, '.git', 'info'), { recursive: true });
+    fs.appendFileSync(path.join(dest, '.git', 'info', 'exclude'), '\nnode_modules\n');
+  }
   for (const f of ['CLAUDE.md', path.join('docs', 'AGENT_OPERATING_RULES.md')]) {
     let target = null;
     try {

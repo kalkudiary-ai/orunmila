@@ -254,6 +254,58 @@
         "unexplained"
       ]
     },
+    "not_credited": {
+      "description": "On an unexplained change on disk only: the agent activity beside it that station 5's steps did not credit, from recorded facts, so the label never hides that the agent was there. It credits nothing: a failed or reading tool call does not change a file, and the change may be a person's, a formatter's or another program's. Left out when there is none.",
+      "$comment": "agent's proposal (slice A1c, LD178, Q10), from O's question on LD177 (1): the brief names no such field; unknown fields are allowed (line 209)",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "kind",
+          "ref",
+          "seen"
+        ],
+        "properties": {
+          "kind": {
+            "description": "agent_tool_call: a Glove tool call with marks in this odù; agent_command: an agent command that exited within one quiet window before the change was first seen.",
+            "enum": [
+              "agent_tool_call",
+              "agent_command"
+            ]
+          },
+          "ref": {
+            "description": "The tool call id or the command's id.",
+            "type": "string",
+            "minLength": 1
+          },
+          "says": {
+            "description": "For a tool call: its verbs in this odù.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "seen": {
+            "description": "Where the change was seen against the call's recorded start and end: after_end, before_start, partly_inside, no_start (no start recorded), no_end (no outcome recorded); after_exit for a command; null when the change has no Sentinel sighting to place.",
+            "enum": [
+              "after_end",
+              "before_start",
+              "partly_inside",
+              "no_start",
+              "no_end",
+              "after_exit",
+              null
+            ]
+          },
+          "gap_ms": {
+            "description": "For after_end, before_start and after_exit: the milliseconds, on the session's monotonic clock, between the change's nearest sighting and the call's end, its start, or the command's exit.",
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
     "witnesses": {
       "description": "The sources whose marks are behind the event.",
       "$comment": "brief v4 line 308",
@@ -367,6 +419,20 @@
         "properties": {
           "cause": {
             "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "not_credited"
+        ]
+      },
+      "then": {
+        "properties": {
+          "attribution": {
+            "const": "unexplained"
           }
         }
       }

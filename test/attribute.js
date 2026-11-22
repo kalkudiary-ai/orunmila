@@ -102,6 +102,65 @@ it('A1 step 2, time match: a change inside the start and end of an agent tool ca
   assert.deepStrictEqual(blame(of(odus, file('src/open.ts'))), ['unexplained', null]);
 });
 
+it('A1c: an unexplained change beside agent activity says, from recorded facts, what was not credited and why; with nothing beside it, or once explained, the field is absent', () => {
+  const cmd = (text) => ({ kind: 'command', text });
+  const { odus } = replay((append) => {
+    // A failed edit, the file changed 200 ms after the call ended (LD177's case).
+    append(M.started(0, 'e2', { kind: 'file', path: 'src/late.ts' }));
+    append(M.failed(100, 'e2', { kind: 'file', path: 'src/late.ts' }));
+    append(M.disk(300, 'src/late.ts'));
+    // A read, the file changed 200 ms after it.
+    append(M.read(2100, 'r2', 'src/seen.ts'));
+    append(M.disk(2300, 'src/seen.ts'));
+    // A call with no outcome recorded.
+    append(M.started(0, 'e3', { kind: 'file', path: 'src/open.ts' }));
+    append(M.disk(100, 'src/open.ts'));
+    // Seen before the call started; seen before a read with no start recorded; seen during and after a failed call.
+    append(M.disk(0, 'src/early.ts'));
+    append(M.started(500, 'e4', { kind: 'file', path: 'src/early.ts' }));
+    append(M.failed(600, 'e4', { kind: 'file', path: 'src/early.ts' }));
+    append(M.disk(300, 'src/peek.ts'));
+    append(M.read(500, 'r3', 'src/peek.ts'));
+    append(M.started(0, 'e5', { kind: 'file', path: 'src/both.ts' }));
+    append(M.disk(100, 'src/both.ts'));
+    append(M.failed(200, 'e5', { kind: 'file', path: 'src/both.ts' }));
+    append(M.disk(400, 'src/both.ts'));
+    // No agent activity at all.
+    append(M.disk(200, 'src/hand.ts'));
+    // A change inside the call: explained, nothing to add.
+    append(M.started(0, 'e1', { kind: 'file', path: 'src/in.ts' }));
+    append(M.disk(100, 'src/in.ts'));
+    append(M.failed(200, 'e1', { kind: 'file', path: 'src/in.ts' }));
+    append(M.tick(12000));
+    // A command that exited 200 ms before a change, and one that exited longer than a quiet window before.
+    append(M.started(20000, 'b1', cmd('npm run fmt'), 'Bash'));
+    append(M.exited(20400, 'b1', 'npm run fmt'));
+    append(M.disk(20600, 'src/fmt.ts'));
+    append(M.tick(30000));
+    append(M.started(30000, 'b2', cmd('npm run old'), 'Bash'));
+    append(M.exited(30100, 'b2', 'npm run old'));
+    append(M.disk(32000, 'src/far.ts'));
+    append(M.tick(45000));
+  });
+  const nc = (p) => of(odus, file(p)).not_credited;
+  assert.deepStrictEqual(blame(of(odus, file('src/late.ts'))), ['unexplained', null], 'the label stays: a failed call is never credited (LD177)');
+  assert.deepStrictEqual(nc('src/late.ts'), [{ kind: 'agent_tool_call', ref: 'e2', says: ['started', 'ended'], seen: 'after_end', gap_ms: 200 }]);
+  assert.deepStrictEqual(nc('src/seen.ts'), [{ kind: 'agent_tool_call', ref: 'r2', says: ['read'], seen: 'after_end', gap_ms: 200 }]);
+  assert.deepStrictEqual(nc('src/open.ts'), [{ kind: 'agent_tool_call', ref: 'e3', says: ['started'], seen: 'no_end' }]);
+  assert.deepStrictEqual(nc('src/early.ts'), [{ kind: 'agent_tool_call', ref: 'e4', says: ['started', 'ended'], seen: 'before_start', gap_ms: 500 }]);
+  assert.deepStrictEqual(nc('src/peek.ts'), [{ kind: 'agent_tool_call', ref: 'r3', says: ['read'], seen: 'no_start' }]);
+  assert.deepStrictEqual(blame(of(odus, file('src/both.ts'))), ['unexplained', null]);
+  assert.deepStrictEqual(nc('src/both.ts'), [{ kind: 'agent_tool_call', ref: 'e5', says: ['started', 'ended'], seen: 'partly_inside' }]);
+  assert.deepStrictEqual(nc('src/fmt.ts'),[{ kind: 'agent_command', ref: 'b1', seen: 'after_exit', gap_ms: 200 }]);
+  assert.ok(!('not_credited' in of(odus, file('src/far.ts'))), 'an exit longer than a quiet window before is not beside it');
+  assert.ok(!('not_credited' in of(odus, file('src/hand.ts'))), 'nothing beside it: no field');
+  const inside = of(odus, file('src/in.ts'));
+  assert.strictEqual(inside.attribution, 'explained');
+  assert.ok(!('not_credited' in inside), 'explained: no field');
+  const keys = (r) => checkOdu(r).map((e) => `${e.path} ${e.keyword}`);
+  assert.ok(keys({ ...inside, not_credited: nc('src/late.ts') }).length > 0, 'the schema allows it only on an unexplained odù');
+});
+
 it('A1 step 3, command child: a change while an agent command runs is explained by the command; with two running, by the first, the other named in `also`', () => {
   const cmd = (text) => ({ kind: 'command', text });
   const { odus } = replay((append) => {

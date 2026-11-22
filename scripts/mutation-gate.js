@@ -1711,6 +1711,28 @@ const MUTANTS = [
   { id: 'A1-8 replay never hands the engine the byproducts list', file: 'src/opon/replay/index.js', test: 'test/attribute.js',
     from: 'byproducts: Array.isArray(config.byproducts) ? config.byproducts : null,', to: 'byproducts: null,',
     fails: ['A1 test 9', 'A1 step 4'] },
+  // Slice A1c: what an unexplained change's neighbours were not credited for (LD178).
+  { id: 'A1c-1 not_credited on an explained odù too', file: 'src/opon/settle/engine.js', test: 'test/attribute.js',
+    from: "g.notCredited = disk && g.attr.attribution === 'unexplained' ? notCreditedOf(g) : undefined;", to: 'g.notCredited = disk ? notCreditedOf(g) : undefined;',
+    fails: ['A1c'] },
+  { id: 'A1c-2 a command beside a change however long before it exited', file: 'src/opon/settle/engine.js', test: 'test/attribute.js',
+    from: 'c.exitAt < seen && seen - c.exitAt <= quiet', to: 'c.exitAt < seen',
+    fails: ['A1c'] },
+  { id: 'A1c-3 the gap after a call\'s end dropped', file: 'src/opon/settle/engine.js', test: 'test/attribute.js',
+    from: "rel = { seen: 'after_end', gap_ms: ms(lo - c.end) };", to: "rel = { seen: 'after_end' };",
+    fails: ['A1c'] },
+  { id: 'A1c-4 a call with no outcome read as no start', file: 'src/opon/settle/engine.js', test: 'test/attribute.js',
+    from: "else if (c.start === null) rel = { seen: 'no_start' };", to: "else if (c.end === null) rel = { seen: 'no_start' };",
+    fails: ['A1c'] },
+  { id: 'A1c-7 a change seen before the call started not told apart', file: 'src/opon/settle/engine.js', test: 'test/attribute.js',
+    from: "        else if (c.start !== null && hi < c.start) rel = { seen: 'before_start', gap_ms: ms(c.start - hi) };\n", to: '',
+    fails: ['A1c'] },
+  { id: 'A1c-5 the odù log drops not_credited', file: 'src/opon/ledger/odu-log.js', test: 'test/attribute.js',
+    from: '    ...(g.not_credited ? { not_credited: g.not_credited.map((e) => ({ ...e, ...(e.says ? { says: [...e.says] } : {}) })) } : {}),\n', to: '',
+    fails: ['A1c'] },
+  { id: 'A1c-6 the schema allows not_credited on any label', file: 'spec/odu.schema.json', test: 'test/attribute.js',
+    from: '"if": {\n        "required": [\n          "not_credited"\n        ]\n      },', to: '"if": {\n        "required": [\n          "not_credited_never"\n        ]\n      },',
+    fails: ['A1c'] },
 ];
 
 function copyRepo(root) {

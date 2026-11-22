@@ -6,9 +6,10 @@
  * deterministic code (guarantee 8): marks in, group records out, nothing read
  * from disk or the clock.
  *
- *   createOpon({ sessionId, config, baseline? })   config from the session header
- *                 (test 35); baseline: path -> fingerprint (null for a link or
- *                 other non-file) from the snapshot beside the log, or null
+ *   createOpon({ sessionId, config, baseline?, byproducts? })   config from the
+ *                 session header (test 35); baseline: path -> fingerprint (null
+ *                 for a link or other non-file) from the snapshot beside the
+ *                 log, or null; byproducts: the header's list (A1a), or null
  *     .push(mark)   one mark, in seq order; returns the records it sealed
  *     .end()        the groups not yet sealed, in the order they opened, as
  *                   they stand (the closeout's force-settle is Phase 4)
@@ -118,6 +119,15 @@
  * its own call, a turn by its turn, the session's end by the session; anything
  * else is unexplained. When several tool calls qualify at one step, `ref` is
  * the first and `also` names the rest. Overlapping sessions are slice A2.
+ *
+ * What was not credited (slice A1c, LD178): an unexplained change on disk
+ * lists the agent activity beside it that the steps did not credit, from
+ * recorded facts, so "unexplained" never hides that the agent was there. Each
+ * Glove tool call with marks in the group: its verbs, and where the change was
+ * seen against the call's recorded start and end (`after_end`, `before_start`
+ * with `gap_ms`; `no_start`, `no_end`, `partly_inside`; null with no Sentinel
+ * sighting). Each agent command that exited within one quiet window before the
+ * change was first seen: `after_exit`, `gap_ms`. The label never changes.
  *
  * Group records (LD142) use the odù's field names where they apply, and are
  * not odù records: no confidence or conflicts yet.
@@ -281,6 +291,30 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null }) {
     return UNEXPLAINED;
   }
 
+  /** A1c (LD178): the agent activity beside an unexplained change that the steps did not credit, or undefined. */
+  function notCreditedOf(g) {
+    const out = [];
+    const seen = g.changeSeen;
+    const lo = seen.length ? seen.reduce((a, b) => (b < a ? b : a)) : null;
+    const hi = seen.length ? seen.reduce((a, b) => (b > a ? b : a)) : null;
+    const ms = (ns) => Number(ns / NS_PER_MS);
+    for (const ref of new Set(g.hints.filter((h, i) => h && GLOVE.has(g.sources[i])))) {
+      const says = g.says.filter((v, i) => g.hints[i] === ref && GLOVE.has(g.sources[i]));
+      const c = calls.get(ref);
+      let rel = { seen: null };
+      if (lo !== null && c) {
+        if (c.end !== null && lo > c.end) rel = { seen: 'after_end', gap_ms: ms(lo - c.end) };
+        else if (c.start !== null && hi < c.start) rel = { seen: 'before_start', gap_ms: ms(c.start - hi) };
+        else if (c.start === null) rel = { seen: 'no_start' };
+        else if (c.end === null) rel = { seen: 'no_end' };
+        else rel = { seen: 'partly_inside' };
+      }
+      out.push({ kind: 'agent_tool_call', ref, says, ...rel });
+    }
+    for (const x of g.besideExit || []) out.push({ kind: 'agent_command', ref: x.ref, seen: 'after_exit', gap_ms: ms(x.gap) });
+    return out.length ? out : undefined;
+  }
+
   function record(g) {
     const net = g.net; // set when the group seals
     return {
@@ -301,6 +335,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null }) {
       continues: g.continues,
       ...(net === undefined ? {} : { net_change: { ...net } }),
       ...(g.attr ? { attribution: g.attr.attribution, cause: g.attr.cause } : {}),
+      ...(g.notCredited ? { not_credited: g.notCredited.map((e) => ({ ...e, ...(e.says ? { says: [...e.says] } : {}) })) } : {}),
     };
   }
 
@@ -343,6 +378,8 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null }) {
       g.state = 'sealed';
       g.net = netChange(g);
       g.attr = attributionOf(g);
+      const disk = (g.key.startsWith('file:') || g.key.startsWith('dirchange:')) && g.says.some((v) => DISK.has(v));
+      g.notCredited = disk && g.attr.attribution === 'unexplained' ? notCreditedOf(g) : undefined;
       sealedLast.set(g.key, { id: g.id, at: g.sealedAt, causes: g.causes });
       if (live.get(g.key) === g) live.delete(g.key);
       unsealed.delete(g.id);
@@ -403,6 +440,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null }) {
     b.hints = rows.map((r) => r[5]);
     b.changeSeen = [...b.changeSeen, ...a.changeSeen];
     if (b.atChange === null) b.atChange = a.atChange;
+    if (b.besideExit === null) b.besideExit = a.besideExit;
     for (const c of a.causes) b.causes.add(c);
     if (a.first < b.first) b.first = a.first;
     if (a.last > b.last) b.last = a.last;
@@ -456,7 +494,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null }) {
       const continues = f && (f.held || now - f.at < quiet) ? f.id : null;
       const s = sealedLast.get(key);
       const amends = s && ((m.cause_hint && s.causes.has(m.cause_hint)) || BigInt(m.mono_ns) <= s.at) ? s.id : null;
-      g = { n: ++made, id: id(made), key, state: 'open', parentId: null, childIds: [], startAt: null, exitAt: null, lost: false, target, seqs: [], says: [], real: [], realSays: [], sources: [], slots: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues, amends, causes: new Set(), isCommand: key.startsWith('command:'), isTurn: key.startsWith('turn:'), turnEnded: false, fp: null, lastOther: 0, net: undefined, hints: [], changeSeen: [], atChange: null, attr: null };
+      g = { n: ++made, id: id(made), key, state: 'open', parentId: null, childIds: [], startAt: null, exitAt: null, lost: false, target, seqs: [], says: [], real: [], realSays: [], sources: [], slots: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues, amends, causes: new Set(), isCommand: key.startsWith('command:'), isTurn: key.startsWith('turn:'), turnEnded: false, fp: null, lastOther: 0, net: undefined, hints: [], changeSeen: [], atChange: null, besideExit: null, attr: null, notCredited: undefined };
       live.set(key, g);
       unsealed.set(g.id, g);
       all.push(g);
@@ -496,7 +534,11 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null }) {
       // A1b: when the change was seen, for steps 2 (a file's own marks) and 3 (the commands running at its first).
       const seen = BigInt(m.mono_ns);
       if (m.target.kind === 'file') g.changeSeen.push(seen);
-      if (g.atChange === null) g.atChange = runningAt(seen).map((c) => c.key.slice('command:'.length));
+      if (g.atChange === null) {
+        g.atChange = runningAt(seen).map((c) => c.key.slice('command:'.length));
+        // A1c: the commands that exited within one quiet window before it, for an unexplained change's `not_credited`.
+        g.besideExit = [...unsealed.values()].filter((c) => c.isCommand && !c.lost && c.exitAt !== null && c.exitAt < seen && seen - c.exitAt <= quiet).map((c) => ({ ref: c.key.slice('command:'.length), gap: seen - c.exitAt }));
+      }
     }
     if (GLOVE.has(m.source) && m.cause_hint && key.startsWith('file:')) {
       // A1b, step 2: a Glove tool call on a file, from its start to its outcome, on the mark's own clock.

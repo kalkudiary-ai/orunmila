@@ -20,7 +20,8 @@
  * status, scope, own mark_seqs and, for `saw`, its verbs and each mark's key
  * detail slots; `ceiling` says the ceiling settled it (Q6, O's yes, LD174). `net_change` comes from
  * the group (station 4, slice N2), and only where the group has one;
- * `attribution` and `cause` from station 5 (slice A1b). Fields station 6
+ * `attribution` and `cause` from station 5 (slice A1b), and on an unexplained
+ * change `not_credited`, the agent activity beside it (A1c). Fields station 6
  * fills (confidence, conflicts) are left out until its slices: a field is
  * never written as a guess. Plain code, no clock.
  */
@@ -61,6 +62,7 @@ function oduRecord(g, bySeq) {
     ...(g.net_change ? { net_change: { ...g.net_change } } : {}),
     cause: g.cause === null ? null : { ...g.cause, ...(g.cause.also ? { also: [...g.cause.also] } : {}) },
     attribution: g.attribution,
+    ...(g.not_credited ? { not_credited: g.not_credited.map((e) => ({ ...e, ...(e.says ? { says: [...e.says] } : {}) })) } : {}),
     lease: { checked: false, inside: null },
     mark_seqs: [...g.mark_seqs],
   };

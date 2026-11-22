@@ -151,12 +151,16 @@ it("test 10: with the Sentinel watching, any write in the project's .orunmila/ i
     const dir = path.join(t.root, '.orunmila');
     const seen = (p) => t.tampered().some((m) => m.target.path === path.relative(t.root, p));
     assert.ok(await awaitWatching(dir, seen), 'a probe write in .orunmila/ became a tampered mark');
-    const before = t.tampered().length;
+    // Wait for this write's own mark, then for any probe still in its debounce,
+    // so the count below is not moved by a late probe (seen once: B3b).
+    const isBp = (m) => m.target.path === '.orunmila/byproducts';
     fs.writeFileSync(path.join(dir, 'byproducts'), 'changed/\n');
-    for (const end = Date.now() + 5000; Date.now() < end && t.tampered().length === before; ) await new Promise((r) => setTimeout(r, 50));
-    assert.strictEqual(t.tampered().length, before + 1);
+    for (const end = Date.now() + 5000; Date.now() < end && !t.tampered().some(isBp); ) await new Promise((r) => setTimeout(r, 50));
+    assert.strictEqual(t.tampered().filter(isBp).length, 1, 'one tampered mark for the write, at once');
+    await new Promise((r) => setTimeout(r, 500));
+    const settled = t.tampered().map((m) => m.target.path);
     t.send();
-    assert.strictEqual(t.tampered().length, before + 1, 'the payload check sees the same fingerprint: no second mark');
+    assert.deepStrictEqual(t.tampered().map((m) => m.target.path), settled, 'the payload check sees the same fingerprint: no second mark');
   } finally {
     t.done();
   }

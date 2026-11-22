@@ -35,11 +35,17 @@ function tinyCode() {
  * A new session folder under `base` with `config` in its header; returns { dir, root, append(mark), seqs }.
  * `baseline`: entries for a baseline snapshot kept beside the log (slice N2), sorted and written as
  * src/opon/net/baseline.js writes them, its fingerprint in the header.
+ * `byproducts`: { text, inHeader } writes the project's `.orunmila/byproducts` before the header is
+ * built (its fingerprint is then frozen), and with `inHeader` the header carries the list (A1a).
  */
-function makeLog(base, config = {}, { baseline = null } = {}) {
+function makeLog(base, config = {}, { baseline = null, byproducts = null } = {}) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'orunmila-root-')));
   const dir = path.join(base, SID);
-  const header = buildHeader({ sessionId: SID, root, agent: { name: 'claude-code', version: null }, orunmilaVersion: '0.0.0-test', codeRoot: tinyCode(), lawPacks: {}, hookSettings: [], config, observedAt: wall(0), monoNs: ns(0) });
+  if (byproducts) {
+    fs.mkdirSync(path.join(root, '.orunmila'));
+    fs.writeFileSync(path.join(root, '.orunmila', 'byproducts'), byproducts.text);
+  }
+  const header = buildHeader({ sessionId: SID, root, agent: { name: 'claude-code', version: null }, orunmilaVersion: '0.0.0-test', codeRoot: tinyCode(), lawPacks: {}, hookSettings: [], config, observedAt: wall(0), monoNs: ns(0), byproducts: Boolean(byproducts && byproducts.inHeader) });
   let text = null;
   if (baseline) {
     text = [...baseline].sort((a, b) => (a.path < b.path ? -1 : 1)).map((e) => canonicalize(e) + '\n').join('');
@@ -82,6 +88,11 @@ const M = {
   prompted: (ms, turn = 't1') => base(ms, { source: 'hook', agent: 'claude-code', turn, target: { kind: 'turn', id: turn }, says: 'prompted', detail: { prompt: 'go', from_human: true } }),
   claimed: (ms, turn = 't1') => base(ms, { source: 'agent_claim', agent: 'claude-code', turn, target: { kind: 'claim' }, says: 'claimed', detail: { text: 'done' } }),
   turnEnded: (ms, turn = 't1') => base(ms, { source: 'hook', agent: 'claude-code', turn, target: { kind: 'turn', id: turn }, says: 'ended', detail: {} }),
+  // A tool call other than a command that failed: `ended` (line 259).
+  failed: (ms, call, target, tool = 'Edit', turn = 't1') => base(ms, { source: 'hook', agent: 'claude-code', turn, cause_hint: call, target, says: 'ended', detail: { tool, exit_status: 'fail' } }),
+  called: (ms, call, name, turn = 't1') => base(ms, { source: 'hook', agent: 'claude-code', turn, cause_hint: call, target: { kind: 'tool', name }, says: 'called', detail: { tool: name, exit_status: 'pass', tool_input: {} } }),
+  sessionEnded: (ms) => base(ms, { source: 'hook', agent: 'claude-code', target: { kind: 'session', id: SID }, says: 'ended', detail: {} }),
+  gap: (ms, lost = 'a test gap') => base(ms, { source: 'process', target: null, says: 'gap', detail: { lost } }),
   // Station 4 (N2, LD171): the Opon's own fingerprint of a target at settle time; 'absent' when no file is there.
   fingerprinted: (ms, file, fp) =>
     base(ms, { source: 'process', target: { kind: 'file', path: file }, says: 'fingerprinted', detail: fp === 'absent' ? { exists: false } : { exists: true, size: 4, fingerprint: fp } }),

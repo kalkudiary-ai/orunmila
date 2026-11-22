@@ -17,6 +17,8 @@
  * changes nothing (test 34). The baseline snapshot the header names (slice N2,
  * LD171) is read from the session folder, as a kept file: if it is missing or
  * changed it is lost evidence, and every target's first `before` is unknown.
+ * The byproducts list is the header's (`config.byproducts`, A1a); a header
+ * without one gives step 4 nothing to match (A1b).
  * A file kept beside the log that is missing or
  * changed is named as lost evidence in the first line (open question 4), and
  * replay goes on: stations 2-3 read no diff, and nothing is ever read as an
@@ -56,7 +58,7 @@ function replayFolder(dir) {
   const recs = raw.records.filter((r) => !(r.part > 1 && r.line === 1)).map((r) => r.rec);
   const header = recs[0];
   const config = configFromHeader(header);
-  const opon = createOpon({ sessionId: header.session_id, config, baseline: baselineOf(dir, header, v) });
+  const opon = createOpon({ sessionId: header.session_id, config, byproducts: Array.isArray(config.byproducts) ? config.byproducts : null, baseline: baselineOf(dir, header, v) });
   const groups = [];
   for (const m of recs.slice(1)) groups.push(...opon.push(m));
   const odu = oduLog({ header, marks: recs.slice(1), groups }).text;

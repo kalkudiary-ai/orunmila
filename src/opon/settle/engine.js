@@ -103,8 +103,24 @@
  * (once any group of that path still in its grace has sealed: N2b, LD173).
  * Groups of marks that change nothing on disk leave `net_change` out (line 389).
  *
+ * Attribution (station 5, slice A1b, LD176; lines 392-400, 413): when a group
+ * seals it gets exactly one label and its `cause`, by the brief's steps in
+ * order. For a change on disk: (1) a Glove outcome mark that changes a file
+ * (created, modified, deleted) carrying its tool call id: `agent_tool_call`;
+ * (2) every Sentinel mark of the file's change seen inside the recorded start
+ * and end of a Glove tool call on that path: `time_match` (a call with no end
+ * recorded cannot show "inside"); (3) an agent command running when the change
+ * was first seen (G2's test): `agent_command`; (4) the path matching an entry
+ * of the header's byproducts list (`createOpon`'s `byproducts`; with none, null,
+ * step 4 has nothing to match; never for a path outside the root):
+ * `byproduct`, its `ref` the entry; (5) else `unexplained`, cause null. For
+ * marks that change nothing: a tool call with an outcome mark is explained by
+ * its own call, a turn by its turn, the session's end by the session; anything
+ * else is unexplained. When several tool calls qualify at one step, `ref` is
+ * the first and `also` names the rest. Overlapping sessions are slice A2.
+ *
  * Group records (LD142) use the odù's field names where they apply, and are
- * not odù records: no attribution, confidence or conflicts yet.
+ * not odù records: no confidence or conflicts yet.
  */
 
 const path = require('path');
@@ -149,7 +165,14 @@ function fingerprintedState(m) {
   return d.exists === true && typeof d.fingerprint === 'string' ? d.fingerprint : null;
 }
 
-function createOpon({ sessionId, config, baseline = null }) {
+/** A label with a cause of `kind`: the first id its `ref`, any others in `also` (A1b). */
+function explained(kind, ids) {
+  return { attribution: 'explained', cause: ids.length > 1 ? { kind, ref: ids[0], also: ids.slice(1) } : { kind, ref: ids[0] } };
+}
+const UNEXPLAINED = { attribution: 'unexplained', cause: null };
+const CHANGES_A_FILE = new Set(['created', 'modified', 'deleted']);
+
+function createOpon({ sessionId, config, baseline = null, byproducts = null }) {
   const quiet = BigInt(config.quiet_window_ms) * NS_PER_MS;
   const grace = BigInt(config.lag_grace_ms) * NS_PER_MS;
   const ceiling = BigInt(config.ceiling_ms) * NS_PER_MS;
@@ -159,6 +182,7 @@ function createOpon({ sessionId, config, baseline = null }) {
   const sealedLast = new Map(); // key -> { id, at, causes }: the key's last sealed group (rule 8)
   const gaps = []; // { from, to, who: 'both' | 'sentinel' | 'glove' } (G1)
   const lastState = new Map(); // key -> the target's state at its last sealed group, or after a rename (N2)
+  const calls = new Map(); // tool call id -> { keys, start, end }: the Glove's tool calls on files, for step 2 (A1b)
   const exclusions = Array.isArray(config.exclusions) ? config.exclusions : [];
   const all = [];
   let now = null;
@@ -226,6 +250,37 @@ function createOpon({ sessionId, config, baseline = null }) {
     return { before, after, changed: before === null || after === null ? null : before !== after };
   }
 
+  /** The agent commands running at `seen` (G2's test), in the order they opened. */
+  function runningAt(seen) {
+    return [...unsealed.values()].filter((c) => c.isCommand && c.startAt !== null && c.startAt <= seen && (c.exitAt === null || seen <= c.exitAt));
+  }
+
+  /** Station 5 (A1b): one label and its cause, by the brief's steps in order. */
+  function attributionOf(g) {
+    const glove = (keep) => [...new Set(g.hints.filter((h, i) => h && GLOVE.has(g.sources[i]) && keep(g.says[i])))];
+    const disk = (g.key.startsWith('file:') || g.key.startsWith('dirchange:')) && g.says.some((v) => DISK.has(v));
+    if (!disk) {
+      if (g.key.startsWith('turn:')) return explained('turn', [g.key.slice('turn:'.length)]);
+      if (g.key.startsWith('session:')) return explained('session', [g.key.slice('session:'.length)]);
+      const own = glove((v) => v !== 'started');
+      return own.length ? explained('agent_tool_call', own) : UNEXPLAINED;
+    }
+    const direct = glove((v) => CHANGES_A_FILE.has(v));
+    if (direct.length) return explained('agent_tool_call', direct);
+    if (g.changeSeen.length) {
+      const lo = g.changeSeen.reduce((a, b) => (b < a ? b : a));
+      const hi = g.changeSeen.reduce((a, b) => (b > a ? b : a));
+      const inside = [...calls].filter(([, c]) => c.keys.has(g.key) && c.start !== null && c.end !== null && c.start <= lo && hi <= c.end).map(([id]) => id);
+      if (inside.length) return explained('time_match', inside);
+    }
+    if (g.atChange && g.atChange.length) return explained('agent_command', g.atChange);
+    if (byproducts && g.target && !g.target.outside) {
+      const entry = byproducts.find((e) => isIgnored(g.target.path, [e]));
+      if (entry !== undefined) return { attribution: 'byproduct', cause: { kind: 'byproduct', ref: entry } };
+    }
+    return UNEXPLAINED;
+  }
+
   function record(g) {
     const net = g.net; // set when the group seals
     return {
@@ -245,6 +300,7 @@ function createOpon({ sessionId, config, baseline = null }) {
       amends: g.amends,
       continues: g.continues,
       ...(net === undefined ? {} : { net_change: { ...net } }),
+      ...(g.attr ? { attribution: g.attr.attribution, cause: g.attr.cause } : {}),
     };
   }
 
@@ -286,6 +342,7 @@ function createOpon({ sessionId, config, baseline = null }) {
     return sealed.map((g) => {
       g.state = 'sealed';
       g.net = netChange(g);
+      g.attr = attributionOf(g);
       sealedLast.set(g.key, { id: g.id, at: g.sealedAt, causes: g.causes });
       if (live.get(g.key) === g) live.delete(g.key);
       unsealed.delete(g.id);
@@ -336,13 +393,16 @@ function createOpon({ sessionId, config, baseline = null }) {
   /** Group `a`'s marks go into `b` (their `real` flags kept, or set to `asReal`), and `a` is gone. */
   function absorb(b, a, asReal) {
     const realOf = (x, i) => (asReal === null ? x.real[i] : asReal);
-    const rows = [...a.seqs.map((s, i) => [s, a.says[i], realOf(a, i), a.sources[i], a.slots[i]]), ...b.seqs.map((s, i) => [s, b.says[i], b.real[i], b.sources[i], b.slots[i]])].sort((x, y) => x[0] - y[0]);
+    const rows = [...a.seqs.map((s, i) => [s, a.says[i], realOf(a, i), a.sources[i], a.slots[i], a.hints[i]]), ...b.seqs.map((s, i) => [s, b.says[i], b.real[i], b.sources[i], b.slots[i], b.hints[i]])].sort((x, y) => x[0] - y[0]);
     b.seqs = rows.map((r) => r[0]);
     b.says = rows.map((r) => r[1]);
     b.real = rows.map((r) => r[2]);
     b.realSays = rows.filter((r) => r[2]).map((r) => r[1]);
     b.sources = rows.map((r) => r[3]);
     b.slots = rows.map((r) => r[4]);
+    b.hints = rows.map((r) => r[5]);
+    b.changeSeen = [...b.changeSeen, ...a.changeSeen];
+    if (b.atChange === null) b.atChange = a.atChange;
     for (const c of a.causes) b.causes.add(c);
     if (a.first < b.first) b.first = a.first;
     if (a.last > b.last) b.last = a.last;
@@ -396,7 +456,7 @@ function createOpon({ sessionId, config, baseline = null }) {
       const continues = f && (f.held || now - f.at < quiet) ? f.id : null;
       const s = sealedLast.get(key);
       const amends = s && ((m.cause_hint && s.causes.has(m.cause_hint)) || BigInt(m.mono_ns) <= s.at) ? s.id : null;
-      g = { n: ++made, id: id(made), key, state: 'open', parentId: null, childIds: [], startAt: null, exitAt: null, lost: false, target, seqs: [], says: [], real: [], realSays: [], sources: [], slots: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues, amends, causes: new Set(), isCommand: key.startsWith('command:'), isTurn: key.startsWith('turn:'), turnEnded: false, fp: null, lastOther: 0, net: undefined };
+      g = { n: ++made, id: id(made), key, state: 'open', parentId: null, childIds: [], startAt: null, exitAt: null, lost: false, target, seqs: [], says: [], real: [], realSays: [], sources: [], slots: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues, amends, causes: new Set(), isCommand: key.startsWith('command:'), isTurn: key.startsWith('turn:'), turnEnded: false, fp: null, lastOther: 0, net: undefined, hints: [], changeSeen: [], atChange: null, attr: null };
       live.set(key, g);
       unsealed.set(g.id, g);
       all.push(g);
@@ -431,6 +491,21 @@ function createOpon({ sessionId, config, baseline = null }) {
     g.real.push(real);
     g.sources.push(m.source);
     g.slots.push(slotsOf(m));
+    g.hints.push(m.cause_hint || null);
+    if (DISK.has(m.says) && !GLOVE.has(m.source) && m.target && (m.target.kind === 'file' || m.target.kind === 'dir')) {
+      // A1b: when the change was seen, for steps 2 (a file's own marks) and 3 (the commands running at its first).
+      const seen = BigInt(m.mono_ns);
+      if (m.target.kind === 'file') g.changeSeen.push(seen);
+      if (g.atChange === null) g.atChange = runningAt(seen).map((c) => c.key.slice('command:'.length));
+    }
+    if (GLOVE.has(m.source) && m.cause_hint && key.startsWith('file:')) {
+      // A1b, step 2: a Glove tool call on a file, from its start to its outcome, on the mark's own clock.
+      const c = calls.get(m.cause_hint) || { keys: new Set(), start: null, end: null };
+      c.keys.add(key);
+      if (m.says === 'started') c.start = BigInt(m.mono_ns);
+      else c.end = BigInt(m.mono_ns);
+      calls.set(m.cause_hint, c);
+    }
     if (m.cause_hint) g.causes.add(m.cause_hint);
     if (real) g.realSays.push(m.says);
     if (!fingerprint) g.last = now;

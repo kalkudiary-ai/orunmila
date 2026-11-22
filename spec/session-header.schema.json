@@ -98,7 +98,7 @@
           "minimum": 0
         },
         "byproducts": {
-          "description": "The byproducts list (`.orunmila/byproducts`) as it was at session start: one entry per line, trimmed, blank lines and `#` comments left out, matched as the ignore list's entries are. Its fingerprint is `frozen.byproducts`, of the same bytes. Absent when the header does not carry the list (before the live path, slice A1a); replay then knows it only if `frozen.byproducts` is null (no file: no byproducts).",
+          "description": "The byproducts list (`.orunmila/byproducts`) as it was at session start: one entry per line, trimmed, blank lines and `#` comments left out, matched as the ignore list's entries are. Its fingerprint is `frozen.byproducts`, of the same bytes. Absent when the header does not carry the list (the live path off, slice A1a); station 5 then has no list to match.",
           "$comment": "brief v4 lines 283, 349, 399; the list in the header is the agent's proposal (LD175, Q9), so replay reads it from the header and never from current settings",
           "type": "array",
           "items": { "type": "string" }

@@ -3,7 +3,7 @@
   "$id": "urn:orunmila:spec:v1:odu",
   "title": "Orunmila odù record, schema version 1: DRAFT",
   "description": "The single trustworthy record of one real event. The Ọpọ́n writes one odù record per real event to a second log, hash-chained and canonically serialised like the raw log. The judge reads only this log.",
-  "$comment": "brief v4 lines 285-333. Fields the brief names keep its names; `record` and `seq` are the agent's choice (the hash chain checks seq, spec/hash-chain.md), and so is `continues`, rule 2's link back (line 364), which the brief requires and names no field for (LD167). `continues`, `ceiling` and each witness's `slots` were proposed to O as Q6 and approved (2026-11-22, LD174). Phase 3 slice O1 builds the fields replay can fill from a group; net_change, cause, attribution, confidence and conflicts come with stations 4-6 and are optional until then. Unknown fields are allowed (line 209).",
+  "$comment": "brief v4 lines 285-333. Fields the brief names keep its names; `record` and `seq` are the agent's choice (the hash chain checks seq, spec/hash-chain.md), and so is `continues`, rule 2's link back (line 364), which the brief requires and names no field for (LD167). `continues`, `ceiling` and each witness's `slots` were proposed to O as Q6 and approved (2026-11-22, LD174). Phase 3 slice O1 builds the fields replay can fill from a group; net_change came with station 4 (N2), cause and attribution with station 5 (A1b); confidence and conflicts come with station 6 and are optional until then. Unknown fields are allowed (line 209).",
   "type": "object",
   "required": [
     "schema_version",
@@ -22,6 +22,8 @@
     "window",
     "witnesses",
     "witness_status",
+    "cause",
+    "attribution",
     "lease",
     "mark_seqs",
     "prev_hash",
@@ -203,21 +205,44 @@
       }
     },
     "cause": {
-      "description": "The cause attribution found, for example the agent's tool call; null for none.",
-      "$comment": "brief v4 line 306; station 5 (slice A1)",
+      "description": "The cause attribution found, by station 5's steps in order; null when nothing matches (`unexplained`).",
+      "$comment": "brief v4 lines 306, 392-400, 413; station 5 (slice A1b). The kinds beside the brief's `agent_tool_call`, and `also`, are the agent's proposal (LD176, Q9)",
       "type": [
         "object",
         "null"
       ],
       "required": [
-        "kind"
+        "kind",
+        "ref"
       ],
       "properties": {
         "kind": {
+          "description": "agent_tool_call: a Glove mark of the tool call that changed the target (step 1), or, for marks that change nothing, the call's own outcome; time_match: the change fell inside that tool call's start and end (step 2); agent_command: the change happened while that agent command ran (step 3); byproduct: the path matched that entry of the byproducts list (step 4); turn: a turn's own marks; session: the session's end.",
+          "$comment": "brief v4 lines 306 (`agent_tool_call`), 396-399, 413; the other names are the agent's (LD176, Q9)",
+          "enum": [
+            "agent_tool_call",
+            "time_match",
+            "agent_command",
+            "byproduct",
+            "turn",
+            "session"
+          ]
+        },
+        "ref": {
+          "description": "What caused it: a tool call id, a turn id, a session id, or the byproducts entry that matched.",
+          "$comment": "brief v4 line 306",
           "type": "string",
           "minLength": 1
         },
-        "ref": {}
+        "also": {
+          "description": "When more than one tool call or command qualified at the same step: the others, after `ref`.",
+          "$comment": "agent's proposal (LD176, Q9): the brief's example names one cause",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
       }
     },
     "attribution": {
@@ -319,6 +344,34 @@
       "$ref": "#/definitions/fingerprint"
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "attribution": {
+            "const": "unexplained"
+          }
+        },
+        "required": [
+          "attribution"
+        ]
+      },
+      "then": {
+        "properties": {
+          "cause": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "cause": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  ],
   "definitions": {
     "fingerprint": {
       "type": "string",

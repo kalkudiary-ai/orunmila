@@ -19,9 +19,10 @@
  * `amends` and `continues` name odùs. `witness_status` keeps each witness's
  * status, scope, own mark_seqs and, for `saw`, its verbs and each mark's key
  * detail slots; `ceiling` says the ceiling settled it (Q6, O's yes, LD174). `net_change` comes from
- * the group (station 4, slice N2), and only where the group has one. Fields
- * stations 5-6 fill (cause, attribution, confidence, conflicts) are left out
- * until those slices: a field is never written as a guess. Plain code, no clock.
+ * the group (station 4, slice N2), and only where the group has one;
+ * `attribution` and `cause` from station 5 (slice A1b). Fields station 6
+ * fills (confidence, conflicts) are left out until its slices: a field is
+ * never written as a guess. Plain code, no clock.
  */
 
 const { seal } = require('../../verify/chain');
@@ -58,6 +59,8 @@ function oduRecord(g, bySeq) {
     witnesses,
     witness_status: { glove: witnessEntry(g.witness_status.glove), sentinel: witnessEntry(g.witness_status.sentinel) },
     ...(g.net_change ? { net_change: { ...g.net_change } } : {}),
+    cause: g.cause === null ? null : { ...g.cause, ...(g.cause.also ? { also: [...g.cause.also] } : {}) },
+    attribution: g.attribution,
     lease: { checked: false, inside: null },
     mark_seqs: [...g.mark_seqs],
   };

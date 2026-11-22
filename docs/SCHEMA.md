@@ -219,4 +219,8 @@ Only with `ORUNMILA_EXACT_CAPTURE=1` (off by default):
 - **`file_read.read_range`** (optional): `{ asked_offset, asked_limit,
   start_line, lines, total_lines }`, each a whole number or `null`, plus
   `truncated_by_token_cap: true` when the result says so. Absent when nothing
-  about the extent is known.
+  about the extent is known. `lines` and `total_lines` are the tool's own
+  counts, kept as given: Claude Code's Read counts the empty piece after a
+  file's last newline as a line in both, so a file ending in a newline shows one
+  more than its newline count (890 newlines: `total_lines` 891), and a whole
+  read still has `lines` equal to `total_lines`.

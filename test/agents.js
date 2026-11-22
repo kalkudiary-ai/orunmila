@@ -377,4 +377,30 @@ it('cli: install --agent claude-code refuses a second registration pointing at a
   rmrf(work);
 });
 
+// --- a read's line counts (LD125, the Fable cold verify's line-count check) ---
+// Claude Code's Read counts the empty piece after a file's last newline as a
+// line, in numLines and totalLines alike: on 1,342 of 1,342 results measured,
+// numLines was the content's newline count + 1. Capture keeps both numbers as
+// the tool gave them, so a whole read of a newline-ended file is `full`.
+
+it('agents: a whole Read of a newline-ended file keeps the tool\'s counts and is full (LD125)', () => {
+  const cc = agents.getAdapter('claude-code');
+  const whole = { type: 'text', file: { filePath: '/x/f.txt', content: 'one\ntwo\nthree\n', numLines: 4, startLine: 1, totalLines: 4 } };
+  const ext = cc.fields.readExtent(whole);
+  assert.deepStrictEqual(ext, { start_line: 1, lines: 4, total_lines: 4 }, 'the counts as the tool stated them');
+  assert.strictEqual(agents.readRange({ file_path: '/x/f.txt' }, ext).kind, 'full');
+  const part = { type: 'text', file: { filePath: '/x/f.txt', content: 'one\ntwo\nthree', numLines: 3, startLine: 1, totalLines: 4 } };
+  assert.strictEqual(agents.readRange({ file_path: '/x/f.txt', limit: 3 }, cc.fields.readExtent(part)).kind, 'range');
+});
+
+it('spec: read_range says what its line counts count (LD125)', () => {
+  const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'spec', 'mark.schema.json'), 'utf8'));
+  const props = schema.definitions.detail.properties.read_range.properties;
+  for (const k of ['lines', 'total_lines']) {
+    assert.strictEqual(typeof props[k].description, 'string', `${k} has a description`);
+    assert.strictEqual(typeof props[k].$comment, 'string', `${k} has a $comment`);
+    assert.strictEqual(props[k].$ref, '#/definitions/line_number', `${k} keeps its type`);
+  }
+});
+
 runAll('agents');

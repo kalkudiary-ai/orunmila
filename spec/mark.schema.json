@@ -373,8 +373,16 @@
             "asked_offset": { "$ref": "#/definitions/line_number" },
             "asked_limit": { "$ref": "#/definitions/line_number" },
             "start_line": { "$ref": "#/definitions/line_number" },
-            "lines": { "$ref": "#/definitions/line_number" },
-            "total_lines": { "$ref": "#/definitions/line_number" },
+            "lines": {
+              "description": "How many lines the tool's result says it returned, as the tool counts them. Claude Code's Read counts the empty piece after a file's last newline as a line, here and in total_lines alike, so a whole read has lines equal to total_lines.",
+              "$comment": "agent's choice, LD125 (measured: 1,342 of 1,342 Read results count the content's newlines + 1)",
+              "$ref": "#/definitions/line_number"
+            },
+            "total_lines": {
+              "description": "How many lines the tool's result says the file holds, as the tool counts them: for Claude Code's Read, a file ending in a newline counts one more than its newlines (890 newlines: 891). Kept as the tool stated it, never recounted.",
+              "$comment": "agent's choice, LD125 (Fable cold verify C2, 2026-11-22)",
+              "$ref": "#/definitions/line_number"
+            },
             "truncated_by_token_cap": {
               "description": "True when the tool's result says it cut the file's content at its token cap. Absent otherwise.",
               "$comment": "agent's choice, LD94 (Claude Code's Read result field truncatedByTokenCap)",

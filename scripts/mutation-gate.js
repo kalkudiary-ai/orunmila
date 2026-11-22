@@ -1254,6 +1254,13 @@ const MUTANTS = [
   { id: 'LA-6 the CLI installs a plist for another script', file: 'bin/orunmila.js', test: 'test/launch-agent.js',
     from: "r = agent.install({ node: process.execPath, script: __filename, home, env: process.env });", to: "r = agent.install({ node: process.execPath, script: 'orunmila', home, env: process.env });",
     fails: ['LA CLI: intake agent install'] },
+  // Slice LC3: a file put back to its committed bytes starts its slice's count again (LD150).
+  { id: 'LC3-1 a restore is never seen', file: 'scripts/leopard-check.js', test: 'test/leopard-check.js',
+    from: "w.hash !== undefined && w.hash === committedHash(rev, w.rel)) putBack.set(w.rel, w.t);", to: "false) putBack.set(w.rel, w.t);",
+    fails: ['--pending (LC3): writes undone', '--pending (LC3): a new file deleted again'] },
+  { id: 'LC3-2 any Sentinel write is a restore', file: 'scripts/leopard-check.js', test: 'test/leopard-check.js',
+    from: "w.hash !== undefined && w.hash === committedHash(rev, w.rel)) putBack.set(w.rel, w.t);", to: "w.hash !== undefined) putBack.set(w.rel, w.t);",
+    fails: ['--pending (LC3): a write to other bytes'] },
   // Slice B9: the gate's receipts and prompts from marks (LD148).
   { id: 'B9-1 a failed read is a receipt (NF26)', file: 'src/opon/gate/receipts.js', test: 'test/gate-from-marks.js',
     from: "    if (!(d.exit_status === 'pass')) continue; // NF26, NF69: a call that did not pass is no receipt\n", to: "",

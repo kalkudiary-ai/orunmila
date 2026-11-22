@@ -543,4 +543,50 @@ it(
   }),
 );
 
+// LC3 (LD150): a file put back to its committed bytes starts its slice's count again.
+const sha256hex = (s) => require('crypto').createHash('sha256').update(s).digest('hex');
+const restored = (repo, off, rel, hashAfter, kind = 'modify') => ({ ...sentinelWrite(repo, off, rel), change_kind: kind, hash_after: hashAfter });
+
+it(
+  '--pending (LC3): writes undone by a restore to the committed bytes are not the slice\'s; the red after the restore is before its first write',
+  withRepo((repo) => {
+    commit(repo, -50, ['src/a.js'], 'base a'); // committed bytes: "src/a.js -50\n", before the span
+    const committed = sha256hex('src/a.js -50\n');
+    stage(repo, ['test/a.js', 'src/a.js']);
+    const rows = [
+      prompt(0),
+      gloveWrite(repo, 3, 'src/a.js'), // abandoned work
+      restored(repo, 4, 'src/a.js', sha256hex('abandoned')),
+      restored(repo, 8, 'src/a.js', committed), // put back
+      ...pendingRows(repo).slice(1),
+    ];
+    const r = check(repo, rows, PENDING);
+    assert.strictEqual(r.json.pending.red.status, 'yes', JSON.stringify(r.json.pending));
+    assert.strictEqual(r.json.pending.shown, true);
+    assert.strictEqual(r.status, 0);
+  }),
+);
+
+it(
+  '--pending (LC3): a write to other bytes than the committed ones is no restore, so the earlier write still counts',
+  withRepo((repo) => {
+    commit(repo, -50, ['src/a.js'], 'base a');
+    stage(repo, ['test/a.js', 'src/a.js']);
+    const rows = [prompt(0), gloveWrite(repo, 3, 'src/a.js'), restored(repo, 8, 'src/a.js', sha256hex('other bytes')), ...pendingRows(repo).slice(1)];
+    const r = check(repo, rows, PENDING);
+    assert.strictEqual(r.json.pending.red.status, 'no run', JSON.stringify(r.json.pending.red));
+    assert.strictEqual(r.status, 1);
+  }),
+);
+
+it(
+  '--pending (LC3): a new file deleted again (absent at HEAD) is a restore too',
+  withRepo((repo) => {
+    stage(repo, ['test/a.js', 'src/a.js']);
+    const rows = [prompt(0), gloveWrite(repo, 3, 'src/a.js'), restored(repo, 8, 'src/a.js', null, 'delete'), ...pendingRows(repo).slice(1)];
+    const r = check(repo, rows, PENDING);
+    assert.strictEqual(r.json.pending.red.status, 'yes', JSON.stringify(r.json.pending.red));
+  }),
+);
+
 runAll('leopard-check');

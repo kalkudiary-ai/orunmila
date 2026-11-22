@@ -17,7 +17,9 @@
  *   gates  each gate run alone after the last write, its latest run passing
  *
  * A slice's window runs from the latest earlier Slice commit that shares a file
- * with it (or the session's first record) to its own commit (LD135: a commit
+ * with it (or the session's first record) to its own commit; a file the
+ * Sentinel saw put back to its committed bytes starts its count again there
+ * (LC3, LD150: undone work is not the slice's) (LD135: a commit
  * of another session's, on other files, is no boundary). Its writes are the Glove's and the Sentinel's
  * file_write rows for the files the commit changed: both witnesses, because a
  * shell command's write has only a Sentinel row. Runs come from the Glove's
@@ -338,15 +340,38 @@ function check({ rows, session, repo, pending = null }) {
     ...author.filter((e) => e.type === 'file_write' && e.source === 'hook'),
     ...rows.filter((e) => e.type === 'file_write' && e.source === 'fs-sentinel'),
   ]
-    .map((e) => ({ ts: e.ts, t: ms(e.ts), source: e.source, rel: rel(e.path) }))
+    .map((e) => ({ ts: e.ts, t: ms(e.ts), source: e.source, rel: rel(e.path), hash: e.source === 'fs-sentinel' && 'hash_after' in e ? e.hash_after : undefined }))
     .filter((w) => w.rel !== null && w.t >= span.from)
     .sort((a, b) => a.t - b.t);
 
+  // LC3 (LD150): the bytes a file had when the slice began, at `rev` (HEAD for a
+  // pending slice, the commit's parent otherwise): a Sentinel row whose content is
+  // those bytes again (null: absent again) puts the file back, so the writes to it
+  // up to that row were undone and are not the slice's.
+  const committed = new Map();
+  const committedHash = (rev, f) => {
+    const k = `${rev}:${f}`;
+    if (!committed.has(k)) {
+      let h;
+      try {
+        h = require('crypto').createHash('sha256').update(execFileSync('git', ['-C', repo, 'show', k], { stdio: ['ignore', 'pipe', 'ignore'] })).digest('hex');
+      } catch {
+        h = null; // absent at rev
+      }
+      committed.set(k, h);
+    }
+    return committed.get(k);
+  };
+
   /** One slice's verdict over the window (from, end]: its files' writes, its Test: runs, the gates. */
-  const judgeSlice = (c, from, end) => {
+  const judgeSlice = (c, from, end, rev) => {
     const inWindow = (t) => t > from && t <= end;
     const files = new Set(c.files);
-    const mine = writes.filter((w) => files.has(w.rel) && inWindow(w.t));
+    const putBack = new Map(); // file -> the time of its last restore to the committed bytes
+    for (const w of writes) {
+      if (files.has(w.rel) && inWindow(w.t) && w.source === 'fs-sentinel' && w.hash !== undefined && w.hash === committedHash(rev, w.rel)) putBack.set(w.rel, w.t);
+    }
+    const mine = writes.filter((w) => files.has(w.rel) && inWindow(w.t) && !(putBack.has(w.rel) && w.t <= putBack.get(w.rel)));
     const nonTest = mine.filter((w) => !w.rel.startsWith('test/'));
     const first = nonTest[0] || null;
     const last = mine.length ? mine[mine.length - 1] : null;
@@ -404,7 +429,7 @@ function check({ rows, session, repo, pending = null }) {
     const done = sliceCommits(repo, span.from, Date.now());
     const staged = git(repo, ['diff', '--cached', '--name-only']).split('\n').filter(Boolean).sort();
     if (!staged.length) return { ...head, pending: { test: pending.test, files: [], status: 'nothing staged', shown: false } };
-    return { ...head, pending: judgeSlice({ test: pending.test, files: staged }, windowStart(done, staged), Infinity) };
+    return { ...head, pending: judgeSlice({ test: pending.test, files: staged }, windowStart(done, staged), Infinity, 'HEAD') };
   }
 
   // Every Slice commit in the span is a possible window boundary (LD135), but only
@@ -424,7 +449,7 @@ function check({ rows, session, repo, pending = null }) {
       return;
     }
     const end = c.t + 999; // committer time has whole seconds
-    report.push(judgeSlice(c, windowStart(commits.slice(0, k), c.files), end));
+    report.push(judgeSlice(c, windowStart(commits.slice(0, k), c.files), end, `${c.sha}^`));
   });
   return { ...head, commits: report, others };
 }

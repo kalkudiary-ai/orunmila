@@ -7,7 +7,9 @@
  * Checks, in order: the raw log's hash chain (spec/hash-chain.md); every raw
  * line against its schema (line 1 the session header, the rest marks); the
  * quarantine log's chain; every file kept beside the log that a mark names
- * (missing, or changed since its fingerprint was taken). It loads nothing
+ * (missing, or changed since its fingerprint was taken), and the baseline
+ * snapshot when the header names one (`baseline.jsonl`, against the header's
+ * baseline.fingerprint; slice N1b, LD170). It loads nothing
  * outside src/verify and spec/, so it can be read in one sitting. A field the
  * spec does not declare leaves a record intact (a reader ignores what it does
  * not know, brief v3 line 209), and the answer names each one (LD85).
@@ -138,7 +140,8 @@ function checkLog(dir, name) {
 const isContinuation = (r) => r.part > 1 && r.line === 1;
 const summary = (l) => ({ ok: l.ok, parts: l.parts, cuts: l.cuts, ...(l.fail || {}) });
 
-const fileWords = (b) => `Record broken: the file kept beside the log for mark ${b.seq} (${b.ref}) ${b.problem === 'changed' ? 'was changed after it was written' : 'is missing'}.`;
+const fileWords = (b) =>
+  `Record broken: ${b.baseline ? 'the baseline snapshot kept beside the log' : `the file kept beside the log for mark ${b.seq}`} (${b.ref}) ${b.problem === 'changed' ? 'was changed after it was written' : 'is missing'}.`;
 
 function failWords(l, name) {
   const log = LOG_NAMES[name];
@@ -175,6 +178,20 @@ function verifySession(dir) {
   }
 
   const files = { checked: 0, bad: [] };
+  // The baseline snapshot the header names (LD170): it is a file kept beside the log, read by its fingerprint.
+  const head = raw.records.length && raw.records[0].part === 1 && raw.records[0].line === 1 ? raw.records[0].rec : null;
+  let baseline = null;
+  if (head && head.baseline && typeof head.baseline === 'object' && typeof head.baseline.fingerprint === 'string') {
+    const ref = head.baseline.fingerprint;
+    let buf = null;
+    try {
+      buf = fs.readFileSync(path.join(dir, 'baseline.jsonl'));
+    } catch {
+      files.bad.push({ ref, seq: 0, problem: 'missing', baseline: true });
+    }
+    if (buf !== null && sha256(buf) !== ref) files.bad.push({ ref, seq: 0, problem: 'changed', baseline: true });
+    else if (buf !== null) baseline = { entries: buf.toString('utf8').split('\n').length - 1 };
+  }
   for (const { rec } of marks) {
     const d = rec && rec.detail && typeof rec.detail === 'object' ? rec.detail : {};
     for (const slot of REF_SLOTS) {
@@ -218,9 +235,10 @@ function verifySession(dir) {
     const fields = undeclared.length
       ? [`${plural(undeclared.length, 'field', 'fields')} the spec does not declare: ${undeclared.map((u) => `${u.path} at ${where('raw log', u.part, u.line)}`).join(', ')}`]
       : [];
+    const base = baseline ? [`the baseline snapshot of ${plural(baseline.entries, 'entry', 'entries')} matches the header`] : [];
     words =
       `Record intact: ${plural(counts.marks, 'mark', 'marks')}, ${plural(counts.quarantined, 'quarantined input', 'quarantined inputs')}, ` +
-      `${plural(counts.kept_files, 'kept file', 'kept files')}, unbroken${[...cuts, ...fields].map((c) => `; ${c}`).join('')}.`;
+      `${plural(counts.kept_files, 'kept file', 'kept files')}, unbroken${[...cuts, ...fields, ...base].map((c) => `; ${c}`).join('')}.`;
   }
   return { ok: raw.ok && schema.ok && quarantine.ok && files.bad.length === 0, words, counts, raw: summary(raw), schema, quarantine: summary(quarantine), files, undeclared };
 }

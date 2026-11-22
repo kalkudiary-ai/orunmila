@@ -157,6 +157,20 @@
         }
       }
     },
+    "baseline": {
+      "description": "The baseline snapshot taken at session start: a fingerprint of every file in the workspace, kept beside the log as `baseline.jsonl` (one canonical JSON line per entry, sorted by path). The walk skips what `config.exclusions` names, so the exclusion itself is in this header. Its fingerprint is here, so the hash chain covers it too. Absent when no snapshot was taken.",
+      "$comment": "brief v4 lines 385, 387; the field's name and shape are the agent's (LD170). Counts of entries and bytes are left out: the brief does not name them and the file gives them",
+      "type": "object",
+      "required": ["fingerprint"],
+      "properties": {
+        "fingerprint": {
+          "description": "Plain SHA-256 of `baseline.jsonl`'s bytes.",
+          "$comment": "brief v4 line 387",
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
     "prev_hash": { "description": "The hash chain starts from the header, so it has no previous hash.", "$comment": "brief v3 line 282", "type": "null" },
     "hash": {
       "description": "The header's own hash; the first mark's prev_hash.",

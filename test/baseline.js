@@ -86,4 +86,166 @@ it('N1a: the snapshot file is canonical JSON lines, the same text twice, and its
   }
 });
 
+// ---- N1b: the snapshot written beside the log, its fingerprint in the header (LD170)
+
+const net = require('net');
+const { spawn } = require('child_process');
+const { createRouter } = require('../src/opon/intake/router');
+const { createSessionLog, openSessionLog, verifySessionLog } = require('../src/opon/ledger/session-log');
+const { buildHeader } = require('../src/opon/intake/header');
+const { oponLive } = require('../src/opon/intake/server');
+const { nowMono } = require('../src/opon/intake/mono');
+const { compile } = require('../src/verify/schema');
+
+const SRC = path.join(__dirname, '..', 'src');
+const ENV_VALUE = 'abcdefgh12345678';
+const readLines = (file) => fs.readFileSync(file, 'utf8').split('\n').slice(0, -1).map((l) => JSON.parse(l));
+
+/** A throwaway home and project with a router; `opts` are the router's. */
+function withProject(fn, opts = {}) {
+  return async () => {
+    const base = fs.realpathSync(tmpDir());
+    const home = path.join(base, 'h');
+    const project = path.join(base, 'p');
+    const put = (p, c) => {
+      fs.mkdirSync(path.dirname(path.join(project, p)), { recursive: true });
+      fs.writeFileSync(path.join(project, p), c);
+    };
+    put('src/a.js', 'one\n');
+    put('node_modules/x/index.js', 'dep\n');
+    put('.env', `TOKEN=${ENV_VALUE}\n`);
+    put(`notes-${ENV_VALUE}.txt`, 'a file whose name holds a .env value\n');
+    const clock = () => ({ mono: nowMono(), wall: new Date().toISOString() });
+    const router = createRouter({ home, clock, checkSender: () => true, codeRoot: SRC, orunmilaVersion: '0.0.0-test', installKey: KEY, hookSettingsFor: () => [], config: { exclusions: ['node_modules/'] }, ...opts });
+    const start = { session_id: 'ses_b1', transcript_path: '/tmp/t.jsonl', cwd: project, hook_event_name: 'SessionStart', source: 'startup' };
+    try {
+      await fn({ router, start, home, project, dir: path.join(home, 'sessions', 'ses_b1') });
+    } finally {
+      rmrf(base);
+    }
+  };
+}
+
+it(
+  'N1b: with the baseline on, the session log is made with baseline.jsonl beside it and its fingerprint in the header; the walk skips the header\'s config.exclusions; a path holding a .env value is redacted, as a mark\'s is',
+  withProject(
+    ({ router, start, dir }) => {
+      assert.strictEqual(router.payload(start, { channel: 'command' }).ok, true);
+      const header = readLines(path.join(dir, 'raw.jsonl'))[0];
+      const bytes = fs.readFileSync(path.join(dir, 'baseline.jsonl'));
+      assert.deepStrictEqual(header.baseline, { fingerprint: sha(bytes) });
+      assert.deepStrictEqual(header.config.exclusions, ['node_modules/']);
+      const entries = readLines(path.join(dir, 'baseline.jsonl'));
+      assert.deepStrictEqual(entries.map((e) => e.path), ['.env', 'notes-[REDACTED:env_value].txt', 'src/a.js']);
+      assert.deepStrictEqual(entries[1].redactions, ['env_value']);
+      const checkEntry = compile(JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'spec', 'baseline.schema.json'), 'utf8')));
+      for (const e of entries) assert.deepStrictEqual(checkEntry(e), [], JSON.stringify(e));
+      assert.ok(!bytes.toString('utf8').includes(ENV_VALUE), 'the value is never written');
+      assert.ok(entries[0].fingerprint.startsWith('hmac-sha256:'), 'the .env is keyed');
+      assert.strictEqual((fs.statSync(path.join(dir, 'baseline.jsonl')).mode & 0o777).toString(8), '600');
+      const v = verifySessionLog(dir);
+      assert.strictEqual(v.ok, true, v.words);
+      assert.match(v.words, /; the baseline snapshot of 3 entries matches the header\.$/);
+    },
+    { baseline: true },
+  ),
+);
+
+it(
+  'N1b: with the baseline off (the default), no baseline file is written and the header has no baseline field: nothing changes',
+  withProject(({ router, start, dir }) => {
+    assert.strictEqual(router.payload(start, { channel: 'command' }).ok, true);
+    assert.strictEqual(fs.existsSync(path.join(dir, 'baseline.jsonl')), false);
+    assert.strictEqual('baseline' in readLines(path.join(dir, 'raw.jsonl'))[0], false);
+    assert.doesNotMatch(verifySessionLog(dir).words, /baseline/);
+  }),
+);
+
+it(
+  'N1b: verify says so when the baseline snapshot beside the log was changed or is missing, and a log so broken is never reopened',
+  withProject(
+    ({ router, start, dir }) => {
+      router.payload(start, { channel: 'command' });
+      const file = path.join(dir, 'baseline.jsonl');
+      fs.appendFileSync(file, '{"path":"planted"}\n');
+      let v = verifySessionLog(dir);
+      assert.strictEqual(v.ok, false);
+      assert.match(v.words, /^Record broken: the baseline snapshot kept beside the log \(sha256:[0-9a-f]{64}\) was changed after it was written\.$/);
+      assert.throws(() => openSessionLog(dir), /cannot be reopened: Record broken: the baseline snapshot/);
+      fs.rmSync(file);
+      v = verifySessionLog(dir);
+      assert.strictEqual(v.ok, false);
+      assert.match(v.words, /the baseline snapshot kept beside the log \(sha256:[0-9a-f]{64}\) is missing\.$/);
+    },
+    { baseline: true },
+  ),
+);
+
+it('N1b: the session log refuses a header baseline that does not match the snapshot given, and either one without the other', () => {
+  const base = fs.realpathSync(tmpDir());
+  try {
+    fs.mkdirSync(path.join(base, 'p'));
+    const header = buildHeader({ sessionId: 'ses_b2', root: path.join(base, 'p'), agent: { name: 'claude-code' }, orunmilaVersion: '0.0.0-test', codeRoot: SRC });
+    const text = '{"path":"a","size":0,"fingerprint":"sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}\n';
+    const dir = (n) => path.join(base, `s${n}`);
+    assert.throws(() => createSessionLog(dir(1), { ...header, baseline: { fingerprint: sha('other') } }, { baseline: text }), /does not match/);
+    assert.throws(() => createSessionLog(dir(2), { ...header, baseline: { fingerprint: sha(text) } }), /baseline/);
+    assert.throws(() => createSessionLog(dir(3), header, { baseline: text }), /baseline/);
+    for (const n of [1, 2, 3]) assert.strictEqual(fs.existsSync(path.join(dir(n), 'raw.jsonl')), false, 'nothing is written when refused');
+    createSessionLog(dir(4), { ...header, baseline: { fingerprint: sha(text) } }, { baseline: text });
+    assert.strictEqual(fs.readFileSync(path.join(dir(4), 'baseline.jsonl'), 'utf8'), text);
+    assert.strictEqual(verifySessionLog(dir(4)).ok, true);
+    // The leak check (LD101) searches the snapshot as it does every kept file: a value that got past redaction is reported by name.
+    const leaky = `{"path":"notes-${ENV_VALUE}.txt","size":0,"fingerprint":"sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}\n`;
+    const log = createSessionLog(dir(5), { ...header, baseline: { fingerprint: sha(leaky) } }, { baseline: leaky, envEntries: [{ names: ['TOKEN'], value: ENV_VALUE }] });
+    assert.deepStrictEqual(log.leaks().map((h) => [h.log, h.names]), [['baseline', ['TOKEN']]]);
+  } finally {
+    rmrf(base);
+  }
+});
+
+it('N1b: ORUNMILA_OPON_LIVE=1, and nothing else, turns the live path on (LD166)', () => {
+  assert.strictEqual(oponLive({}), false);
+  assert.strictEqual(oponLive({ ORUNMILA_OPON_LIVE: '1' }), true);
+  for (const v of ['', '0', 'true', 'yes', ' 1']) assert.strictEqual(oponLive({ ORUNMILA_OPON_LIVE: v }), false, JSON.stringify(v));
+});
+
+/** `orunmila intake run` on a throwaway home; one SessionStart over its socket; the session folder's files. */
+async function intakeRunFiles(env) {
+  const base = fs.realpathSync(tmpDir());
+  const home = path.join(base, 'h');
+  const project = path.join(base, 'p');
+  fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(project, 'src', 'a.js'), 'one\n');
+  const child = spawn(process.execPath, [path.join(__dirname, '..', 'bin', 'orunmila.js'), 'intake', 'run'], {
+    env: { ...process.env, ORUNMILA_HOME: home, ORUNMILA_INTAKE_PORT: '0', ORUNMILA_OPON_LIVE: '', ...env },
+    stdio: 'ignore',
+  });
+  const sock = path.join(home, 'intake', 'intake.sock');
+  const dir = path.join(home, 'sessions', 'ses_b3');
+  const until = async (cond) => {
+    for (let end = Date.now() + 8000; Date.now() < end; await new Promise((r) => setTimeout(r, 50))) if (cond()) return true;
+    return cond();
+  };
+  try {
+    assert.ok(await until(() => fs.existsSync(sock)), 'the intake did not start');
+    await new Promise((resolve, reject) => {
+      const c = net.createConnection(sock, () => c.end(JSON.stringify({ op: 'payload', payload: { session_id: 'ses_b3', cwd: project, hook_event_name: 'SessionStart', source: 'startup' } }) + '\n'));
+      c.on('error', reject);
+      c.on('close', resolve);
+    });
+    assert.ok(await until(() => fs.existsSync(path.join(dir, 'raw.jsonl'))), 'no session log');
+    return fs.readdirSync(dir).sort();
+  } finally {
+    child.kill('SIGTERM');
+    await new Promise((r) => (child.exitCode === null ? child.on('exit', r) : r()));
+    rmrf(base);
+  }
+}
+
+it('N1b: `orunmila intake run` writes the baseline only with ORUNMILA_OPON_LIVE=1', async () => {
+  assert.deepStrictEqual(await intakeRunFiles({}), ['files', 'quarantine.jsonl', 'raw.jsonl']);
+  assert.deepStrictEqual(await intakeRunFiles({ ORUNMILA_OPON_LIVE: '1' }), ['baseline.jsonl', 'files', 'quarantine.jsonl', 'raw.jsonl']);
+});
+
 runAll('baseline');

@@ -10,6 +10,10 @@
  *                            reasons, in a chain of its own; never dropped
  *   <dir>/files/<hex>        files kept beside the log (diffs, full output),
  *                            whole, named by the plain SHA-256 of their bytes
+ *   <dir>/baseline.jsonl     the baseline snapshot at session start (station 4,
+ *                            slice N1b, LD170), when one was taken: its
+ *                            fingerprint is the header's baseline.fingerprint,
+ *                            so the hash chain covers it (brief v4 line 387)
  *
  * Intake alone assigns seq, prev_hash and hash; an input that sets one is
  * quarantined. A mark naming a diff_ref or output_ref that was not kept is
@@ -24,7 +28,9 @@
  * those values right after it is written (the leak check, LD101), and a hit
  * is reported by name in append's `leaks` and in leaks().
  * One writer per session log is assumed (one intake per machine, slice B1).
- * createSessionLog makes a new folder; openSessionLog reopens one that
+ * createSessionLog makes a new folder, with `baseline` (the snapshot's text,
+ * src/opon/net/baseline.js) exactly when the header names one, and refuses a
+ * snapshot that does not match the header's fingerprint; openSessionLog reopens one that
  * verifies, for an intake that restarted (slice B1c, test 84). ended() says
  * whether the raw log holds the session's end mark (LD55); pin() is the
  * process the session is pinned to, from the record (LD58), or null.
@@ -81,13 +87,19 @@ function leakEntries(envValues, envEntries) {
   return [...byValue].map(([value, names]) => ({ names: [...names].sort(), value }));
 }
 
-function createSessionLog(dir, headerInput, { envValues = [], envEntries = [] } = {}) {
+function createSessionLog(dir, headerInput, { envValues = [], envEntries = [], baseline = null } = {}) {
   const entries = leakEntries(envValues, envEntries); // first: an entry with no names list refuses the log before any write
   const rawFile = path.join(dir, 'raw.jsonl');
   const qFile = path.join(dir, 'quarantine.jsonl');
   const filesDir = path.join(dir, 'files');
   if (fs.existsSync(rawFile)) throw new Error(`a session log already exists in ${dir}`);
   for (const k of INTAKE_FIELDS) if (k in headerInput) throw new Error(`the header sets ${k}, which intake assigns`);
+  // The baseline and the header's fingerprint of it come together, or not at all (LD170).
+  const named = isObject(headerInput.baseline);
+  if (named !== (baseline !== null)) throw new Error(named ? 'the header names a baseline snapshot, but none was given' : 'a baseline snapshot was given, but the header does not name it');
+  if (named && `sha256:${sha256(Buffer.from(String(baseline), 'utf8'))}` !== headerInput.baseline.fingerprint) {
+    throw new Error("the baseline snapshot does not match the header's baseline.fingerprint");
+  }
   const header = seal({ ...headerInput, seq: 0 }, null);
   const errs = checkHeader(header);
   if (errs.length) throw new Error(`malformed session header: ${describe(errs).join('; ')}`);
@@ -95,10 +107,17 @@ function createSessionLog(dir, headerInput, { envValues = [], envEntries = [] } 
   fs.mkdirSync(filesDir, { recursive: true, mode: 0o700 });
   fs.chmodSync(dir, 0o700);
   fs.chmodSync(filesDir, 0o700);
+  if (named) {
+    // Placed before the raw log, whole: a crash between the two leaves no log that names a missing
+    // snapshot, and the next start, finding no raw log, places a fresh one over the stale file.
+    const tmp = path.join(dir, `baseline.jsonl.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`);
+    fs.writeFileSync(tmp, String(baseline), { flag: 'wx', mode: 0o600 });
+    fs.renameSync(tmp, path.join(dir, 'baseline.jsonl'));
+  }
   fs.writeFileSync(rawFile, line(header), { flag: 'wx', mode: 0o600 });
   const qHeader = seal({ schema_version: 1, record: 'quarantine_header', session_id: header.session_id, seq: 0 }, null);
   fs.writeFileSync(qFile, line(qHeader), { flag: 'wx', mode: 0o600 });
-  return writer(dir, { rawFile, qFile, header, last: header, timed: header, qLast: qHeader, counts: { marks: 0, quarantined: 0 }, ended: false, pin: null, envValues, envEntries, entries, headerLine: line(header) });
+  return writer(dir, { rawFile, qFile, header, last: header, timed: header, qLast: qHeader, counts: { marks: 0, quarantined: 0 }, ended: false, pin: null, envValues, envEntries, entries, headerLine: line(header), baselineText: named ? String(baseline) : null });
 }
 
 /** Start the next part of a log a crash cut (LD57): its first line names the cut and follows the last whole line. */
@@ -163,7 +182,7 @@ function openSessionLog(dir, { envValues = [], envEntries = [] } = {}) {
  * and `qLast` (quarantine, in qFile); `timed` is the raw log's last header or
  * mark, which last() reports (a continuation record has no times).
  */
-function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended, pin, envValues, envEntries = [], entries, headerLine = null }) {
+function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended, pin, envValues, envEntries = [], entries, headerLine = null, baselineText = null }) {
   const filesDir = path.join(dir, 'files');
 
   // LD101: the leak check after redaction. Each record and kept file is searched,
@@ -183,6 +202,7 @@ function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended
   }
   const reported = (r, found) => (found.length ? { ...r, leaks: found } : r);
   if (headerLine !== null) check(headerLine, { log: 'raw', seq: 0 }, []);
+  if (baselineText !== null) check(baselineText, { log: 'baseline' }, []);
 
   /** Keep a file beside the log: text is redacted first (line 266); binary is kept as is. Returns { ref, kinds }. */
   function keep(content, found) {

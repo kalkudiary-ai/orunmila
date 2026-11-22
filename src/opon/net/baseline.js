@@ -5,7 +5,7 @@
  * 385, 387, 390, 250; Phase 3 slice N1a, LD169): a fingerprint of every file in
  * the workspace at session start.
  *
- *   snapshot(root, { exclusions, key, caseInsensitive?, chunkBytes? })
+ *   snapshot(root, { exclusions, key, envValues?, caseInsensitive?, chunkBytes? })
  *     -> { entries, text, fingerprint, files, bytes }
  *
  * Every entry under `root` is walked, sorted by path, except what the header's
@@ -18,8 +18,11 @@
  * outside the project. Anything else that is not a folder is
  * { path, kind: 'other' }. Nothing seen is left out. Paths are relative to the
  * root with `/`, lower-cased on a case-insensitive file system, as intake
- * normalises a mark's path (line 345), so a baseline entry and a mark for one
- * file name it the same way.
+ * normalises a mark's path (line 345), then redacted as every string of a mark
+ * is (`envValues`, the project's `.env` values, held in memory only; slice N1b,
+ * LD170), so a baseline entry and a mark for one file name it the same way and
+ * no secret in a file's name reaches the file; a redacted entry notes the kinds
+ * in `redactions`.
  *
  * `text` is the snapshot file: one canonical JSON line (RFC 8785) per entry;
  * `fingerprint` is the plain SHA-256 of its bytes, for the session header
@@ -31,7 +34,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { canonicalize } = require('../../verify/canonical');
 const { isIgnored } = require('../../capture/fs-sentinel/ignore');
-const { onRedactionList } = require('../intake/redact');
+const { onRedactionList, redactText } = require('../intake/redact');
 const { isCaseInsensitive } = require('../intake/paths');
 
 const CHUNK = 1024 * 1024;
@@ -58,7 +61,7 @@ function hashFile(abs, rel, key, chunkBytes) {
   return { size, fingerprint: h.prefix + h.hash.digest('hex') };
 }
 
-function snapshot(root, { exclusions = [], key = null, caseInsensitive, chunkBytes = CHUNK } = {}) {
+function snapshot(root, { exclusions = [], key = null, envValues = [], caseInsensitive, chunkBytes = CHUNK } = {}) {
   const top = fs.realpathSync(root);
   const ci = caseInsensitive === undefined ? isCaseInsensitive(top) : caseInsensitive;
   const entries = [];
@@ -67,11 +70,16 @@ function snapshot(root, { exclusions = [], key = null, caseInsensitive, chunkByt
       const abs = path.join(dir, e.name);
       const rel = path.relative(top, abs).split(path.sep).join('/');
       if (isIgnored(e.isDirectory() ? rel + '/' : rel, exclusions)) continue;
+      if (e.isDirectory() && !e.isSymbolicLink()) {
+        walk(abs);
+        continue;
+      }
       const name = ci ? rel.toLowerCase() : rel;
-      if (e.isSymbolicLink()) entries.push({ path: name, kind: 'link' });
-      else if (e.isDirectory()) walk(abs);
-      else if (e.isFile()) entries.push({ path: name, ...hashFile(abs, rel, key, chunkBytes) });
-      else entries.push({ path: name, kind: 'other' });
+      const r = redactText(name, envValues);
+      const noted = r.kinds.length ? { redactions: r.kinds } : {};
+      if (e.isSymbolicLink()) entries.push({ path: r.text, kind: 'link', ...noted });
+      else if (e.isFile()) entries.push({ path: r.text, ...hashFile(abs, rel, key, chunkBytes), ...noted });
+      else entries.push({ path: r.text, kind: 'other', ...noted });
     }
   };
   walk(top);

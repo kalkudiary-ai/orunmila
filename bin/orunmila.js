@@ -1300,7 +1300,7 @@ function leakCheck() {
  * Nothing sends to it yet: the hooks' sender is slice B2.
  */
 async function cmdIntake() {
-  const { createServer, intakePaths, readInstallKey, statusOf, intakePort } = require('../src/opon/intake/server');
+  const { createServer, intakePaths, readInstallKey, statusOf, intakePort, oponLive } = require('../src/opon/intake/server');
   const home = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
   const p = intakePaths(home);
   const sub = args[1];
@@ -1322,6 +1322,7 @@ async function cmdIntake() {
       orunmilaVersion: require('../package.json').version,
       installKey: readInstallKey(home),
       sentinel: true, // the Sentinel runs inside the intake (B4, LD145)
+      baseline: oponLive(), // the baseline snapshot at session start, only with ORUNMILA_OPON_LIVE=1 (N1b, LD170)
     });
     const server = createServer({ home, router, httpPort: intakePort() });
     const r = await server.start();

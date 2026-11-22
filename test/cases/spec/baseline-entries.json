@@ -1,0 +1,176 @@
+{
+  "good": {
+    "file": {
+      "path": "src/a.js",
+      "size": 4,
+      "fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "keyed": {
+      "path": ".env",
+      "size": 23,
+      "fingerprint": "hmac-sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    "link": {
+      "path": "outside-link",
+      "kind": "link"
+    },
+    "other": {
+      "path": "a.fifo",
+      "kind": "other"
+    },
+    "redacted": {
+      "path": "notes-[REDACTED:env_value].txt",
+      "size": 0,
+      "fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "redactions": [
+        "env_value"
+      ]
+    }
+  },
+  "bad": [
+    {
+      "name": "no path",
+      "from": "file",
+      "set": {},
+      "unset": [
+        "/path"
+      ],
+      "error": {
+        "path": "/path",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "an empty path",
+      "from": "file",
+      "set": {
+        "/path": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/path",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "a path that is not a string",
+      "from": "file",
+      "set": {
+        "/path": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/path",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a negative size",
+      "from": "file",
+      "set": {
+        "/size": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/size",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "a size that is not an integer",
+      "from": "file",
+      "set": {
+        "/size": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/size",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a fingerprint that is not SHA-256 or HMAC-SHA-256",
+      "from": "file",
+      "set": {
+        "/fingerprint": "md5:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "unset": [],
+      "error": {
+        "path": "/fingerprint",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "a fingerprint that is not a string",
+      "from": "file",
+      "set": {
+        "/fingerprint": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/fingerprint",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a kind not in the list (a folder is walked, never listed)",
+      "from": "link",
+      "set": {
+        "/kind": "dir"
+      },
+      "unset": [],
+      "error": {
+        "path": "/kind",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "redactions that are not a list",
+      "from": "redacted",
+      "set": {
+        "/redactions": "env_value"
+      },
+      "unset": [],
+      "error": {
+        "path": "/redactions",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a redaction kind that is not a string",
+      "from": "redacted",
+      "set": {
+        "/redactions/0": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/redactions/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "an empty redaction kind",
+      "from": "redacted",
+      "set": {
+        "/redactions/0": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/redactions/0",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "an empty redactions list",
+      "from": "redacted",
+      "set": {
+        "/redactions": []
+      },
+      "unset": [],
+      "error": {
+        "path": "/redactions",
+        "keyword": "minItems"
+      }
+    }
+  ]
+}

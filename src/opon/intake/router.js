@@ -8,13 +8,17 @@
  *
  *   createRouter({ home, clock, checkSender, codeRoot, orunmilaVersion,
  *                  installKey, hookSettingsFor?, lawPacksFor?, config?,
- *                  diff?, tickMs?, releaseMs? })
+ *                  diff?, tickMs?, releaseMs?, sentinel?, baseline? })
  *   router.payload(payload, { channel, pid, monoNs } = {})
  *       -> { ok, results: [the log's answer per mark], reason? }
  *       In order: the session's log is made at first contact, with its header
  *       (configuration frozen then, line 343), in <home>/sessions/<id>/, outside
  *       the project (line 348), or reopened if it exists; the payload gets its
- *       turn; a write's file facts are measured, before at PreToolUse and after
+ *       turn (with `baseline: true`, slice N1b, LD170, the baseline snapshot of
+ *       the root is taken first, skipping the header's config.exclusions, and
+ *       kept beside the log as baseline.jsonl, its fingerprint in the header's
+ *       `baseline`; off by default, as the live path is, LD166);
+ *       a write's file facts are measured, before at PreToolUse and after
  *       at PostToolUse, and a read's at PostToolUse (the whole file at hook time,
  *       test 55); the adapter translates (A8); paths are normalised (line 345);
  *       each mark goes through the engine (seq, pin, stamp) with its kept files
@@ -83,6 +87,7 @@ const { looksBinary } = require('../../capture/fs-sentinel/hasher');
 const { getAdapter } = require('../../capture/agents');
 const { createSentinels } = require('./sentinel');
 const { createTamperWatch } = require('./tamper');
+const { snapshot } = require('../net/baseline');
 
 const CC = getAdapter('claude-code');
 const RELEASE_MS = 30 * 60 * 1000;
@@ -244,8 +249,15 @@ function createRouter(o) {
       monoNs: now.mono,
       envValues: entries.map((e) => e.value),
     });
+    let baseline = null;
+    if (o.baseline) {
+      // Station 4's baseline, at session start (brief v4 lines 385, 387): the same exclusions the header records.
+      const b = snapshot(root, { exclusions: header.config.exclusions, key: o.installKey, envValues: entries.map((e) => e.value) });
+      header.baseline = { fingerprint: b.fingerprint };
+      baseline = b.text;
+    }
     ensureDir(sessionsDir);
-    const log = createSessionLog(dir, header, { envEntries: entries });
+    const log = createSessionLog(dir, header, { envEntries: entries, baseline });
     const tamper = createTamperWatch({ header: { ...header, project_root: root }, codeRoot: o.codeRoot, lawPacks: lawPacksFor(root), clock });
     return { log, root, ci: isCaseInsensitive(root), n: 0, open: false, pre: new Map(), last: BigInt(now.mono), limit: header.config.diff_size_limit_bytes, tamper };
   }

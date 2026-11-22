@@ -474,6 +474,13 @@ function createServer({ home, router, pollMs = 100, statusTimeoutMs = 1000, maxL
 
 const DEFAULT_HTTP_PORT = 47390; // LD140: free on this machine when chosen (lsof, 2026-11-22)
 
+/**
+ * The Ọpọ́n's live path in the intake (LD166, LD170): on only with
+ * ORUNMILA_OPON_LIVE=1, exactly; anything else, or nothing, is off. Today it
+ * takes the baseline snapshot at session start (slice N1b); stations 1-6 join it in L1.
+ */
+const oponLive = (env = process.env) => env.ORUNMILA_OPON_LIVE === '1';
+
 /** The intake's HTTP port: ORUNMILA_INTAKE_PORT, or the default; a value that is not a port throws. */
 function intakePort(env = process.env) {
   const v = env.ORUNMILA_INTAKE_PORT;
@@ -483,4 +490,4 @@ function intakePort(env = process.env) {
   return n;
 }
 
-module.exports = { createServer, intakePaths, readInstallKey, statusOf, intakePort, DEFAULT_HTTP_PORT, MAX_LINE };
+module.exports = { createServer, intakePaths, readInstallKey, statusOf, intakePort, oponLive, DEFAULT_HTTP_PORT, MAX_LINE };

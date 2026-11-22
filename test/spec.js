@@ -54,6 +54,7 @@ const FORMATS = [
   { name: 'continuation', schema: 'continuation.schema.json', cases: 'continuations.json', sweep: true },
   { name: 'retention header', schema: 'retention-header.schema.json', cases: 'retention-headers.json', sweep: true },
   { name: 'retention removal', schema: 'retention-removal.schema.json', cases: 'retention-removals.json', sweep: true },
+  { name: 'baseline entry', schema: 'baseline.schema.json', cases: 'baseline-entries.json', sweep: true },
 ];
 
 // --- the deletion sweep (NF85, LD79) ----------------------------------------------

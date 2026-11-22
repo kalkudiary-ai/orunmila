@@ -76,4 +76,51 @@ it(
   }),
 );
 
+it(
+  "rule 3: a running command's group stays open until the process exits, past any quiet window and the ceiling, then waits one quiet window",
+  withBase((base) => {
+    const s = makeLog(base);
+    const a = s.append(M.started(0, 'c1', { kind: 'command', text: 'npm install' }, 'Bash'));
+    for (let ms = 10000; ms <= 50000; ms += 10000) s.append(M.tick(ms));
+    const mid = groups(s.dir);
+    assert.deepStrictEqual(mid.map((x) => x.state), ['open'], 'held while the command runs: 50 s, past the 30 s ceiling');
+    const b = s.append(M.exited(60000, 'c1', 'npm install'));
+    s.append(M.tick(70000));
+    const g = groups(s.dir);
+    assert.deepStrictEqual(g.map((x) => [x.mark_seqs, x.state, x.settled_at_ns, x.ceiling, x.action]), [[[a, b], 'sealed', ns(61500), false, 'exited']]);
+  }),
+);
+
+it(
+  "rule 3: a turn's group holds until its ended mark; checks that come after the end join it",
+  withBase((base) => {
+    const s = makeLog(base);
+    const p = s.append(M.prompted(0));
+    const c = s.append(M.claimed(1000));
+    s.append(M.tick(5000)); // quiet 4 s, but the turn has not ended
+    assert.deepStrictEqual(groups(s.dir).map((x) => x.state), ['open']);
+    const e = s.append(M.turnEnded(6000));
+    s.append(M.tick(20000));
+    const g = groups(s.dir);
+    assert.deepStrictEqual(g.map((x) => [x.mark_seqs, x.settled_at_ns]), [[[p, c, e], ns(7500)]]);
+  }),
+);
+
+it(
+  "rule 3 with rule 2: a turn longer than the ceiling is force-settled there, and its later marks continue it however long the gap (LD154)",
+  withBase((base) => {
+    const s = makeLog(base);
+    s.append(M.prompted(0));
+    s.append(M.tick(35000));
+    s.append(M.turnEnded(45000)); // 15 s after the force-settle: the turn was still running
+    s.append(M.tick(60000));
+    const g = groups(s.dir);
+    assert.deepStrictEqual(g.map((x) => [x.ceiling, x.settled_at_ns, x.continues === null]), [
+      [true, ns(30000), true],
+      [false, ns(46500), false],
+    ]);
+    assert.strictEqual(g[1].continues, g[0].group_id);
+  }),
+);
+
 runAll('settle');

@@ -22,7 +22,14 @@
  * (rule 2, `ceiling: true`); it takes no more marks, and the target's next
  * mark, if it comes within a quiet window of that moment (the target is still
  * busy), opens a continuation group that names it (`continues`, LD153); a mark
- * later than that is a new event. A mark for a settled group (in its
+ * later than that is a new event.
+ *
+ * Process-aware hold (rule 3): a command's group with a `started` mark and no
+ * `exited` (or failed `ended`) yet stays open however long it is quiet, and the
+ * ceiling never cuts it; once the process has exited it waits one quiet
+ * window. A turn's group holds until its `ended` mark, subject to the ceiling;
+ * a held group force-settled at the ceiling is still running, so its next mark
+ * continues it however late (LD154). Children of a running command: slice G2. A mark for a settled group (in its
  * grace) joins it and opens it again, its timer restarted: the grace is there
  * for a slow source's marks of the same event. A sealed group is never
  * reopened (rule 8, slice S6). Ticks only move time.
@@ -67,6 +74,13 @@ function createOpon({ sessionId, config }) {
 
   const id = (n) => `g_${String(n).padStart(4, '0')}`;
 
+  /** Why a group may not settle yet (rule 3): 'process', 'turn' or null. */
+  function holdOf(g) {
+    if (g.isCommand && g.says.includes('started') && !g.says.some((v) => v === 'exited' || v === 'ended')) return 'process';
+    if (g.isTurn && !g.turnEnded) return 'turn';
+    return null;
+  }
+
   function record(g) {
     return {
       group_id: g.id,
@@ -90,17 +104,19 @@ function createOpon({ sessionId, config }) {
     const sealed = [];
     for (const g of unsealed.values()) {
       if (g.state === 'open') {
-        const byQuiet = g.last + quiet;
-        const byCeiling = g.first + ceiling;
-        const at = byQuiet <= byCeiling ? byQuiet : byCeiling;
-        if (t >= at) {
+        const hold = holdOf(g);
+        const byQuiet = hold ? null : g.last + quiet;
+        // A command that was seen starting is held until it exits, never cut by the ceiling (rule 3).
+        const byCeiling = g.isCommand && g.says.includes('started') ? null : g.first + ceiling;
+        const at = byQuiet === null ? byCeiling : byCeiling === null || byQuiet <= byCeiling ? byQuiet : byCeiling;
+        if (at !== null && t >= at) {
           g.state = 'settled';
           g.settledAt = at;
-          if (byCeiling < byQuiet) {
+          if (at !== byQuiet) {
             // Rule 2: force-settled; the target's next marks go to a continuation.
             g.forced = true;
             if (live.get(g.key) === g) live.delete(g.key);
-            forcedLast.set(g.key, { id: g.id, at });
+            forcedLast.set(g.key, { id: g.id, at, held: hold !== null });
           }
         }
       }
@@ -128,8 +144,8 @@ function createOpon({ sessionId, config }) {
     if (!g) {
       const f = forcedLast.get(key);
       forcedLast.delete(key);
-      const continues = f && now - f.at < quiet ? f.id : null;
-      g = { n: ++made, id: id(made), key, state: 'open', target: m.target, seqs: [], says: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues };
+      const continues = f && (f.held || now - f.at < quiet) ? f.id : null;
+      g = { n: ++made, id: id(made), key, state: 'open', target: m.target, seqs: [], says: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues, isCommand: key.startsWith('command:'), isTurn: key.startsWith('turn:'), turnEnded: false };
       live.set(key, g);
       unsealed.set(g.id, g);
       all.push(g);
@@ -140,6 +156,7 @@ function createOpon({ sessionId, config }) {
     g.seqs.push(m.seq);
     g.says.push(m.says);
     g.last = now;
+    if (m.says === 'ended' && m.target && m.target.kind === 'turn') g.turnEnded = true;
     return out;
   }
 

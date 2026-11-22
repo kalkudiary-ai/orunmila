@@ -5,9 +5,12 @@
 > *unsandboxed* there (the driver's `git status`, the referee's `git diff-tree`, and Claude Code's own
 > start-up `git status` for the next session) then runs the planted hooks, fsmonitor and filters as
 > O. A symlink swapped between the guard's check and the Write tool's write also got 3 of 12 writes
-> outside the clone. `turbo.js run` refuses to start (`HOLD` in `turbo.js`). The fix needs O: run
-> sessions as a separate macOS user that cannot read or write O's files (administrator rights), or
-> accept these routes in writing. Everything below describes the harness as built.
+> outside the clone. `turbo.js run` refuses to start (`HOLD` in `turbo.js`). O's choice (2026-11-22):
+> make an escape show up and stop the run, not try to make it impossible. Slices T18-T21 (LD126-LD131)
+> built that ("Escape checks" below): both routes are now caught after the session and halt the run
+> before any git. Only O lifts the hold, after reading the planted-escape results. A separate macOS
+> user (administrator rights) would still be the only fix that also prevents. Everything below
+> describes the harness as built.
 
 An unattended Leopard run for the Orunmila build (O, 2026-11-22; decisions LD108-LD116 in
 `review/leopard-decisions.md` on `output-1`). It keeps working for the hours you give it. It does
@@ -149,6 +152,12 @@ refuses while HALT.json exists. Read it, run no git in that clone, and make a ne
   hooks and info are unchanged since the run started. The same check runs before the driver's first
   git at start, so a run never starts over a planted `.git`. The driver's own git also runs with the
   git dir, common dir and work tree pinned to the clone, no system config, and hooks and fsmonitor off.
+- **Both records** (T21, LD131): every write the Glove recorded for the session (not failed, with a
+  changed line) needs a Sentinel row on the clone for the same path within -1 s/+3 s. A write the
+  Glove recorded but the clone's disk did not show may have landed elsewhere: the symlink race on
+  the Write tool lands anywhere you can write, so this is the check that sees it wherever it went.
+  A Glove write outside the clone and TURBO_HOME is a finding too. It is on whenever the clone has
+  its Sentinel.
 - **Links** (T20, LD130): any link in the clone whose target is outside it is a finding, except
   `node_modules`, `CLAUDE.md` and `docs/AGENT_OPERATING_RULES.md` at the targets the source has.
 - **Outside the clone** (T19, LD128): every Sentinel row under the live copy and the source worktree
@@ -160,6 +169,11 @@ refuses while HALT.json exists. Read it, run no git in that clone, and make a ne
   explains passes (a peer's write on the same path, or a command of its own within 3 s or within its
   span); any other halts. A Sentinel already watching the live copy or the worktree is used; with
   `ORUNMILA_HOME` set the driver starts its own, since a foreign one logs elsewhere.
+
+`summary.md` opens with the run's four declarations, the close-out's absolute claims, each
+**confirmed**, **refuted** (its check found something) or **unproven** (its check could not run), with
+the counts behind it: no file outside the clone was written; every write is in both records; the
+clone's `.git` held; no link points outside the clone.
 
 Limits: these catch an escape after the fact, within one session, and stop the run; they do not
 prevent it. Git run outside the sandbox *during* a session is not covered by the `.git` check:

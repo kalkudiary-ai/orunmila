@@ -14,6 +14,8 @@
  *   readLog(file, offset)       the event log from a byte offset (it is ~100 MB; a session's rows are the tail)
  *   outside(...)                what the Sentinels outside the clone and the tripwire saw in a
  *                               session's window, and which of it another session's record explains (T19)
+ *   gitSetup, linkScan          the clone's .git read by fs, and links out of the clone (T20)
+ *   join(...)                   every Glove write of the session has a Sentinel row on the clone (T21)
  *
  * A finding is { check, detail }; the driver halts the run on any (LD127).
  */
@@ -383,4 +385,42 @@ function linkScan(root, allowed = {}) {
   return { findings, scanned };
 }
 
-module.exports = { sentinelIgnoreText, writeSentinelIgnore, tripwirePaths, fingerprint, changed, readLog, explainer, outside, parseGitConfig, gitSetup, cloneLinks, linkScan };
+// --- T21: every write is in both records (LD131) ---------------------------------------------
+
+/** True when a unified diff has a changed line (a write of the same bytes has none, and no disk change). */
+function hasChange(diff) {
+  if (typeof diff !== 'string') return true; // no diff recorded: expect a disk record
+  return diff.split('\n').some((l) => (l.startsWith('+') && !l.startsWith('+++')) || (l.startsWith('-') && !l.startsWith('---')));
+}
+
+/**
+ * One session's join (LD131): each of its Glove write rows in [t0, t1], not failed, with a changed
+ * line, needs a Sentinel row on the same path within -1 s/+3 s (review/witness-join.py's window). A
+ * Sentinel row may pair with more than one Glove row: two quick edits of a file inside the
+ * Sentinel's 150 ms debounce leave one disk row. A Glove write outside `roots` is a finding too.
+ */
+function join({ rows, sid, roots, t0, t1 }) {
+  const findings = [];
+  let writes = 0;
+  let paired = 0;
+  let unchanged = 0;
+  const disk = rows.filter((e) => e.source === 'fs-sentinel' && e.type === 'file_write' && e.path);
+  for (const w of rows) {
+    if (w.session_id !== sid || w.type !== 'file_write' || w.source === 'fs-sentinel' || w.failed || w._t < t0 || w._t > t1) continue;
+    writes++;
+    const p = path.resolve(String(w.path || ''));
+    if (!roots.some((r) => inside(p, r))) {
+      findings.push({ check: 'join', detail: `the Glove recorded a write to ${p} at ${w.ts}, outside the clone and TURBO_HOME` });
+      continue;
+    }
+    if (!hasChange(w.diff)) {
+      unchanged++;
+      continue;
+    }
+    if (disk.some((s) => s.path === p && s._t >= w._t - W_BEFORE && s._t <= w._t + W_AFTER)) paired++;
+    else findings.push({ check: 'join', detail: `the Glove recorded a write to ${p} at ${w.ts}, and the Sentinel on the clone recorded none within -1 s/+3 s: the write may have landed elsewhere (a symlink swapped under the Write tool)` });
+  }
+  return { findings, join: { writes, paired, unchanged } };
+}
+
+module.exports = { sentinelIgnoreText, writeSentinelIgnore, tripwirePaths, fingerprint, changed, readLog, explainer, outside, parseGitConfig, gitSetup, cloneLinks, linkScan, hasChange, join };

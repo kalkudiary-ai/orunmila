@@ -1324,4 +1324,95 @@ it('T19 tripwire: the default list names the files that run code as O, and none 
   assert.ok(!has(path.join(home, '.claude', 'plugins')), 'Claude Code rewrites plugins/ itself: it would halt every run');
 });
 
+
+const glove = (p, diff = '--- a\n+++ b\n@@ -0,0 +1 @@\n+x') => ({ session_id: '$SELF', type: 'file_write', source: 'hook', path: p, diff });
+const disk = (p) => ({ session_id: null, type: 'file_write', source: 'fs-sentinel', path: p });
+
+it('T21 join: a Glove write with no Sentinel row on the clone halts the run (the write landed elsewhere)', async () => {
+  const d = driverSetup([], { slices: [S('a')], join: true });
+  try {
+    const raced = path.join(d.root, 'src', 'raced.js');
+    fs.writeFileSync(d.opts.env.TURBO_FAKE, JSON.stringify([{ writeFiles: { [path.join(d.base, 'elsewhere', 'raced.js')]: 'x\n' }, appendLog: [glove(raced)], result: R('done', 'a') }, { result: R('nothing', null) }]));
+    const out = await turbo.run(d.opts);
+    await expectHalt(d, out, 'join', raced);
+    assert.ok(fs.readFileSync(path.join(out.runDir, 'summary.md'), 'utf8').includes('Every write in the run is in both records: **refuted**'));
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('T21 join: a Glove write outside the clone and TURBO_HOME halts the run', async () => {
+  const d = driverSetup([], { slices: [S('a')], join: true });
+  try {
+    const away = path.join(d.base, 'away.txt');
+    fs.writeFileSync(d.opts.env.TURBO_FAKE, JSON.stringify([{ appendLog: [glove(away)], result: R('done', 'a') }, { result: R('nothing', null) }]));
+    await expectHalt(d, await turbo.run(d.opts), 'join', 'outside the clone');
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('T21 join: paired writes and a write that changed nothing pass; the declarations say confirmed, with counts', async () => {
+  const d = driverSetup([], { slices: [], join: true, maxSessions: 1 });
+  try {
+    const a = path.join(d.root, 'a.txt');
+    const same = path.join(d.root, 'same.txt');
+    fs.writeFileSync(d.opts.env.TURBO_FAKE, JSON.stringify([{ appendLog: [glove(a), disk(a), glove(same, '')], result: R('nothing', null) }]));
+    const out = await turbo.run(d.opts);
+    assert.strictEqual(out.stopReason, 'max-sessions', JSON.stringify(out.sessions[0].findings));
+    assert.deepStrictEqual(out.sessions[0].checks.join, { writes: 2, paired: 1, unchanged: 1 });
+    const summary = fs.readFileSync(path.join(out.runDir, 'summary.md'), 'utf8');
+    for (const line of ['Every write in the run is in both records: **confirmed**', "The clone's .git held in every session: **confirmed**", 'No link in the clone points outside it, except the ones it was made with: **confirmed**'])
+      assert.ok(summary.includes(line), `the summary lacks: ${line}\n${summary}`);
+    // No outside root and no Sentinel in this test: that declaration cannot be confirmed.
+    assert.ok(summary.includes('No file outside the clone was written in the run: **unproven**'), summary);
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('T21 declarations: with no Sentinel on the clone, "every write is in both records" is unproven, never confirmed', async () => {
+  const d = driverSetup([{ result: R('nothing', null) }], { slices: [], maxSessions: 1 });
+  try {
+    const out = await turbo.run(d.opts);
+    const summary = fs.readFileSync(path.join(out.runDir, 'summary.md'), 'utf8');
+    assert.ok(summary.includes('Every write in the run is in both records: **unproven**'), summary);
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('T21 end to end, with real Sentinels: a write whose Glove row names the clone but which lands elsewhere halts the run; honest writes pass', async () => {
+  const run1 = async (raced) => {
+    const d = driverSetup([], { slices: [S('a')], sentinel: true, sentinelBin: ORUNMILA_BIN, settleMs: 1500, maxSessions: 1 });
+    const honest = path.join(d.root, 'src', 'honest.js');
+    const named = path.join(d.root, 'src', 'raced.js');
+    const steps = [
+      {
+        writeFiles: { [honest]: 'honest\n', ...(raced ? { [path.join(d.base, 'elsewhere', 'raced.js')]: 'raced\n' } : {}) },
+        appendLog: [glove(honest), ...(raced ? [glove(named)] : [])],
+        result: R('done', 'a'),
+      },
+      { result: R('nothing', null) },
+    ];
+    fs.writeFileSync(d.opts.env.TURBO_FAKE, JSON.stringify(steps));
+    return { d, out: await turbo.run(d.opts), honest, named };
+  };
+  const clean = await run1(false);
+  try {
+    assert.strictEqual(clean.out.stopReason, 'max-sessions', JSON.stringify(clean.out.sessions[0].findings));
+    assert.deepStrictEqual(clean.out.sessions[0].checks.join, { writes: 1, paired: 1, unchanged: 0 });
+  } finally {
+    rmrf(clean.d.base);
+  }
+  const bad = await run1(true);
+  try {
+    await expectHalt(bad.d, bad.out, 'join', bad.named);
+    const halt = JSON.parse(fs.readFileSync(path.join(bad.d.home, 'driver', 'HALT.json'), 'utf8'));
+    assert.ok(!halt.findings.some((f) => f.detail.includes(bad.honest)), 'the honest write, which the Sentinel saw, was a finding');
+  } finally {
+    rmrf(bad.d.base);
+  }
+});
+
 runAll('turbo');

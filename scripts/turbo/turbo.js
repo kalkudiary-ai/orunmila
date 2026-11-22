@@ -323,6 +323,32 @@ function addEvidenceFix(p, sliceId, detail, sid, commits) {
 
 // --- the run -------------------------------------------------------------------
 
+/**
+ * The run's declarations (LD131): each one confirmed, refuted (a finding of its check) or unproven
+ * (its check could not run), with the counts behind it. They are the close-out's absolute claims,
+ * so each says how far it reaches.
+ */
+function declarations(r) {
+  const S = r.sessions.filter((s) => s.checks);
+  const w = r.watch || {};
+  const sum = (f) => S.reduce((a, s) => a + (Number(f(s.checks)) || 0), 0);
+  const hit = (...kinds) => r.sessions.some((s) => (s.findings || []).some((f) => kinds.includes(f.check)));
+  const say = (refuted, why) => (refuted ? '**refuted**' : why ? `**unproven** (${why})` : '**confirmed**');
+  const none = S.length ? null : 'no session was checked';
+  const j = (k) => sum((c) => (c.join && typeof c.join === 'object' ? c.join[k] : 0));
+  return [
+    '## Declarations (the driver checked each after every session; LD131)',
+    '',
+    `- No file outside the clone was written in the run: ${say(hit('outside', 'tripwire', 'join'), none || (!w.outsideSentinel ? 'no Sentinel watched outside the clone' : !w.join ? 'the both-records check was off' : null))}. ` +
+      `Within: the Sentinels on ${w.outsideRoots || 0} folder(s) outside the clone (${sum((c) => c.outside && c.outside.rows)} row(s), ${sum((c) => c.outside && c.outside.explained)} explained by another session), ` +
+      `a tripwire of ${w.tripwire || 0} entr${w.tripwire === 1 ? 'y' : 'ies'} (${sum((c) => c.tripwire && c.tripwire.changed)} change(s), ${sum((c) => c.tripwire && c.tripwire.explained)} explained), and the both-records check, which sees a write land anywhere.`,
+    `- Every write in the run is in both records: ${say(hit('join'), none || (!w.join ? 'no Sentinel on the clone' : null))}. Glove writes ${j('writes')}: ${j('paired')} with a Sentinel row, ${j('unchanged')} that changed nothing.`,
+    `- The clone's .git held in every session: ${say(hit('git'), none)}. ${S.length} session(s) checked by reading the files, before any git.`,
+    `- No link in the clone points outside it, except the ones it was made with: ${say(hit('links'), none)}. ${sum((c) => c.links && c.links.scanned)} entries scanned.`,
+    '',
+  ];
+}
+
 function summaryText(r) {
   const out = [
     `# TURBO run ${r.run}`,
@@ -339,6 +365,7 @@ function summaryText(r) {
           '',
         ]
       : []),
+    ...declarations(r),
     `Sentinel: ${r.sentinel || 'off'}.`,
     '',
     `## Sessions (${r.sessions.length})`,
@@ -390,6 +417,7 @@ async function run(opts) {
     outsideRoots: null, // null: the live copy and the source worktree (LD128)
     tripwire: null, // null: watch.tripwirePaths() for this machine (LD128)
     settleMs: 5000, // after a session, before its records are read: the Sentinel's debounce and lag
+    join: null, // null: on when the clone has a Sentinel (LD131); with none, "both records" is unproven
     wall: Date.now, // the real clock the witnesses stamp rows with (o.now may be a test's)
     held: !HOLD.lifted,
     ...opts,
@@ -422,6 +450,7 @@ async function run(opts) {
   const live = o.env.TURBO_LIVE || path.join(require('os').homedir(), 'tools', 'orunmila');
   const outsideRoots = (o.outsideRoots || [live, source]).filter((r) => fs.existsSync(r));
   const tripEntries = o.tripwire || watch.tripwirePaths({ live });
+  const joinOn = o.join === null ? Boolean(o.sentinel) : Boolean(o.join);
   const eventsFile = path.join(o.env.ORUNMILA_HOME || path.join(require('os').homedir(), '.orunmila'), 'events.jsonl');
   const logSize = () => {
     try {
@@ -623,8 +652,9 @@ async function run(opts) {
       if (o.settleMs) await new Promise((r) => setTimeout(r, o.settleMs));
       const seen = watch.readLog(eventsFile, logOffset).rows;
       const out = watch.outside({ rows: seen, sid, roots: outsideRoots, clone: [o.root, o.home], t0: wallStart - 1000, t1: o.wall(), before: tripBefore, after: watch.fingerprint(tripEntries) });
-      const checks = { git: { findings: gitFindings.length }, links: { scanned: links.scanned, findings: links.findings.length }, outside: out.outside, tripwire: out.tripwire };
-      const findings = [...gitFindings, ...links.findings, ...out.findings];
+      const jr = joinOn ? watch.join({ rows: seen, sid, roots: [...new Set([o.root, o.home])], t0: wallStart - 1000, t1: o.wall() }) : null;
+      const checks = { git: { findings: gitFindings.length }, links: { scanned: links.scanned, findings: links.findings.length }, outside: out.outside, tripwire: out.tripwire, join: jr ? jr.join : 'off' };
+      const findings = [...gitFindings, ...links.findings, ...out.findings, ...(jr ? jr.findings : [])];
       if (findings.length) {
         const row = { session: sid, kind: a.kind, slice: a.slice ? a.slice.id : null, exit: res.code, signal: res.signal, timedOut: res.timedOut, spawnError: res.spawnError, ms: res.ms, outcome: null, error: 'halted: escape check', verified: [], unverified: [], queued: [], decisions: [], cost: null, dirty: [], headMoves: [], referee: null, checks, findings };
         sessions.push(row);
@@ -712,7 +742,7 @@ async function run(opts) {
     const ended = new Date(o.now()).toISOString();
     // No git here: after a halt a planted .git would run its code (LD127); the source was read at the start.
     const sentinelNote = o.sentinel ? sentinels.map((s) => s.note || `failed on ${s.root}: ${s.spawnError || 'not ready'}`).join('; ') : 'off';
-    result = { run: runId, runDir, scratchDir, sentinel: sentinelNote, root: o.root, source: source || null, started: new Date(start).toISOString(), ended, stopReason: stopReason || 'error', hours: o.hours, branch, sessions, plan: finalPlan, halted };
+    result = { run: runId, runDir, scratchDir, sentinel: sentinelNote, root: o.root, source: source || null, started: new Date(start).toISOString(), ended, stopReason: stopReason || 'error', hours: o.hours, branch, sessions, plan: finalPlan, halted, watch: { outsideRoots: outsideRoots.length, outsideSentinel: Boolean(o.sentinel) && outsideRoots.length > 0, tripwire: tripEntries.length, join: joinOn } };
     fs.writeFileSync(path.join(runDir, 'summary.md'), summaryText(result));
     log({ type: 'end', stopReason: result.stopReason, sessions: sessions.length });
     for (const s of sentinels) if (s.child && s.child.exitCode === null) s.child.kill('SIGINT');

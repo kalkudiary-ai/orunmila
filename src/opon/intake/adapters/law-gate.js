@@ -44,6 +44,8 @@ function translateCheck({ sessionId, agent = null, turn, observedAt, check }) {
   } else {
     return reject('the check is none of skipped, passed, warned or blocked');
   }
+  // NF6: the loader's words about a law file it could not read, never silence (LD146).
+  if (Array.isArray(check.lawErrors) && check.lawErrors.length) detail.law_errors = check.lawErrors.map(String);
   return {
     mark: {
       schema_version: 1,

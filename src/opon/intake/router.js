@@ -43,6 +43,13 @@
  *                       session of that root (src/opon/intake/sentinel.js); the
  *                       header's config.exclusions is then what it does not watch
  *
+ * Law-gate checks (slice B5, LD146; test 61): a payload with hook_event_name
+ * `OrunmilaLawCheck` and the gate's `check` (src/laws/gate.js onCheck, sent by
+ * the gate hook with ORUNMILA_GATE_MARKS=1) is one `law_gate` `checked` mark on
+ * the session's latest turn, open or just closed by its Stop (the two Stop
+ * hooks run in either order); it never opens a turn. With no turn yet it is
+ * quarantined with the adapter's reason.
+ *
  * Turns (test 63; D-Q2): a turn opens at the first payload after the previous
  * turn's Stop, or at the session's first: a prompt, or, for a continuation, a
  * tool call or a Stop. A prompt while a turn is open joins it (a prompt sent
@@ -66,6 +73,7 @@ const { createSessionLog, openSessionLog } = require('../ledger/session-log');
 const { checkLog } = require('../../verify/session');
 const { buildHeader } = require('./header');
 const { translatePayload } = require('./adapters/claude-code');
+const { translateCheck } = require('./adapters/law-gate');
 const { normalisePath, isCaseInsensitive, sessionFolderName } = require('./paths');
 const { readEnvEntries } = require('./leak-check');
 const { fingerprint, onRedactionList, redactText } = require('./redact');
@@ -259,6 +267,12 @@ function createRouter(o) {
     if (ev === 'SessionStart') {
       writeHeld();
       return { ok: true, results: [] };
+    }
+    if (ev === 'OrunmilaLawCheck') {
+      const c = translateCheck({ sessionId: id, agent: CC.id, turn: s.n > 0 ? `t${s.n}` : null, observedAt: clock().wall, check: p.check });
+      const results = c.mark ? [engine.receive(c.mark, from)] : c.rejects.map((r) => engine.receive({ session_id: id, adapter_reject: r.reason, payload: p }, from));
+      writeHeld();
+      return { ok: results.every((r) => r.ok), results };
     }
     let turn = null;
     if (ev !== 'SessionEnd') {

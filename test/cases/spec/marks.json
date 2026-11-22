@@ -3121,6 +3121,42 @@
         "path": "/detail/root",
         "keyword": "minLength"
       }
+    },
+    {
+      "name": "/detail/law_errors of the wrong type (B5, LD146)",
+      "from": "law_gate_blocked",
+      "set": {
+        "/detail/law_errors": "not a list"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/law_errors",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/law_errors with an empty item (B5, LD146)",
+      "from": "law_gate_blocked",
+      "set": {
+        "/detail/law_errors": [""]
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/law_errors/0",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/detail/law_errors with an item that is not text (B5, LD146)",
+      "from": "law_gate_blocked",
+      "set": {
+        "/detail/law_errors": [3]
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/law_errors/0",
+        "keyword": "type"
+      }
     }
   ]
 }

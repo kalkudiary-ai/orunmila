@@ -443,6 +443,12 @@
             }
           }
         },
+        "law_errors": {
+          "description": "On a law-gate check, what the law loader said about a law file it could not read or a law it could not use, in its own words: a law that quietly stopped applying is never silent.",
+          "$comment": "agent's choice, LD146: NF6 (Phase 1 plan B5), a malformed law file recorded, not silent",
+          "type": "array",
+          "items": { "description": "One message from the law loader.", "$comment": "NF6; LD146", "type": "string", "minLength": 1 }
+        },
         "reason": {
           "description": "Why a check was skipped, for example: could not confirm the current turn. On the session's end, the reason the agent gave; on the intake's closing note, why it stopped.",
           "$comment": "brief v3 lines 242, 575; agent's choice of name, LD36; the session end's and the closing note's use, LD55 and LD56",

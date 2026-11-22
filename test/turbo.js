@@ -708,4 +708,20 @@ it('driver: the default referee runs leopard-check --gate on the session and rea
   }
 });
 
+// --- T6: docs and config ------------------------------------------------------
+
+it('config: the run state folder .turbo/ is ignored by git, so a run never dirties the tree', () => {
+  const r = spawnSync('git', ['-C', path.join(__dirname, '..'), 'check-ignore', '-q', '.turbo/plan.json']);
+  assert.strictEqual(r.status, 0, '.turbo/ is not gitignored');
+});
+
+it('prompt: trailers are one block, ending with Co-Authored-By, so git (and leopard-check) can read Slice:', () => {
+  const text = session.prompt(session.promptVars({ run: 'R', session: 'S', home: '/h', assignment: { kind: 'strike' } }));
+  assert.ok(text.includes('one trailer block'), 'the prompt does not say trailers are one block');
+  // The worked example in the prompt must itself parse: its last paragraph holds Slice:.
+  const ex = text.split('```text\n')[1].split('```')[0];
+  const r = spawnSync('git', ['interpret-trailers', '--parse'], { input: ex, encoding: 'utf8' });
+  assert.ok(r.stdout.includes('Slice: T9'), `the example's trailers do not parse: ${r.stdout}`);
+});
+
 runAll('turbo');

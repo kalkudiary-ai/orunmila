@@ -1758,6 +1758,28 @@ const MUTANTS = [
   { id: 'A2-8 the commands running at an overlapped change not named', file: 'src/opon/settle/engine.js', test: 'test/attribute-overlap.js',
     from: "    for (const ref of g.overlap && g.overlap.length ? g.atChange || [] : []) out.push({ kind: 'agent_command', ref, seen: 'while_running' });\n", to: '',
     fails: ['A2 test 37'] },
+  // Slice C1: confidence from the cause kinds (LD185).
+  { id: 'C1-1 a direct cause lowered when the Sentinel has no mark for it', file: 'src/opon/settle/engine.js', test: 'test/confidence.js',
+    from: "if (kind && kind !== 'byproduct') return 'high';", to: "if (kind && kind !== 'byproduct') return g.sources.includes('sentinel') || !g.key.startsWith('file:') ? 'high' : 'medium';",
+    fails: ['C1 test 44', 'C1 line 427'] },
+  { id: 'C1-2 a time match is high', file: 'src/opon/settle/engine.js', test: 'test/confidence.js',
+    from: "if (kind === 'time_match' || kind === 'agent_command') return 'medium';", to: "if (kind === 'agent_command') return 'medium';",
+    fails: ['C1 line 423'] },
+  { id: 'C1-3 a claim alone is not low', file: 'src/opon/settle/engine.js', test: 'test/confidence.js',
+    from: "    if (g.sources.every((s) => s === 'agent_claim')) return 'low';\n", to: '',
+    fails: ['C1 line 425'] },
+  { id: 'C1-4 an uncredited change no Sentinel or git saw is high', file: 'src/opon/settle/engine.js', test: 'test/confidence.js',
+    from: "if (disk) return g.sources.some((s) => s === 'sentinel' || s === 'git') ? 'high' : 'medium';", to: "if (disk) return 'high';",
+    fails: ['C1 LD185 (5)'] },
+  { id: 'C1-5 a call with only started is high', file: 'src/opon/settle/engine.js', test: 'test/confidence.js',
+    from: "return g.sources.some((s) => GLOVE.has(s)) ? 'medium' : 'high';", to: "return 'high';",
+    fails: ['C1 line 413'] },
+  { id: 'C1-6 the odù log drops confidence', file: 'src/opon/ledger/odu-log.js', test: 'test/confidence.js',
+    from: '    confidence: g.confidence,\n', to: '',
+    fails: ['C1 test 44', 'C1 test 67', 'C1 test 68'] },
+  { id: 'C1-7 the schema does not require confidence', file: 'spec/odu.schema.json', test: 'test/confidence.js',
+    from: '"attribution",\n    "confidence",\n    "lease",', to: '"attribution",\n    "lease",',
+    fails: ['C1: the odù schema requires confidence'] },
 ];
 
 function copyRepo(root) {

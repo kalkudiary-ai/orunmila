@@ -72,11 +72,13 @@ it('A2 test 37: B\'s edit while A runs a long command is not credited to A: unex
   assert.deepStrictEqual(inA.not_credited, [{ kind: 'agent_command', ref: 'b1', seen: 'while_running' }], 'A\'s running command is named, never credited');
   // Glove and Sentinel joined on each record: in A's, the Sentinel saw the change and A's Glove has nothing for it.
   assert.deepStrictEqual([inA.witness_status.glove.status, inA.witness_status.sentinel.status], ['saw_nothing', 'saw']);
+  assert.strictEqual(inA.confidence, 'high', 'C1: the change is certain, and its label says it cannot be pinned (line 423)');
   const inB = of(b, 'src/b.ts');
   assert.deepStrictEqual(blame(inB), ['explained', { kind: 'agent_tool_call', ref: 'e9' }], 'a direct cause pins it to one session');
   assert.ok(!('conflicts' in inB));
   // In B's, both witnesses saw it: B's Glove edit and the Sentinel's change, one odù.
   assert.deepStrictEqual([inB.witness_status.glove.status, inB.witness_status.sentinel.status], ['saw', 'saw']);
+  assert.strictEqual(inB.confidence, 'high', 'C1: a direct cause');
 });
 
 it('A2 control: the same log of A alone credits the change to A\'s command (step 3), with no conflict', () => {

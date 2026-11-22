@@ -3,7 +3,7 @@
   "$id": "urn:orunmila:spec:v1:odu",
   "title": "Orunmila odù record, schema version 1: DRAFT",
   "description": "The single trustworthy record of one real event. The Ọpọ́n writes one odù record per real event to a second log, hash-chained and canonically serialised like the raw log. The judge reads only this log.",
-  "$comment": "brief v4 lines 285-333. Fields the brief names keep its names; `record` and `seq` are the agent's choice (the hash chain checks seq, spec/hash-chain.md), and so is `continues`, rule 2's link back (line 364), which the brief requires and names no field for (LD167). `continues`, `ceiling` and each witness's `slots` were proposed to O as Q6 and approved (2026-11-22, LD174). Phase 3 slice O1 builds the fields replay can fill from a group; net_change came with station 4 (N2), cause and attribution with station 5 (A1b); confidence and conflicts come with station 6 and are optional until then. Unknown fields are allowed (line 209).",
+  "$comment": "brief v4 lines 285-333. Fields the brief names keep its names; `record` and `seq` are the agent's choice (the hash chain checks seq, spec/hash-chain.md), and so is `continues`, rule 2's link back (line 364), which the brief requires and names no field for (LD167). `continues`, `ceiling` and each witness's `slots` were proposed to O as Q6 and approved (2026-11-22, LD174). Phase 3 slice O1 builds the fields replay can fill from a group; net_change came with station 4 (N2), cause and attribution with station 5 (A1b), confidence with station 6 (C1, LD185); conflicts come with station 6's C3 and are optional until then. Unknown fields are allowed (line 209).",
   "type": "object",
   "required": [
     "schema_version",
@@ -24,6 +24,7 @@
     "witness_status",
     "cause",
     "attribution",
+    "confidence",
     "lease",
     "mark_seqs",
     "prev_hash",
@@ -344,8 +345,8 @@
       }
     },
     "confidence": {
-      "description": "high, medium or low, by the rules in station 6.",
-      "$comment": "brief v4 lines 313, 327, 419-427; station 6 (slice C1)",
+      "description": "high, medium or low, by the rules in station 6: how sure we are of the cause. High: a direct cause (a Glove outcome mark naming its tool call on this target), or a change with no agent cause that the Sentinel or git saw. Medium: the cause comes only from a time match or a running command. Low: only a claim, with no witness observation. Never lowered because one witness recorded nothing.",
+      "$comment": "brief v4 lines 313, 327, 409, 413, 419-427; station 6 (slice C1). The cases the table is silent on (a turn, the session's end, a call with only `started`, a gap or note, a change on disk only a Glove mark step 1 does not credit reports) are read in LD185",
       "enum": [
         "high",
         "medium",

@@ -140,8 +140,12 @@
  * sighting). Each agent command that exited within one quiet window before the
  * change was first seen: `after_exit`, `gap_ms`. The label never changes.
  *
+ * Confidence (station 6, slice C1, LD185; lines 419-427): read from the cause
+ * and the sources of the marks behind the group, never lowered because one
+ * witness recorded nothing (`confidenceOf`).
+ *
  * Group records (LD142) use the odù's field names where they apply, and are
- * not odù records: no confidence or conflicts yet.
+ * not odù records: conflicts other than concurrent_sessions come with C3.
  */
 
 const path = require('path');
@@ -305,6 +309,24 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     return UNEXPLAINED;
   }
 
+  /**
+   * Station 6's confidence (C1, LD185; lines 419-427): from the cause and the sources of the marks behind
+   * the group, never from a witness's silence (line 427). Only a claim: low. A direct cause, a tool call's
+   * own outcome, a turn, the session's end: high. A time match or a running command: medium. No agent
+   * cause: a change on disk the Sentinel or git saw is high (certain, its label says unexplained or
+   * byproduct), else medium; marks that change nothing are medium with a Glove mark in them (a call with
+   * only `started`: line 423, "medium at most"), else high (Orunmila's own record: a gap, a note).
+   */
+  function confidenceOf(g, attr) {
+    if (g.sources.every((s) => s === 'agent_claim')) return 'low';
+    const kind = attr.cause && attr.cause.kind;
+    if (kind === 'time_match' || kind === 'agent_command') return 'medium';
+    if (kind && kind !== 'byproduct') return 'high';
+    const disk = (g.key.startsWith('file:') || g.key.startsWith('dirchange:')) && g.says.some((v) => DISK.has(v));
+    if (disk) return g.sources.some((s) => s === 'sentinel' || s === 'git') ? 'high' : 'medium';
+    return g.sources.some((s) => GLOVE.has(s)) ? 'medium' : 'high';
+  }
+
   /** A1c (LD178): the agent activity beside an unexplained change that the steps did not credit, or undefined. */
   function notCreditedOf(g) {
     const out = [];
@@ -350,7 +372,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       amends: g.amends,
       continues: g.continues,
       ...(net === undefined ? {} : { net_change: { ...net } }),
-      ...(g.attr ? { attribution: g.attr.attribution, cause: g.attr.cause } : {}),
+      ...(g.attr ? { attribution: g.attr.attribution, cause: g.attr.cause, confidence: g.confidence } : {}),
       ...(g.attr && g.attr.conflicts ? { conflicts: g.attr.conflicts.map((c) => ({ ...c, sessions: [...c.sessions] })) } : {}),
       ...(g.notCredited ? { not_credited: g.notCredited.map((e) => ({ ...e, ...(e.says ? { says: [...e.says] } : {}) })) } : {}),
     };
@@ -395,6 +417,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       g.state = 'sealed';
       g.net = netChange(g);
       g.attr = attributionOf(g);
+      g.confidence = confidenceOf(g, g.attr);
       const disk = (g.key.startsWith('file:') || g.key.startsWith('dirchange:')) && g.says.some((v) => DISK.has(v));
       g.notCredited = disk && g.attr.attribution === 'unexplained' ? notCreditedOf(g) : undefined;
       sealedLast.set(g.key, { id: g.id, at: g.sealedAt, causes: g.causes });
@@ -512,7 +535,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       const continues = f && (f.held || now - f.at < quiet) ? f.id : null;
       const s = sealedLast.get(key);
       const amends = s && ((m.cause_hint && s.causes.has(m.cause_hint)) || BigInt(m.mono_ns) <= s.at) ? s.id : null;
-      g = { n: ++made, id: id(made), key, state: 'open', parentId: null, childIds: [], startAt: null, exitAt: null, lost: false, target, seqs: [], says: [], real: [], realSays: [], sources: [], slots: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues, amends, causes: new Set(), isCommand: key.startsWith('command:'), isTurn: key.startsWith('turn:'), turnEnded: false, fp: null, lastOther: 0, net: undefined, hints: [], changeSeen: [], atChange: null, besideExit: null, overlap: null, attr: null, notCredited: undefined };
+      g = { n: ++made, id: id(made), key, state: 'open', parentId: null, childIds: [], startAt: null, exitAt: null, lost: false, target, seqs: [], says: [], real: [], realSays: [], sources: [], slots: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues, amends, causes: new Set(), isCommand: key.startsWith('command:'), isTurn: key.startsWith('turn:'), turnEnded: false, fp: null, lastOther: 0, net: undefined, hints: [], changeSeen: [], atChange: null, besideExit: null, overlap: null, attr: null, confidence: null, notCredited: undefined };
       live.set(key, g);
       unsealed.set(g.id, g);
       all.push(g);

@@ -297,7 +297,7 @@ it(
       fs.mkdirSync(path.dirname(p.lock), { recursive: true, mode: 0o700 });
       fs.writeFileSync(p.lock, '999999999\n');
       fs.rmSync(p.key, { force: true }); // each round races to make the install key too
-      const kids = await startMany(8, [bin, 'intake', 'run'], { ORUNMILA_HOME: home });
+      const kids = await startMany(8, [bin, 'intake', 'run'], { ORUNMILA_HOME: home, ORUNMILA_INTAKE_PORT: '0' }); // never the live default port (H2b)
       const alive = kids.filter((k) => k.code === undefined);
       try {
         assert.strictEqual(alive.length, 1, `round ${round}: ${alive.length} intakes running; exits ${JSON.stringify(kids.map((k) => k.code))}`);

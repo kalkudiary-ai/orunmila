@@ -1388,6 +1388,12 @@ const COMMANDS = {
   'leak-check': cmdLeakCheck,
 };
 
+// The installed version (SECURITY.md asks a reporter to give it; OW2, LD151).
+if (cmd === '--version') {
+  console.log(require('../package.json').version);
+  process.exit(0);
+}
+
 if (!cmd || !COMMANDS[cmd]) {
   console.log(`orunmila - claim-vs-reality verification for AI coding agents
 
@@ -1406,6 +1412,7 @@ Install
   orunmila install --intake                       send every hook payload to the intake too (claude-code; start it first)
   orunmila lenses [--agent ID] [--global]         the two lenses side by side + which are installed right now
   orunmila agents                                 list supported agents and their config locations
+  orunmila --version                              the installed version
 
 The Stain Map — read what happened
   orunmila trail [--session ID] [--out path] [--archive STAMP] [--no-redact-home]

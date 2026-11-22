@@ -189,4 +189,10 @@ it('OW1: the help no longer says capture does not write the session logs (the in
   assert.ok(r.stdout.includes('the per-session logs the intake writes'), r.stdout);
 });
 
+it("OW2: orunmila --version prints the package's version, as SECURITY.md asks reporters to give it", () => {
+  const r = run('bin/orunmila.js', { args: ['--version'] });
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  assert.strictEqual(r.stdout.trim(), require('../package.json').version);
+});
+
 runAll('intake-send');

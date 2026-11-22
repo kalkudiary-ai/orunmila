@@ -101,15 +101,24 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   run|start|status|stop` runs one intake per machine on a Unix socket in
   Orunmila's data dir; it writes each session to its own hash-chained log in
   `sessions/<id>/`, outside the project (`orunmila verify` checks one).
-  `orunmila install --intake` adds a small sender, `intake-send.js`, to Claude
-  Code's hooks for every event and every tool, beside the capture hooks you
-  already have, which keep working as before. The sender never blocks your
-  agent: **when no intake is running, it sends nothing and that session has no
-  intake record at all**, so start the intake first. A sender that cannot hand
-  its payload over within one second gives up, and that payload is lost. If
+  `orunmila install --intake` adds Claude Code HTTP hooks posting to
+  `127.0.0.1` (port 47390, or `ORUNMILA_INTAKE_PORT`) for prompts, tool calls
+  and stops, and a small sender, `intake-send.js`, for session start, failed
+  tool calls and session end, for every tool, beside the capture hooks you
+  already have, which keep working as before. Neither ever blocks your agent:
+  **when no intake is running, nothing is sent and that session has no intake
+  record at all**, so start the intake first; `orunmila intake agent install`
+  keeps it running at login (a per-user launch agent, macOS;
+  `orunmila intake agent uninstall` removes it). A sender that cannot hand its
+  payload over within one second gives up, and that payload is lost. If
   another process holds the intake's socket when it starts, the intake records
-  that and takes the socket back. Nothing reads these logs yet: reports still
-  come from the event log.
+  that and takes the socket back; a port held by another process is recorded
+  and tried again every second until the intake has it. The intake runs the Filesystem Sentinel
+  itself for each session's folder, `.orunmila/` included, and records a change
+  during the session to the project's `.orunmila/` files, the law packs, the
+  agent's hook settings or Orunmila's own code as tampering. Only
+  `orunmila trail --json --marks` reads these logs so far (both witnesses on
+  every row); every other report still comes from the event log.
 - **Exact capture, off by default (`ORUNMILA_EXACT_CAPTURE=1`).** Claude Code
   sends a failed tool call with no `tool_response`; the exit code is the first
   line of its `error` text (`Exit code N`, or `Error: Exit code N`) and the
@@ -125,6 +134,13 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   a listing, are now weak receipts, and a failed `range` read is none (each was
   full while every read said `full`). With the switch off, capture writes
   exactly what it wrote before; docs/SCHEMA.md lists the fields.
+- **`orunmila --version`** prints the installed version.
+- **Two previews for the Closeout Gate, off by default.** With
+  `ORUNMILA_GATE_MARKS=1` each check the gate makes (passed, warned, blocked or
+  skipped, with the laws and the quoted sentence) is also written to the
+  intake's session log. With `ORUNMILA_GATE_FROM_MARKS=1` the gate judges a
+  turn from that log: a read or edit that failed is no receipt, and a folder
+  listing is a weak one. With both off the gate behaves exactly as before.
 - **`orunmila leak-check`: find your `.env` values in what Orunmila stored.**
   Capture redacts known secret formats, not your `.env` values, so a value in
   a format it does not know is stored as written, by both witnesses;

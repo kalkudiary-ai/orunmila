@@ -23,7 +23,10 @@ orunmila is designed to minimise its own attack surface:
   opt-in: the report's 3D Graph tab loads a script from a CDN when you open it;
   the developer benchmark `bin/bench.js` runs other agents and can call
   OpenRouter when you invoke it; `bin/dashboard.js` is a local web server
-  (loopback only since 0.2.2).
+  (loopback only since 0.2.2). The intake (`orunmila intake`, sent to by
+  `orunmila install --intake`) listens on a Unix socket in `~/.orunmila/intake/`
+  and on `127.0.0.1` only (port 47390, or `ORUNMILA_INTAKE_PORT`), for Claude
+  Code's own hooks on the same machine; it contacts nothing.
 - **Read-mostly** — orunmila observes your agent's activity and renders reports.
   It does not modify your source files. It writes only to its own data dir and
   to report files you explicitly ask for.

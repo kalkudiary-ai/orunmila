@@ -51,7 +51,20 @@
  * target whose last group is sealed is late for it when it carries a tool
  * call id that group has, or was itself observed (its own mono_ns) at or
  * before the seal: it opens a new group whose `amends` names the sealed one.
- * Any other mark for that target is a new event. A mark for a settled group (in its
+ * Any other mark for that target is a new event.
+ *
+ * Witness status (G1, LD158; line 331): every group names both witnesses.
+ * `saw` lists that witness's own mark_seqs, its verbs (`says`) and each mark's
+ * key slots (exit_status, read_kind, result, fingerprints); the Glove is the
+ * `hook` and `agent_claim` marks, the Sentinel the `sentinel` marks. A witness
+ * with no marks is, from recorded facts only: for the Sentinel, `out_of_scope`
+ * when the group is no disk event (`not_a_disk_event`), its path is outside the
+ * project (`outside_root`) or among the header's exclusions (`excluded`); for
+ * either, `down` when a recorded gap covers the group's time (the intake's
+ * downtime for both, a Sentinel watch gap for the Sentinel, any other capture
+ * gap for the Glove); otherwise `saw_nothing`, which does not say it was
+ * healthy. A gap is taken into account before time moves on, so a group it
+ * covers knows it before it seals. A mark for a settled group (in its
  * grace) joins it and opens it again, its timer restarted: the grace is there
  * for a slow source's marks of the same event. A sealed group is never
  * reopened (rule 8, slice S6). Ticks only move time.
@@ -62,9 +75,20 @@
 
 const path = require('path');
 const { keyOf, aliasPath } = require('../group/keys');
+const { isIgnored } = require('../../capture/fs-sentinel/ignore');
 
 const NS_PER_MS = 1000000n;
 const DISK = new Set(['created', 'modified', 'deleted', 'renamed']);
+const GLOVE = new Set(['hook', 'agent_claim']);
+const SLOTS = ['exit_status', 'read_kind', 'result', 'fingerprint_before', 'fingerprint'];
+
+/** A mark's key detail slots, for its witness's `slots`. */
+function slotsOf(m) {
+  const out = { seq: m.seq };
+  const d = m.detail && typeof m.detail === 'object' ? m.detail : {};
+  for (const k of SLOTS) if (k in d) out[k] = d[k];
+  return out;
+}
 
 /**
  * A group's action. For changes on disk, from whether the target existed
@@ -92,6 +116,8 @@ function createOpon({ sessionId, config }) {
   const unsealed = new Map(); // id -> group, in the order they opened
   const forcedLast = new Map(); // key -> { id, at }: the last group of the key force-settled at its ceiling
   const sealedLast = new Map(); // key -> { id, at, causes }: the key's last sealed group (rule 8)
+  const gaps = []; // { from, to, who: 'both' | 'sentinel' | 'glove' } (G1)
+  const exclusions = Array.isArray(config.exclusions) ? config.exclusions : [];
   const all = [];
   let now = null;
   let made = 0;
@@ -103,6 +129,28 @@ function createOpon({ sessionId, config }) {
     if (g.isCommand && g.says.includes('started') && !g.says.some((v) => v === 'exited' || v === 'ended')) return 'process';
     if (g.isTurn && !g.turnEnded) return 'turn';
     return null;
+  }
+
+  function witness(g, name) {
+    const mine = g.sources.map((s, i) => (name === 'glove' ? GLOVE.has(s) : s === 'sentinel') ? i : -1).filter((i) => i >= 0);
+    if (mine.length) return { status: 'saw', mark_seqs: mine.map((i) => g.seqs[i]), says: mine.map((i) => g.says[i]), slots: mine.map((i) => g.slots[i]) };
+    const disk = (g.key.startsWith('file:') || g.key.startsWith('dirchange:')) && g.says.some((v) => DISK.has(v));
+    if (name === 'sentinel') {
+      if (!disk) return { status: 'out_of_scope', scope: 'not_a_disk_event' };
+      if (g.target && g.target.outside) return { status: 'out_of_scope', scope: 'outside_root' };
+      if (g.target && isIgnored(g.target.path, exclusions)) return { status: 'out_of_scope', scope: 'excluded' };
+    }
+    if (gaps.some((x) => (x.who === 'both' || x.who === name) && x.from <= g.last && x.to >= g.first)) return { status: 'down' };
+    return { status: 'saw_nothing' };
+  }
+
+  /** A gap mark's cover (G1): the intake's downtime (both), a Sentinel watch gap, or another capture gap (the Glove). */
+  function registerGap(m) {
+    const d = m.detail && typeof m.detail === 'object' ? m.detail : {};
+    const seen = BigInt(m.mono_ns);
+    const from = d.since && d.since.mono_ns ? BigInt(d.since.mono_ns) : seen;
+    const to = d.until && d.until.mono_ns ? BigInt(d.until.mono_ns) : seen;
+    gaps.push({ from, to, who: d.since ? 'both' : d.root ? 'sentinel' : 'glove' });
   }
 
   function record(g) {
@@ -117,6 +165,7 @@ function createOpon({ sessionId, config }) {
       settled_at_ns: g.settledAt === null ? null : String(g.settledAt),
       sealed_at_ns: g.sealedAt === null ? null : String(g.sealedAt),
       ceiling: g.forced,
+      witness_status: { glove: witness(g, 'glove'), sentinel: witness(g, 'sentinel') },
       parent_id: null,
       children: [],
       amends: g.amends,
@@ -197,11 +246,14 @@ function createOpon({ sessionId, config }) {
   /** Group `a`'s marks go into `b` (their `real` flags kept, or set to `asReal`), and `a` is gone. */
   function absorb(b, a, asReal) {
     const realOf = (x, i) => (asReal === null ? x.real[i] : asReal);
-    const rows = [...a.seqs.map((s, i) => [s, a.says[i], realOf(a, i)]), ...b.seqs.map((s, i) => [s, b.says[i], b.real[i]])].sort((x, y) => x[0] - y[0]);
+    const rows = [...a.seqs.map((s, i) => [s, a.says[i], realOf(a, i), a.sources[i], a.slots[i]]), ...b.seqs.map((s, i) => [s, b.says[i], b.real[i], b.sources[i], b.slots[i]])].sort((x, y) => x[0] - y[0]);
     b.seqs = rows.map((r) => r[0]);
     b.says = rows.map((r) => r[1]);
     b.real = rows.map((r) => r[2]);
     b.realSays = rows.filter((r) => r[2]).map((r) => r[1]);
+    b.sources = rows.map((r) => r[3]);
+    b.slots = rows.map((r) => r[4]);
+    for (const c of a.causes) b.causes.add(c);
     if (a.first < b.first) b.first = a.first;
     if (a.last > b.last) b.last = a.last;
     unsealed.delete(a.id);
@@ -211,6 +263,7 @@ function createOpon({ sessionId, config }) {
   function push(m) {
     const t = BigInt(m.mono_ns);
     now = now === null || t > now ? t : now;
+    if (m.says === 'gap') registerGap(m); // before time moves on: a group it covers knows before it seals
     const out = advance(now);
     if (m.says === 'tick') return out;
     let key = keyOf(m);
@@ -247,7 +300,7 @@ function createOpon({ sessionId, config }) {
       const continues = f && (f.held || now - f.at < quiet) ? f.id : null;
       const s = sealedLast.get(key);
       const amends = s && ((m.cause_hint && s.causes.has(m.cause_hint)) || BigInt(m.mono_ns) <= s.at) ? s.id : null;
-      g = { n: ++made, id: id(made), key, state: 'open', target, seqs: [], says: [], real: [], realSays: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues, amends, causes: new Set(), isCommand: key.startsWith('command:'), isTurn: key.startsWith('turn:'), turnEnded: false };
+      g = { n: ++made, id: id(made), key, state: 'open', target, seqs: [], says: [], real: [], realSays: [], sources: [], slots: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues, amends, causes: new Set(), isCommand: key.startsWith('command:'), isTurn: key.startsWith('turn:'), turnEnded: false };
       live.set(key, g);
       unsealed.set(g.id, g);
       all.push(g);
@@ -267,6 +320,8 @@ function createOpon({ sessionId, config }) {
     g.seqs.push(m.seq);
     g.says.push(m.says);
     g.real.push(real);
+    g.sources.push(m.source);
+    g.slots.push(slotsOf(m));
     if (m.cause_hint) g.causes.add(m.cause_hint);
     if (real) g.realSays.push(m.says);
     g.last = now;

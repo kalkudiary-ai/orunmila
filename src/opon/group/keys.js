@@ -6,9 +6,11 @@
  *
  *   keyOf(mark) -> the group key
  *
- * A file or folder is keyed by its normalised path (intake normalised it,
- * line 345), so a read of a file joins that file's group, both witnesses'
- * marks join one group, and the tool call that changed it too. A command, a
+ * A file is keyed by its normalised path (intake normalised it, line 345), so
+ * a read of a file joins that file's group, both witnesses' marks join one
+ * group, and the tool call that changed it too. A folder's own change on disk
+ * is keyed by its path (rule 6 folds it); a read of a folder (a search, a
+ * listing) by its path and tool call id, as a tool call. A command, a
  * tool call or a network contact is keyed by its kind and its tool call id
  * (`cause_hint`), because two runs of one command are two events; with no id
  * the mark stands alone. Turn marks (a prompt, the closing claim, the turn's
@@ -45,7 +47,9 @@ function keyOf(m) {
   if (!t) return alone;
   // A folder's own change on disk is keyed apart from reads of the folder (a listing, a search): rule 6 folds it.
   if (t.kind === 'dir' && typeof t.path === 'string' && DISK.has(m.says)) return `dirchange:${t.path}`;
-  if ((t.kind === 'file' || t.kind === 'dir') && typeof t.path === 'string') return `${t.kind}:${t.path}`;
+  if (t.kind === 'file' && typeof t.path === 'string') return `file:${t.path}`;
+  // A read of a folder (a search, a listing) is a tool call: two searches are two events (G1).
+  if (t.kind === 'dir' && typeof t.path === 'string') return m.cause_hint ? `dir:${t.path}|${m.cause_hint}` : alone;
   if (t.kind === 'command' || t.kind === 'tool' || t.kind === 'network') return m.cause_hint ? `${t.kind}:${m.cause_hint}` : alone;
   if (t.kind === 'turn' || t.kind === 'claim') return m.turn ? `turn:${m.turn}` : t.id ? `turn:${t.id}` : alone;
   if (t.kind === 'session' && t.id) return `session:${t.id}`;

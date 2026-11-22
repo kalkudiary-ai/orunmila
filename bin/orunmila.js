@@ -1361,8 +1361,51 @@ async function cmdIntake() {
   process.exitCode = 2;
 }
 
+/**
+ * `orunmila replay <session-folder> [--out file] [--expect file]` (Phase 2
+ * slice R1, LD152): the Ọpọ́n's output for a recorded raw log. With --expect,
+ * compares it with an earlier output and names the first line that differs
+ * (exit 1); exit 0 when they are the same. A log that does not verify is
+ * refused (exit 1).
+ */
+function cmdReplay() {
+  const { replayFolder } = require('../src/opon/replay');
+  const dir = args[1] && !args[1].startsWith('--') ? args[1] : null;
+  if (!dir) {
+    console.error('Usage: orunmila replay <session-folder> [--out file] [--expect file]');
+    process.exitCode = 2;
+    return;
+  }
+  const r = replayFolder(dir);
+  if (!r.ok) {
+    console.log(r.words);
+    process.exitCode = 1;
+    return;
+  }
+  const expect = flag('expect', null);
+  if (expect) {
+    const want = fs.readFileSync(expect, 'utf8').split('\n');
+    const got = r.text.split('\n');
+    for (let i = 0; i < Math.max(want.length, got.length); i++) {
+      if (want[i] !== got[i]) {
+        console.log(`replay differs from ${expect} at line ${i + 1}:\n  expected: ${want[i] === undefined ? '(no line)' : want[i]}\n  replayed: ${got[i] === undefined ? '(no line)' : got[i]}`);
+        process.exitCode = 1;
+        return;
+      }
+    }
+    console.log(`replay matches ${expect} (${r.lines.length} lines)`);
+    return;
+  }
+  const out = flag('out', null);
+  if (out) {
+    fs.writeFileSync(out, r.text);
+    console.log(`Wrote ${out} (${r.words})`);
+  } else process.stdout.write(r.text);
+}
+
 const COMMANDS = {
   install: cmdInstall,
+  replay: cmdReplay,
   intake: cmdIntake,
   agents: cmdAgents,
   laws: cmdLaws,
@@ -1451,6 +1494,7 @@ Both lenses
                                                   (the per-session logs the intake writes, in ~/.orunmila/sessions/)
   orunmila intake run|start|status|stop           the intake server, one per machine (install --intake sends to it)
   orunmila intake agent install|uninstall|status  keep the intake running at login with a launch agent (macOS)
+  orunmila replay <session-folder> [--expect file]  the Opon's settled groups for a session log, replayed (Phase 2)
 
 Docs: README.md · known issues with status: review/ISSUES.md
 `);

@@ -129,4 +129,61 @@ it("B9 gate: with ORUNMILA_GATE_FROM_MARKS=1 the gate judges the turn's marks in
   }
 });
 
+const claimMark = (text, turn = 't1') => mark('claimed', { kind: 'claim' }, { text }, { source: 'agent_claim', turn });
+const gapMark = (detail, source = 'process') => ({ source, says: 'gap', target: null, turn: null, detail });
+
+it("B9b (LD163): a turn the log shows ended with another claim is not this Stop's; an open turn, or one ended with this claim, is", () => {
+  const { confirmedTurn } = require('../src/opon/gate/turn-marks');
+  const marks = [
+    mark('prompted', { kind: 'turn', id: 't1' }, { prompt: 'p', from_human: true }),
+    mark('read', { kind: 'file', path: 'src/x.js' }, { tool: 'Read', exit_status: 'pass', read_kind: 'full' }),
+    claimMark('an earlier answer'),
+    mark('ended', { kind: 'turn', id: 't1' }, {}),
+  ];
+  assert.strictEqual(confirmedTurn(marks, 'this answer').turn, null);
+  assert.strictEqual(confirmedTurn(marks, 'an earlier answer').turn, 't1', "the intake's Stop hook landed first (NF8)");
+  assert.strictEqual(confirmedTurn(marks.slice(0, 2), 'this answer').turn, 't1', 'a turn not yet ended is the current one');
+});
+
+it('B9b (LD163): a capture gap since the previous turn ended may have lost marks, so no turn from marks; a Sentinel watch gap, or one before that end, does not count', () => {
+  const { confirmedTurn } = require('../src/opon/gate/turn-marks');
+  const end1 = [claimMark('a'), mark('ended', { kind: 'turn', id: 't1' }, {})];
+  const t2 = mark('read', { kind: 'file', path: 'src/x.js' }, { tool: 'Read', exit_status: 'pass', read_kind: 'full' }, { turn: 't2' });
+  assert.strictEqual(confirmedTurn([...end1, gapMark({ lost: 'the intake was down', since: { mono_ns: '1' } }), t2], 'b').turn, null, "the intake's downtime");
+  assert.strictEqual(confirmedTurn([...end1, gapMark({ lost: 'the HTTP port was taken' }), t2], 'b').turn, null, 'another capture gap');
+  assert.strictEqual(confirmedTurn([...end1, gapMark({ lost: 'a folder could not be watched', root: '/r' }, 'sentinel'), t2], 'b').turn, 't2', 'a Sentinel watch gap');
+  assert.strictEqual(confirmedTurn([gapMark({ lost: 'x', since: { mono_ns: '1' } }), ...end1, t2], 'b').turn, 't2', 'a gap before the previous turn ended');
+});
+
+it("B9b gate (LD163): with ORUNMILA_GATE_FROM_MARKS=1, a log whose latest turn ended with another claim is not judged: the gate reads the event log, as with the flag off", () => {
+  const home = fs.realpathSync(tmpDir());
+  const root = fs.realpathSync(tmpDir());
+  const saved = { ORUNMILA_HOME: process.env.ORUNMILA_HOME, ORUNMILA_GATE_FROM_MARKS: process.env.ORUNMILA_GATE_FROM_MARKS, ORUNMILA_LAWS: process.env.ORUNMILA_LAWS };
+  try {
+    process.env.ORUNMILA_HOME = home;
+    delete process.env.ORUNMILA_LAWS;
+    const router = createRouter({ home, clock: () => ({ mono: nowMono(), wall: new Date().toISOString() }), checkSender: () => true, codeRoot: path.join(__dirname, '..', 'src'), orunmilaVersion: 't', installKey: crypto.randomBytes(32), hookSettingsFor: () => [] });
+    const send = (p) => router.payload({ session_id: 'g3', cwd: root, ...p }, { channel: 'command' });
+    // The previous turn read src/x.js and ended; this Stop's turn never reached the intake.
+    send({ hook_event_name: 'UserPromptSubmit', prompt: 'check it' });
+    send({ hook_event_name: 'PostToolUse', tool_name: 'Read', tool_input: { file_path: path.join(root, 'src/x.js') }, tool_use_id: 'c3', tool_response: { type: 'text', file: { numLines: 1, startLine: 1, totalLines: 1 } } });
+    send({ hook_event_name: 'Stop', last_assistant_message: 'Read it.' });
+    router.stop('over');
+    const { runGate } = require('../src/laws/gate');
+    const { getAdapter } = require('../src/capture/agents');
+    process.env.ORUNMILA_GATE_FROM_MARKS = '1';
+    let check = null;
+    runGate({ session_id: 'g3', hook_event_name: 'Stop', last_assistant_message: 'src/x.js contains no TODO markers.' }, getAdapter('claude-code'), { root, onCheck: (c) => (check = c) });
+    const unreceipted = check.findings.flatMap((f) => (f.evidence && f.evidence.unreceipted_targets) || []);
+    assert.ok(unreceipted.includes('src/x.js'), "the previous turn's read is no receipt for this turn");
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    rmrf(home);
+    rmrf(root);
+  }
+});
+
 runAll('gate-from-marks');

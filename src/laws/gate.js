@@ -364,12 +364,13 @@ function runGate(payload, adapter, { root, onCheck } = {}) {
     let receipts = null;
     // B9 (LD148), off by default: the turn's receipts and prompts from the
     // intake's marks (open questions 2 and 3); no log for the session, or no
-    // turn in it, judges from the event log as before.
+    // turn in it the log shows is this Stop's and whole (B9b, LD163), judges
+    // from the event log as before.
     if (process.env.ORUNMILA_GATE_FROM_MARKS === '1') {
-      const { readSessionMarks, turnFromMarks } = require('../opon/gate/turn-marks');
+      const { readSessionMarks, confirmedTurn } = require('../opon/gate/turn-marks');
       const all = readSessionMarks(dataDir(), sessionId);
-      const t = all && turnFromMarks(all);
-      if (t) {
+      const t = all && confirmedTurn(all, String(claimText));
+      if (t && t.turn) {
         receipts = require('../opon/gate/receipts').buildReceiptsFromMarks(t.marks);
         promptText = t.promptText;
         // The lexical laws and strict proof read commands: the turn's, from its marks.

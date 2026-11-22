@@ -212,8 +212,9 @@ it('test 8 (rule 8): a mark that arrives after its group sealed never reopens it
   const s = makeLog(base);
   const a = s.append(M.started(0, 'e1', { kind: 'file', path: 'src/a.ts' }));
   const b = s.append(M.disk(100, 'src/a.ts'));
-  s.append(M.tick(5000)); // settled at 1,600, sealed at 4,600
-  const late = s.append(M.edited(5100, 'e1', 'src/a.ts')); // the hook's outcome, for the same tool call
+  s.append(M.turnEnded(200)); // the call's wait ends with its turn (C3b): settled at 1,700, sealed at 4,700
+  s.append(M.tick(5000));
+  const late = s.append(M.edited(5100, 'e1', 'src/a.ts')); // the hook's outcome, for the same tool call, after the seal
   const stale = s.append(M.disk(4000, 'src/b.ts')); // a slow source: seen at 4,000, arrives now
   s.append(M.tick(9000));
   const fresh = s.append(M.edited(20000, 'e2', 'src/a.ts')); // a new tool call, long after
@@ -223,8 +224,11 @@ it('test 8 (rule 8): a mark that arrives after its group sealed never reopens it
   const [first, amend, again] = byPath('src/a.ts');
   assert.deepStrictEqual(first.mark_seqs, [a, b], 'the sealed record is untouched');
   assert.strictEqual(first.amends, null);
+  assert.strictEqual(first.settled_at_ns, ns(1700), 'its wait ended at the turn\'s end (200): one quiet window from then (C3b)');
+  assert.deepStrictEqual(first.conflicts.map((c) => [c.kind, c.ref, c.why]), [['outcome_missing', 'e1', null]], 'judged at the end of its turn, and kept: the late outcome never rewrites it');
   assert.deepStrictEqual(amend.mark_seqs, [late]);
   assert.strictEqual(amend.amends, first.group_id);
+  assert.deepStrictEqual(amend.conflicts.filter((c) => c.kind === 'outcome_missing'), [], 'the late report is not ignored: it is a record of its own, pointing at the one it amends');
   assert.deepStrictEqual(again.mark_seqs, [fresh]);
   assert.strictEqual(again.amends, null);
   assert.strictEqual(byPath('src/b.ts')[0].mark_seqs[0], stale);

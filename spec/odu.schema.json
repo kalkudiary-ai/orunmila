@@ -356,7 +356,7 @@
     },
     "conflicts": {
       "description": "A list of disagreements, each naming the sources and what each said. Never dropped: on every odù, empty when there is none.",
-      "$comment": "brief v4 lines 314, 328, 405, 411, 429-439; station 6 (slices C3a-C3e). `sources` and `said` are the agent's names for line 328's \"naming the sources and what each said\" (LD188, Q13); concurrent_sessions's `sessions` (LD180, Q11 (1), approved LD184)",
+      "$comment": "brief v4 lines 314, 328, 405, 411, 429-439; station 6 (slices C3a-C3e). `sources` and `said` are the agent's names for line 328's \"naming the sources and what each said\" (LD188, Q13); concurrent_sessions's `sessions` (LD180, Q11 (1), approved LD184); outcome_missing's `ref` and `why` (LD189, Q14)",
       "type": "array",
       "items": {
         "type": "object",
@@ -365,11 +365,43 @@
           "sources",
           "said"
         ],
+        "if": {
+          "properties": {
+            "kind": {
+              "const": "outcome_missing"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        "then": {
+          "required": [
+            "ref",
+            "why"
+          ]
+        },
         "properties": {
           "kind": {
-            "description": "The conflict's kind. concurrent_sessions: a change during overlapping sessions that cannot be pinned to one session. unconfirmed_by_filesystem: an agent reported an edit inside the Sentinel's root that the Sentinel and git never saw.",
+            "description": "The conflict's kind. concurrent_sessions: a change during overlapping sessions that cannot be pinned to one session. unconfirmed_by_filesystem: an agent reported an edit inside the Sentinel's root that the Sentinel and git never saw. outcome_missing: a tool call's `started` mark with no outcome by the end of its turn, or an outcome its payload says was interrupted.",
             "type": "string",
             "minLength": 1
+          },
+          "ref": {
+            "description": "For outcome_missing: the tool call's id.",
+            "$comment": "agent's proposal (LD189, Q14)",
+            "type": "string",
+            "minLength": 1
+          },
+          "why": {
+            "description": "For outcome_missing: interrupted or denied only when the agent's own hook payload says so; gap only when a capture gap mark covers the call from its start until it stopped waiting; null otherwise, since the record does not guess why.",
+            "$comment": "brief v4 line 439; the field is the agent's proposal (LD189, Q14). No adapter records a denial today, so `denied` is not yet written",
+            "enum": [
+              "interrupted",
+              "denied",
+              "gap",
+              null
+            ]
           },
           "sources": {
             "description": "The mark sources behind the odù that bear on the conflict, sorted.",

@@ -77,6 +77,84 @@ it('C3a: the same change seen by both witnesses, a human edit, and marks that ch
   }
 });
 
+const DOWN = (fromMs, toMs) => ({ ...M.gap(toMs, 'every mark sent to intake while it was not running'), detail: { lost: 'every mark sent to intake while it was not running', since: { mono_ns: ns(fromMs), observed_at: wall(fromMs) }, until: { mono_ns: ns(toMs), observed_at: wall(toMs) }, sessions: ['ses_replay_test'] } });
+const missing = (ref, why, said = { hook: ['started'] }) => ({ kind: 'outcome_missing', sources: Object.keys(said).sort(), said, ref, why });
+
+it('C3b test 71: a tool call whose after-hook is lost, one interrupted (the payload says so) and one denied (no payload says why): each odù has outcome_missing, judged at the end of its turn; "interrupted" only where the payload says so, no "gap" with no gap recorded', () => {
+  const odus = replay((append) => {
+    append(M.prompted(0));
+    append(M.started(100, 'e1', { kind: 'file', path: 'src/lost.ts' }));
+    append(M.started(200, 'c1', { kind: 'command', text: 'npm test' }, 'Bash'));
+    append({ ...M.exited(900, 'c1', 'npm test', 'unknown'), detail: { tool: 'Bash', exit_status: 'unknown', output_excerpt: '', interrupted: true } });
+    append(M.started(1000, 'c2', { kind: 'command', text: 'rm -rf build' }, 'Bash'));
+    append(M.claimed(20000));
+    append(M.turnEnded(20000));
+    append(M.tick(40000));
+  });
+  const lost = of(odus, file('src/lost.ts'));
+  assert.deepStrictEqual([witnesses(lost), lost.conflicts], [['saw', 'out_of_scope'], [missing('e1', null)]], 'no change on disk recorded: not a disk event');
+  const cmd = (text) => of(odus, (o) => o.target && o.target.kind === 'command' && o.target.text === text);
+  const interrupted = cmd('npm test');
+  assert.deepStrictEqual([witnesses(interrupted), interrupted.conflicts], [['saw', 'out_of_scope'], [missing('c1', 'interrupted', { hook: ['started', 'exited'] })]]);
+  const denied = cmd('rm -rf build');
+  assert.deepStrictEqual([witnesses(denied), denied.conflicts], [['saw', 'out_of_scope'], [missing('c2', null)]], 'held by rule 3 until its turn ended, then judged');
+});
+
+it('C3b: no verdict before the end of its turn: a call with only `started` keeps its odù open while its turn runs, however long it is quiet', () => {
+  const odus = replay((append) => {
+    append(M.started(0, 'e1', { kind: 'file', path: 'src/waiting.ts' }));
+    append(M.tick(60000));
+  });
+  assert.strictEqual(odus.filter(file('src/waiting.ts')).length, 0, 'not sealed with a verdict its turn has not reached');
+});
+
+it('C3b, the late report: an outcome that arrives long after the call started (a permission prompt) joins the call\'s own odù, with the Sentinel\'s sighting: one odù, a direct cause, no conflict', () => {
+  const odus = replay((append) => {
+    append(M.started(0, 'e1', { kind: 'file', path: 'src/slow.ts' }));
+    append(M.edited(45000, 'e1', 'src/slow.ts'));
+    append(M.disk(45050, 'src/slow.ts'));
+    append(M.turnEnded(46000));
+    append(M.tick(90000));
+  });
+  const o = of(odus, file('src/slow.ts'));
+  assert.deepStrictEqual([witnesses(o), o.witness_status.glove.says, o.attribution, o.cause, o.confidence, o.conflicts, o.ceiling], [['saw', 'saw'], ['started', 'modified'], 'explained', { kind: 'agent_tool_call', ref: 'e1' }, 'high', [], false]);
+});
+
+it('C3b: "gap" only when a capture gap covers the call: the intake down after the call started ends its wait, and the record says gap', () => {
+  const odus = replay((append) => {
+    append(M.started(0, 'e2', { kind: 'file', path: 'src/gapped.ts' }));
+    append(DOWN(1000, 8000));
+    append(M.tick(40000));
+  });
+  const o = of(odus, file('src/gapped.ts'));
+  assert.deepStrictEqual([witnesses(o), o.conflicts], [['saw', 'out_of_scope'], [missing('e2', 'gap')]]);
+});
+
+it('C3b: the session\'s end also ends a call\'s wait when its turn never ended (the Stop hook lost)', () => {
+  const odus = replay((append) => {
+    append(M.started(0, 'e3', { kind: 'file', path: 'src/cut.ts' }));
+    append(M.sessionEnded(5000));
+    append(M.tick(30000));
+  });
+  const o = of(odus, file('src/cut.ts'));
+  assert.deepStrictEqual([witnesses(o), o.conflicts], [['saw', 'out_of_scope'], [missing('e3', null)]]);
+});
+
+it('C3b: a call with its outcome has no outcome_missing, and the schema names the conflict\'s call and why', () => {
+  const odus = replay((append) => {
+    append(M.started(0, 'e1', { kind: 'file', path: 'src/done.ts' }));
+    append(M.edited(100, 'e1', 'src/done.ts'));
+    append(M.disk(150, 'src/done.ts'));
+    append(M.turnEnded(1000));
+    append(M.tick(20000));
+  });
+  const o = of(odus, file('src/done.ts'));
+  assert.deepStrictEqual([witnesses(o), o.conflicts], [['saw', 'saw'], []]);
+  const keys = (r) => checkOdu(r).map((e) => `${e.path} ${e.keyword}`);
+  assert.ok(keys({ ...o, conflicts: [{ ...missing('e1', 'guessed') }] }).length > 0, 'why is interrupted, denied, gap or null');
+  assert.ok(keys({ ...o, conflicts: [{ kind: 'outcome_missing', sources: ['hook'], said: { hook: ['started'] }, why: null }] }).length > 0, 'an outcome_missing names its call');
+});
+
 it('C3a: the odù schema requires conflicts, and each conflict its kind, sources and what each said', () => {
   const [o] = replay((append) => {
     append(M.edited(0, 'e1', 'src/a.ts'));

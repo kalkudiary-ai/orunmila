@@ -95,6 +95,7 @@ it('A1 step 2, time match: a change inside the start and end of an agent tool ca
     // A call with no outcome recorded: its end is unknown, so "inside" cannot be shown.
     append(M.started(0, 'e3', { kind: 'file', path: 'src/open.ts' }));
     append(M.disk(100, 'src/open.ts'));
+    append(M.turnEnded(1000)); // its turn ends without one, so its odù seals (C3b)
     append(M.tick(12000));
   });
   assert.deepStrictEqual(blame(of(odus, file('src/in.ts'))), ['explained', { kind: 'time_match', ref: 'e1' }]);
@@ -131,6 +132,7 @@ it('A1c: an unexplained change beside agent activity says, from recorded facts, 
     append(M.started(0, 'e1', { kind: 'file', path: 'src/in.ts' }));
     append(M.disk(100, 'src/in.ts'));
     append(M.failed(200, 'e1', { kind: 'file', path: 'src/in.ts' }));
+    append(M.turnEnded(1000)); // e3's turn ends without its outcome, so its odù seals (C3b)
     append(M.tick(12000));
     // A command that exited 200 ms before a change, and one that exited longer than a quiet window before.
     append(M.started(20000, 'b1', cmd('npm run fmt'), 'Bash'));

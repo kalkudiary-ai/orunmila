@@ -36,6 +36,13 @@
  * window. A turn's group holds until its `ended` mark, subject to the ceiling;
  * a held group force-settled at the ceiling is still running, so its next mark
  * continues it however late (LD154). Children of a running command: slice G2.
+ * A group with a Glove tool call in flight (its `started`, no outcome yet)
+ * waits too, so the call is judged by the end of its turn (line 439; slice C3b,
+ * LD189): until the call's outcome, its turn's `ended`, the session's `ended`, or
+ * the intake's downtime from after it started; the ceiling never cuts that
+ * wait, and restarts at its end if the wait outlasted it. A group whose wait
+ * ended with no mark of its own waits one quiet window from that moment. A
+ * running command's wait ends the same way, its exit then lost (as G3).
  *
  * Renames and temp files (rule 4, LD155): an editor's temp file joins the
  * group of the file it stands for (src/opon/group/keys.js aliasPath), and vim's
@@ -147,8 +154,11 @@
  * Conflicts (station 6, slice C3a, LD188; lines 328, 411, 438): every sealed
  * group carries `conflicts`, empty when there is none; each names the sources
  * that bear on it and what each said (`sources`, `said`). Station 5 gives
- * `concurrent_sessions`; `conflictsOf` gives `unconfirmed_by_filesystem`. The
- * other conflicts come with slices C3b-C3e.
+ * `concurrent_sessions`; `conflictsOf` gives `unconfirmed_by_filesystem`, and
+ * `outcome_missing` (C3b, LD189) for each call with a `started` mark in the
+ * group and no outcome when it seals, or an outcome its payload says was
+ * interrupted: `ref` the call, `why` interrupted, gap (a Glove or intake capture
+ * gap covers the call's wait) or null. The other conflicts come with C3c-C3e.
  *
  * Group records (LD142) use the odù's field names where they apply, and are
  * not odù records.
@@ -217,6 +227,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
   const gaps = []; // { from, to, who: 'both' | 'sentinel' | 'glove' } (G1)
   const lastState = new Map(); // key -> the target's state at its last sealed group, or after a rename (N2)
   const calls = new Map(); // tool call id -> { keys, start, end }: the Glove's tool calls on files, for step 2 (A1b)
+  const inFlight = new Map(); // tool call id -> { turn, start, done, interrupted, end }: every Glove call, for its outcome (C3b)
   const exclusions = Array.isArray(config.exclusions) ? config.exclusions : [];
   const all = [];
   let now = null;
@@ -224,15 +235,42 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
 
   const id = (n) => `g_${String(n).padStart(4, '0')}`;
 
-  /** Why a group may not settle yet (rule 3): 'process', 'turn' or null. */
+  /** The Glove tool calls with a `started` mark in group g, in seq order (C3b). */
+  const startedIn = (g) => [...new Set(g.hints.filter((h, i) => h && g.says[i] === 'started' && GLOVE.has(g.sources[i])))];
+  /** C3b (LD189): the latest moment a call of g stopped waiting (its outcome, its turn's end, a gap), or null. */
+  function releaseOf(g) {
+    let r = null;
+    for (const id of startedIn(g)) {
+      const e = inFlight.get(id).end;
+      if (e !== null && (r === null || e > r)) r = e;
+    }
+    return r;
+  }
+
+  /** Why a group may not settle yet (rule 3; C3b): 'process', 'call', 'turn' or null. */
   function holdOf(g) {
     if (g.parentId !== null) {
       const p = unsealed.get(g.parentId);
       if (p && holdOf(p) === 'process') return 'process'; // a child of a running command (G2)
     }
     if (g.isCommand && g.says.includes('started') && !g.says.some((v) => v === 'exited' || v === 'ended') && !g.lost) return 'process';
+    if (startedIn(g).some((id) => inFlight.get(id).end === null)) return 'call'; // line 439: judged by the end of its turn
     if (g.isTurn && !g.turnEnded) return 'turn';
     return null;
+  }
+
+  /** C3b: the calls still waiting that `pred` picks stop waiting at `at`; a running command's exit is then lost (as G3). */
+  function endCalls(pred, at) {
+    for (const [id, t] of inFlight) {
+      if (t.start === null || t.end !== null || !pred(t)) continue;
+      t.end = at;
+      for (const c of unsealed.values()) {
+        if (c.key === `command:${id}` && c.exitAt === null) {
+          c.lost = true;
+          c.exitAt = at;
+        }
+      }
+    }
   }
 
   function witness(g, name) {
@@ -264,6 +302,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
           c.exitAt = from;
         }
       }
+      endCalls((t) => t.start <= from, from); // C3b: so may any call's outcome
     }
   }
 
@@ -306,6 +345,13 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     const out = [];
     const gloveEdit = g.says.some((v, i) => CHANGES_A_FILE.has(v) && g.sources[i] === 'hook');
     if (g.key.startsWith('file:') && gloveEdit && !g.sources.includes('git') && witness(g, 'sentinel').status === 'saw_nothing') out.push(conflictOf(g, 'unconfirmed_by_filesystem', ['hook', 'sentinel']));
+    // C3b (LD189; line 439, test 71): a started call with no outcome by the end of its turn, or one its payload says was interrupted.
+    for (const id of startedIn(g)) {
+      const t = inFlight.get(id);
+      const covered = gaps.some((x) => (x.who === 'both' || x.who === 'glove') && x.from <= t.end && x.to >= t.start);
+      const why = t.done ? (t.interrupted ? 'interrupted' : undefined) : covered ? 'gap' : null;
+      if (why !== undefined) out.push(conflictOf(g, 'outcome_missing', g.sources, { ref: id, why }));
+    }
     return out;
   }
 
@@ -413,7 +459,9 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       if (g.state === 'open') {
         const hold = holdOf(g);
         const parent = g.parentId !== null ? unsealed.get(g.parentId) : null;
-        const from = parent && parent.exitAt !== null && parent.exitAt > g.last ? parent.exitAt : g.last; // a child waits from its parent's exit
+        const fromMarks = parent && parent.exitAt !== null && parent.exitAt > g.last ? parent.exitAt : g.last; // a child waits from its parent's exit
+        const released = releaseOf(g);
+        const from = released !== null && released > fromMarks ? released : fromMarks; // C3b: and a call's group from its release
         let byQuiet = hold ? null : from + quiet;
         if (byQuiet !== null && g.childIds.length) {
           // A parent settles only once every child has settled, at the later moment (G2).
@@ -421,8 +469,10 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
           if (kids.some((k) => k.state === 'open')) byQuiet = null;
           else for (const k of kids) if (k.settledAt > byQuiet) byQuiet = k.settledAt;
         }
-        // A command that was seen starting is held until it exits, never cut by the ceiling (rule 3).
-        const byCeiling = g.isCommand && g.says.includes('started') ? null : g.first + ceiling;
+        // A command that was seen starting is held until it exits, never cut by the ceiling (rule 3); a call in
+        // flight likewise until it stops waiting, and a wait that outlasted the ceiling restarts it (C3b, LD189).
+        const cut = released !== null && released > g.first + ceiling ? released + ceiling : g.first + ceiling;
+        const byCeiling = hold === 'call' || (g.isCommand && g.says.includes('started')) ? null : cut;
         const at = byQuiet === null ? byCeiling : byCeiling === null || byQuiet <= byCeiling ? byQuiet : byCeiling;
         if (at !== null && t >= at) {
           g.state = 'settled';
@@ -624,6 +674,21 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     if (real) g.realSays.push(m.says);
     if (!fingerprint) g.last = now;
     if (m.says === 'ended' && m.target && m.target.kind === 'turn') g.turnEnded = true;
+    if (GLOVE.has(m.source) && m.cause_hint) {
+      // C3b (LD189): a call waits from its `started` until its outcome, its turn's end, the session's end or a gap.
+      const c = inFlight.get(m.cause_hint) || { turn: null, start: null, done: false, interrupted: false, end: null };
+      if (m.says === 'started') {
+        if (c.start === null) c.start = now;
+        c.turn = m.turn || null;
+      } else {
+        c.done = true;
+        if (c.end === null) c.end = now;
+        if (m.detail && m.detail.interrupted === true) c.interrupted = true; // the payload says so (claude-code.js)
+      }
+      inFlight.set(m.cause_hint, c);
+    }
+    if (m.says === 'ended' && m.target && m.target.kind === 'turn') endCalls((c) => c.turn !== null && c.turn === (m.target.id || m.turn), now);
+    if (m.says === 'ended' && m.target && m.target.kind === 'session') endCalls(() => true, now);
     if (g.isCommand && m.says === 'started' && g.startAt === null) g.startAt = now;
     if (g.isCommand && (m.says === 'exited' || m.says === 'ended')) g.exitAt = now;
     if (g.parentId !== null && GLOVE.has(m.source) && m.cause_hint) {

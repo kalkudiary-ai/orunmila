@@ -37,12 +37,9 @@ const plan = require('./plan');
 const session = require('./session');
 
 const ROOT = path.resolve(__dirname, '..', '..');
-const GATES = [
-  ['npm', 'test'],
-  ['npm', 'run', 'lint'],
-  ['npm', 'run', 'accuracy:gate'],
-  ['npm', 'run', 'coverage'],
-];
+// Loaded when the driver starts, before any session runs: a session can edit the clone's file, so the
+// referee must never run it from disk (cold verify 4: an edit to it wrote into the worktree; LD117).
+const LEOPARD = require('../leopard-check');
 
 // --- small helpers -------------------------------------------------------------
 
@@ -67,7 +64,8 @@ function headActions(root) {
   return r.stdout.split('\n').filter(Boolean).map((l) => l.split(':')[0]);
 }
 const COMMIT_ACTIONS = new Set(['commit', 'commit (initial)']);
-const porcelain = (root) => git(root, ['status', '--porcelain=v1']).split('\n').filter(Boolean);
+// No fsmonitor and no submodules: either would run code a session can plant in the clone (LD117).
+const porcelain = (root) => git(root, ['-c', 'core.fsmonitor=false', 'status', '--porcelain=v1', '--ignore-submodules=all']).split('\n').filter(Boolean);
 
 /** True when root is a linked worktree: its git common dir lies outside it, shared with another checkout. */
 function isLinkedWorktree(root) {
@@ -146,22 +144,40 @@ function stamp(ms) {
   return new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
 }
 
-/** The default referee: `leopard-check --gate` on the session; shown only on exit 0. */
+/**
+ * The default referee: leopard-check's check() on the session, in-process (LD117), as its --gate
+ * judges it: shown only when every Slice commit is fully shown, and not when there is none.
+ * exit: 0 shown, 1 not shown, 2 no records for the session or a log it cannot read.
+ */
 function leopardReferee(sid, { root = ROOT, orunmilaHome = process.env.ORUNMILA_HOME } = {}) {
-  const env = { ...process.env };
-  if (orunmilaHome) env.ORUNMILA_HOME = orunmilaHome;
-  const r = spawnSync('node', [path.join(ROOT, 'scripts', 'leopard-check.js'), '--session', sid, '--gate', '--json', '--repo', root], { encoding: 'utf8', env });
-  let detail = (r.stderr || '').trim();
+  const logFile = path.join(orunmilaHome || path.join(require('os').homedir(), '.orunmila'), 'events.jsonl');
+  let rows;
   try {
-    const j = JSON.parse(r.stdout);
-    detail = j.commits.map((c) => `${c.sha.slice(0, 7)} ${c.slice}: red ${c.red.status}, green ${c.green.status}, gates ${c.gates.map((g) => g.status).join('/')}`).join('; ') || 'no Slice commit in the session';
-  } catch {}
-  return { shown: r.status === 0, exit: r.status, detail };
+    rows = fs.readFileSync(logFile, 'utf8').split('\n').filter(Boolean).flatMap((l) => {
+      try {
+        return [JSON.parse(l)];
+      } catch {
+        return [];
+      }
+    });
+  } catch (err) {
+    return { shown: false, exit: 2, detail: `cannot read ${logFile}: ${err.message}` };
+  }
+  if (!rows.some((e) => e.session_id === sid)) return { shown: false, exit: 2, detail: `no records for session ${sid}` };
+  let r;
+  try {
+    r = LEOPARD.check({ rows, session: sid, repo: root });
+  } catch (err) {
+    return { shown: false, exit: 2, detail: `leopard-check failed: ${err.message.split('\n')[0]}` };
+  }
+  const shown = r.commits.length > 0 && r.commits.every((c) => c.shown);
+  const detail = r.commits.map((c) => `${c.sha.slice(0, 7)} ${c.slice}: red ${c.red.status}, green ${c.green.status}, gates ${c.gates.map((g) => g.status).join('/')}`).join('; ') || 'no Slice commit in the session';
+  return { shown, exit: shown ? 0 : 1, detail };
 }
 
 // --- one session ---------------------------------------------------------------
 
-function runSession(o, { sid, text, settingsFile, runDir, env }) {
+function runSession(o, { sid, text, settingsFile, runDir, scratchDir, env }) {
   const dir = path.join(runDir, 'sessions');
   fs.mkdirSync(dir, { recursive: true });
   const outFile = path.join(dir, `${sid}.out.json`);
@@ -186,7 +202,7 @@ function runSession(o, { sid, text, settingsFile, runDir, env }) {
       killer.unref();
     }, o.sessionMinutes * 60 * 1000);
     try {
-      const addDirs = [o.home, path.join(runDir, 'scratch')];
+      const addDirs = [o.home, scratchDir];
       child = spawn(o.claudeBin, session.argv({ sessionId: sid, settingsFile, model: o.model, maxBudgetUsd: o.budgetUsd, effort: o.effort, addDirs }), {
         cwd: o.root,
         env,
@@ -282,10 +298,6 @@ function summaryText(r) {
     out.push('', '## Bringing the work back (O\'s step)', '', 'The run worked in its own clone. To look at its commits from the source, without moving any branch there:', '');
     out.push('```sh', `git -C ${r.source} fetch ${r.root} ${r.branch}:refs/turbo/${r.branch} output-1:refs/turbo/output-1`, `git -C ${r.source} log --oneline ${r.branch}..refs/turbo/${r.branch}`, '```');
   }
-  if (r.gates) {
-    out.push('', '## Final gates (run by the driver, each alone)', '');
-    for (const g of r.gates) out.push(`- \`${g.command}\`: exit ${g.exit} (${g.file})`);
-  }
   return out.join('\n') + '\n';
 }
 
@@ -304,7 +316,6 @@ async function run(opts) {
     now: Date.now,
     sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
     referee: (sid, { root }) => leopardReferee(sid, { root }),
-    finalGates: true,
     caffeinate: process.platform === 'darwin',
     maxSessions: Infinity,
     beforeCheck: null,
@@ -316,9 +327,26 @@ async function run(opts) {
   const start = o.now();
   const deadline = start + o.hours * 3600 * 1000;
   const runId = stamp(start);
+  if (isLinkedWorktree(o.root)) {
+    throw new Error(`${o.root} is a linked worktree: its .git is shared with another checkout (here, the live copy), which no sandbox rule keeps safe (LD116). Run TURBO in its own clone: node scripts/turbo/turbo.js clone`);
+  }
+  if (spawnSync('git', ['-C', o.root, 'config', '--get', 'turbo.source']).status !== 0) {
+    throw new Error(`${o.root} is not a TURBO clone (no turbo.source): make one with node scripts/turbo/turbo.js clone, and run there (LD117)`);
+  }
   fs.mkdirSync(o.home, { recursive: true });
+  // The driver's records live in .turbo/driver/, denied to sessions (LD117); never through a link.
+  const driverHome = path.join(o.home, 'driver');
+  const scratchHome = path.join(o.home, 'scratch');
+  for (const d of [driverHome, scratchHome]) {
+    let st = null;
+    try {
+      st = fs.lstatSync(d); // lstat: existsSync follows a link, so a dangling one would pass
+    } catch {}
+    if (st && st.isSymbolicLink()) throw new Error(`${d} is a symlink; TURBO does not write through it`);
+  }
+  fs.mkdirSync(driverHome, { recursive: true });
 
-  const lockFile = path.join(o.home, 'driver.lock');
+  const lockFile = path.join(driverHome, 'driver.lock');
   if (fs.existsSync(lockFile)) {
     let held = null;
     try {
@@ -326,20 +354,19 @@ async function run(opts) {
     } catch {}
     if (held && alive(held.pid)) throw new Error(`another driver is running (pid ${held.pid}, run ${held.run})`);
   }
-  if (isLinkedWorktree(o.root)) {
-    throw new Error(`${o.root} is a linked worktree: its .git is shared with another checkout (here, the live copy), which no sandbox rule keeps safe (LD116). Run TURBO in its own clone: node scripts/turbo/turbo.js clone`);
-  }
   const baseline = porcelain(o.root);
   const tracked = baseline.filter((l) => !l.startsWith('??'));
   if (tracked.length) throw new Error(`the tree has uncommitted tracked changes; TURBO starts on a clean tree, and those belong to someone: ${tracked.join(', ')}`);
   fs.writeFileSync(lockFile, JSON.stringify({ pid: process.pid, run: runId, started: new Date(start).toISOString() }));
 
-  const runDir = path.join(o.home, 'runs', runId);
-  fs.mkdirSync(path.join(runDir, 'scratch'), { recursive: true });
+  const runDir = path.join(driverHome, runId);
+  const scratchDir = path.join(scratchHome, runId);
+  fs.mkdirSync(runDir, { recursive: true });
+  fs.mkdirSync(scratchDir, { recursive: true });
   const logFile = path.join(runDir, 'log.jsonl');
   const log = (e) => fs.appendFileSync(logFile, JSON.stringify({ ts: new Date(o.now()).toISOString(), ...e }) + '\n');
   const settingsFile = path.join(runDir, 'settings.json');
-  fs.writeFileSync(settingsFile, JSON.stringify(session.settings({ root: o.root }), null, 2) + '\n');
+  fs.writeFileSync(settingsFile, JSON.stringify(session.settings({ root: o.root, home: o.home }), null, 2) + '\n');
   const inbox = path.join(o.home, 'inbox.md');
   const branch = branchOf(o.root);
 
@@ -440,9 +467,9 @@ async function run(opts) {
         phaseSessions: a.phase_sessions || [],
         counts: plan.counts(p),
       });
-      const env = session.env({ base: o.env, root: o.root, home: o.home, run: runId, session: sid, scratch: path.join(runDir, 'scratch') });
+      const env = session.env({ base: o.env, root: o.root, home: o.home, run: runId, session: sid, scratch: scratchDir });
       log({ type: 'session-start', session: sid, kind: a.kind, slice: a.slice ? a.slice.id : null });
-      const res = await runSession(o, { sid, text: session.prompt(vars), settingsFile, runDir, env });
+      const res = await runSession(o, { sid, text: session.prompt(vars), settingsFile, runDir, scratchDir, env });
       state.lastInbox = inboxSha;
 
       const parsed = res.timedOut || res.spawnError ? { error: res.timedOut ? 'timed out' : res.spawnError } : session.parseResult(res.stdout);
@@ -511,22 +538,19 @@ async function run(opts) {
       }
     }
   } finally {
-    const finalPlan = plan.load(o.home);
-    let gates = null;
-    if (o.finalGates && stopReason) {
-      gates = GATES.map((argv) => {
-        const file = path.join(runDir, `gate-${argv.slice(1).join('-').replace(/[^a-z0-9-]/gi, '_')}.txt`);
-        const fd = fs.openSync(file, 'w');
-        const g = spawnSync(argv[0], argv.slice(1), { cwd: o.root, stdio: ['ignore', fd, fd], env: process.env });
-        fs.closeSync(fd);
-        return { command: argv.join(' '), exit: g.status, file };
-      });
+    // No final gates: they would run the clone's code outside the sandbox (LD117); the referee checks
+    // the sessions' own gate runs instead.
+    let finalPlan;
+    try {
+      finalPlan = plan.load(o.home);
+    } catch {
+      finalPlan = plan.empty();
     }
     const ended = new Date(o.now()).toISOString();
     const src = spawnSync('git', ['-C', o.root, 'config', '--get', 'turbo.source'], { encoding: 'utf8' });
-    result = { run: runId, runDir, sentinel: sentinelNote, root: o.root, source: src.status === 0 ? src.stdout.trim() : null, started: new Date(start).toISOString(), ended, stopReason: stopReason || 'error', hours: o.hours, branch, sessions, plan: finalPlan, gates };
+    result = { run: runId, runDir, scratchDir, sentinel: sentinelNote, root: o.root, source: src.status === 0 ? src.stdout.trim() : null, started: new Date(start).toISOString(), ended, stopReason: stopReason || 'error', hours: o.hours, branch, sessions, plan: finalPlan };
     fs.writeFileSync(path.join(runDir, 'summary.md'), summaryText(result));
-    log({ type: 'end', stopReason: result.stopReason, sessions: sessions.length, gates });
+    log({ type: 'end', stopReason: result.stopReason, sessions: sessions.length });
     if (sentinelChild && sentinelChild.exitCode === null) sentinelChild.kill('SIGINT');
     try {
       fs.unlinkSync(lockFile);
@@ -594,10 +618,10 @@ async function main(argv) {
       const p = plan.load(home);
       process.stdout.write(`plan: ${JSON.stringify(plan.counts(p))}\n`);
       for (const q of p.queue.filter((x) => x.status === 'open')) process.stdout.write(`open ${q.id} (${q.kind}) ${q.title}\n`);
-      const lock = path.join(home, 'driver.lock');
+      const lock = path.join(home, 'driver', 'driver.lock');
       process.stdout.write(fs.existsSync(lock) ? `driver: ${fs.readFileSync(lock, 'utf8')}\n` : 'driver: not running\n');
-      const runs = fs.existsSync(path.join(home, 'runs')) ? fs.readdirSync(path.join(home, 'runs')).sort() : [];
-      if (runs.length) process.stdout.write(`last run: ${path.join(home, 'runs', runs[runs.length - 1])}\n`);
+      const runs = fs.existsSync(path.join(home, 'driver')) ? fs.readdirSync(path.join(home, 'driver')).filter((n) => n !== 'driver.lock').sort() : [];
+      if (runs.length) process.stdout.write(`last run: ${path.join(home, 'driver', runs[runs.length - 1])}\n`);
       return 0;
     }
     if (cmd === 'run') {

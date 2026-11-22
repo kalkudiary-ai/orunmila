@@ -466,6 +466,8 @@ function writeVerdict(p, ctx) {
   if (inside(p, ctx.self)) return deny('self-edit', `${p} is TURBO's own code; it is not changed during a run`);
   if (inside(p, path.join(ctx.root, '.claude'))) return deny('hook-settings', `${p} holds the hook settings; a change there changes capture`);
   if (inside(p, path.join(ctx.root, '.git'))) return deny('destructive', `${p} is inside .git`);
+  if (inside(p, path.join(ctx.home, 'driver'))) return deny('self-edit', `${p} is the driver's own record; only the driver writes it`);
+  if (['inbox.md', 'STOP', 'PAUSE'].some((n) => p === path.join(ctx.home, n))) return deny('o-inbox', `${p} is O's: only O writes it`);
   return null;
 }
 
@@ -529,7 +531,8 @@ function decide(payload, ctx) {
 
 function contextFromEnv(env = process.env) {
   const root = real(env.TURBO_ROOT || ROOT);
-  const scratch = [...(env.TURBO_SCRATCH ? env.TURBO_SCRATCH.split(path.delimiter).filter(Boolean) : []), os.tmpdir(), '/tmp', '/private/tmp'].map(real);
+  // Only the run's own scratch: the temp dir holds every Claude session's scratchpad (LD117).
+  const scratch = (env.TURBO_SCRATCH ? env.TURBO_SCRATCH.split(path.delimiter).filter(Boolean) : []).map(real);
   return {
     root,
     live: real(env.TURBO_LIVE || path.join(os.homedir(), 'tools', 'orunmila')),

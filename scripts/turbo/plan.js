@@ -196,6 +196,8 @@ function validate(p) {
 function load(dir = home()) {
   const file = path.join(dir, 'plan.json');
   if (!fs.existsSync(file)) return empty();
+  // A session can write TURBO_HOME; the unsandboxed driver must not read or write through its links (LD117).
+  if (fs.lstatSync(file).isSymbolicLink()) throw new Error(`${file} is a symlink; TURBO does not follow it`);
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
@@ -228,7 +230,11 @@ function save(dir, p) {
   fs.mkdirSync(dir, { recursive: true });
   const put = (name, text) => {
     const tmp = path.join(dir, `.${name}.${process.pid}.tmp`);
-    fs.writeFileSync(tmp, text);
+    // Remove whatever is there (a planted symlink included), then create it exclusively.
+    try {
+      fs.unlinkSync(tmp);
+    } catch {}
+    fs.writeFileSync(tmp, text, { flag: 'wx' });
     fs.renameSync(tmp, path.join(dir, name));
   };
   put('plan.json', JSON.stringify(p, null, 2) + '\n');

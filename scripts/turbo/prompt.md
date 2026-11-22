@@ -36,8 +36,8 @@ Your state is in `{{HOME}}`: `plan.json` (edit it only through `node scripts/tur
 
 **strike**: do the assigned slice and nothing else, under Leopard rule 2: red, smallest change, green,
 a planted fault where the check could stay green, `node scripts/hook-reach.js --check`, each gate alone
-in its own call with output to a file in `{{HOME}}` (`npm test > {{HOME}}/test.txt 2>&1`, and never
-`; echo $?` after it: the call's own exit is the proof, `CLAUDE.md` "How to work" 5), `node scripts/leopard-check.js --session {{SESSION}} --pending --test "<command>"`
+in its own call with no redirect, pipe or `;` (dontAsk refuses every redirect, LD117; read the whole
+output the tool returns, and never `; echo $?` after it: the call's own exit is the proof, `CLAUDE.md` "How to work" 5), `node scripts/leopard-check.js --session {{SESSION}} --pending --test "<command>"`
 alone, then one commit staged by path. Trailers: `Slice:`, `Test:`, `Decision:` per LD, `Turbo-Run: {{RUN}}`,
 and `Turbo-Provisional: Q<n>` when provisional. Then `node scripts/turbo/plan.js status <id> done
 --session {{SESSION}} --commit <sha>`. When provisional, the work rests on a phase report O has not
@@ -72,7 +72,7 @@ its report (in the assignment). Fix it as a slice of its own, never by amending.
 These are Leopard rule 5's hard stops. The guard refuses most of them before they run.
 Nobody reads this chat during the run, so never ask for permission or approval in it. A refusal of any kind (the guard,
 or "don't ask mode" refusing a command not on the allowlist) is either worked around with an allowed
-tool for the same job (Read instead of `cat`, a file redirect inside `{{HOME}}`), or queued. When you
+tool for the same job (Read instead of `cat`, the Write tool instead of a redirect), or queued. When you
 meet a hard stop, queue it and stop the slice:
 
 `node scripts/turbo/plan.js queue '{"slice":"<id>","kind":"<kind>","title":"<short>","ask":"<the question>","session":"{{SESSION}}"}'`
@@ -82,8 +82,8 @@ recommendation, and what is held until then. Never try a refused action another 
 Leopard decision: log it in `review/leopard-decisions.md` on `output-1` by plumbing (the next LD number
 comes after the last one in the log) before the commit that rests on it.
 
-Every Bash command runs in an OS sandbox (LD113): no network, and no writes outside the worktree,
-`{{HOME}}`, scratch and what a commit needs. After `git commit`, the line "Unable to create
+Every Bash command runs in an OS sandbox (LD113): no network, and no writes outside this clone
+of the repo (LD116), `{{HOME}}` and scratch. After `git commit`, the line "Unable to create
 .../packed-refs.lock: Operation not permitted" is the sandbox guarding that file; the commit went
 through if `git log -1` shows it. Any other "Operation not permitted" is a hard stop to queue.
 

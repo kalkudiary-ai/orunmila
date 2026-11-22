@@ -20,7 +20,6 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const GUARD = path.join(__dirname, 'guard.js');
-const GITHOOKS = path.join(__dirname, 'githooks');
 const TEMPLATE = path.join(__dirname, 'prompt.md');
 
 const OUTCOMES = ['done', 'blocked', 'planned', 'nothing', 'recovered', 'failed'];
@@ -153,7 +152,7 @@ function gitDirs(root) {
  * whose .git would be shared. Every session scratchpad under
  * /private/tmp/claude-<uid>/ is denied.
  */
-function sandbox(root) {
+function sandbox(root, home = null) {
   const g = gitDirs(root);
   const allowWrite = [];
   // Every session scratchpad: the wildcard for ones made later, and each one that exists by its
@@ -167,6 +166,9 @@ function sandbox(root) {
   // In a TURBO clone (LD116) the git dir is its own, inside the cwd; only its hooks and config,
   // which could run code or turn the git hooks off, are denied.
   if (g) denyWrite.push(path.join(g.common, 'hooks'), path.join(g.common, 'config'), path.join(g.common, 'config.lock'));
+  // The driver's own records, and what only O writes (LD117): a session that could write them
+  // could make the unsandboxed driver write through a symlink, or forge O's answer.
+  if (home) denyWrite.push(path.join(home, 'driver'), path.join(home, 'inbox.md'), path.join(home, 'STOP'), path.join(home, 'PAUSE'));
   return {
     enabled: true,
     failIfUnavailable: true,
@@ -178,9 +180,9 @@ function sandbox(root) {
   };
 }
 
-function settings({ guard = GUARD, root = ROOT } = {}) {
+function settings({ guard = GUARD, root = ROOT, home = null } = {}) {
   return {
-    sandbox: sandbox(root),
+    sandbox: sandbox(root, home),
     permissions: {
       defaultMode: 'dontAsk',
       allow: ['Read', 'Edit', 'Write', 'MultiEdit', 'Agent', 'Task', 'TodoWrite', 'ToolSearch', 'StructuredOutput', ...BASH_ALLOW.map((c) => `Bash(${c}:*)`)],
@@ -193,11 +195,10 @@ function settings({ guard = GUARD, root = ROOT } = {}) {
 }
 
 function env({ base = process.env, root = ROOT, home, run, session, scratch = '' }) {
+  // No git config reaches a session through the environment, inherited or injected (LD117).
+  const clean = Object.fromEntries(Object.entries(base).filter(([k]) => !/^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+|PARAMETERS)$/.test(k)));
   return {
-    ...base,
-    GIT_CONFIG_COUNT: '1',
-    GIT_CONFIG_KEY_0: 'core.hooksPath',
-    GIT_CONFIG_VALUE_0: GITHOOKS,
+    ...clean,
     NPM_CONFIG_DRY_RUN: 'true',
     TURBO_ROOT: root,
     TURBO_HOME: home,
@@ -293,4 +294,4 @@ function parseResult(stdout) {
   return bad ? { error: bad, cost } : { result: r, cost };
 }
 
-module.exports = { ROOT, GUARD, GITHOOKS, RESULT_SCHEMA, OUTCOMES, settings, env, argv, render, promptVars, prompt, parseResult };
+module.exports = { ROOT, GUARD, RESULT_SCHEMA, OUTCOMES, settings, env, argv, render, promptVars, prompt, parseResult };

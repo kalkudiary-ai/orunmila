@@ -42,7 +42,8 @@ Everything is in `.turbo/` (gitignored):
 | `PAUSE` | Create it to hold the run after the current session (so you can work in the tree yourself). Delete it to go on. |
 | `STOP` | Create it to end the run after the current session. |
 | `plan.json` | The test list: slices, dependencies, status. |
-| `runs/<id>/` | `log.jsonl` (every step), `summary.md` (at the end), each session's prompt and output. |
+| `driver/<id>/` | The driver's own records, which sessions cannot write: `log.jsonl` (every step), `summary.md` (at the end), each session's prompt and output. |
+| `scratch/<id>/` | The sessions' scratch folder for the run. |
 
 `node scripts/turbo/turbo.js status` prints the plan counts, the open items and whether a driver
 is running.
@@ -60,7 +61,9 @@ is running.
 
 Two failed sessions in a row, or three with no progress, also mean wait. A waiting run does not exit:
 it resumes when your inbox changes. It ends at its hours, at `STOP`, or if the worktree's branch
-changes. At the end the driver runs the four gates itself and writes `summary.md`.
+changes. At the end it writes `summary.md`. It runs no gates of its own: that would run the clone's
+code outside the sandbox (LD117); the referee checks the gate runs the sessions made, each run alone
+with no redirect (dontAsk refuses every redirect).
 
 At a phase end the close-out slice runs the full `CLAUDE.md` close-out and queues the phase report
 (non-blocking). Later-phase slices then go on as **provisional**: behind an off-by-default flag, or
@@ -79,7 +82,15 @@ driver refuses to run in a linked worktree. (LD113-LD115 tried to keep the share
 lists; three cold verifies each found a new gap, the last one `commondir`, branches kept in
 `packed-refs`, and deletable pack files, so the method changed.) There is no retry outside it
 (`allowUnsandboxedCommands: false`), and a session will not start without it (`failIfUnavailable`).
-The file tools (Edit, Write) are not sandboxed; the guard checks them by real path.
+The file tools (Edit, Write) are not sandboxed; the guard checks them by real path and allows them
+only in the clone, TURBO_HOME and scratch.
+
+The driver runs outside the sandbox, so it trusts nothing a session can write (LD117, after a cold
+verify made it write into the worktree twice): the referee runs `leopard-check` code loaded before
+the first session, never the clone's file; its records sit in `.turbo/driver/`, which sessions
+cannot write; it refuses a symlink there or at `plan.json`, and writes temp files exclusively; its
+`git status` turns fsmonitor and submodules off; it runs only in a clone made by `turbo.js clone`
+(`turbo.source` set). `inbox.md`, `STOP` and `PAUSE` are yours: sessions cannot write them.
 
 The layers below are second checks:
 
@@ -90,18 +101,20 @@ The layers below are second checks:
    live copy `~/tools/orunmila`, the hook settings and git config, and TURBO's own code. It parses
    each shell command, including `$(...)`, backticks, heredocs fed to a shell, `bash -c`, `eval` and
    wrappers such as `env`, `nohup`, `timeout` and `xargs`.
-3. git hooks set through the environment (`githooks/`): every push and any update to `main` is
-   refused, however git is run.
-4. `NPM_CONFIG_DRY_RUN=true`: `npm publish` only reports.
+3. `NPM_CONFIG_DRY_RUN=true`: `npm publish` only reports.
+
+(A git-hook layer set through the environment was removed by LD117: in the clone it guarded nothing
+the sandbox does not, and it broke every test that commits to `main` in a temp repo.)
 
 No MCP servers are loaded. A refused action becomes a queue item.
 
-**Known limits:** the guard and the git hooks can be got round (variables, aliases, `send-pack`,
-`-c core.hooksPath=`); the sandbox is what holds. Inside the clone a session can write anything but
+**Known limits:** the guard can be got round (variables, aliases, `send-pack`); the sandbox is what
+holds. Inside the clone a session can write anything but
 the paths above, including its branches and its object store: damage there stays in the clone, and
 reaches the worktree only through your fetch. A refused checkout can rewrite the clone's files before
 it fails on `HEAD`; the driver reads `HEAD`'s reflog after each session, and any entry that is not a
-commit makes the next session a recovery. Orunmila is Glove and Sentinel: the driver starts a
+commit makes the next session a recovery; a session can write that reflog (a commit must append to
+it), so the check is advisory. Orunmila is Glove and Sentinel: the driver starts a
 Sentinel on the clone for the run (`orunmila watch-fs --root <clone>`, or `TURBO_SENTINEL_BIN`) unless
 one already watches it, stops the one it started at the end, and `summary.md` says which.
 

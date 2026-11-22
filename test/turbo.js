@@ -324,59 +324,13 @@ it('guard: the hook refuses with exit 2 and a reason on stderr, allows with exit
   }
 });
 
-// --- T3: the git hooks --------------------------------------------------------
+// --- shared git helpers (T3's git-hook layer was removed by LD117) -------------
 
 const { spawnSync } = require('child_process');
-const HOOKS_DIR = path.join(__dirname, '..', 'scripts', 'turbo', 'githooks');
-const HOOK_ENV = { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.hooksPath', GIT_CONFIG_VALUE_0: HOOKS_DIR };
 
 function gitIn(repo, args, env = {}) {
   return spawnSync('git', ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { encoding: 'utf8', env: { ...process.env, ...env } });
 }
-
-function hookRepo() {
-  const base = fs.realpathSync(tmpDir());
-  const repo = path.join(base, 'r');
-  fs.mkdirSync(repo);
-  gitIn(repo, ['init', '-q', '-b', 'work']);
-  fs.writeFileSync(path.join(repo, 'a'), 'a\n');
-  gitIn(repo, ['add', 'a']);
-  gitIn(repo, ['commit', '-q', '-m', 'a']);
-  spawnSync('git', ['init', '-q', '--bare', path.join(base, 'remote.git')]);
-  return { base, repo, remote: path.join(base, 'remote.git') };
-}
-
-it('githooks: with TURBO\'s env, any update to main is refused and other refs move', () => {
-  const { base, repo } = hookRepo();
-  try {
-    const main = gitIn(repo, ['update-ref', 'refs/heads/main', 'HEAD'], HOOK_ENV);
-    assert.notStrictEqual(main.status, 0, 'update-ref main was allowed');
-    assert.ok(main.stderr.includes('TURBO'), main.stderr);
-    assert.notStrictEqual(gitIn(repo, ['branch', 'main'], HOOK_ENV).status, 0, 'git branch main was allowed');
-    assert.strictEqual(gitIn(repo, ['rev-parse', '--verify', '-q', 'refs/heads/main']).status, 1, 'main exists after the refusals');
-    assert.strictEqual(gitIn(repo, ['update-ref', 'refs/heads/output-1', 'HEAD'], HOOK_ENV).status, 0, 'another branch could not move');
-    fs.writeFileSync(path.join(repo, 'b'), 'b\n');
-    gitIn(repo, ['add', 'b'], HOOK_ENV);
-    assert.strictEqual(gitIn(repo, ['commit', '-q', '-m', 'b'], HOOK_ENV).status, 0, 'a commit on the work branch was refused');
-    // Control: without the env the same update goes through, so the hook is what refused it.
-    assert.strictEqual(gitIn(repo, ['update-ref', 'refs/heads/main', 'HEAD']).status, 0);
-  } finally {
-    rmrf(base);
-  }
-});
-
-it('githooks: with TURBO\'s env, every push is refused; without it, the same push goes through', () => {
-  const { base, repo, remote } = hookRepo();
-  try {
-    const push = gitIn(repo, ['push', '-q', remote, 'HEAD:refs/heads/x'], HOOK_ENV);
-    assert.notStrictEqual(push.status, 0, 'a push was allowed');
-    assert.ok(push.stderr.includes('TURBO'), push.stderr);
-    assert.strictEqual(spawnSync('git', ['-C', remote, 'rev-parse', '--verify', '-q', 'refs/heads/x']).status, 1, 'the remote got the ref');
-    assert.strictEqual(gitIn(repo, ['push', '-q', remote, 'HEAD:refs/heads/x']).status, 0);
-  } finally {
-    rmrf(base);
-  }
-});
 
 // --- T4: one session ----------------------------------------------------------
 
@@ -394,15 +348,17 @@ it('session: settings deny by default, allow a closed list, and put the guard be
   assert.ok(pre[0].hooks[0].command.includes(path.join('scripts', 'turbo', 'guard.js')), pre[0].hooks[0].command);
 });
 
-it('session: the env turns on the git hooks and npm dry-run, names the run, and leaves the base env alone', () => {
+it('session: the env sets npm dry-run, names the run, injects no git config (LD117), and leaves the base env alone', () => {
   const baseEnv = { PATH: '/bin', GIT_CONFIG_COUNT: '3' };
   const e = session.env({ base: baseEnv, root: '/r', home: '/h', run: 'R1', session: 'S1', scratch: '/s' });
-  assert.deepStrictEqual([e.GIT_CONFIG_COUNT, e.GIT_CONFIG_KEY_0, e.GIT_CONFIG_VALUE_0], ['1', 'core.hooksPath', path.join(session.ROOT, 'scripts', 'turbo', 'githooks')]);
-  assert.ok(fs.existsSync(path.join(e.GIT_CONFIG_VALUE_0, 'pre-push')));
+  // The git-hook env broke every test that commits to main in a temp repo (cold verify 4).
+  assert.strictEqual(e.GIT_CONFIG_COUNT, undefined);
+  assert.strictEqual(e.GIT_CONFIG_KEY_0, undefined);
   assert.strictEqual(e.NPM_CONFIG_DRY_RUN, 'true');
   assert.deepStrictEqual([e.TURBO_HOME, e.TURBO_RUN, e.TURBO_SESSION, e.TURBO_ROOT, e.TURBO_SCRATCH], ['/h', 'R1', 'S1', '/r', '/s']);
   assert.strictEqual(e.PATH, '/bin');
   assert.strictEqual(baseEnv.GIT_CONFIG_COUNT, '3', 'the base env was changed');
+  assert.ok(!fs.existsSync(path.join(session.ROOT, 'scripts', 'turbo', 'githooks')), 'the removed git-hook layer is still on disk');
 });
 
 it('session: argv runs print mode, pinned session id, dontAsk, no MCP servers, JSON with the result schema', () => {
@@ -500,6 +456,7 @@ function driverSetup(steps, { slices = [], referee = () => ({ shown: true, detai
   fs.writeFileSync(path.join(root, 'tracked.txt'), 'x\n');
   gitIn(root, ['add', 'tracked.txt']);
   gitIn(root, ['commit', '-q', '-m', 'base']);
+  gitIn(root, ['config', 'turbo.source', base]); // a TURBO clone records its source (LD117: the driver runs only there)
   const p = plan.empty();
   for (const s of slices) plan.addSlice(p, s);
   plan.save(home, p);
@@ -551,8 +508,8 @@ it('driver: strikes the plan in order, stalks when it is empty, then waits out t
     const sid = c0.argv[c0.argv.indexOf('--session-id') + 1];
     assert.strictEqual(sid, out.sessions[0].session, 'the session id is pinned');
     assert.ok(c0.stdin.includes('Kind: **strike**'), 'the prompt came on stdin');
-    assert.ok(c0.hooksPath.endsWith(path.join('scripts', 'turbo', 'githooks')), 'the git hooks env reached the session');
-    assert.ok(!fs.existsSync(path.join(d.home, 'driver.lock')), 'the lock was released');
+    assert.strictEqual(c0.hooksPath, undefined, 'git config reached the session through the env (LD117)');
+    assert.ok(!fs.existsSync(path.join(d.home, 'driver', 'driver.lock')), 'the lock was released');
   } finally {
     rmrf(d.base);
   }
@@ -668,10 +625,10 @@ it('driver: STOP ends the run before the next session; PAUSE holds it; a changed
 it('driver: refuses to start while another live driver holds the lock, and clears a dead one\'s lock', async () => {
   const d = driverSetup([], { slices: [], hours: 0 });
   try {
-    fs.mkdirSync(d.home, { recursive: true });
-    fs.writeFileSync(path.join(d.home, 'driver.lock'), JSON.stringify({ pid: process.pid, run: 'other' }));
+    fs.mkdirSync(path.join(d.home, 'driver'), { recursive: true });
+    fs.writeFileSync(path.join(d.home, 'driver', 'driver.lock'), JSON.stringify({ pid: process.pid, run: 'other' }));
     await assert.rejects(() => turbo.run(d.opts), /another driver/);
-    fs.writeFileSync(path.join(d.home, 'driver.lock'), JSON.stringify({ pid: 2147483646, run: 'dead' }));
+    fs.writeFileSync(path.join(d.home, 'driver', 'driver.lock'), JSON.stringify({ pid: 2147483646, run: 'dead' }));
     assert.strictEqual((await turbo.run(d.opts)).stopReason, 'hours');
   } finally {
     rmrf(d.base);
@@ -683,7 +640,7 @@ it('driver: refuses to start on a tree with uncommitted tracked changes (they be
   try {
     fs.writeFileSync(path.join(d.root, 'tracked.txt'), 'someone else\'s work\n');
     await assert.rejects(() => turbo.run(d.opts), /uncommitted tracked changes/);
-    assert.ok(!fs.existsSync(path.join(d.home, 'driver.lock')), 'the lock was left behind');
+    assert.ok(!fs.existsSync(path.join(d.home, 'driver', 'driver.lock')), 'the lock was left behind');
   } finally {
     rmrf(d.base);
   }
@@ -755,7 +712,9 @@ it('driver: the session is started with TURBO_HOME and its scratch folder as add
     const out = await turbo.run(d.opts);
     const a = d.call(0).argv;
     const dirs = a.map((x, i) => (x === '--add-dir' ? a[i + 1] : null)).filter(Boolean);
-    assert.deepStrictEqual(dirs, [d.home, path.join(out.runDir, 'scratch')]);
+    assert.deepStrictEqual(dirs, [d.home, out.scratchDir]);
+    assert.strictEqual(out.scratchDir, path.join(d.home, 'scratch', out.run));
+    assert.strictEqual(out.runDir, path.join(d.home, 'driver', out.run), 'the driver keeps its records in .turbo/driver/');
   } finally {
     rmrf(d.base);
   }
@@ -798,7 +757,7 @@ it('driver: refuses a linked worktree (its .git is shared with another checkout)
   try {
     gitIn(d.root, ['worktree', 'add', '-q', path.join(d.base, 'wt'), '-b', 'wtb']);
     await assert.rejects(() => turbo.run({ ...d.opts, root: path.join(d.base, 'wt') }), /linked worktree/);
-    assert.ok(!fs.existsSync(path.join(d.home, 'driver.lock')), 'the lock was left behind');
+    assert.ok(!fs.existsSync(path.join(d.home, 'driver', 'driver.lock')), 'the lock was left behind');
   } finally {
     rmrf(d.base);
   }
@@ -889,6 +848,112 @@ it('driver: starts a Sentinel on its root for the run and stops it at the end (G
   } finally {
     rmrf(d.base);
   }
+});
+
+// --- T13: the driver's own boundary (LD117) ---------------------------------------
+
+it('T13 referee: runs leopard-check code loaded at start, not the file a session can edit later', () => {
+  const base = fs.realpathSync(tmpDir());
+  try {
+    const mirror = path.join(base, 'm');
+    fs.mkdirSync(path.join(mirror, 'scripts', 'turbo'), { recursive: true });
+    const R0 = path.join(__dirname, '..');
+    for (const f of ['turbo.js', 'plan.js', 'session.js', 'guard.js', 'prompt.md']) fs.copyFileSync(path.join(R0, 'scripts', 'turbo', f), path.join(mirror, 'scripts', 'turbo', f));
+    fs.copyFileSync(path.join(R0, 'scripts', 'leopard-check.js'), path.join(mirror, 'scripts', 'leopard-check.js'));
+    const t = require(path.join(mirror, 'scripts', 'turbo', 'turbo.js'));
+    const marker = path.join(base, 'ESCAPED');
+    // A session's edit, after the driver started.
+    fs.writeFileSync(path.join(mirror, 'scripts', 'leopard-check.js'), `require('fs').writeFileSync(${JSON.stringify(marker)}, 'ran');\n`);
+    const home = path.join(base, 'oh');
+    fs.mkdirSync(home);
+    fs.writeFileSync(path.join(home, 'events.jsonl'), JSON.stringify({ ts: new Date().toISOString(), type: 'command_run', session_id: 'S9', command: 'ls' }) + '\n');
+    const v = t.leopardReferee('S9', { root: R0, orunmilaHome: home });
+    assert.ok(!fs.existsSync(marker), 'the referee ran the edited file');
+    assert.strictEqual(v.shown, false);
+  } finally {
+    rmrf(base);
+  }
+});
+
+it('T13 sandbox: the driver folder, O\'s inbox, STOP and PAUSE are denied to sessions', () => {
+  const sb = session.settings({ root: path.join(__dirname, '..'), home: '/h/.turbo' }).sandbox.filesystem;
+  for (const p of ['/h/.turbo/driver', '/h/.turbo/inbox.md', '/h/.turbo/STOP', '/h/.turbo/PAUSE']) assert.ok(sb.denyWrite.includes(p), `denyWrite lacks ${p}`);
+});
+
+it('T13 guard: file tools write only in the clone, TURBO_HOME and scratch; never O\'s inbox or the driver folder', () => {
+  const { base, ctx } = guardCtx();
+  try {
+    const env = { TURBO_ROOT: ctx.root, TURBO_LIVE: ctx.live, TURBO_HOME: ctx.home, TURBO_SCRATCH: ctx.scratch.join(path.delimiter) };
+    const c = guard.contextFromEnv(env);
+    const d = (p) => guard.decide({ cwd: ctx.root, tool_name: 'Write', tool_input: { file_path: p } }, c);
+    assert.strictEqual(d(path.join(require('os').tmpdir(), 'x.txt')).kind, 'outside-tree', 'the temp dir is open to file tools');
+    assert.strictEqual(d('/private/tmp/claude-505/-Users-x/y.txt').kind, 'outside-tree');
+    assert.strictEqual(d(path.join(ctx.home, 'inbox.md')).kind, 'o-inbox');
+    assert.strictEqual(d(path.join(ctx.home, 'STOP')).kind, 'o-inbox');
+    assert.strictEqual(d(path.join(ctx.home, 'driver', 'r', 'summary.md')).kind, 'self-edit');
+    assert.ok(d(path.join(ctx.home, 'plan-notes.md')).allow);
+  } finally {
+    rmrf(base);
+  }
+});
+
+it('T13 driver: runs only in a TURBO clone (turbo.source set), refuses a symlinked driver folder or plan.json', async () => {
+  const d = driverSetup([], { slices: [S('a')], hours: 0 });
+  try {
+    gitIn(d.root, ['config', '--unset', 'turbo.source']);
+    await assert.rejects(() => turbo.run(d.opts), /TURBO clone/);
+    gitIn(d.root, ['config', 'turbo.source', d.base]);
+    const victim = path.join(d.base, 'victim');
+    fs.mkdirSync(victim);
+    fs.symlinkSync(victim, path.join(d.home, 'driver'));
+    await assert.rejects(() => turbo.run(d.opts), /symlink/);
+    assert.deepStrictEqual(fs.readdirSync(victim), [], 'the driver wrote through the symlink');
+    fs.unlinkSync(path.join(d.home, 'driver'));
+    fs.symlinkSync(path.join(d.base, 'nowhere', 'yet'), path.join(d.home, 'driver'));
+    await assert.rejects(() => turbo.run(d.opts), /symlink/, 'a dangling symlink passed the check');
+    fs.unlinkSync(path.join(d.home, 'driver'));
+    const pj = path.join(d.home, 'plan.json');
+    fs.renameSync(pj, path.join(d.base, 'plan-real.json'));
+    fs.symlinkSync(path.join(d.base, 'plan-real.json'), pj);
+    assert.throws(() => plan.load(d.home), /symlink/);
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('T13 plan.save: a planted temp-file symlink is not written through', () => {
+  const home = fs.realpathSync(tmpDir());
+  try {
+    const victim = path.join(home, 'victim.txt');
+    fs.writeFileSync(victim, 'keep\n');
+    fs.symlinkSync(victim, path.join(home, `.plan.json.${process.pid}.tmp`));
+    plan.save(home, plan.empty());
+    assert.strictEqual(fs.readFileSync(victim, 'utf8'), 'keep\n');
+    assert.deepStrictEqual(plan.load(home), plan.empty());
+  } finally {
+    rmrf(home);
+  }
+});
+
+it('T13 driver: its git status does not run the repo\'s core.fsmonitor', async () => {
+  const d = driverSetup([{ result: R('nothing', null) }], { slices: [], maxSessions: 1 });
+  try {
+    const marker = path.join(d.base, 'FSMONITOR-RAN');
+    const hook = path.join(d.base, 'fsm.sh');
+    fs.writeFileSync(hook, `#!/bin/sh\ntouch ${marker}\n`);
+    fs.chmodSync(hook, 0o755);
+    gitIn(d.root, ['config', 'core.fsmonitor', hook]);
+    await turbo.run(d.opts);
+    assert.ok(!fs.existsSync(marker), 'the driver ran the repo\'s fsmonitor');
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('T13 prompt: gates run alone with no redirect (dontAsk refuses every redirect)', () => {
+  const flat = session.prompt(session.promptVars({ run: 'R', session: 'S', home: '/h', assignment: { kind: 'strike' } })).replace(/\s+/g, ' ');
+  assert.ok(flat.includes('with no redirect'), 'the prompt still tells sessions to redirect gates');
+  assert.ok(!flat.includes('> {{HOME}}') && !flat.includes('> /h/test.txt'), 'the prompt still shows a redirect');
 });
 
 it('driver: a HEAD reflog entry that is not a commit (a checkout, even one put back) makes the next session a recovery', async () => {

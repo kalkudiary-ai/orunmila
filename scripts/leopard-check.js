@@ -13,8 +13,9 @@
  *   green  a passing run of it, alone, after the slice's last write
  *   gates  each gate run alone after the last write, its latest run passing
  *
- * A slice's window runs from the previous Slice commit (or the session's first
- * record) to its own commit. Its writes are the Glove's and the Sentinel's
+ * A slice's window runs from the latest earlier Slice commit that shares a file
+ * with it (or the session's first record) to its own commit (LD135: a commit
+ * of another session's, on other files, is no boundary). Its writes are the Glove's and the Sentinel's
  * file_write rows for the files the commit changed: both witnesses, because a
  * shell command's write has only a Sentinel row. Runs come from the Glove's
  * command_run rows; a command has no Sentinel side. A sub-agent's runs and
@@ -335,26 +336,34 @@ function check({ rows, session, repo, pending = null }) {
     return entry;
   };
 
+  /**
+   * Where a slice's window starts (LD135): just after the latest earlier Slice
+   * commit that shares a file with it, or at the session's first record. A
+   * commit touching none of its files, another session's included, is no
+   * boundary: it took none of this slice's writes or runs with it.
+   */
+  const windowStart = (earlier, files) => {
+    const sharing = earlier.filter((p) => p.files.some((f) => files.includes(f)));
+    return sharing.length ? sharing[sharing.length - 1].t + 999 : span.from;
+  };
+
   const head = { session, records: own.length, span: { from: new Date(span.from).toISOString(), to: new Date(span.to).toISOString() }, limits: LIMITS };
 
   if (pending) {
     // The slice not yet committed: its staged files, from the session's last
     // Slice commit (or its first record) to now.
     const done = sliceCommits(repo, span.from, Date.now());
-    const from = done.length ? done[done.length - 1].t + 999 : span.from;
     const staged = git(repo, ['diff', '--cached', '--name-only']).split('\n').filter(Boolean).sort();
     if (!staged.length) return { ...head, pending: { test: pending.test, files: [], status: 'nothing staged', shown: false } };
-    return { ...head, pending: judgeSlice({ test: pending.test, files: staged }, from, Infinity) };
+    return { ...head, pending: judgeSlice({ test: pending.test, files: staged }, windowStart(done, staged), Infinity) };
   }
 
   const commits = sliceCommits(repo, span.from, span.to);
   const report = [];
-  let from = span.from;
-  for (const c of commits) {
+  commits.forEach((c, k) => {
     const end = c.t + 999; // committer time has whole seconds
-    report.push(judgeSlice(c, from, end));
-    from = end;
-  }
+    report.push(judgeSlice(c, windowStart(commits.slice(0, k), c.files), end));
+  });
   return { ...head, commits: report };
 }
 

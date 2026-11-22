@@ -428,4 +428,42 @@ it(
   }),
 );
 
+// --- LD135: another session's Slice commit that shares no file is no boundary ---
+
+/** Slice b's records: test write 110, red 120, src write 130, green 140, gates 150-154. */
+const sliceB = (repo) => [prompt(0), gloveWrite(repo, 110, 'test/b.js'), cmd(120, 'node test/b.js', true), gloveWrite(repo, 130, 'src/b.js'), cmd(140, 'node test/b.js', false), ...gateRows(150)];
+const PEER_MSG = 'feat: peer\n\nSlice: P1\nTest: node test/z.js\n';
+
+it(
+  '--pending (LD135): a Slice commit that shares no file with the staged slice, landing after its writes, does not reset its window',
+  withRepo((repo) => {
+    commit(repo, 145, ['src/z.js'], PEER_MSG); // another session's slice, after b's writes
+    stage(repo, ['test/b.js', 'src/b.js']);
+    const r = check(repo, sliceB(repo), ['--pending', '--test', 'node test/b.js']);
+    assert.strictEqual(r.status, 0, r.stdout);
+    assert.strictEqual(r.json.pending.writes.count, 2, JSON.stringify(r.json.pending.writes));
+    assert.strictEqual(r.json.pending.shown, true);
+  }),
+);
+
+it(
+  'report (LD135): a commit sharing no file between a slice\'s writes and its commit is no boundary; one sharing a file still is',
+  withRepo((repo) => {
+    commit(repo, 135, ['src/z.js'], PEER_MSG);
+    commit(repo, 160, ['test/b.js', 'src/b.js'], 'feat: b\n\nSlice: L10\nTest: node test/b.js\n');
+    const mine = check(repo, [...sliceB(repo), cmd(161, 'git commit -F /tmp/m', false)]).json.commits.find((c) => c.slice === 'L10');
+    assert.strictEqual(mine.shown, true, JSON.stringify(mine));
+    // A commit at 135 that touches src/b.js takes the earlier writes and the red run with it.
+    const repo2 = makeRepo();
+    try {
+      commit(repo2, 135, ['src/b.js'], PEER_MSG);
+      commit(repo2, 160, ['test/b.js', 'src/b.js'], 'feat: b\n\nSlice: L10\nTest: node test/b.js\n');
+      const again = check(repo2, [...sliceB(repo2), cmd(161, 'git commit -F /tmp/m', false)]).json.commits.find((c) => c.slice === 'L10');
+      assert.strictEqual(again.shown, false, JSON.stringify(again));
+    } finally {
+      rmrf(repo2);
+    }
+  }),
+);
+
 runAll('leopard-check');

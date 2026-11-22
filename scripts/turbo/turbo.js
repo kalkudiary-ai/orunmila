@@ -116,6 +116,18 @@ function cloneRepo({ source, dest, branch, ledger = 'output-1', claudeHome = pat
   return { dest, branch };
 }
 
+/** True when a Sentinel (`... watch-fs --root <root>`) is running, read from ps by exact argv tokens. */
+function sentinelRunningFor(root) {
+  const r = spawnSync('ps', ['-axo', 'args'], { encoding: 'utf8' });
+  if (r.status !== 0) return false;
+  const want = fs.realpathSync(root);
+  return r.stdout.split('\n').some((l) => {
+    const t = l.trim().split(/\s+/);
+    const i = t.indexOf('--root');
+    return t.includes('watch-fs') && i >= 0 && t[i + 1] === want;
+  });
+}
+
 function isCommit(root, s) {
   const r = spawnSync('git', ['-C', root, 'cat-file', '-t', s], { encoding: 'utf8' });
   return r.status === 0 && r.stdout.trim() === 'commit';
@@ -247,6 +259,8 @@ function summaryText(r) {
     '',
     `Started ${r.started}, ended ${r.ended}. Stop reason: **${r.stopReason}**. Hours asked: ${r.hours}. Branch: ${r.branch}.`,
     '',
+    `Sentinel: ${r.sentinel || 'off'}.`,
+    '',
     `## Sessions (${r.sessions.length})`,
     '',
     '| # | session | kind | slice | outcome | commits | referee | exit | minutes |',
@@ -294,6 +308,9 @@ async function run(opts) {
     caffeinate: process.platform === 'darwin',
     maxSessions: Infinity,
     beforeCheck: null,
+    sentinel: true,
+    sentinelBin: process.env.TURBO_SENTINEL_BIN || 'orunmila',
+    sentinelRunning: sentinelRunningFor,
     ...opts,
   };
   const start = o.now();
@@ -330,6 +347,25 @@ async function run(opts) {
     try {
       spawn('caffeinate', ['-i', '-w', String(process.pid)], { detached: true, stdio: 'ignore' }).unref();
     } catch {}
+  }
+
+  // Orunmila is Glove AND Sentinel: the clone needs a Sentinel of its own for the run, or a
+  // shell write there has no record at all and leopard-check cannot place it.
+  let sentinelChild = null;
+  let sentinelNote = 'off';
+  if (o.sentinel) {
+    if (o.sentinelRunning(o.root)) sentinelNote = 'already watching this root';
+    else {
+      try {
+        sentinelChild = spawn(o.sentinelBin, ['watch-fs', '--root', o.root], { stdio: 'ignore' });
+        sentinelChild.on('error', (err) => {
+          sentinelNote = `failed to start: ${err.message}`;
+        });
+        sentinelNote = `started (pid ${sentinelChild.pid}), stopped at the end`;
+      } catch (err) {
+        sentinelNote = `failed to start: ${err.message}`;
+      }
+    }
   }
 
   const state = { recover: null, lastStalkKey: null, lastInbox: sha(inbox), waiting: false, fails: 0, noProgress: 0, paused: false };
@@ -488,9 +524,10 @@ async function run(opts) {
     }
     const ended = new Date(o.now()).toISOString();
     const src = spawnSync('git', ['-C', o.root, 'config', '--get', 'turbo.source'], { encoding: 'utf8' });
-    result = { run: runId, runDir, root: o.root, source: src.status === 0 ? src.stdout.trim() : null, started: new Date(start).toISOString(), ended, stopReason: stopReason || 'error', hours: o.hours, branch, sessions, plan: finalPlan, gates };
+    result = { run: runId, runDir, sentinel: sentinelNote, root: o.root, source: src.status === 0 ? src.stdout.trim() : null, started: new Date(start).toISOString(), ended, stopReason: stopReason || 'error', hours: o.hours, branch, sessions, plan: finalPlan, gates };
     fs.writeFileSync(path.join(runDir, 'summary.md'), summaryText(result));
     log({ type: 'end', stopReason: result.stopReason, sessions: sessions.length, gates });
+    if (sentinelChild && sentinelChild.exitCode === null) sentinelChild.kill('SIGINT');
     try {
       fs.unlinkSync(lockFile);
     } catch {}

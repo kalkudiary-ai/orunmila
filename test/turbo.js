@@ -523,6 +523,7 @@ function driverSetup(steps, { slices = [], referee = () => ({ shown: true, detai
     referee,
     finalGates: false,
     caffeinate: false,
+    sentinel: false,
     ...rest,
   };
   const call = (n) => JSON.parse(fs.readFileSync(`${fakeSteps}.call${n}.json`, 'utf8'));
@@ -862,6 +863,31 @@ it('clone: a shallow source gives a clone whose history git can walk (the live r
     assert.strictEqual(gitIn(dest, ['log', '--all', '--format=%h']).status, 0, gitIn(dest, ['log', '--all']).stderr);
   } finally {
     rmrf(base);
+  }
+});
+
+it('driver: starts a Sentinel on its root for the run and stops it at the end (Glove AND Sentinel)', async () => {
+  const d = driverSetup([{ result: R('nothing', null) }], { slices: [], maxSessions: 1 });
+  try {
+    const rec = path.join(d.base, 'sentinel-rec.json');
+    const bin = path.join(d.base, 'sentinel-fake');
+    fs.writeFileSync(
+      bin,
+      `#!/usr/bin/env node\nconst fs = require('fs');\nfs.writeFileSync(${JSON.stringify(rec)}, JSON.stringify({ argv: process.argv.slice(2), pid: process.pid }));\nprocess.on('SIGINT', () => { fs.writeFileSync(${JSON.stringify(rec)} + '.stopped', 'SIGINT'); process.exit(0); });\nsetInterval(() => {}, 1000);\n`,
+    );
+    fs.chmodSync(bin, 0o755);
+    const out = await turbo.run({ ...d.opts, sentinel: true, sentinelBin: bin, sentinelRunning: () => false });
+    for (let i = 0; i < 50 && !fs.existsSync(`${rec}.stopped`); i++) await new Promise((r) => setTimeout(r, 100));
+    assert.deepStrictEqual(JSON.parse(fs.readFileSync(rec, 'utf8')).argv, ['watch-fs', '--root', d.root]);
+    assert.strictEqual(fs.readFileSync(`${rec}.stopped`, 'utf8'), 'SIGINT', 'the Sentinel was not stopped at the end');
+    assert.ok(fs.readFileSync(path.join(out.runDir, 'summary.md'), 'utf8').includes('Sentinel: started'), 'the summary does not say a Sentinel watched');
+    // One already watching this root is used, not doubled.
+    fs.unlinkSync(rec);
+    const again = await turbo.run({ ...d.opts, sentinel: true, sentinelBin: bin, sentinelRunning: () => true });
+    assert.ok(!fs.existsSync(rec), 'a second Sentinel was started');
+    assert.ok(fs.readFileSync(path.join(again.runDir, 'summary.md'), 'utf8').includes('Sentinel: already watching'));
+  } finally {
+    rmrf(d.base);
   }
 });
 

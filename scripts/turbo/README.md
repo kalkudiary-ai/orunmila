@@ -101,8 +101,9 @@ No MCP servers are loaded. A refused action becomes a queue item.
 the paths above, including its branches and its object store: damage there stays in the clone, and
 reaches the worktree only through your fetch. A refused checkout can rewrite the clone's files before
 it fails on `HEAD`; the driver reads `HEAD`'s reflog after each session, and any entry that is not a
-commit makes the next session a recovery. The Sentinel does not watch the clone, so in a witness join
-its writes are Glove rows "outside the watched folder".
+commit makes the next session a recovery. Orunmila is Glove and Sentinel: the driver starts a
+Sentinel on the clone for the run (`orunmila watch-fs --root <clone>`, or `TURBO_SENTINEL_BIN`) unless
+one already watches it, stops the one it started at the end, and `summary.md` says which.
 
 ## Files
 

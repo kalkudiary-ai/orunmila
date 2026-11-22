@@ -260,7 +260,7 @@ async function run(opts) {
   const logFile = path.join(runDir, 'log.jsonl');
   const log = (e) => fs.appendFileSync(logFile, JSON.stringify({ ts: new Date(o.now()).toISOString(), ...e }) + '\n');
   const settingsFile = path.join(runDir, 'settings.json');
-  fs.writeFileSync(settingsFile, JSON.stringify(session.settings(), null, 2) + '\n');
+  fs.writeFileSync(settingsFile, JSON.stringify(session.settings({ root: o.root }), null, 2) + '\n');
   const inbox = path.join(o.home, 'inbox.md');
   const branch = branchOf(o.root);
 

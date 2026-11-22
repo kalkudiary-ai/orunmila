@@ -60,7 +60,17 @@ keeps or repeals them as a set (LD111).
 
 ## What it will not do
 
-Four layers stop the hard stops (LD109):
+The base layer is the OS sandbox (LD113, after a cold verify got 14 of 20 bypasses past the guard
+and switched the git hooks off with `-c core.hooksPath=/dev/null`). Every Bash command and all its
+children (`node -e` and scripts included) run under macOS Seatbelt with no network at all and writes
+only to the worktree, TURBO_HOME and scratch, the temp dir, and the git common dir a commit needs,
+inside which `refs/heads/main`, `packed-refs`, the live copy's `HEAD`, `config` and `hooks`, and this
+worktree's `HEAD` are denied (checked live: probe sessions `4d03030b` and `351e371a`, EPERM on each,
+a commit going through, a branch switch by rename refused). There is no retry outside it
+(`allowUnsandboxedCommands: false`), and a session will not start without it (`failIfUnavailable`).
+The file tools (Edit, Write) are not sandboxed; the guard checks them by real path.
+
+The layers below are second checks:
 
 1. `--permission-mode dontAsk` with a closed allowlist (`session.js`): anything else is refused.
 2. The guard (`guard.js`, a PreToolUse hook that fails closed) refuses: push, merge or pull, a
@@ -75,8 +85,9 @@ Four layers stop the hard stops (LD109):
 
 No MCP servers are loaded. A refused action becomes a queue item.
 
-**Known limit:** code that a script or `node -e` runs is not read by the guard. Layers 3 and 4 still
-hold for git and npm, but a script could write a file the guard would have refused.
+**Known limits:** the guard and the git hooks can be got round (variables, aliases, `send-pack`,
+`-c core.hooksPath=`); the sandbox is what holds. Inside the worktree a session can still write any
+file outside `scripts/turbo/` and `.claude/`, and move any branch but `main` (all reversible by git).
 
 ## Files
 

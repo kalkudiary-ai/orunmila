@@ -82,6 +82,11 @@ recommendation, and what is held until then. Never try a refused action another 
 Leopard decision: log it in `review/leopard-decisions.md` on `output-1` by plumbing (the next LD number
 comes after the last one in the log) before the commit that rests on it.
 
+Every Bash command runs in an OS sandbox (LD113): no network, and no writes outside the worktree,
+`{{HOME}}`, scratch and what a commit needs. After `git commit`, the line "Unable to create
+.../packed-refs.lock: Operation not permitted" is the sandbox guarding that file; the commit went
+through if `git log -1` shows it. Any other "Operation not permitted" is a hard stop to queue.
+
 Write commit messages to `{{HOME}}/msg-{{SESSION}}.txt` and commit with `git commit -F`. The
 trailers are one trailer block, the message's last paragraph, with `Co-Authored-By` inside it and no
 blank line between: git reads only the last paragraph as trailers, so a blank line before

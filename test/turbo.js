@@ -741,7 +741,7 @@ it('session: TURBO_HOME and the scratch folder are added dirs, so a redirect int
 it('prompt: the end is a StructuredOutput call; a refusal is queued, never asked for in chat; no echo $?', () => {
   const text = session.prompt(session.promptVars({ run: 'R', session: 'S', home: '/h', assignment: { kind: 'strike' } }));
   const flat = text.replace(/\s+/g, ' '); // line wrapping is not content
-  for (const must of ['StructuredOutput', 'Nobody reads this chat', 'never `; echo $?`']) assert.ok(flat.includes(must), `the prompt lacks: ${must}`);
+  for (const must of ['StructuredOutput', 'Nobody reads this chat', 'never `; echo $?`', 'packed-refs.lock']) assert.ok(flat.includes(must), `the prompt lacks: ${must}`);
 });
 
 it('driver: the session is started with TURBO_HOME and its scratch folder as added dirs', async () => {
@@ -754,6 +754,48 @@ it('driver: the session is started with TURBO_HOME and its scratch folder as add
   } finally {
     rmrf(d.base);
   }
+});
+
+// --- T8: the OS sandbox as the base layer (LD113) -------------------------------
+
+it('sandbox: on, fail-closed, no unsandboxed retry, no network, nothing excluded', () => {
+  const sb = session.settings({ root: path.join(__dirname, '..') }).sandbox;
+  assert.strictEqual(sb.enabled, true);
+  assert.strictEqual(sb.failIfUnavailable, true, 'without it a session runs unsandboxed when the sandbox cannot start');
+  assert.strictEqual(sb.allowUnsandboxedCommands, false, 'dangerouslyDisableSandbox would be an escape');
+  assert.strictEqual(sb.autoAllowBashIfSandboxed, false, 'the allowlist still decides');
+  assert.ok(!sb.excludedCommands || sb.excludedCommands.length === 0, 'an excluded command runs outside the sandbox');
+  assert.deepStrictEqual(sb.network.allowedDomains, []);
+  assert.strictEqual(sb.network.strictAllowlist, true);
+});
+
+it('sandbox: commits can write the git common dir, but not main, packed-refs, HEADs, config or hooks', () => {
+  const root = path.join(__dirname, '..');
+  const fsx = session.settings({ root }).sandbox.filesystem;
+  const common = fs.realpathSync(path.resolve(root, require('child_process').execFileSync('git', ['-C', root, 'rev-parse', '--git-common-dir'], { encoding: 'utf8' }).trim()));
+  const own = require('child_process').execFileSync('git', ['-C', root, 'rev-parse', '--absolute-git-dir'], { encoding: 'utf8' }).trim();
+  assert.ok(fsx.allowWrite.includes(common), `allowWrite lacks ${common}`);
+  const want = [
+    'refs/heads/main',
+    'refs/heads/main.lock',
+    'packed-refs',
+    'packed-refs.lock',
+    'HEAD',
+    'HEAD.lock',
+    'config',
+    'config.lock',
+    'hooks',
+  ].map((p) => path.join(common, p));
+  want.push(path.join(own, 'HEAD'), path.join(root, 'scripts', 'turbo'), path.join(root, '.claude'));
+  for (const w of want) assert.ok(fsx.denyWrite.includes(w), `denyWrite lacks ${w}`);
+  // A commit locks the worktree's HEAD (HEAD.lock, then removed): denying it broke git commit
+  // in the sandboxed probe (session 2cacf12e, exit 128). A branch switch must rename the lock
+  // onto HEAD, which stays denied.
+  assert.ok(!fsx.denyWrite.includes(path.join(own, 'HEAD.lock')), "the worktree's HEAD.lock is denied, so no commit can be made");
+});
+
+it('allowlist: git -C is gone (it let any git subcommand past layer 1)', () => {
+  assert.ok(!session.settings({ root: '/r' }).permissions.allow.includes('Bash(git -C:*)'));
 });
 
 runAll('turbo');

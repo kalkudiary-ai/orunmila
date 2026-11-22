@@ -80,7 +80,6 @@ const BASH_ALLOW = [
   'git rm',
   'git mv',
   'git worktree',
-  'git -C',
   'ls',
   'wc',
   'cat',
@@ -132,8 +131,49 @@ const DENY = [
   'Glob',
 ];
 
-function settings({ guard = GUARD } = {}) {
+/** The worktree's git dirs: { common, own }, real paths; null when git cannot say (then no git write is allowed). */
+function gitDirs(root) {
+  try {
+    const git = (a) => require('child_process').execFileSync('git', ['-C', root, 'rev-parse', a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    return { common: fs.realpathSync(path.resolve(root, git('--git-common-dir'))), own: git('--absolute-git-dir') };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The OS sandbox for every Bash command and its children (LD113): no network at
+ * all, and writes only where a slice needs them. The worktree (cwd), TURBO_HOME
+ * and scratch (--add-dir) and the per-user temp dir are writable by default; the
+ * git common dir is added so commits work, with the refs and files that would
+ * merge, switch, reconfigure or unhook git denied inside it (with the .lock git
+ * writes first, except the worktree's own HEAD.lock, which a commit needs). The
+ * live copy's files are in no writable path.
+ */
+function sandbox(root) {
+  const g = gitDirs(root);
+  const allowWrite = g ? [g.common] : [];
+  const denyWrite = [path.join(root, 'scripts', 'turbo'), path.join(root, '.claude')];
+  if (g) {
+    for (const p of ['refs/heads/main', 'packed-refs', 'HEAD', 'config']) denyWrite.push(path.join(g.common, p), path.join(g.common, `${p}.lock`));
+    // The worktree's HEAD, but not its HEAD.lock: a commit takes that lock (the sandboxed
+    // probe's commit failed with it denied); a branch switch must rename it onto HEAD.
+    denyWrite.push(path.join(g.common, 'hooks'), path.join(g.own, 'HEAD'));
+  }
   return {
+    enabled: true,
+    failIfUnavailable: true,
+    allowUnsandboxedCommands: false,
+    autoAllowBashIfSandboxed: false,
+    excludedCommands: [],
+    network: { allowedDomains: [], strictAllowlist: true },
+    filesystem: { allowWrite, denyWrite },
+  };
+}
+
+function settings({ guard = GUARD, root = ROOT } = {}) {
+  return {
+    sandbox: sandbox(root),
     permissions: {
       defaultMode: 'dontAsk',
       allow: ['Read', 'Edit', 'Write', 'MultiEdit', 'Agent', 'Task', 'TodoWrite', 'ToolSearch', 'StructuredOutput', ...BASH_ALLOW.map((c) => `Bash(${c}:*)`)],

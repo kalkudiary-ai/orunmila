@@ -17,8 +17,8 @@
  * header's hash, so the odù log is tied to the raw log it came from. Each odù
  * keeps its group's numbering (group g_0007 is odu_0007), so parents, children,
  * `amends` and `continues` name odùs. `witness_status` keeps each witness's
- * status, scope, own mark_seqs and, for `saw`, its verbs; the key detail
- * slots stay in the group record until O answers Q6. `net_change` comes from
+ * status, scope, own mark_seqs and, for `saw`, its verbs and each mark's key
+ * detail slots; `ceiling` says the ceiling settled it (Q6, O's yes, LD174). `net_change` comes from
  * the group (station 4, slice N2), and only where the group has one. Fields
  * stations 5-6 fill (cause, attribution, confidence, conflicts) are left out
  * until those slices: a field is never written as a guess. Plain code, no clock.
@@ -32,7 +32,10 @@ const oduId = (groupId) => (groupId === null || groupId === undefined ? null : `
 function witnessEntry(w) {
   const e = { status: w.status, mark_seqs: Array.isArray(w.mark_seqs) ? [...w.mark_seqs] : [] };
   if (w.scope) e.scope = w.scope;
-  if (w.status === 'saw') e.says = [...w.says];
+  if (w.status === 'saw') {
+    e.says = [...w.says];
+    e.slots = w.slots.map((s) => ({ ...s }));
+  }
   return e;
 }
 
@@ -47,6 +50,7 @@ function oduRecord(g, bySeq) {
     children: g.children.map(oduId),
     amends: oduId(g.amends),
     continues: oduId(g.continues),
+    ceiling: g.ceiling,
     state: g.state,
     target: g.target,
     action: g.action,

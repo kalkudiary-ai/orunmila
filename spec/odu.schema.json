@@ -3,7 +3,7 @@
   "$id": "urn:orunmila:spec:v1:odu",
   "title": "Orunmila odù record, schema version 1: DRAFT",
   "description": "The single trustworthy record of one real event. The Ọpọ́n writes one odù record per real event to a second log, hash-chained and canonically serialised like the raw log. The judge reads only this log.",
-  "$comment": "brief v4 lines 285-333. Fields the brief names keep its names; `record` and `seq` are the agent's choice (the hash chain checks seq, spec/hash-chain.md), and so is `continues`, rule 2's link back (line 364), which the brief requires and names no field for (LD167; proposed to O, Q6). Phase 3 slice O1 builds the fields replay can fill from a group; net_change, cause, attribution, confidence and conflicts come with stations 4-6 and are optional until then. Unknown fields are allowed (line 209).",
+  "$comment": "brief v4 lines 285-333. Fields the brief names keep its names; `record` and `seq` are the agent's choice (the hash chain checks seq, spec/hash-chain.md), and so is `continues`, rule 2's link back (line 364), which the brief requires and names no field for (LD167). `continues`, `ceiling` and each witness's `slots` were proposed to O as Q6 and approved (2026-11-22, LD174). Phase 3 slice O1 builds the fields replay can fill from a group; net_change, cause, attribution, confidence and conflicts come with stations 4-6 and are optional until then. Unknown fields are allowed (line 209).",
   "type": "object",
   "required": [
     "schema_version",
@@ -14,6 +14,8 @@
     "parent_id",
     "children",
     "amends",
+    "continues",
+    "ceiling",
     "state",
     "target",
     "action",
@@ -83,12 +85,17 @@
     },
     "continues": {
       "description": "The odù this one continues, when the target never went quiet and the earlier one was force-settled at the ceiling (station 2, rule 2); null for none.",
-      "$comment": "brief v4 line 364 (\"a continuation group opens and links back to it\"); the field name is the agent's choice, LD153, LD167; Q6",
+      "$comment": "brief v4 line 364 (\"a continuation group opens and links back to it\"); the field name is the agent's choice, LD153, LD167; approved by O as Q6 (LD174)",
       "type": [
         "string",
         "null"
       ],
       "pattern": "^odu_[0-9]{4,}$"
+    },
+    "ceiling": {
+      "description": "True when the target never went quiet and the record was force-settled at the ceiling (station 2, rule 2); its continuation names it in `continues`.",
+      "$comment": "brief v4 line 364; the field name is the agent's (LD153); approved by O as Q6 (LD174)",
+      "type": "boolean"
     },
     "state": {
       "description": "open (still collecting), settled (quiet, decided), sealed (final, hashed, never changes). Only sealed records reach the judge.",
@@ -159,7 +166,7 @@
     },
     "net_change": {
       "description": "Whether anything actually changed: the target's fingerprint before and after, and whether they differ. Odùs of marks that change nothing on disk leave it out: nothing on disk was meant to change, and null would mean unknown.",
-      "$comment": "brief v4 lines 301-305, 381-390; station 4 (slice N2). `absent` for a known absence is the agent's proposal (LD171, Q8): null means unknown and nothing else (line 241), so a created file's before and a deleted file's after need a value of their own",
+      "$comment": "brief v4 lines 301-305, 381-390; station 4 (slice N2). `absent` for a known absence is the agent's (LD171), approved by O as Q8 (2026-11-22, LD174): null means unknown and nothing else (line 241), so a created file's before and a deleted file's after need a value of their own",
       "type": "object",
       "required": [
         "before",
@@ -354,10 +361,27 @@
         },
         "says": {
           "description": "For saw: its verbs.",
-          "$comment": "brief v4 lines 310-311, 331; the key detail slots stay in the group record until O answers Q6 (LD167)",
+          "$comment": "brief v4 lines 310-311, 331",
           "type": "array",
           "items": {
             "type": "string"
+          }
+        },
+        "slots": {
+          "description": "For saw: each of its marks' key detail slots, in the order of `mark_seqs`: the mark's `seq`, and whichever of exit_status, read_kind, result, fingerprint_before and fingerprint the mark carries.",
+          "$comment": "brief v4 line 331 (\"its verbs and key detail slots\"); a field of its own beside `says`, as the example (line 310) shows verbs only; approved by O as Q6 (LD174)",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "seq"
+            ],
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
           }
         }
       }

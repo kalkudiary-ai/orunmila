@@ -7,7 +7,7 @@
  */
 
 const { assert, fs, path, ROOT, tmpDir, rmrf, it, runAll } = require('./helpers');
-const { makeLog, M } = require('./helpers-opon');
+const { makeLog, M, FP } = require('./helpers-opon');
 const { replayFolder } = require('../src/opon/replay');
 const { oduLog } = require('../src/opon/ledger/odu-log');
 const { verifyText } = require('../src/verify/chain');
@@ -72,8 +72,14 @@ it(
     const edit = by('src/a.ts');
     assert.deepStrictEqual(edit.mark_seqs, seq.edit);
     assert.deepStrictEqual(edit.witnesses, ['hook', 'sentinel']);
-    assert.deepStrictEqual(edit.witness_status.glove, { status: 'saw', mark_seqs: seq.edit.slice(0, 2), says: ['started', 'modified'] });
-    assert.deepStrictEqual(edit.witness_status.sentinel, { status: 'saw', mark_seqs: [seq.edit[2]], says: ['modified'] });
+    // Q6 (O, yes, LD174): `says` beside each mark's key detail slots (line 331).
+    assert.deepStrictEqual(edit.witness_status.glove, {
+      status: 'saw',
+      mark_seqs: seq.edit.slice(0, 2),
+      says: ['started', 'modified'],
+      slots: [{ seq: seq.edit[0] }, { seq: seq.edit[1], exit_status: 'pass', fingerprint_before: FP('a'), fingerprint: FP('b') }],
+    });
+    assert.deepStrictEqual(edit.witness_status.sentinel, { status: 'saw', mark_seqs: [seq.edit[2]], says: ['modified'], slots: [{ seq: seq.edit[2], fingerprint_before: FP('c'), fingerprint: FP('d') }] });
     const read = by('src/b.ts');
     assert.strictEqual(read.action, 'read');
     assert.deepStrictEqual(read.witness_status.sentinel, { status: 'out_of_scope', scope: 'not_a_disk_event', mark_seqs: [] });
@@ -81,7 +87,7 @@ it(
     const child = by('node_modules/x.js');
     assert.deepStrictEqual(cmd.children, [child.odu_id]);
     assert.strictEqual(child.parent_id, cmd.odu_id);
-    assert.ok(odus.every((o) => o.amends === null && o.continues === null));
+    assert.ok(odus.every((o) => o.amends === null && o.continues === null && o.ceiling === false));
   }),
 );
 
@@ -96,6 +102,8 @@ it(
     assert.deepStrictEqual(odus.map((o) => o.target.path), ['app.log', 'app.log']);
     assert.strictEqual(odus[0].continues, null);
     assert.strictEqual(odus[1].continues, odus[0].odu_id);
+    // Q6: the odù says when the ceiling settled it (rule 2); the continuation opened at 2,000 ms meets its own ceiling at 4,000 ms, before its quiet end.
+    assert.deepStrictEqual(odus.map((o) => o.ceiling), [true, true]);
     // oduLog itself writes only sealed groups, whatever its caller hands it (the live intake will, L1).
     const out = replayFolder(s.dir);
     const all = out.lines.slice(1).map((l) => JSON.parse(l));

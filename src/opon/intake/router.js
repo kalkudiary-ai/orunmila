@@ -82,6 +82,7 @@ const { unifiedDiff } = require('../../reconcile/difftool');
 const { looksBinary } = require('../../capture/fs-sentinel/hasher');
 const { getAdapter } = require('../../capture/agents');
 const { createSentinels } = require('./sentinel');
+const { createTamperWatch } = require('./tamper');
 
 const CC = getAdapter('claude-code');
 const RELEASE_MS = 30 * 60 * 1000;
@@ -94,7 +95,7 @@ function defaultHookSettings(root) {
   return [path.join(root, '.claude', 'settings.json'), path.join(root, '.claude', 'settings.local.json'), path.join(os.homedir(), '.claude', 'settings.json')];
 }
 
-/** The turn count and whether the last turn is still open, from a session's raw log (on reopen). */
+/** The turn count, whether the last turn is still open, and the tampered marks, from a session's raw log (on reopen). */
 function turnsFrom(dir) {
   const recs = checkLog(dir, 'raw').records.map((r) => r.rec);
   let n = 0;
@@ -104,7 +105,8 @@ function turnsFrom(dir) {
   }
   const id = `t${n}`;
   const open = n > 0 && !recs.some((r) => r.says === 'ended' && isObject(r.target) && r.target.kind === 'turn' && r.target.id === id);
-  return { header: recs[0], n, open };
+  const tampered = recs.filter((r) => r.says === 'tampered' && isObject(r.detail) && r.detail.what !== 'foreign_sender');
+  return { header: recs[0], n, open, tampered };
 }
 
 /** A file's state at hook time: exists, and, for a regular file, its bytes, size and fingerprint. */
@@ -173,6 +175,12 @@ function createRouter(o) {
         emit: (root, mark, keep) => {
           for (const [id, s] of [...states].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
             if (s.watched && s.root === root) engine.receive(normalise(s, { ...mark, session_id: id }), {}, keep);
+            // Any write in the project's .orunmila/ is tampering, at once (test 10, B3).
+            const rel = mark.source === 'sentinel' && mark.target ? mark.target.path : '';
+            if (s.watched && s.root === root && (rel === '.orunmila' || rel.startsWith('.orunmila/'))) {
+              const t = s.tamper.saw(path.join(root, rel), mark.detail.fingerprint, mark.detail.fingerprint_before === undefined ? null : mark.detail.fingerprint_before);
+              if (t) engine.receive(normalise(s, { ...t, session_id: id }), {});
+            }
           }
         },
       })
@@ -212,7 +220,8 @@ function createRouter(o) {
     const t = turnsFrom(dir);
     const root = t.header.project_root;
     const log = openSessionLog(dir, { envEntries: readEnvEntries(root).entries });
-    return { log, root, ci: isCaseInsensitive(root), n: t.n, open: t.open, pre: new Map(), last: BigInt(clock().mono), limit: t.header.config.diff_size_limit_bytes };
+    const tamper = createTamperWatch({ header: t.header, codeRoot: o.codeRoot, lawPacks: lawPacksFor(root), prior: t.tampered, clock });
+    return { log, root, ci: isCaseInsensitive(root), n: t.n, open: t.open, pre: new Map(), last: BigInt(clock().mono), limit: t.header.config.diff_size_limit_bytes, tamper };
   }
 
   function start(id, p) {
@@ -237,7 +246,8 @@ function createRouter(o) {
     });
     ensureDir(sessionsDir);
     const log = createSessionLog(dir, header, { envEntries: entries });
-    return { log, root, ci: isCaseInsensitive(root), n: 0, open: false, pre: new Map(), last: BigInt(now.mono), limit: header.config.diff_size_limit_bytes };
+    const tamper = createTamperWatch({ header: { ...header, project_root: root }, codeRoot: o.codeRoot, lawPacks: lawPacksFor(root), clock });
+    return { log, root, ci: isCaseInsensitive(root), n: 0, open: false, pre: new Map(), last: BigInt(now.mono), limit: header.config.diff_size_limit_bytes, tamper };
   }
 
   function normalise(s, m) {
@@ -263,10 +273,12 @@ function createRouter(o) {
     }
     s.last = BigInt(clock().mono);
     watchFor(s);
+    // What was frozen at session start, fingerprinted again at every payload (B3, LD147).
+    const tampered = s.tamper.check().map((m) => engine.receive(normalise(s, { ...m, session_id: id }), {}));
     const ev = p.hook_event_name;
     if (ev === 'SessionStart') {
       writeHeld();
-      return { ok: true, results: [] };
+      return { ok: tampered.every((r) => r.ok), results: tampered };
     }
     if (ev === 'OrunmilaLawCheck') {
       const c = translateCheck({ sessionId: id, agent: CC.id, turn: s.n > 0 ? `t${s.n}` : null, observedAt: clock().wall, check: p.check });

@@ -136,7 +136,7 @@ function settings({ guard = GUARD } = {}) {
   return {
     permissions: {
       defaultMode: 'dontAsk',
-      allow: ['Read', 'Edit', 'Write', 'MultiEdit', 'Agent', 'Task', 'TodoWrite', 'ToolSearch', ...BASH_ALLOW.map((c) => `Bash(${c}:*)`)],
+      allow: ['Read', 'Edit', 'Write', 'MultiEdit', 'Agent', 'Task', 'TodoWrite', 'ToolSearch', 'StructuredOutput', ...BASH_ALLOW.map((c) => `Bash(${c}:*)`)],
       deny: DENY,
     },
     hooks: {
@@ -160,9 +160,11 @@ function env({ base = process.env, root = ROOT, home, run, session, scratch = ''
   };
 }
 
-function argv({ sessionId, settingsFile, model = 'opus', maxBudgetUsd = null, effort = null }) {
+function argv({ sessionId, settingsFile, model = 'opus', maxBudgetUsd = null, effort = null, addDirs = [] }) {
   const a = [
     '-p',
+    // Working dirs, so a redirect into TURBO_HOME or scratch is not refused (smoke session 95549334).
+    ...addDirs.flatMap((d) => ['--add-dir', d]),
     '--session-id',
     sessionId,
     '--permission-mode',

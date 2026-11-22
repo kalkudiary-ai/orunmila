@@ -724,4 +724,36 @@ it('prompt: trailers are one block, ending with Co-Authored-By, so git (and leop
   assert.ok(r.stdout.includes('Slice: T9'), `the example's trailers do not parse: ${r.stdout}`);
 });
 
+// --- T7a: what the live smoke session showed (session 95549334, Haiku) ---------
+
+it('session: StructuredOutput is allowed, or dontAsk refuses the very call that ends the session', () => {
+  assert.ok(session.settings().permissions.allow.includes('StructuredOutput'));
+});
+
+it('session: TURBO_HOME and the scratch folder are added dirs, so a redirect into them is not refused', () => {
+  const a = session.argv({ sessionId: 'S1', settingsFile: '/s', addDirs: ['/h', '/h/runs/r/scratch'] });
+  const dirs = a.map((x, i) => (x === '--add-dir' ? a[i + 1] : null)).filter(Boolean);
+  assert.deepStrictEqual(dirs, ['/h', '/h/runs/r/scratch']);
+  const i = a.indexOf('--add-dir');
+  assert.ok(a[i + 2].startsWith('--'), 'a list flag must be followed by another flag, never the end of argv');
+});
+
+it('prompt: the end is a StructuredOutput call; a refusal is queued, never asked for in chat; no echo $?', () => {
+  const text = session.prompt(session.promptVars({ run: 'R', session: 'S', home: '/h', assignment: { kind: 'strike' } }));
+  const flat = text.replace(/\s+/g, ' '); // line wrapping is not content
+  for (const must of ['StructuredOutput', 'Nobody reads this chat', 'never `; echo $?`']) assert.ok(flat.includes(must), `the prompt lacks: ${must}`);
+});
+
+it('driver: the session is started with TURBO_HOME and its scratch folder as added dirs', async () => {
+  const d = driverSetup([{ result: R('nothing', null) }], { slices: [], maxSessions: 1 });
+  try {
+    const out = await turbo.run(d.opts);
+    const a = d.call(0).argv;
+    const dirs = a.map((x, i) => (x === '--add-dir' ? a[i + 1] : null)).filter(Boolean);
+    assert.deepStrictEqual(dirs, [d.home, path.join(out.runDir, 'scratch')]);
+  } finally {
+    rmrf(d.base);
+  }
+});
+
 runAll('turbo');

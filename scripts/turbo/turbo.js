@@ -119,7 +119,8 @@ function runSession(o, { sid, text, settingsFile, runDir, env }) {
       killer.unref();
     }, o.sessionMinutes * 60 * 1000);
     try {
-      child = spawn(o.claudeBin, session.argv({ sessionId: sid, settingsFile, model: o.model, maxBudgetUsd: o.budgetUsd, effort: o.effort }), {
+      const addDirs = [o.home, path.join(runDir, 'scratch')];
+      child = spawn(o.claudeBin, session.argv({ sessionId: sid, settingsFile, model: o.model, maxBudgetUsd: o.budgetUsd, effort: o.effort, addDirs }), {
         cwd: o.root,
         env,
         stdio: ['pipe', fdOut, fdErr],

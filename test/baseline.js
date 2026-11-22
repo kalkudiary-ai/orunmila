@@ -196,6 +196,25 @@ it(
 );
 
 it(
+  'A1a: with the live path on, the header carries the byproducts list (config.byproducts); off, the header has none',
+  async () => {
+    for (const on of [true, false]) {
+      await withProject(
+        ({ router, start, project, dir }) => {
+          fs.mkdirSync(path.join(project, '.orunmila'));
+          fs.writeFileSync(path.join(project, '.orunmila', 'byproducts'), 'dist/\n');
+          assert.strictEqual(router.payload(start, { channel: 'command' }).ok, true);
+          const header = readLines(path.join(dir, 'raw.jsonl'))[0];
+          assert.deepStrictEqual(header.config.byproducts, on ? ['dist/'] : undefined, `live path ${on ? 'on' : 'off'}`);
+          assert.strictEqual(header.frozen.byproducts, sha('dist/\n'));
+        },
+        on ? { baseline: true } : {},
+      )();
+    }
+  },
+);
+
+it(
   'N1b: verify says so when the baseline snapshot beside the log was changed or is missing, and a log so broken is never reopened',
   withProject(
     ({ router, start, dir }) => {

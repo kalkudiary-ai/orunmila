@@ -1573,6 +1573,32 @@
         "path": "/baseline",
         "keyword": "type"
       }
+    },
+    {
+      "name": "byproducts not a list (A1a)",
+      "from": "header",
+      "set": {
+        "/config/byproducts": "dist/"
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/byproducts",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "byproducts holding an entry that is not a string (A1a)",
+      "from": "header",
+      "set": {
+        "/config/byproducts": [
+          7
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/byproducts/0",
+        "keyword": "type"
+      }
     }
   ]
 }

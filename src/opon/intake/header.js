@@ -7,9 +7,14 @@
  * header, never from current settings (configFromHeader).
  *
  *   buildHeader({ sessionId, root, agent, orunmilaVersion, codeRoot, lawPacks,
- *                 hookSettings, config?, observedAt?, monoNs?, envValues? })
+ *                 hookSettings, config?, observedAt?, monoNs?, envValues?,
+ *                 byproducts? })
  *     -> the header without seq / prev_hash / hash (intake seals it); its
- *        test_command is the project's test command, frozen (slice B8, LD70)
+ *        test_command is the project's test command, frozen (slice B8, LD70);
+ *        with `byproducts: true` (the live path, slice A1a, LD175), the
+ *        entries of `.orunmila/byproducts` as config.byproducts, from the
+ *        bytes its frozen fingerprint covers, so replay has the list itself
+ *        (station 5, step 4) and never reads current settings
  *   codeFingerprint(dir)       one fingerprint over every file under dir
  *                              (path and content), for Orunmila's own code
  *                              (ledger A3, NF41); a change mid-session is a
@@ -58,6 +63,16 @@ function codeFingerprint(dir) {
   return 'sha256:' + sha256(lines.join(''));
 }
 
+/** The byproducts list (station 5, step 4): one entry per line, trimmed; blank lines and `#` comments left out; none is []. */
+function byproductsFrom(buf) {
+  if (buf === null) return [];
+  return buf
+    .toString('utf8')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('#'));
+}
+
 function hooksReportFrom(settingsList) {
   const out = { before: [], after: [] };
   const add = (list, matcher) => {
@@ -90,6 +105,8 @@ function buildHeader(o) {
   const lawPacks = {};
   for (const [name, p] of Object.entries(o.lawPacks || {})) lawPacks[name] = fileFingerprint(p);
   const config = { ...DEFAULT_CONFIG, exclusions: [...DEFAULT_CONFIG.exclusions], ...(o.config || {}) };
+  const byproducts = readRegular(path.join(orunmilaDir, 'byproducts')); // read once: the fingerprint and the list are of the same bytes
+  if (o.byproducts) config.byproducts = byproductsFrom(byproducts);
   return {
     schema_version: 1,
     record: 'session_header',
@@ -104,7 +121,7 @@ function buildHeader(o) {
     config,
     frozen: {
       rules: fileFingerprint(path.join(orunmilaDir, 'rules')),
-      byproducts: fileFingerprint(path.join(orunmilaDir, 'byproducts')),
+      byproducts: fingerprintOf(byproducts),
       ignore: fileFingerprint(path.join(orunmilaDir, 'ignore')),
       law_packs: lawPacks,
       hook_settings: hookSettings,

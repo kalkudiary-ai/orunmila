@@ -193,6 +193,29 @@ it(
 );
 
 it(
+  "A1a: with byproducts on, the header carries .orunmila/byproducts' list as config.byproducts, from the same bytes as its frozen fingerprint; none is []; off, nothing changes",
+  withProject((root) => {
+    const file = path.join(root, '.orunmila', 'byproducts');
+    const text = '# build output\ndist/\n\n  coverage/  \n.cache\n';
+    fs.writeFileSync(file, text);
+    const h = buildHeader(opts(root, { byproducts: true }));
+    assert.deepStrictEqual(h.config.byproducts, ['dist/', 'coverage/', '.cache'], 'one entry per line; blank lines and # comments left out');
+    assert.strictEqual(h.frozen.byproducts, sha(text));
+    const sealed = { ...h, seq: 0, prev_hash: null, hash: 'sha256:' + '0'.repeat(64) };
+    assert.deepStrictEqual(checkHeader(sealed), []);
+    assert.deepStrictEqual(checkHeader({ ...sealed, config: { ...sealed.config, byproducts: [1] } }).map((e) => `${e.path} ${e.keyword}`), ['/config/byproducts/0 type']);
+    const off = buildHeader(opts(root));
+    assert.strictEqual('byproducts' in off.config, false, 'off: the header is as before');
+    assert.strictEqual(off.frozen.byproducts, sha(text));
+    fs.rmSync(file);
+    assert.deepStrictEqual(buildHeader(opts(root, { byproducts: true })).config.byproducts, [], 'no file: no byproducts, known');
+    fs.mkdirSync(file);
+    const folder = buildHeader(opts(root, { byproducts: true }));
+    assert.deepStrictEqual([folder.frozen.byproducts, folder.config.byproducts], [null, []], 'not a regular file (NF83): read as none, as its fingerprint is');
+  }),
+);
+
+it(
   "test 35's seed: replay reads configuration from the header, never from today's settings",
   withProject((root) => {
     const h = buildHeader(opts(root, { config: { quiet_window_ms: 900 } }));

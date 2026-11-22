@@ -248,6 +248,7 @@ function createRouter(o) {
       observedAt: now.wall,
       monoNs: now.mono,
       envValues: entries.map((e) => e.value),
+      byproducts: Boolean(o.baseline), // the live path's flag (LD166): the byproducts list in the header (A1a, LD175)
     });
     let baseline = null;
     if (o.baseline) {

@@ -173,4 +173,39 @@ it('rule 4: a rename moves the old path\'s group into the new one; a rename alon
   assert.strictEqual(g[1].action, 'renamed');
 }));
 
+const dirMark = (ms, dir, says) => ({ ...M.disk(ms, dir, says), target: { kind: 'dir', path: dir } });
+
+it('rule 5: a file deleted then created again inside one window is one group, modified; test 3: an edit and its revert are one group', withBase((base) => {
+  const s = makeLog(base);
+  s.append(M.disk(0, 'a.txt', 'deleted'));
+  s.append(M.disk(500, 'a.txt', 'created'));
+  s.append(M.disk(5000, 'b.txt'));
+  s.append(M.disk(5400, 'b.txt')); // back to the bytes it had: net change is station 4's
+  s.append(M.tick(30000));
+  const g = groups(s.dir);
+  assert.deepStrictEqual(g.map((x) => [x.target.path, x.action, x.mark_seqs.length]), [
+    ['a.txt', 'modified', 2],
+    ['b.txt', 'modified', 2],
+  ]);
+}));
+
+it('rule 6: a folder\'s changes fold into the file changes beneath it, before or after them; a folder alone keeps its own group', withBase((base) => {
+  const s = makeLog(base);
+  const d1 = s.append(dirMark(0, 'build', 'created'));
+  const f1 = s.append(M.disk(100, 'build/out.js', 'created'));
+  const f2 = s.append(M.disk(200, 'src/x.js'));
+  const d2 = s.append(dirMark(250, 'src', 'modified'));
+  const lone = s.append(dirMark(300, 'empty', 'created'));
+  const f3 = s.append(M.disk(400, 'gone/a.js'));
+  const d3 = s.append(dirMark(450, 'gone', 'deleted')); // a folder's mark does not count for the action
+  s.append(M.tick(30000));
+  const g = groups(s.dir);
+  assert.deepStrictEqual(g.map((x) => [x.target, x.action, x.mark_seqs]), [
+    [{ kind: 'file', path: 'build/out.js' }, 'created', [d1, f1]],
+    [{ kind: 'file', path: 'src/x.js' }, 'modified', [f2, d2]],
+    [{ kind: 'dir', path: 'empty' }, 'created', [lone]],
+    [{ kind: 'file', path: 'gone/a.js' }, 'modified', [f3, d3]],
+  ]);
+}));
+
 runAll('settle');

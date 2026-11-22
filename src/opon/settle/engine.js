@@ -36,7 +36,16 @@
  * `4913` its folder's latest open file group; their marks are listed but do
  * not count for the action, so a temp file's own creation never makes an edit
  * look like one. A `renamed` mark moves the old path's open group into the new
- * path's (merged with it if it has one). A mark for a settled group (in its
+ * path's (merged with it if it has one).
+ *
+ * Folders fold down (rule 6, LD156): a folder's own change on disk joins the
+ * earliest-opened open file group beneath it; with none, it waits in a group
+ * of its own, which the first file group to open beneath it takes in. A
+ * folder's marks never count for the action. A folder keeps its own group only
+ * when nothing beneath it changed while it was open (created or deleted while
+ * empty, as the brief says, or a lone change: kept, never dropped). Delete then
+ * recreate inside one window is `modified` (rule 5): the action reads whether
+ * the target existed before its first change and after its last. A mark for a settled group (in its
  * grace) joins it and opens it again, its timer restarted: the grace is there
  * for a slow source's marks of the same event. A sealed group is never
  * reopened (rule 8, slice S6). Ticks only move time.
@@ -152,6 +161,16 @@ function createOpon({ sessionId, config }) {
     return best;
   }
 
+  /** The open file group beneath folder `dir` that opened first (rule 6), or null. */
+  function firstOpenUnder(dir) {
+    let best = null;
+    for (const g of live.values()) {
+      if (g.state !== 'open' || !g.key.startsWith('file:') || !g.target.path.startsWith(dir === '.' ? '' : dir + '/')) continue;
+      if (!best || g.n < best.n) best = g;
+    }
+    return best;
+  }
+
   /** Rule 4: the old path's open group goes to the new path, merged with the new path's own. */
   function rename(fromKey, toKey, target) {
     const a = live.get(fromKey);
@@ -164,7 +183,13 @@ function createOpon({ sessionId, config }) {
       live.set(toKey, a);
       return;
     }
-    const rows = [...a.seqs.map((s, i) => [s, a.says[i], a.real[i]]), ...b.seqs.map((s, i) => [s, b.says[i], b.real[i]])].sort((x, y) => x[0] - y[0]);
+    absorb(b, a, null);
+  }
+
+  /** Group `a`'s marks go into `b` (their `real` flags kept, or set to `asReal`), and `a` is gone. */
+  function absorb(b, a, asReal) {
+    const realOf = (x, i) => (asReal === null ? x.real[i] : asReal);
+    const rows = [...a.seqs.map((s, i) => [s, a.says[i], realOf(a, i)]), ...b.seqs.map((s, i) => [s, b.says[i], b.real[i]])].sort((x, y) => x[0] - y[0]);
     b.seqs = rows.map((r) => r[0]);
     b.says = rows.map((r) => r[1]);
     b.real = rows.map((r) => r[2]);
@@ -198,6 +223,14 @@ function createOpon({ sessionId, config }) {
         real = false;
       }
       if (m.says === 'renamed' && m.detail && typeof m.detail.from === 'string') rename(`file:${m.detail.from}`, key, target);
+    } else if (key.startsWith('dirchange:')) {
+      // Rule 6: a folder's change joins a file change beneath it.
+      const host = firstOpenUnder(m.target.path);
+      if (host) {
+        key = host.key;
+        target = host.target;
+        real = false;
+      }
     }
     let g = live.get(key);
     if (!g) {
@@ -208,6 +241,15 @@ function createOpon({ sessionId, config }) {
       live.set(key, g);
       unsealed.set(g.id, g);
       all.push(g);
+      if (key.startsWith('file:')) {
+        // Rule 6: a folder change still waiting above this file folds into it.
+        for (const d of [...live.values()]) {
+          if (d.state === 'open' && d.key.startsWith('dirchange:') && target.path.startsWith(d.target.path === '.' ? '' : d.target.path + '/')) {
+            live.delete(d.key);
+            absorb(g, d, false);
+          }
+        }
+      }
     } else if (g.state === 'settled') {
       g.state = 'open';
       g.settledAt = null;

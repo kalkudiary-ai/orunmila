@@ -26,6 +26,7 @@
 const path = require('path');
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+const DISK = new Set(['created', 'modified', 'deleted', 'renamed']);
 
 function aliasPath(p) {
   const dir = path.posix.dirname(p);
@@ -42,6 +43,8 @@ function keyOf(m) {
   const t = isObject(m.target) ? m.target : null;
   const alone = `seq:${m.seq}`;
   if (!t) return alone;
+  // A folder's own change on disk is keyed apart from reads of the folder (a listing, a search): rule 6 folds it.
+  if (t.kind === 'dir' && typeof t.path === 'string' && DISK.has(m.says)) return `dirchange:${t.path}`;
   if ((t.kind === 'file' || t.kind === 'dir') && typeof t.path === 'string') return `${t.kind}:${t.path}`;
   if (t.kind === 'command' || t.kind === 'tool' || t.kind === 'network') return m.cause_hint ? `${t.kind}:${m.cause_hint}` : alone;
   if (t.kind === 'turn' || t.kind === 'claim') return m.turn ? `turn:${m.turn}` : t.id ? `turn:${t.id}` : alone;

@@ -43,6 +43,7 @@ const { configFromHeader } = require('../intake/header');
 const { createOpon } = require('../settle/engine');
 const { oduLog } = require('../ledger/odu-log');
 const { spanOf } = require('../intake/overlap');
+const { baselineMap } = require('../net/baseline');
 const fs = require('fs');
 const path = require('path');
 
@@ -72,13 +73,7 @@ function othersBeside(dir, sessionId) {
 /** The baseline the header names, as path -> fingerprint (null for a link or other), or null when there is none to trust. */
 function baselineOf(dir, header, v) {
   if (!header.baseline || v.files.bad.some((b) => b.baseline)) return null;
-  const map = new Map();
-  for (const line of fs.readFileSync(path.join(dir, 'baseline.jsonl'), 'utf8').split('\n')) {
-    if (!line) continue;
-    const e = JSON.parse(line);
-    map.set(e.path, typeof e.fingerprint === 'string' ? e.fingerprint : null);
-  }
-  return map;
+  return baselineMap(fs.readFileSync(path.join(dir, 'baseline.jsonl'), 'utf8'));
 }
 
 function replayFolder(dir) {

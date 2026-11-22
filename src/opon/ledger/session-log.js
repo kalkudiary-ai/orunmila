@@ -33,7 +33,10 @@
  * snapshot that does not match the header's fingerprint; openSessionLog reopens one that
  * verifies, for an intake that restarted (slice B1c, test 84). ended() says
  * whether the raw log holds the session's end mark (LD55); pin() is the
- * process the session is pinned to, from the record (LD58), or null.
+ * process the session is pinned to, from the record (LD58), or null;
+ * header() is the sealed session header. `onRecord(record)`, given to either,
+ * is called with each mark as written to the raw log, after the log's own
+ * state has moved on, so it may append again (the live Ọpọ́n, slice L1c).
  */
 
 const fs = require('fs');
@@ -87,7 +90,7 @@ function leakEntries(envValues, envEntries) {
   return [...byValue].map(([value, names]) => ({ names: [...names].sort(), value }));
 }
 
-function createSessionLog(dir, headerInput, { envValues = [], envEntries = [], baseline = null } = {}) {
+function createSessionLog(dir, headerInput, { envValues = [], envEntries = [], baseline = null, onRecord = null } = {}) {
   const entries = leakEntries(envValues, envEntries); // first: an entry with no names list refuses the log before any write
   const rawFile = path.join(dir, 'raw.jsonl');
   const qFile = path.join(dir, 'quarantine.jsonl');
@@ -117,7 +120,7 @@ function createSessionLog(dir, headerInput, { envValues = [], envEntries = [], b
   fs.writeFileSync(rawFile, line(header), { flag: 'wx', mode: 0o600 });
   const qHeader = seal({ schema_version: 1, record: 'quarantine_header', session_id: header.session_id, seq: 0 }, null);
   fs.writeFileSync(qFile, line(qHeader), { flag: 'wx', mode: 0o600 });
-  return writer(dir, { rawFile, qFile, header, last: header, timed: header, qLast: qHeader, counts: { marks: 0, quarantined: 0 }, ended: false, pin: null, envValues, envEntries, entries, headerLine: line(header), baselineText: named ? String(baseline) : null });
+  return writer(dir, { rawFile, qFile, header, last: header, timed: header, qLast: qHeader, counts: { marks: 0, quarantined: 0 }, ended: false, pin: null, envValues, envEntries, entries, headerLine: line(header), baselineText: named ? String(baseline) : null, onRecord });
 }
 
 /** Start the next part of a log a crash cut (LD57): its first line names the cut and follows the last whole line. */
@@ -142,7 +145,7 @@ function continueLog(dir, name, tail, sessionId) {
  * a broken chain is never extended, and nothing in a session is ever edited
  * (line 348). Known limit: a part whose own first line is cut is refused.
  */
-function openSessionLog(dir, { envValues = [], envEntries = [] } = {}) {
+function openSessionLog(dir, { envValues = [], envEntries = [], onRecord = null } = {}) {
   const entries = leakEntries(envValues, envEntries); // first: an entry with no names list refuses the reopen before any write
   const v = verifySession(dir);
   const rawLog = checkLog(dir, 'raw');
@@ -174,6 +177,7 @@ function openSessionLog(dir, { envValues = [], envEntries = [] } = {}) {
     envEntries,
     pin: pinning ? pinOf(pinning) : null,
     envValues,
+    onRecord,
   });
 }
 
@@ -182,7 +186,7 @@ function openSessionLog(dir, { envValues = [], envEntries = [] } = {}) {
  * and `qLast` (quarantine, in qFile); `timed` is the raw log's last header or
  * mark, which last() reports (a continuation record has no times).
  */
-function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended, pin, envValues, envEntries = [], entries, headerLine = null, baselineText = null }) {
+function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended, pin, envValues, envEntries = [], entries, headerLine = null, baselineText = null, onRecord = null }) {
   const filesDir = path.join(dir, 'files');
 
   // LD101: the leak check after redaction. Each record and kept file is searched,
@@ -290,13 +294,14 @@ function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended
     counts.marks++;
     if (endsSession(sealed)) ended = true;
     if (pin === null) pin = pinOf(sealed);
+    if (onRecord) onRecord(sealed); // L1c: the record as written, after the log's own state has moved on
     return reported({ ok: true, seq: sealed.seq }, found);
   }
 
   /** The raw log's last record: where an intake that restarts finds when it last wrote (test 84). */
   const lastRecord = () => ({ seq: timed.seq, mono_ns: timed.mono_ns, observed_at: timed.observed_at });
 
-  return { append, counts: () => ({ ...counts }), last: lastRecord, ended: () => ended, pin: () => pin, leaks: () => leaks.map(copy) };
+  return { append, counts: () => ({ ...counts }), last: lastRecord, ended: () => ended, pin: () => pin, leaks: () => leaks.map(copy), header: () => header };
 }
 
 /** Check a session folder: the ledger uses src/verify for checking (brief v3 line 618). */

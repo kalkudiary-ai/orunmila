@@ -477,7 +477,8 @@ const DEFAULT_HTTP_PORT = 47390; // LD140: free on this machine when chosen (lso
 /**
  * The Ọpọ́n's live path in the intake (LD166, LD170): on only with
  * ORUNMILA_OPON_LIVE=1, exactly; anything else, or nothing, is off. Today it
- * takes the baseline snapshot at session start (slice N1b); stations 1-6 join it in L1.
+ * takes the baseline snapshot at session start (slice N1b) and runs stations 2-6 on every
+ * session it starts, writing odu.jsonl (slice L1c; a session reopened after a restart: L1d).
  */
 const oponLive = (env = process.env) => env.ORUNMILA_OPON_LIVE === '1';
 

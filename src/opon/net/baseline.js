@@ -117,4 +117,36 @@ function snapshot(root, { exclusions = [], key = null, envValues = [], caseInsen
   };
 }
 
-module.exports = { snapshot };
+/** A baseline snapshot's text as path -> fingerprint (null for a link, other or unreadable entry): replay's and the live intake's one reading (L1c). */
+function baselineMap(text) {
+  const map = new Map();
+  for (const line of String(text).split('\n')) {
+    if (!line) continue;
+    const e = JSON.parse(line);
+    map.set(e.path, typeof e.fingerprint === 'string' ? e.fingerprint : null);
+  }
+  return map;
+}
+
+/**
+ * A file's state now, for its `fingerprinted` mark at settle time (L1c, LD200 (3); line 386): no
+ * entry `{ exists: false }`; a regular file streamed, as the snapshot hashes one; anything else, or a
+ * read that fails, `{ exists: true, size: null, fingerprint: null }` (unknown, never guessed).
+ */
+function fingerprintNow(abs, rel, key) {
+  let st;
+  try {
+    st = fs.lstatSync(abs);
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return { exists: false };
+    return { exists: true, size: null, fingerprint: null };
+  }
+  if (!st.isFile()) return { exists: true, size: null, fingerprint: null };
+  try {
+    return { exists: true, ...hashFile(abs, rel, key, CHUNK) };
+  } catch {
+    return { exists: true, size: null, fingerprint: null };
+  }
+}
+
+module.exports = { snapshot, baselineMap, fingerprintNow };

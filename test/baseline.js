@@ -264,7 +264,7 @@ it('N1b: ORUNMILA_OPON_LIVE=1, and nothing else, turns the live path on (LD166)'
 });
 
 /** `orunmila intake run` on a throwaway home; one SessionStart over its socket; the session folder's files. */
-async function intakeRunFiles(env) {
+async function intakeRunFiles(env, last = 'raw.jsonl') {
   const base = fs.realpathSync(tmpDir());
   const home = path.join(base, 'h');
   const project = path.join(base, 'p');
@@ -287,7 +287,7 @@ async function intakeRunFiles(env) {
       c.on('error', reject);
       c.on('close', resolve);
     });
-    assert.ok(await until(() => fs.existsSync(path.join(dir, 'raw.jsonl'))), 'no session log');
+    assert.ok(await until(() => fs.existsSync(path.join(dir, last))), `no ${last}`);
     return fs.readdirSync(dir).sort();
   } finally {
     child.kill('SIGTERM');
@@ -296,9 +296,9 @@ async function intakeRunFiles(env) {
   }
 }
 
-it('N1b: `orunmila intake run` writes the baseline only with ORUNMILA_OPON_LIVE=1', async () => {
+it('N1b: `orunmila intake run` writes the baseline only with ORUNMILA_OPON_LIVE=1, and with it the odù log (L1c)', async () => {
   assert.deepStrictEqual(await intakeRunFiles({}), ['files', 'quarantine.jsonl', 'raw.jsonl']);
-  assert.deepStrictEqual(await intakeRunFiles({ ORUNMILA_OPON_LIVE: '1' }), ['baseline.jsonl', 'files', 'quarantine.jsonl', 'raw.jsonl']);
+  assert.deepStrictEqual(await intakeRunFiles({ ORUNMILA_OPON_LIVE: '1' }, 'odu.jsonl'), ['baseline.jsonl', 'files', 'odu.jsonl', 'quarantine.jsonl', 'raw.jsonl']); // odu.jsonl is written last
 });
 
 runAll('baseline');

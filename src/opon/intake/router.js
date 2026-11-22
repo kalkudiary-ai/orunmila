@@ -17,7 +17,11 @@
  *       turn (with `baseline: true`, slice N1b, LD170, the baseline snapshot of
  *       the root is taken first, skipping the header's config.exclusions, and
  *       kept beside the log as baseline.jsonl, its fingerprint in the header's
- *       `baseline`; off by default, as the live path is, LD166);
+ *       `baseline`; off by default, as the live path is, LD166; with it too,
+ *       slice L1c, LD200, the session's live Ọpọ́n, src/opon/intake/live.js:
+ *       every mark its log writes goes through stations 2-6, each settled
+ *       change of a file gets its `fingerprinted` mark, and each sealed odù
+ *       goes to odu.jsonl beside the raw log);
  *       a write's file facts are measured, before at PreToolUse and after
  *       at PostToolUse, and a read's at PostToolUse (the whole file at hook time,
  *       test 55); the adapter translates (A8); paths are normalised (line 345);
@@ -87,7 +91,8 @@ const { looksBinary } = require('../../capture/fs-sentinel/hasher');
 const { getAdapter } = require('../../capture/agents');
 const { createSentinels } = require('./sentinel');
 const { createTamperWatch } = require('./tamper');
-const { snapshot } = require('../net/baseline');
+const { snapshot, baselineMap } = require('../net/baseline');
+const { createLive } = require('./live');
 
 const CC = getAdapter('claude-code');
 const RELEASE_MS = 30 * 60 * 1000;
@@ -170,6 +175,8 @@ function createRouter(o) {
   const intakeDir = path.join(home, 'intake');
   const states = new Map(); // session id -> { log, root, ci, n, open, pre, last, limit }
   const engine = createIntake({ openLog: (id) => states.get(id).log, clock, checkSender: o.checkSender, tickMs: o.tickMs });
+  // The Ọpọ́n live (slice L1c, LD200), with the live path's flag only: one engine per session it starts.
+  const live = o.baseline ? createLive({ spans: [], key: o.installKey, clock, receive: (m) => engine.receive(m, {}), error: (reason, payload) => error(reason, payload) }) : null;
   let heldText = null;
   // The Sentinel inside the intake (B4): its marks go to every watching session of the root.
   const sentinels = o.sentinel
@@ -258,7 +265,9 @@ function createRouter(o) {
       baseline = b.text;
     }
     ensureDir(sessionsDir);
-    const log = createSessionLog(dir, header, { envEntries: entries, baseline });
+    let lv = null; // the session's live Ọpọ́n (L1c): fed each mark its log writes
+    const log = createSessionLog(dir, header, { envEntries: entries, baseline, onRecord: live ? (rec) => lv && live.feed(lv, rec) : null });
+    if (live) lv = live.open(dir, log.header(), baseline === null ? null : baselineMap(baseline));
     const tamper = createTamperWatch({ header: { ...header, project_root: root }, codeRoot: o.codeRoot, lawPacks: lawPacksFor(root), clock });
     return { log, root, ci: isCaseInsensitive(root), n: 0, open: false, pre: new Map(), last: BigInt(now.mono), limit: header.config.diff_size_limit_bytes, tamper };
   }

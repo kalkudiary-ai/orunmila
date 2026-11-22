@@ -1322,7 +1322,7 @@ async function cmdIntake() {
       orunmilaVersion: require('../package.json').version,
       installKey: readInstallKey(home),
       sentinel: true, // the Sentinel runs inside the intake (B4, LD145)
-      baseline: oponLive(), // the baseline snapshot at session start, only with ORUNMILA_OPON_LIVE=1 (N1b, LD170)
+      baseline: oponLive(), // the Ọpọ́n's live path, only with ORUNMILA_OPON_LIVE=1: the baseline at session start (N1b, LD170), stations 2-6 and odu.jsonl (L1c, LD200)
     });
     const server = createServer({ home, router, httpPort: intakePort() });
     const r = await server.start();

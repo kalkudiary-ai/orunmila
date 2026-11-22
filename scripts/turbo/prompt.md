@@ -21,6 +21,12 @@ Kind: **{{KIND}}**
 Your state is in `{{HOME}}`: `plan.json` (edit it only through `node scripts/turbo/plan.js`),
 `approvals.md` (the queue for O), `inbox.md` (O writes there; you never edit it).
 
+## What you can run
+
+Bash commands must start with one of these (dontAsk refuses anything else, with no prompt): {{ALLOWED}}.
+Run git from the clone root, without `-C`. A refusal covers that one command, not Bash as a whole: use
+the allowed form, or an allowed tool for the same job.
+
 ## First
 
 1. If the inbox changed, read `{{HOME}}/inbox.md` in full. O's words there outrank your assignment,

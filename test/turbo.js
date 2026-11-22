@@ -971,6 +971,16 @@ it('T14 prompt: never run a gate in the background (NF66: it is recorded as pass
   assert.ok(flat.includes('never in the background'), 'the prompt does not forbid background gate runs');
 });
 
+it('T15 prompt: lists the allowed Bash commands from the allowlist itself, and says a refusal covers one command', () => {
+  // Run 20261122T025630Z: Sonnet used `git -C <path>` (not allowed), took three refusals for "all Bash
+  // is denied" and gave up the slice.
+  const text = session.prompt(session.promptVars({ run: 'R', session: 'S', home: '/h', assignment: { kind: 'strike' } }));
+  for (const c of session.BASH_ALLOW) assert.ok(text.includes(`\`${c}\``), `the prompt does not list ${c}`);
+  const flat = text.replace(/\s+/g, ' ');
+  assert.ok(flat.includes('without `-C`'), 'the prompt does not say to run git without -C');
+  assert.ok(flat.includes('covers that one command'), 'the prompt does not say a refusal covers one command');
+});
+
 it('driver: a HEAD reflog entry that is not a commit (a checkout, even one put back) makes the next session a recovery', async () => {
   const steps = [{ result: R('nothing', null), checkoutAndBack: true }, { result: R('recovered', null) }];
   const d = driverSetup(steps, { slices: [S('a')], maxSessions: 2 });

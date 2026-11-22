@@ -257,6 +257,7 @@ function promptVars({ run, session, home, assignment, root = ROOT, sessionMinute
     PROVISIONAL: provisional ? `yes, it rests on ${provisional}` : 'no',
     PHASE_SESSIONS: phaseSessions.length ? phaseSessions.join(', ') : '(none)',
     PLAN_COUNTS: JSON.stringify(counts),
+    ALLOWED: BASH_ALLOW.map((c) => '`' + c + '`').join(', '),
   };
 }
 
@@ -296,4 +297,4 @@ function parseResult(stdout) {
   return bad ? { error: bad, cost } : { result: r, cost };
 }
 
-module.exports = { ROOT, GUARD, RESULT_SCHEMA, OUTCOMES, settings, env, argv, render, promptVars, prompt, parseResult };
+module.exports = { ROOT, GUARD, BASH_ALLOW, RESULT_SCHEMA, OUTCOMES, settings, env, argv, render, promptVars, prompt, parseResult };

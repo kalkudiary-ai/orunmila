@@ -12,7 +12,8 @@
  */
 
 const { assert, fs, path, tmpDir, rmrf, it, runAll } = require('./helpers');
-const { makeLog, M } = require('./helpers-opon');
+const { makeLog, M, FP } = require('./helpers-opon');
+const { createOpon } = require('../src/opon/settle/engine');
 const { replayFolder } = require('../src/opon/replay');
 const { oduLog, createOduWriter } = require('../src/opon/ledger/odu-log');
 const { canonicalize } = require('../src/verify/canonical');
@@ -54,6 +55,40 @@ it(
     assert.deepStrictEqual([of('src/hand.ts').witness_status.glove.status, of('src/hand.ts').witness_status.sentinel.status], ['saw_nothing', 'saw']);
     assert.strictEqual(w.add({ ...groups[0], state: 'open' }, (seq) => source.get(seq)), null, 'a group not sealed is not written');
   }),
+);
+
+it(
+  'L1b line 386: a change of a file inside the root is due a fingerprint each time it settles with a mark since it last asked, never for its own fingerprint; a read, an excluded path and one outside the root are never due',
+  () => {
+    const o = createOpon({ sessionId: 'ses_l1b', config: { quiet_window_ms: 1500, lag_grace_ms: 3000, ceiling_ms: 30000, exclusions: ['node_modules'] } });
+    let seq = 0;
+    const sealed = [];
+    const push = (m) => sealed.push(...o.push({ ...m, seq: ++seq }));
+    push(M.edited(0, 'e1', 'src/a.ts'));
+    push(M.disk(50, 'src/a.ts'));
+    push(M.read(0, 'r1', 'src/b.ts'));
+    push(M.disk(0, 'node_modules/x.js', 'created'));
+    push({ ...M.edited(0, 'e2', '/elsewhere/y.ts'), target: { kind: 'file', path: '/elsewhere/y.ts', outside: true } });
+    push(M.turnEnded(100));
+    push(M.tick(1000));
+    assert.deepStrictEqual(o.fingerprintsDue(), [], 'nothing has settled yet');
+    push(M.tick(1600));
+    assert.deepStrictEqual(o.fingerprintsDue(), ['src/a.ts']);
+    assert.deepStrictEqual(o.fingerprintsDue(), [], 'each ask is given once');
+    push(M.fingerprinted(1650, 'src/a.ts', FP('b')));
+    push(M.tick(2200));
+    assert.deepStrictEqual(o.fingerprintsDue(), [], 'its own fingerprint reopens it until the next step, and does not ask again');
+    push(M.disk(2300, 'src/a.ts')); // a slow source's mark in its grace: it opens and settles again, and asks again
+    push(M.tick(3900));
+    assert.deepStrictEqual(o.fingerprintsDue(), ['src/a.ts']);
+    push(M.fingerprinted(3950, 'src/a.ts', FP('c')));
+    push(M.tick(9000));
+    const a = sealed.find((g) => g.target && g.target.path === 'src/a.ts');
+    assert.deepStrictEqual([a.witness_status.glove.status, a.witness_status.sentinel.status, a.net_change.after], ['saw', 'saw', FP('c')]);
+    push(M.disk(10000, 'src/a.ts')); // a new event after the seal
+    push(M.tick(11600));
+    assert.deepStrictEqual(o.fingerprintsDue(), ['src/a.ts']);
+  },
 );
 
 runAll('opon-live');

@@ -16,6 +16,10 @@
  *     .push(mark)   one mark, in seq order; returns the records it sealed
  *     .end()        the groups not yet sealed, in the order they opened, as
  *                   they stand (the closeout's force-settle is Phase 4)
+ *     .fingerprintsDue()  the paths of the file changes that settled since
+ *                   the last call, inside the root and not excluded, each due
+ *                   a `fingerprinted` mark (L1b, LD200); a group asks again only
+ *                   after a mark other than its own fingerprint
  *
  * Event time (line 359): "now" is the mono_ns of the latest mark, ticks
  * included, and never goes back (a mark stamped earlier than now, a late
@@ -276,6 +280,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
   const waiting = []; // closed groups whose seal waits for their turns or a group they name, in the order they closed (C3d2)
   const freedAt = new Map(); // a waiting group's id -> when it sealed (C3d2)
   const exclusions = Array.isArray(config.exclusions) ? config.exclusions : [];
+  const due = []; // L1b: the paths of settled file changes due a fingerprint, in the order they settled
   const all = [];
   let now = null;
   let made = 0;
@@ -622,6 +627,11 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
         if (at !== null && t >= at) {
           g.state = 'settled';
           g.settledAt = at;
+          // L1b (LD200 (2); line 386): a change of a file inside the root, settled with a mark since it last asked, is due a fingerprint.
+          if (g.key.startsWith('file:') && g.says.some((v) => DISK.has(v)) && !g.target.outside && !isIgnored(g.target.path, exclusions) && g.fpAsked !== g.lastOther) {
+            g.fpAsked = g.lastOther;
+            due.push(g.target.path);
+          }
           if (at !== byQuiet) {
             // Rule 2: force-settled; the target's next marks go to a continuation.
             g.forced = true;
@@ -918,8 +928,10 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
   }
 
   const end = () => all.filter((g) => g.state !== 'sealed').map(record);
+  /** L1b: the paths due a fingerprint since the last call, each given once; the live intake writes them, replay reads them from the log. */
+  const fingerprintsDue = () => due.splice(0, due.length);
 
-  return { push, end };
+  return { push, end, fingerprintsDue };
 }
 
 module.exports = { createOpon, actionOf };

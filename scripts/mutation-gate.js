@@ -1961,6 +1961,19 @@ const MUTANTS = [
   { id: "L1a-2 the writer's seq skips", file: 'src/opon/ledger/odu-log.js', test: 'test/opon-live.js',
     from: 'seal({ ...oduRecord(g, sourceOf), seq: prev.seq + 1 }, prev.hash);', to: 'seal({ ...oduRecord(g, sourceOf), seq: prev.seq + 2 }, prev.hash);',
     fails: ['L1a'] },
+  // Slice L1b: the engine's fingerprint queue (LD200 (2)).
+  { id: 'L1b-1 a group asks again for its own fingerprint', file: 'src/opon/settle/engine.js', test: 'test/opon-live.js',
+    from: ' && g.fpAsked !== g.lastOther) {', to: ') {',
+    fails: ['L1b'] },
+  { id: 'L1b-2 an excluded path is due a fingerprint', file: 'src/opon/settle/engine.js', test: 'test/opon-live.js',
+    from: '!g.target.outside && !isIgnored(g.target.path, exclusions) && g.fpAsked', to: '!g.target.outside && g.fpAsked',
+    fails: ['L1b'] },
+  { id: 'L1b-3 a path outside the root is due a fingerprint', file: 'src/opon/settle/engine.js', test: 'test/opon-live.js',
+    from: '&& !g.target.outside && !isIgnored(g.target.path, exclusions) && g.fpAsked', to: '&& !isIgnored(g.target.path, exclusions) && g.fpAsked',
+    fails: ['L1b'] },
+  { id: 'L1b-4 a read is due a fingerprint', file: 'src/opon/settle/engine.js', test: 'test/opon-live.js',
+    from: "if (g.key.startsWith('file:') && g.says.some((v) => DISK.has(v)) && !g.target.outside", to: "if (g.key.startsWith('file:') && !g.target.outside",
+    fails: ['L1b'] },
 ];
 
 function copyRepo(root) {

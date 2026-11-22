@@ -310,7 +310,7 @@ it('C3c: the schema asks a phantom_claim for its claim kind, phrases, hedged, wh
   });
   const [o] = claimOdus(odus, 't1');
   const keys = (r) => checkOdu(r).map((e) => `${e.path} ${e.keyword}`);
-  assert.deepStrictEqual(keys(o), []);
+  assert.deepStrictEqual([witnesses(o), keys(o)], [['saw', 'out_of_scope'], []]);
   const c = o.conflicts[0];
   for (const k of ['claim', 'phrases', 'hedged', 'why', 'runs']) {
     const { [k]: _gone, ...less } = c;
@@ -386,7 +386,7 @@ it('C3d1: the schema asks a file phantom_claim for its path and targets, and its
   });
   const [o] = claimOdus(odus, 't1');
   const keys = (r) => checkOdu(r).map((e) => `${e.path} ${e.keyword}`);
-  assert.deepStrictEqual(keys(o), []);
+  assert.deepStrictEqual([witnesses(o), keys(o)], [['saw', 'out_of_scope'], []]);
   const c = o.conflicts[0];
   for (const k of ['path', 'targets']) {
     const { [k]: _gone, ...less } = c;
@@ -492,8 +492,10 @@ it('C3d2: grouping is unchanged while a change waits: a second edit of the file 
   const paths = filesIn(odus).map((o) => [o.target.path, o.net_change && o.net_change.changed]);
   const reverted = paths.findIndex(([p, c]) => p === 'src/back.ts' && c === false);
   assert.ok(reverted >= 0 && reverted < paths.findIndex(([p]) => p === 'src/hand.ts'), JSON.stringify(paths));
-  const back = filesIn(odus).filter(file('src/back.ts'))[1];
+  const [first, back] = filesIn(odus).filter(file('src/back.ts'));
+  assert.deepStrictEqual([witnesses(first), first.conflicts.map((c) => c.kind)], [['saw', 'saw_nothing'], ['unconfirmed_by_filesystem']], 't1 had no claim: no verdict');
   assert.deepStrictEqual([witnesses(back), back.conflicts], [['saw', 'saw'], []]);
+  assert.deepStrictEqual(witnesses(of(odus, file('src/hand.ts'))), ['saw_nothing', 'saw']);
 });
 
 it('C3d2: an odù that amends a waiting one comes after it, as a late Sentinel mark\'s does; a command\'s children wait for its turn, each judged, while their parent, no change on disk, does not', () => {
@@ -532,7 +534,7 @@ it('C3d2: the schema asks a silent_change for its turns and the claims it read',
   });
   const o = of(odus, file('src/a.ts'));
   const keys = (r) => checkOdu(r).map((e) => `${e.path} ${e.keyword}`);
-  assert.deepStrictEqual(keys(o), []);
+  assert.deepStrictEqual([witnesses(o), keys(o)], [['saw', 'saw'], []]);
   const c = o.conflicts[0];
   assert.strictEqual(c.kind, 'silent_change');
   for (const k of ['turns', 'claim_seqs']) {

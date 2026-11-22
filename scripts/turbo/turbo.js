@@ -35,6 +35,7 @@ const { spawn, spawnSync, execFileSync } = require('child_process');
 
 const plan = require('./plan');
 const session = require('./session');
+const watch = require('./watch');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 // Loaded when the driver starts, before any session runs: a session can edit the clone's file, so the
@@ -105,11 +106,13 @@ function cloneRepo({ source, dest, branch, ledger = 'output-1', claudeHome = pat
   // The source's node_modules (gitignored, so not cloned): lint and coverage need its tools. A write
   // through the link lands in the source, which the sandbox refuses (it checks real paths).
   const nm = path.join(source, 'node_modules');
+  fs.mkdirSync(path.join(dest, '.git', 'info'), { recursive: true });
+  // The driver writes the clone's .orunmila/ignore each run (T18); it is the clone's, not the repo's.
+  fs.appendFileSync(path.join(dest, '.git', 'info', 'exclude'), '\n.orunmila/\n');
   if (fs.existsSync(nm) && !fs.existsSync(path.join(dest, 'node_modules'))) {
     fs.symlinkSync(fs.realpathSync(nm), path.join(dest, 'node_modules'));
     // `node_modules/` in .gitignore matches a directory, not a link: exclude it in this clone only.
-    fs.mkdirSync(path.join(dest, '.git', 'info'), { recursive: true });
-    fs.appendFileSync(path.join(dest, '.git', 'info', 'exclude'), '\nnode_modules\n');
+    fs.appendFileSync(path.join(dest, '.git', 'info', 'exclude'), 'node_modules\n');
   }
   for (const f of ['CLAUDE.md', path.join('docs', 'AGENT_OPERATING_RULES.md')]) {
     let target = null;
@@ -337,6 +340,7 @@ async function run(opts) {
     sentinel: true,
     sentinelBin: process.env.TURBO_SENTINEL_BIN || 'orunmila',
     sentinelRunning: sentinelRunningFor,
+    sentinelReadyMs: 120000,
     held: !HOLD.lifted,
     ...opts,
   };
@@ -393,23 +397,33 @@ async function run(opts) {
     } catch {}
   }
 
-  // Orunmila is Glove AND Sentinel: the clone needs a Sentinel of its own for the run, or a
-  // shell write there has no record at all and leopard-check cannot place it.
-  let sentinelChild = null;
-  let sentinelNote = 'off';
-  if (o.sentinel) {
-    if (o.sentinelRunning(o.root)) sentinelNote = 'already watching this root';
-    else {
-      try {
-        sentinelChild = spawn(o.sentinelBin, ['watch-fs', '--root', o.root], { stdio: 'ignore' });
-        sentinelChild.on('error', (err) => {
-          sentinelNote = `failed to start: ${err.message}`;
-        });
-        sentinelNote = `started (pid ${sentinelChild.pid}), stopped at the end`;
-      } catch (err) {
-        sentinelNote = `failed to start: ${err.message}`;
-      }
+  // Orunmila is Glove AND Sentinel. The clone's Sentinel is always the driver's own, started after
+  // the driver writes the clone's ignore file, and ready (its first walk done) before any session
+  // (T18, LD125): one already running may ignore .turbo/, so a session's write there would have
+  // no disk record, and a write before the walk ends is seeded as a baseline, not recorded.
+  const sentinels = [];
+  async function startSentinel(root) {
+    const errFile = path.join(runDir, `sentinel-${sentinels.length}.err`);
+    const fd = fs.openSync(errFile, 'w');
+    const rec = { root, child: null, note: null, spawnError: null };
+    sentinels.push(rec);
+    try {
+      rec.child = spawn(o.sentinelBin, ['watch-fs', '--root', root], { stdio: ['ignore', 'ignore', fd], env: o.env });
+    } finally {
+      fs.closeSync(fd);
     }
+    rec.child.on('error', (err) => {
+      rec.spawnError = err.message;
+    });
+    const t0 = Date.now();
+    while (Date.now() - t0 < o.sentinelReadyMs && !rec.spawnError && rec.child.exitCode === null) {
+      if (fs.readFileSync(errFile, 'utf8').includes('[fs-sentinel] watching ')) {
+        rec.note = `started on ${root} (pid ${rec.child.pid}), ready in ${((Date.now() - t0) / 1000).toFixed(1)} s, stopped at the end`;
+        return rec;
+      }
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    throw new Error(`the Sentinel on ${root} did not finish its first walk within ${o.sentinelReadyMs / 1000} s (${rec.spawnError || `see ${errFile}`}); without it a session's writes have no disk record`);
   }
 
   const state = { recover: null, lastStalkKey: null, lastInbox: sha(inbox), waiting: false, fails: 0, noProgress: 0, paused: false };
@@ -419,6 +433,10 @@ async function run(opts) {
   log({ type: 'start', run: runId, hours: o.hours, deadline: new Date(deadline).toISOString(), branch, root: o.root, model: o.model });
 
   try {
+    if (o.sentinel) {
+      watch.writeSentinelIgnore(o.root);
+      await startSentinel(o.root);
+    }
     for (;;) {
       if (o.beforeCheck) o.beforeCheck();
       if (o.now() >= deadline) {
@@ -565,10 +583,11 @@ async function run(opts) {
     }
     const ended = new Date(o.now()).toISOString();
     const src = spawnSync('git', ['-C', o.root, 'config', '--get', 'turbo.source'], { encoding: 'utf8' });
+    const sentinelNote = o.sentinel ? sentinels.map((s) => s.note || `failed on ${s.root}: ${s.spawnError || 'not ready'}`).join('; ') : 'off';
     result = { run: runId, runDir, scratchDir, sentinel: sentinelNote, root: o.root, source: src.status === 0 ? src.stdout.trim() : null, started: new Date(start).toISOString(), ended, stopReason: stopReason || 'error', hours: o.hours, branch, sessions, plan: finalPlan };
     fs.writeFileSync(path.join(runDir, 'summary.md'), summaryText(result));
     log({ type: 'end', stopReason: result.stopReason, sessions: sessions.length });
-    if (sentinelChild && sentinelChild.exitCode === null) sentinelChild.kill('SIGINT');
+    for (const s of sentinels) if (s.child && s.child.exitCode === null) s.child.kill('SIGINT');
     try {
       fs.unlinkSync(lockFile);
     } catch {}

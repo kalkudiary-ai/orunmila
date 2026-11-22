@@ -125,9 +125,11 @@ the paths above, including its branches and its object store: damage there stays
 reaches the worktree only through your fetch. A refused checkout can rewrite the clone's files before
 it fails on `HEAD`; the driver reads `HEAD`'s reflog after each session, and any entry that is not a
 commit makes the next session a recovery; a session can write that reflog (a commit must append to
-it), so the check is advisory. Orunmila is Glove and Sentinel: the driver starts a
-Sentinel on the clone for the run (`orunmila watch-fs --root <clone>`, or `TURBO_SENTINEL_BIN`) unless
-one already watches it, stops the one it started at the end, and `summary.md` says which.
+it), so the check is advisory. Orunmila is Glove and Sentinel: the driver writes the clone's
+`.orunmila/ignore` (`.turbo/` and every build folder back in view, T18), then starts its own Sentinel
+on the clone (`orunmila watch-fs --root <clone>`, or `TURBO_SENTINEL_BIN`), even when another one
+watches it, and starts no session until that Sentinel's first walk is done. It stops it at the end,
+and `summary.md` says so.
 
 ## Files
 

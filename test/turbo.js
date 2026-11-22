@@ -826,31 +826,6 @@ it('clone: a shallow source gives a clone whose history git can walk (the live r
   }
 });
 
-it('driver: starts a Sentinel on its root for the run and stops it at the end (Glove AND Sentinel)', async () => {
-  const d = driverSetup([{ result: R('nothing', null) }], { slices: [], maxSessions: 1 });
-  try {
-    const rec = path.join(d.base, 'sentinel-rec.json');
-    const bin = path.join(d.base, 'sentinel-fake');
-    fs.writeFileSync(
-      bin,
-      `#!/usr/bin/env node\nconst fs = require('fs');\nfs.writeFileSync(${JSON.stringify(rec)}, JSON.stringify({ argv: process.argv.slice(2), pid: process.pid }));\nprocess.on('SIGINT', () => { fs.writeFileSync(${JSON.stringify(rec)} + '.stopped', 'SIGINT'); process.exit(0); });\nsetInterval(() => {}, 1000);\n`,
-    );
-    fs.chmodSync(bin, 0o755);
-    const out = await turbo.run({ ...d.opts, sentinel: true, sentinelBin: bin, sentinelRunning: () => false });
-    for (let i = 0; i < 50 && !fs.existsSync(`${rec}.stopped`); i++) await new Promise((r) => setTimeout(r, 100));
-    assert.deepStrictEqual(JSON.parse(fs.readFileSync(rec, 'utf8')).argv, ['watch-fs', '--root', d.root]);
-    assert.strictEqual(fs.readFileSync(`${rec}.stopped`, 'utf8'), 'SIGINT', 'the Sentinel was not stopped at the end');
-    assert.ok(fs.readFileSync(path.join(out.runDir, 'summary.md'), 'utf8').includes('Sentinel: started'), 'the summary does not say a Sentinel watched');
-    // One already watching this root is used, not doubled.
-    fs.unlinkSync(rec);
-    const again = await turbo.run({ ...d.opts, sentinel: true, sentinelBin: bin, sentinelRunning: () => true });
-    assert.ok(!fs.existsSync(rec), 'a second Sentinel was started');
-    assert.ok(fs.readFileSync(path.join(again.runDir, 'summary.md'), 'utf8').includes('Sentinel: already watching'));
-  } finally {
-    rmrf(d.base);
-  }
-});
-
 // --- T13: the driver's own boundary (LD117) ---------------------------------------
 
 it('T13 referee: runs leopard-check code loaded at start, not the file a session can edit later', () => {
@@ -859,7 +834,9 @@ it('T13 referee: runs leopard-check code loaded at start, not the file a session
     const mirror = path.join(base, 'm');
     fs.mkdirSync(path.join(mirror, 'scripts', 'turbo'), { recursive: true });
     const R0 = path.join(__dirname, '..');
-    for (const f of ['turbo.js', 'plan.js', 'session.js', 'guard.js', 'prompt.md']) fs.copyFileSync(path.join(R0, 'scripts', 'turbo', f), path.join(mirror, 'scripts', 'turbo', f));
+    for (const f of ['turbo.js', 'plan.js', 'session.js', 'guard.js', 'watch.js', 'prompt.md']) fs.copyFileSync(path.join(R0, 'scripts', 'turbo', f), path.join(mirror, 'scripts', 'turbo', f));
+    fs.mkdirSync(path.join(mirror, 'src', 'capture', 'fs-sentinel'), { recursive: true });
+    fs.copyFileSync(path.join(R0, 'src', 'capture', 'fs-sentinel', 'ignore.js'), path.join(mirror, 'src', 'capture', 'fs-sentinel', 'ignore.js'));
     fs.copyFileSync(path.join(R0, 'scripts', 'leopard-check.js'), path.join(mirror, 'scripts', 'leopard-check.js'));
     const t = require(path.join(mirror, 'scripts', 'turbo', 'turbo.js'));
     const marker = path.join(base, 'ESCAPED');
@@ -1032,6 +1009,103 @@ it('driver: a HEAD reflog entry that is not a commit (a checkout, even one put b
 
 it('allowlist: git -C is gone (it let any git subcommand past layer 1)', () => {
   assert.ok(!session.settings({ root: '/r' }).permissions.allow.includes('Bash(git -C:*)'));
+});
+
+// --- T18-T21: an escape shows up and stops the run (LD125-LD130) ---------------------
+
+const watch = require('../scripts/turbo/watch');
+const ORUNMILA_BIN = path.join(__dirname, '..', 'bin', 'orunmila.js');
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Run a real Sentinel on each root (events to ohome) while fn runs; return the log's rows. */
+async function sentinelRecord(roots, ohome, fn, settleMs = 1500) {
+  const kids = roots.map((root, i) => {
+    const errFile = path.join(ohome, `sentinel-${i}.err`);
+    const fd = fs.openSync(errFile, 'w');
+    const child = require('child_process').spawn(process.execPath, [ORUNMILA_BIN, 'watch-fs', '--root', root], { stdio: ['ignore', 'ignore', fd], env: { ...process.env, ORUNMILA_HOME: ohome } });
+    fs.closeSync(fd);
+    return { child, errFile };
+  });
+  try {
+    for (const k of kids) for (let i = 0; i < 100 && !fs.readFileSync(k.errFile, 'utf8').includes('[fs-sentinel] watching'); i++) await pause(100);
+    await fn();
+    await pause(settleMs);
+  } finally {
+    await Promise.all(kids.map((k) => new Promise((r) => (k.child.exitCode !== null ? r() : (k.child.once('exit', r), k.child.kill('SIGINT'))))));
+  }
+  const log = path.join(ohome, 'events.jsonl');
+  return fs.existsSync(log) ? fs.readFileSync(log, 'utf8').split('\n').filter(Boolean).map(JSON.parse) : [];
+}
+
+it('T18 Sentinel: with the ignore file the driver writes, a write in .turbo/ or a build folder has a disk record; without it, none', async () => {
+  const base = fs.realpathSync(tmpDir());
+  try {
+    const watched = path.join(base, 'with');
+    const control = path.join(base, 'without');
+    for (const r of [watched, control]) fs.mkdirSync(path.join(r, '.turbo', 'scratch'), { recursive: true });
+    watch.writeSentinelIgnore(watched);
+    const ohome = path.join(base, 'oh');
+    fs.mkdirSync(ohome);
+    const rows = await sentinelRecord([watched, control], ohome, () => {
+      for (const r of [watched, control]) {
+        fs.writeFileSync(path.join(r, '.turbo', 'scratch', 's.txt'), 's\n');
+        fs.mkdirSync(path.join(r, 'build'));
+        fs.writeFileSync(path.join(r, 'build', 'b.txt'), 'b\n');
+      }
+    });
+    const seen = (r) => [...new Set(rows.filter((e) => e.source === 'fs-sentinel' && e.path.startsWith(r + path.sep)).map((e) => path.relative(r, e.path)))].sort();
+    assert.deepStrictEqual(seen(watched), [path.join('.turbo', 'scratch', 's.txt'), path.join('build', 'b.txt')]);
+    assert.deepStrictEqual(seen(control), [], 'the control root recorded a write its defaults ignore, so the test proves nothing');
+  } finally {
+    rmrf(base);
+  }
+});
+
+/** A fake Sentinel: records its argv and whether the ignore file was there, prints the ready line unless told not to. */
+function fakeSentinel(base, { ready = true } = {}) {
+  const rec = path.join(base, 'sentinel-rec.json');
+  const bin = path.join(base, ready ? 'sentinel-fake' : 'sentinel-mute');
+  fs.writeFileSync(
+    bin,
+    `#!/usr/bin/env node\nconst fs = require('fs');\nconst path = require('path');\nconst root = process.argv[4];\n` +
+      `process.on('SIGINT', () => { fs.writeFileSync(${JSON.stringify(rec)} + '.stopped', 'SIGINT'); process.exit(0); });\n` +
+      `fs.writeFileSync(${JSON.stringify(rec)}, JSON.stringify({ argv: process.argv.slice(2), ignore: fs.existsSync(path.join(root, '.orunmila', 'ignore')) ? fs.readFileSync(path.join(root, '.orunmila', 'ignore'), 'utf8') : null }));\n` +
+      (ready ? `process.stderr.write('[fs-sentinel] watching ' + root + ' (1 dirs, 0 files baselined)\\n');\n` : '') +
+      `setInterval(() => {}, 1000);\n`,
+  );
+  fs.chmodSync(bin, 0o755);
+  return { bin, rec };
+}
+
+it('T18 driver: writes the ignore file, starts its own Sentinel on the clone even when one watches, and waits for its first walk', async () => {
+  const d = driverSetup([{ result: R('nothing', null) }], { slices: [], maxSessions: 1 });
+  try {
+    const f = fakeSentinel(d.base);
+    const out = await turbo.run({ ...d.opts, sentinel: true, sentinelBin: f.bin, sentinelRunning: () => true });
+    for (let i = 0; i < 50 && !fs.existsSync(`${f.rec}.stopped`); i++) await pause(100);
+    const rec = JSON.parse(fs.readFileSync(f.rec, 'utf8'));
+    assert.deepStrictEqual(rec.argv, ['watch-fs', '--root', d.root]);
+    assert.ok(rec.ignore && rec.ignore.split('\n').includes('!.turbo/'), `the Sentinel started before the ignore file was written: ${rec.ignore}`);
+    assert.strictEqual(fs.readFileSync(`${f.rec}.stopped`, 'utf8'), 'SIGINT', 'the Sentinel was not stopped at the end');
+    const summary = fs.readFileSync(path.join(out.runDir, 'summary.md'), 'utf8');
+    assert.ok(summary.includes('Sentinel: started'), summary);
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('T18 driver: refuses to run when its Sentinel never finishes its first walk (no disk record, no run)', async () => {
+  const d = driverSetup([{ result: R('nothing', null) }], { slices: [], maxSessions: 1 });
+  try {
+    const f = fakeSentinel(d.base, { ready: false });
+    await assert.rejects(() => turbo.run({ ...d.opts, sentinel: true, sentinelBin: f.bin, sentinelReadyMs: 1500 }), /did not finish its first walk/);
+    assert.ok(!fs.existsSync(`${d.opts.env.TURBO_FAKE}.call0.json`), 'a session ran without a ready Sentinel');
+    assert.ok(!fs.existsSync(path.join(d.home, 'driver', 'driver.lock')), 'the lock was left behind');
+    for (let i = 0; i < 50 && !fs.existsSync(`${f.rec}.stopped`); i++) await pause(100);
+    assert.ok(fs.existsSync(`${f.rec}.stopped`), 'the Sentinel that never got ready was left running');
+  } finally {
+    rmrf(d.base);
+  }
 });
 
 runAll('turbo');

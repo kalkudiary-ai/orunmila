@@ -41,6 +41,12 @@ const ROOT = path.resolve(__dirname, '..', '..');
 // referee must never run it from disk (cold verify 4: an edit to it wrote into the worktree; LD117).
 const LEOPARD = require('../leopard-check');
 
+// ON HOLD (LD118): cold verify 5 got a session's code run outside the sandbox through git that runs
+// unsandboxed in the clone (the driver's, and Claude Code's own start-up git status, via a planted
+// .git/commondir), and past the guard by a symlink race on the Write tool. Only O lifts this, after
+// choosing the fix (README, 'On hold'). Changing it is a slice of its own.
+const HOLD = Object.freeze({ lifted: false, decision: 'LD118' });
+
 // --- small helpers -------------------------------------------------------------
 
 const sha = (file) => {
@@ -331,8 +337,10 @@ async function run(opts) {
     sentinel: true,
     sentinelBin: process.env.TURBO_SENTINEL_BIN || 'orunmila',
     sentinelRunning: sentinelRunningFor,
+    held: !HOLD.lifted,
     ...opts,
   };
+  if (o.held) throw new Error('TURBO is on hold (LD118): a session could get code run outside the sandbox (cold verify 5). Read scripts/turbo/README.md, "On hold".');
   const start = o.now();
   const deadline = start + o.hours * 3600 * 1000;
   const runId = stamp(start);
@@ -647,4 +655,4 @@ async function main(argv) {
 
 if (require.main === module) main(process.argv.slice(2)).then((code) => process.exit(code));
 
-module.exports = { run, choose, leopardReferee, summaryText, parseArgs, main, cloneRepo, isLinkedWorktree };
+module.exports = { HOLD, run, choose, leopardReferee, summaryText, parseArgs, main, cloneRepo, isLinkedWorktree };

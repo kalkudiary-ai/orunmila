@@ -1,5 +1,14 @@
 # TURBO
 
+> **ON HOLD (LD118, 2026-11-22). Do not start a run.** The fifth cold verify got a session's code
+> run outside the sandbox: a session plants `.git/commondir` in the clone, and git that runs
+> *unsandboxed* there (the driver's `git status`, the referee's `git diff-tree`, and Claude Code's own
+> start-up `git status` for the next session) then runs the planted hooks, fsmonitor and filters as
+> O. A symlink swapped between the guard's check and the Write tool's write also got 3 of 12 writes
+> outside the clone. `turbo.js run` refuses to start (`HOLD` in `turbo.js`). The fix needs O: run
+> sessions as a separate macOS user that cannot read or write O's files (administrator rights), or
+> accept these routes in writing. Everything below describes the harness as built.
+
 An unattended Leopard run for the Orunmila build (O, 2026-11-22; decisions LD108-LD116 in
 `review/leopard-decisions.md` on `output-1`). It keeps working for the hours you give it. It does
 everything that does not need you, queues what does, and works around it.

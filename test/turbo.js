@@ -481,6 +481,7 @@ function driverSetup(steps, { slices = [], referee = () => ({ shown: true, detai
     finalGates: false,
     caffeinate: false,
     sentinel: false,
+    held: false, // the tests drive the loop; the real hold is T17's
     ...rest,
   };
   const call = (n) => JSON.parse(fs.readFileSync(`${fakeSteps}.call${n}.json`, 'utf8'));
@@ -1001,6 +1002,19 @@ it('T16 clone: links the source\'s node_modules (lint and coverage need its tool
   // The sandbox refuses ps ("operation not permitted", same run); in a clone the driver's lock rules out a peer.
   const flat = session.prompt(session.promptVars({ run: 'R', session: 'S', home: '/h', assignment: { kind: 'strike' } })).replace(/\s+/g, ' ');
   assert.ok(!flat.includes('ps -axo'), 'the prompt still asks for ps');
+});
+
+it('T17 driver: refuses to start until O lifts the hold (cold verify 5 found escapes through unsandboxed git)', async () => {
+  const d = driverSetup([], { slices: [S('a')], hours: 0 });
+  try {
+    await assert.rejects(() => turbo.run({ ...d.opts, held: true }), /on hold/);
+    assert.ok(!fs.existsSync(path.join(d.home, 'driver')), 'a held run left a driver folder');
+    assert.strictEqual(turbo.HOLD.lifted, false, 'the hold is lifted in the code');
+    const readme = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'turbo', 'README.md'), 'utf8');
+    assert.ok(readme.split('\n').slice(0, 12).join(' ').includes('ON HOLD'), 'the README does not open with the hold');
+  } finally {
+    rmrf(d.base);
+  }
 });
 
 it('driver: a HEAD reflog entry that is not a commit (a checkout, even one put back) makes the next session a recovery', async () => {

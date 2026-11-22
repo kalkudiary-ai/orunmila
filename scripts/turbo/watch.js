@@ -223,4 +223,164 @@ function outside({ rows, sid, roots, clone, t0, t1, before, after }) {
   };
 }
 
-module.exports = { sentinelIgnoreText, writeSentinelIgnore, tripwirePaths, fingerprint, changed, readLog, explainer, outside };
+// --- T20: the clone's .git, read by fs (LD129), and its links (LD130) ---------------------
+
+// What a TURBO clone's .git holds, and what git adds in the commands sessions may run (commit,
+// add, reset, read-tree, worktree, an automatic gc). Anything else is not read past: a planted
+// commondir or gitdir sends git to another config and hooks, and the next unsandboxed git runs them.
+const GIT_TOP = new Set(['HEAD', 'config', 'description', 'hooks', 'info', 'objects', 'refs', 'logs', 'index', 'packed-refs', 'COMMIT_EDITMSG', 'ORIG_HEAD', 'FETCH_HEAD', 'shallow', 'branches', 'worktrees', 'gc.pid', 'gc.log']);
+// The config keys a clone is made with (measured on a clone made as cloneRepo makes it, git 2.50.1).
+const CONFIG_KEYS = { core: ['repositoryformatversion', 'filemode', 'bare', 'logallrefupdates', 'ignorecase', 'precomposeunicode', 'symlinks'], turbo: ['source'], branch: ['remote', 'merge'] };
+
+/** Parse a git config file: { entries: [{ section, sub, key, value }], bad: [lines it cannot model] }. */
+function parseGitConfig(text) {
+  const entries = [];
+  const bad = [];
+  let section = null;
+  let sub = null;
+  for (const raw of String(text).split('\n')) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#') || line.startsWith(';')) continue;
+    let m = /^\[\s*([A-Za-z0-9.-]+)(?:\s+"((?:[^"\\]|\\.)*)")?\s*\]\s*(?:[#;].*)?$/.exec(line);
+    if (m) {
+      const name = m[1].toLowerCase();
+      const dot = name.indexOf('.');
+      section = dot < 0 ? name : name.slice(0, dot);
+      sub = m[2] !== undefined ? m[2] : dot < 0 ? null : name.slice(dot + 1);
+      continue;
+    }
+    m = /^([A-Za-z][A-Za-z0-9-]*)\s*(?:=\s*(.*))?$/.exec(line);
+    // A value continued on the next line, or a key before any section, is not modelled: fail closed.
+    if (m && section && !line.endsWith('\\')) {
+      let value = m[2] === undefined ? 'true' : m[2].trim();
+      const q = /^"((?:[^"\\]|\\.)*)"$/.exec(value);
+      if (q) value = q[1].replace(/\\(.)/g, '$1');
+      entries.push({ section, sub, key: m[1].toLowerCase(), value });
+      continue;
+    }
+    bad.push(raw);
+  }
+  return { entries, bad };
+}
+
+/**
+ * The clone's .git, checked by fs only (LD129): { findings, digest, source }. `digest` covers the
+ * config, hooks and info, so a later call shows any change; `source` is turbo.source.
+ */
+function gitSetup(root) {
+  const findings = [];
+  const f = (detail) => findings.push({ check: 'git', detail });
+  const dir = path.join(root, '.git');
+  let st;
+  try {
+    st = fs.lstatSync(dir);
+  } catch {
+    f(`${dir} is missing`);
+    return { findings, digest: null, source: null };
+  }
+  if (st.isSymbolicLink()) f(`${dir} is a symlink`);
+  else if (!st.isDirectory()) f(`${dir} is a file, not a directory: a linked worktree, whose .git is shared with another checkout (LD116), or a planted gitfile`);
+  if (findings.length) return { findings, digest: null, source: null };
+
+  for (const n of fs.readdirSync(dir).sort()) {
+    if (GIT_TOP.has(n) || n.endsWith('.lock')) continue;
+    f(`${path.join(dir, n)} is not part of a TURBO clone's .git${n === 'commondir' || n === 'gitdir' ? `: a planted ${n} sends git to another config and hooks` : ''}`);
+  }
+  // No link anywhere in it but the object store (whose files git only reads as data).
+  const stack = [dir];
+  while (stack.length) {
+    const d = stack.pop();
+    let ents = [];
+    try {
+      ents = fs.readdirSync(d, { withFileTypes: true });
+    } catch {}
+    for (const e of ents) {
+      const p = path.join(d, e.name);
+      if (e.isSymbolicLink()) f(`${p} is a symlink`);
+      else if (e.isDirectory() && p !== path.join(dir, 'objects')) stack.push(p);
+    }
+  }
+  for (const a of ['alternates', 'http-alternates']) if (fs.existsSync(path.join(dir, 'objects', 'info', a))) f(`${path.join(dir, 'objects', 'info', a)} sends git to another object store`);
+
+  let text = '';
+  try {
+    text = fs.readFileSync(path.join(dir, 'config'), 'utf8');
+  } catch (err) {
+    f(`cannot read ${path.join(dir, 'config')}: ${err.code}`);
+  }
+  const { entries, bad } = parseGitConfig(text);
+  for (const b of bad) f(`the config has a line this check cannot read, and git may: ${b.trim().slice(0, 80)}`);
+  for (const e of entries) {
+    const ok = CONFIG_KEYS[e.section];
+    const name = `${e.section}${e.sub !== null ? `.${e.sub}` : ''}.${e.key}`;
+    if (!ok || !ok.includes(e.key) || (e.section !== 'branch' && e.sub !== null)) f(`the config sets ${name}, which a TURBO clone is not made with`);
+  }
+  const src = entries.find((e) => e.section === 'turbo' && e.sub === null && e.key === 'source');
+
+  const parts = [text];
+  for (const sub of ['hooks', 'info']) {
+    let names = [];
+    try {
+      names = fs.readdirSync(path.join(dir, sub)).sort();
+    } catch {}
+    for (const n of names) {
+      const p = path.join(dir, sub, n);
+      const s = fs.lstatSync(p);
+      if (sub === 'hooks' && !(s.isFile() && n.endsWith('.sample'))) f(`${p} is a hook git would run`);
+      parts.push(`${sub}/${n}:${s.isFile() ? digest(fs.readFileSync(p)) : s.isDirectory() ? 'dir' : 'other'}`);
+    }
+  }
+  return { findings, digest: digest(parts.join('\0')), source: src ? src.value : null };
+}
+
+/** The links cloneRepo makes, at the targets the source has: { relPath: target }. */
+function cloneLinks(source) {
+  const out = {};
+  if (!source) return out;
+  try {
+    out.node_modules = fs.realpathSync(path.join(source, 'node_modules'));
+  } catch {}
+  for (const f of ['CLAUDE.md', path.join('docs', 'AGENT_OPERATING_RULES.md')]) {
+    try {
+      out[f] = fs.readlinkSync(path.join(source, f));
+    } catch {}
+  }
+  return out;
+}
+
+/** Every link in the clone (not under .git) whose target is outside it, but the made ones (LD130). */
+function linkScan(root, allowed = {}) {
+  const findings = [];
+  let scanned = 0;
+  const realRoot = fs.realpathSync(root);
+  const stack = [root];
+  while (stack.length) {
+    const d = stack.pop();
+    let ents = [];
+    try {
+      ents = fs.readdirSync(d, { withFileTypes: true });
+    } catch {}
+    for (const e of ents) {
+      const p = path.join(d, e.name);
+      if (d === root && e.name === '.git') continue;
+      scanned++;
+      if (e.isSymbolicLink()) {
+        const target = fs.readlinkSync(p);
+        let real;
+        try {
+          real = fs.realpathSync(p);
+        } catch {
+          real = path.resolve(fs.realpathSync(d), target); // dangling: where it would land
+        }
+        if (inside(real, realRoot)) continue;
+        const rel = path.relative(root, p);
+        if (Object.prototype.hasOwnProperty.call(allowed, rel) && allowed[rel] === target) continue;
+        const made = Object.prototype.hasOwnProperty.call(allowed, rel) ? ` (it was made to point at ${allowed[rel]})` : '';
+        findings.push({ check: 'links', detail: `${p} is a link to ${target}, outside the clone${made}` });
+      } else if (e.isDirectory()) stack.push(p);
+    }
+  }
+  return { findings, scanned };
+}
+
+module.exports = { sentinelIgnoreText, writeSentinelIgnore, tripwirePaths, fingerprint, changed, readLog, explainer, outside, parseGitConfig, gitSetup, cloneLinks, linkScan };

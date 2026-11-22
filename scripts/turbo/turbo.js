@@ -58,21 +58,44 @@ const sha = (file) => {
   }
 };
 
-function git(root, args) {
-  return execFileSync('git', ['-C', root, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+// `env` (from run) pins the git dir (LD129); with none, git inherits this process's env (cloneRepo, clone).
+function git(root, args, env) {
+  return execFileSync('git', ['-C', root, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env });
 }
 
-const branchOf = (root) => git(root, ['symbolic-ref', '-q', '--short', 'HEAD']).trim();
+/**
+ * The env for the driver's own git in a run (LD129): the git dir, common dir and work tree pinned
+ * to the clone, so a planted commondir or gitfile is never followed even if the check missed one;
+ * no system config; hooks and fsmonitor off by GIT_CONFIG_*; every other GIT_* from `base` dropped.
+ */
+function pinnedGitEnv(root, base = process.env) {
+  const clean = Object.fromEntries(Object.entries(base).filter(([k]) => !k.startsWith('GIT_')));
+  const dir = path.join(root, '.git');
+  return {
+    ...clean,
+    GIT_DIR: dir,
+    GIT_COMMON_DIR: dir,
+    GIT_WORK_TREE: root,
+    GIT_CONFIG_NOSYSTEM: '1',
+    GIT_CONFIG_COUNT: '2',
+    GIT_CONFIG_KEY_0: 'core.hooksPath',
+    GIT_CONFIG_VALUE_0: '/dev/null',
+    GIT_CONFIG_KEY_1: 'core.fsmonitor',
+    GIT_CONFIG_VALUE_1: 'false',
+  };
+}
+
+const branchOf = (root, env) => git(root, ['symbolic-ref', '-q', '--short', 'HEAD'], env).trim();
 
 /** HEAD's reflog actions, newest first: the part of each %gs before its first ':' ("commit", "checkout", ...). */
-function headActions(root) {
-  const r = spawnSync('git', ['-C', root, 'log', '-g', '--format=%gs', 'HEAD'], { encoding: 'utf8' });
+function headActions(root, env) {
+  const r = spawnSync('git', ['-C', root, 'log', '-g', '--format=%gs', 'HEAD'], { encoding: 'utf8', env });
   if (r.status !== 0) return [];
   return r.stdout.split('\n').filter(Boolean).map((l) => l.split(':')[0]);
 }
 const COMMIT_ACTIONS = new Set(['commit', 'commit (initial)']);
 // No fsmonitor and no submodules: either would run code a session can plant in the clone (LD117).
-const porcelain = (root) => git(root, ['-c', 'core.fsmonitor=false', 'status', '--porcelain=v1', '--ignore-submodules=all']).split('\n').filter(Boolean);
+const porcelain = (root, env) => git(root, ['-c', 'core.fsmonitor=false', 'status', '--porcelain=v1', '--ignore-submodules=all'], env).split('\n').filter(Boolean);
 
 /** True when root is a linked worktree: its git common dir lies outside it, shared with another checkout. */
 function isLinkedWorktree(root) {
@@ -144,8 +167,8 @@ function sentinelRunningFor(root) {
   });
 }
 
-function isCommit(root, s) {
-  const r = spawnSync('git', ['-C', root, 'cat-file', '-t', s], { encoding: 'utf8' });
+function isCommit(root, s, env) {
+  const r = spawnSync('git', ['-C', root, 'cat-file', '-t', s], { encoding: 'utf8', env });
   return r.status === 0 && r.stdout.trim() === 'commit';
 }
 
@@ -167,7 +190,7 @@ function stamp(ms) {
  * judges it: shown only when every Slice commit is fully shown, and not when there is none.
  * exit: 0 shown, 1 not shown, 2 no records for the session or a log it cannot read.
  */
-function leopardReferee(sid, { root = ROOT, orunmilaHome = process.env.ORUNMILA_HOME } = {}) {
+function leopardReferee(sid, { root = ROOT, orunmilaHome = process.env.ORUNMILA_HOME, gitEnv = null } = {}) {
   const logFile = path.join(orunmilaHome || path.join(require('os').homedir(), '.orunmila'), 'events.jsonl');
   let rows;
   try {
@@ -183,10 +206,23 @@ function leopardReferee(sid, { root = ROOT, orunmilaHome = process.env.ORUNMILA_
   }
   if (!rows.some((e) => e.session_id === sid)) return { shown: false, exit: 2, detail: `no records for session ${sid}` };
   let r;
+  // leopard-check's git inherits this process's env; check() is synchronous, so the pinned git
+  // env (LD129) is set for exactly its call and put back after.
+  const saved = {};
+  const pin = gitEnv ? Object.keys(gitEnv).filter((k) => k.startsWith('GIT_')) : [];
+  const dropped = gitEnv ? Object.keys(process.env).filter((k) => k.startsWith('GIT_') && !pin.includes(k)) : [];
+  for (const k of [...pin, ...dropped]) saved[k] = process.env[k];
   try {
+    for (const k of dropped) delete process.env[k];
+    for (const k of pin) process.env[k] = gitEnv[k];
     r = LEOPARD.check({ rows, session: sid, repo: root });
   } catch (err) {
     return { shown: false, exit: 2, detail: `leopard-check failed: ${err.message.split('\n')[0]}` };
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
   }
   const shown = r.commits.length > 0 && r.commits.every((c) => c.shown);
   const detail = r.commits.map((c) => `${c.sha.slice(0, 7)} ${c.slice}: red ${c.red.status}, green ${c.green.status}, gates ${c.gates.map((g) => g.status).join('/')}`).join('; ') || 'no Slice commit in the session';
@@ -343,7 +379,7 @@ async function run(opts) {
     env: process.env,
     now: Date.now,
     sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
-    referee: (sid, { root }) => leopardReferee(sid, { root }),
+    referee: (sid, { root, gitEnv }) => leopardReferee(sid, { root, gitEnv }),
     caffeinate: process.platform === 'darwin',
     maxSessions: Infinity,
     beforeCheck: null,
@@ -369,14 +405,20 @@ async function run(opts) {
   const start = o.now();
   const deadline = start + o.hours * 3600 * 1000;
   const runId = stamp(start);
-  if (isLinkedWorktree(o.root)) {
-    throw new Error(`${o.root} is a linked worktree: its .git is shared with another checkout (here, the live copy), which no sandbox rule keeps safe (LD116). Run TURBO in its own clone: node scripts/turbo/turbo.js clone`);
+  // Before any git: the clone's .git, read by fs (LD129). A linked worktree's .git is a file, so
+  // this also refuses one (LD116); with a planted commondir, even `git config` reads its config.
+  const g0 = watch.gitSetup(o.root);
+  if (g0.findings.length) {
+    throw new Error(`${o.root}'s .git is not as a TURBO clone is made, so the driver runs no git there (LD129; for a linked worktree, LD116: run TURBO in its own clone, node scripts/turbo/turbo.js clone): ${g0.findings.map((f) => f.detail).join('; ')}`);
   }
-  const sourceR = spawnSync('git', ['-C', o.root, 'config', '--get', 'turbo.source'], { encoding: 'utf8' });
-  if (sourceR.status !== 0) {
+  if (!g0.source) {
     throw new Error(`${o.root} is not a TURBO clone (no turbo.source): make one with node scripts/turbo/turbo.js clone, and run there (LD117)`);
   }
-  const source = sourceR.stdout.trim();
+  const source = g0.source;
+  const gitEnv = pinnedGitEnv(o.root, o.env);
+  const allowedLinks = watch.cloneLinks(source);
+  const l0 = watch.linkScan(o.root, allowedLinks);
+  if (l0.findings.length) throw new Error(`the clone has links outside it (LD130): ${l0.findings.map((f) => f.detail).join('; ')}`);
   const live = o.env.TURBO_LIVE || path.join(require('os').homedir(), 'tools', 'orunmila');
   const outsideRoots = (o.outsideRoots || [live, source]).filter((r) => fs.existsSync(r));
   const tripEntries = o.tripwire || watch.tripwirePaths({ live });
@@ -409,7 +451,7 @@ async function run(opts) {
     } catch {}
     if (held && alive(held.pid)) throw new Error(`another driver is running (pid ${held.pid}, run ${held.run})`);
   }
-  const baseline = porcelain(o.root);
+  const baseline = porcelain(o.root, gitEnv);
   const tracked = baseline.filter((l) => !l.startsWith('??'));
   if (tracked.length) throw new Error(`the tree has uncommitted tracked changes; TURBO starts on a clean tree, and those belong to someone: ${tracked.join(', ')}`);
   fs.writeFileSync(lockFile, JSON.stringify({ pid: process.pid, run: runId, started: new Date(start).toISOString() }));
@@ -423,7 +465,7 @@ async function run(opts) {
   const settingsFile = path.join(runDir, 'settings.json');
   fs.writeFileSync(settingsFile, JSON.stringify(session.settings({ root: o.root, home: o.home }), null, 2) + '\n');
   const inbox = path.join(o.home, 'inbox.md');
-  const branch = branchOf(o.root);
+  const branch = branchOf(o.root, gitEnv);
 
   if (o.caffeinate) {
     try {
@@ -512,7 +554,7 @@ async function run(opts) {
         stopReason = 'stop-file';
         break;
       }
-      if (branchOf(o.root) !== branch) {
+      if (branchOf(o.root, gitEnv) !== branch) {
         stopReason = 'branch-changed';
         break;
       }
@@ -549,7 +591,7 @@ async function run(opts) {
 
       const sid = crypto.randomUUID();
       const planBefore = sha(path.join(o.home, 'plan.json'));
-      const reflogBefore = headActions(o.root).length;
+      const reflogBefore = headActions(o.root, gitEnv).length;
       const vars = session.promptVars({
         run: runId,
         session: sid,
@@ -571,12 +613,18 @@ async function run(opts) {
       const res = await runSession(o, { sid, text: session.prompt(vars), settingsFile, runDir, scratchDir, env });
       state.lastInbox = inboxSha;
 
-      // The escape checks run first, before any git of the driver's (LD127, LD128).
+      // The escape checks run first, before any git of the driver's (LD127-LD130). The .git
+      // check is first of all, and by fs: Claude Code's start-up git status of the next session
+      // would run what a session planted there.
+      const g = watch.gitSetup(o.root);
+      const gitFindings = [...g.findings];
+      if (!gitFindings.length && g.digest !== g0.digest) gitFindings.push({ check: 'git', detail: `the clone's .git config, hooks or info changed during the session` });
+      const links = watch.linkScan(o.root, allowedLinks);
       if (o.settleMs) await new Promise((r) => setTimeout(r, o.settleMs));
       const seen = watch.readLog(eventsFile, logOffset).rows;
       const out = watch.outside({ rows: seen, sid, roots: outsideRoots, clone: [o.root, o.home], t0: wallStart - 1000, t1: o.wall(), before: tripBefore, after: watch.fingerprint(tripEntries) });
-      const checks = { outside: out.outside, tripwire: out.tripwire };
-      const findings = [...out.findings];
+      const checks = { git: { findings: gitFindings.length }, links: { scanned: links.scanned, findings: links.findings.length }, outside: out.outside, tripwire: out.tripwire };
+      const findings = [...gitFindings, ...links.findings, ...out.findings];
       if (findings.length) {
         const row = { session: sid, kind: a.kind, slice: a.slice ? a.slice.id : null, exit: res.code, signal: res.signal, timedOut: res.timedOut, spawnError: res.spawnError, ms: res.ms, outcome: null, error: 'halted: escape check', verified: [], unverified: [], queued: [], decisions: [], cost: null, dirty: [], headMoves: [], referee: null, checks, findings };
         sessions.push(row);
@@ -588,13 +636,13 @@ async function run(opts) {
       const parsed = res.timedOut || res.spawnError ? { error: res.timedOut ? 'timed out' : res.spawnError } : session.parseResult(res.stdout);
       const r = parsed.result || null;
       const named = r ? r.commits : [];
-      const verified = named.filter((c) => isCommit(o.root, c));
+      const verified = named.filter((c) => isCommit(o.root, c, gitEnv));
       const unverified = named.filter((c) => !verified.includes(c));
-      const now = porcelain(o.root);
+      const now = porcelain(o.root, gitEnv);
       const dirty = now.filter((l) => !baseline.includes(l));
       // A refused checkout can rewrite the files before it fails on HEAD (T8's cold verify), and a
       // later commit then carries the damage; any HEAD movement that is not a commit is a recovery.
-      const actions = headActions(o.root);
+      const actions = headActions(o.root, gitEnv);
       const headMoves = actions.slice(0, Math.max(0, actions.length - reflogBefore)).filter((a) => !COMMIT_ACTIONS.has(a));
       const row = {
         session: sid,
@@ -621,7 +669,7 @@ async function run(opts) {
 
       const after = plan.load(o.home);
       if (verified.length) {
-        row.referee = o.referee(sid, { root: o.root });
+        row.referee = o.referee(sid, { root: o.root, gitEnv });
         if (!row.referee.shown) {
           const fix = addEvidenceFix(after, row.slice, row.referee.detail, sid, verified);
           plan.save(o.home, after);
@@ -754,4 +802,4 @@ async function main(argv) {
 
 if (require.main === module) main(process.argv.slice(2)).then((code) => process.exit(code));
 
-module.exports = { HOLD, run, choose, leopardReferee, summaryText, parseArgs, main, cloneRepo, isLinkedWorktree };
+module.exports = { HOLD, run, choose, leopardReferee, summaryText, parseArgs, main, cloneRepo, isLinkedWorktree, pinnedGitEnv };

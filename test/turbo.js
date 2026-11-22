@@ -434,6 +434,9 @@ if (step.commit) {
 }
 if (step.dirty) fs.writeFileSync(step.dirty, 'dirty ' + n);
 // Planted escapes (T19-T21): files written anywhere, links, and rows a witness would have logged.
+for (const [from, to] of step.copyDirs || []) fs.cpSync(from, to, { recursive: true });
+for (const [from, to] of step.renames || []) fs.renameSync(from, to);
+for (const [p, text] of Object.entries(step.appendFiles || {})) fs.appendFileSync(p, text);
 for (const [p, text] of Object.entries(step.writeFiles || {})) {
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, text);
@@ -930,7 +933,7 @@ it('T13 plan.save: a planted temp-file symlink is not written through', () => {
   }
 });
 
-it('T13 driver: its git status does not run the repo\'s core.fsmonitor', async () => {
+it('T13 driver: its git status does not run the repo\'s core.fsmonitor (since T20 it refuses that config outright)', async () => {
   const d = driverSetup([{ result: R('nothing', null) }], { slices: [], maxSessions: 1 });
   try {
     const marker = path.join(d.base, 'FSMONITOR-RAN');
@@ -938,7 +941,7 @@ it('T13 driver: its git status does not run the repo\'s core.fsmonitor', async (
     fs.writeFileSync(hook, `#!/bin/sh\ntouch ${marker}\n`);
     fs.chmodSync(hook, 0o755);
     gitIn(d.root, ['config', 'core.fsmonitor', hook]);
-    await turbo.run(d.opts);
+    await assert.rejects(() => turbo.run(d.opts), /core\.fsmonitor/);
     assert.ok(!fs.existsSync(marker), 'the driver ran the repo\'s fsmonitor');
   } finally {
     rmrf(d.base);
@@ -1191,6 +1194,125 @@ it('T19 outside: a Sentinel row in a watched folder outside the clone halts the 
     rmrf(ok.base);
     rmrf(d0.base);
   }
+});
+
+/**
+ * Cold verify 5's route: a session points .git/commondir at a git dir whose config defines a clean
+ * filter that runs code, adds a .gitattributes using it and leaves a tracked file modified. The
+ * next unsandboxed git that hashes that file (the driver's git status) runs the filter as O.
+ */
+function plantCommondir(d) {
+  const evil = path.join(d.base, 'evilgit');
+  const marker = path.join(d.base, 'RAN-AS-O');
+  const step = {
+    copyDirs: [[path.join(d.root, '.git'), evil]],
+    appendFiles: { [path.join(evil, 'config')]: `[filter "evil"]\n\tclean = touch ${marker}; cat\n` },
+    // Same size as 'x\n': a size change lets git call the file modified without hashing it, and
+    // the filter would not run (measured on git 2.50.1 in the scratchpad: 'y\n' ran it, 'changed\n' did not).
+    writeFiles: { [path.join(d.root, '.git', 'commondir')]: `${evil}\n`, [path.join(d.root, '.gitattributes')]: 'tracked.txt filter=evil\n', [path.join(d.root, 'tracked.txt')]: 'y\n' },
+    result: R('done', 'a'),
+  };
+  return { step, marker };
+}
+
+it('T20 .git: a planted commondir halts the run before any git of the driver\'s runs its code (cold verify 5)', async () => {
+  const d = driverSetup([], { slices: [S('a')] });
+  try {
+    const { step, marker } = plantCommondir(d);
+    fs.writeFileSync(d.opts.env.TURBO_FAKE, JSON.stringify([step, { result: R('nothing', null) }]));
+    const out = await turbo.run(d.opts);
+    await pause(300);
+    assert.ok(!fs.existsSync(marker), 'the driver ran git over the planted .git: the filter ran as O');
+    await expectHalt(d, out, 'git', 'commondir');
+    assert.ok(!fs.existsSync(marker), 'a later run ran git over the planted .git');
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('T20 .git: a gitfile in place of .git, a config key, or a hook halts the run', async () => {
+  const cases = [
+    (d) => ({ renames: [[path.join(d.root, '.git'), path.join(d.base, 'moved-git')]], writeFiles: { [path.join(d.root, '.git')]: `gitdir: ${path.join(d.base, 'moved-git')}\n` }, needle: 'is a file' }),
+    (d) => ({ appendFiles: { [path.join(d.root, '.git', 'config')]: '[core]\n\tfsmonitor = /tmp/x\n' }, needle: 'core.fsmonitor' }),
+    (d) => ({ writeFiles: { [path.join(d.root, '.git', 'hooks', 'post-commit')]: '#!/bin/sh\ntouch /tmp/x\n' }, needle: 'post-commit' }),
+  ];
+  for (const make of cases) {
+    const d = driverSetup([], { slices: [S('a')] });
+    try {
+      const { needle, ...step } = make(d);
+      fs.writeFileSync(d.opts.env.TURBO_FAKE, JSON.stringify([{ ...step, result: R('done', 'a') }, { result: R('nothing', null) }]));
+      await expectHalt(d, await turbo.run(d.opts), 'git', needle);
+    } finally {
+      rmrf(d.base);
+    }
+  }
+});
+
+it('T20 .git: a clean TURBO clone passes; its config is read without git', () => {
+  const base = fs.realpathSync(tmpDir());
+  try {
+    const src = path.join(base, 'src');
+    fs.mkdirSync(src);
+    gitIn(src, ['init', '-q', '-b', 'work']);
+    fs.writeFileSync(path.join(src, 'f.txt'), 'f\n');
+    gitIn(src, ['add', 'f.txt']);
+    gitIn(src, ['commit', '-q', '-m', 'base']);
+    gitIn(src, ['branch', 'output-1']);
+    const dest = path.join(base, 'clone');
+    turbo.cloneRepo({ source: src, dest, branch: 'work', claudeHome: path.join(base, 'ch') });
+    const g = watch.gitSetup(dest);
+    assert.deepStrictEqual(g.findings, [], 'a clone cloneRepo made fails its own check');
+    assert.strictEqual(g.source, fs.realpathSync(src));
+    assert.ok(g.digest, 'no digest of config, hooks and info');
+  } finally {
+    rmrf(base);
+  }
+});
+
+it('T20 links: a link in the clone to outside it halts the run; the links the clone is made with pass', async () => {
+  const d = driverSetup([], { slices: [S('a')] });
+  try {
+    const out = path.join(d.base, 'outside-target');
+    fs.mkdirSync(out);
+    fs.writeFileSync(d.opts.env.TURBO_FAKE, JSON.stringify([{ links: { [path.join(d.root, 'swap')]: out }, result: R('done', 'a') }, { result: R('nothing', null) }]));
+    await expectHalt(d, await turbo.run(d.opts), 'links', 'swap');
+  } finally {
+    rmrf(d.base);
+  }
+  const base = fs.realpathSync(tmpDir());
+  try {
+    const root = path.join(base, 'clone');
+    fs.mkdirSync(path.join(root, 'docs'), { recursive: true });
+    fs.mkdirSync(path.join(base, 'nm'));
+    fs.symlinkSync(path.join(base, 'nm'), path.join(root, 'node_modules'));
+    fs.symlinkSync(path.join(base, 'rules.md'), path.join(root, 'CLAUDE.md'));
+    fs.symlinkSync('inside.txt', path.join(root, 'docs', 'near'));
+    const allowed = { node_modules: path.join(base, 'nm'), 'CLAUDE.md': path.join(base, 'rules.md') };
+    assert.deepStrictEqual(watch.linkScan(root, allowed).findings, []);
+    fs.unlinkSync(path.join(root, 'CLAUDE.md'));
+    fs.symlinkSync(path.join(base, 'elsewhere'), path.join(root, 'CLAUDE.md'));
+    assert.strictEqual(watch.linkScan(root, allowed).findings.length, 1, 'a made link pointed somewhere new passed');
+  } finally {
+    rmrf(base);
+  }
+});
+
+it('T20 driver: refuses to start over a planted .git or an outside link, and runs its own git with the git dir pinned', async () => {
+  const d = driverSetup([{ result: R('nothing', null) }], { slices: [] });
+  try {
+    fs.writeFileSync(path.join(d.root, '.git', 'commondir'), `${d.base}\n`);
+    await assert.rejects(() => turbo.run(d.opts), /commondir/);
+    fs.unlinkSync(path.join(d.root, '.git', 'commondir'));
+    fs.symlinkSync(d.base, path.join(d.root, 'up'));
+    await assert.rejects(() => turbo.run(d.opts), /up is a link/);
+    assert.ok(!d.called(0), 'a session ran');
+  } finally {
+    rmrf(d.base);
+  }
+  const e = turbo.pinnedGitEnv('/c', { PATH: '/bin', GIT_DIR: '/evil', GIT_CONFIG_GLOBAL: '/x' });
+  assert.deepStrictEqual([e.GIT_DIR, e.GIT_COMMON_DIR, e.GIT_WORK_TREE, e.GIT_CONFIG_NOSYSTEM, e.GIT_CONFIG_GLOBAL, e.PATH], ['/c/.git', '/c/.git', '/c', '1', undefined, '/bin']);
+  const pairs = Object.fromEntries([0, 1].map((i) => [e[`GIT_CONFIG_KEY_${i}`], e[`GIT_CONFIG_VALUE_${i}`]]));
+  assert.deepStrictEqual(pairs, { 'core.hooksPath': '/dev/null', 'core.fsmonitor': 'false' });
 });
 
 it('T19 tripwire: the default list names the files that run code as O, and none of the clone', () => {

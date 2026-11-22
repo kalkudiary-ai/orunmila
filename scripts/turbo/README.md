@@ -140,6 +140,17 @@ Any finding **halts** the run (LD127): no more git, no next session, a blocking 
 `approvals.md`, the findings at the top of `summary.md`, and `.turbo/driver/HALT.json`. A later `run`
 refuses while HALT.json exists. Read it, run no git in that clone, and make a new clone.
 
+- **The clone's `.git`** (T20, LD129), checked first, by reading files, never by git (a planted
+  `.git` runs its code at the next unsandboxed git, Claude Code's start-up `git status` for the next
+  session among them; cold verify 5's route, reproduced in `test/turbo.js`): `.git` is a directory,
+  not a gitfile or link; its top-level entries come from a fixed list (no `commondir`, no `gitdir`);
+  no link in it outside `objects/`; no object alternates; the config holds only the keys a TURBO clone
+  is made with (no include, hooksPath, fsmonitor or filter); `hooks/` holds only `*.sample`; and config,
+  hooks and info are unchanged since the run started. The same check runs before the driver's first
+  git at start, so a run never starts over a planted `.git`. The driver's own git also runs with the
+  git dir, common dir and work tree pinned to the clone, no system config, and hooks and fsmonitor off.
+- **Links** (T20, LD130): any link in the clone whose target is outside it is a finding, except
+  `node_modules`, `CLAUDE.md` and `docs/AGENT_OPERATING_RULES.md` at the targets the source has.
 - **Outside the clone** (T19, LD128): every Sentinel row under the live copy and the source worktree
   in the session's window, and a tripwire of named files that run code as you, read by sha256: the
   shell start-up files, `~/.gitconfig`, `~/.config/git`, `~/.ssh/config` and `authorized_keys`,
@@ -151,7 +162,9 @@ refuses while HALT.json exists. Read it, run no git in that clone, and make a ne
   `ORUNMILA_HOME` set the driver starts its own, since a foreign one logs elsewhere.
 
 Limits: these catch an escape after the fact, within one session, and stop the run; they do not
-prevent it. A session that broke out on purpose could also tamper with Orunmila's log, which only a
+prevent it. Git run outside the sandbox *during* a session is not covered by the `.git` check:
+Orunmila's hooks and the guard run none (their code read for it), but whether Claude Code itself runs
+git mid-session is not checked. A session that broke out on purpose could also tamper with Orunmila's log, which only a
 separate macOS user would stop. A file off the tripwire list is caught only by the both-records
 check. `~/.claude/plugins` is not on it, because Claude Code rewrites its caches and marketplace clone
 itself. Your own edits in the worktree or to these files during a run halt it.

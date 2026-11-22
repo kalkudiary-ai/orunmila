@@ -5,7 +5,17 @@
  * v4 station 1, line 343: one intake per machine; design D-I 4.1, 4.2(b), 4.7).
  * It runs one router (router.js) behind a Unix socket Orunmila owns, and is the
  * only thing that writes session logs. Command hooks reach it through a small
- * sender (slice B2); HTTP hooks with pid pinning are a later slice.
+ * sender (slice B2); Claude Code's HTTP hooks post to 127.0.0.1:<httpPort>, each
+ * session pinned to the posting process (slice H1, LD139; peer.js).
+ *   createServer({ ..., httpPort = null, httpRetryMs = 1000, lookups })
+ *     httpPort  null: no HTTP channel; 0: any free port (tests). A POST body is
+ *               a hook payload, routed on channel `http` with the client's pid;
+ *               the answer is 200 with an empty body, a tampered one included.
+ *               A port another process holds is a squat (test 83, TCP form):
+ *               written to the error log with the holder's pid where lsof
+ *               gives it, tried again every httpRetryMs, and once taken back a
+ *               gap in every held session names it. start() and status() give
+ *               { port, listening, squat }.
  *
  *   intakePaths(home)   { dir, sock, lock, takeover, key, errors, held, out } under <home>/intake
  *   readInstallKey(home) the install's key for keyed `.env` fingerprints (line
@@ -38,8 +48,10 @@
 
 const fs = require('fs');
 const net = require('net');
+const http = require('http');
 const path = require('path');
 const crypto = require('crypto');
+const peer = require('./peer');
 
 const MAX_LINE = 32 * 1024 * 1024;
 const SOCK_MAX = 103; // sun_path is 104 bytes on macOS, 108 on Linux, with its NUL
@@ -169,13 +181,115 @@ function alive(pid) {
   }
 }
 
-function createServer({ home, router, pollMs = 100, statusTimeoutMs = 1000, maxLine = MAX_LINE }) {
+function createServer({ home, router, pollMs = 100, statusTimeoutMs = 1000, maxLine = MAX_LINE, httpPort = null, httpRetryMs = 1000, lookups = peer }) {
   const p = intakePaths(home);
   let server = null;
   let timer = null;
   let startedAt = null;
   let lockHeld = false;
   const conns = new Set();
+  // The HTTP channel (slice H1, LD139): Claude Code's own HTTP hooks post to
+  // 127.0.0.1:<httpPort>. Each connection's client pid is looked up once (lsof);
+  // the router pins the session to it (NF49). `squat`: false, or the pid (null if
+  // not known) of the process that held the port when the intake wanted it.
+  let httpServer = null;
+  let httpTimer = null;
+  let httpState = null;
+  const pids = new WeakMap(); // socket -> Promise<pid | null>
+
+  function onHttp(req, res) {
+    const answer = (code) => {
+      res.statusCode = code;
+      res.end(); // an empty 2xx is success with no output for Claude Code
+    };
+    if (req.method !== 'POST') {
+      router.error(`a ${req.method} request reached the intake's HTTP port; only POST is read`, null);
+      answer(405);
+      return;
+    }
+    const sock = req.socket;
+    if (!pids.has(sock)) pids.set(sock, lookups.peerPid(sock)); // while the connection is open
+    const chunks = [];
+    let size = 0;
+    let over = false;
+    req.on('data', (d) => {
+      if (over) return;
+      size += d.length;
+      if (size > maxLine) {
+        over = true;
+        router.error(`a request over ${maxLine} bytes reached the intake's HTTP port: it was not read`, null);
+        answer(413);
+        req.destroy();
+        return;
+      }
+      chunks.push(d);
+    });
+    req.on('end', async () => {
+      if (over) return;
+      const text = Buffer.concat(chunks).toString('utf8');
+      let payload;
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        router.error("a request body that is not JSON reached the intake's HTTP port", text);
+        answer(400);
+        return;
+      }
+      if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
+        router.error("a request body that is not a JSON object reached the intake's HTTP port", payload);
+        answer(400);
+        return;
+      }
+      const pid = await pids.get(sock);
+      try {
+        const out = router.payload(payload, { channel: 'http', pid });
+        for (const r of (out && out.results) || []) {
+          if (r && r.tampered === null) router.error(`a tampered mark could not be written to the session's log: ${r.refused}`, payload);
+        }
+      } catch (e) {
+        router.error(`the router failed on a payload: ${e.message}`, payload);
+      }
+      answer(200); // the same answer for a tampered payload: a forger learns nothing
+    });
+  }
+
+  async function listenHttp() {
+    httpTimer = null;
+    if (!server) return;
+    const s = http.createServer(onHttp);
+    try {
+      await new Promise((resolve, reject) => {
+        s.once('error', reject);
+        s.listen(httpState.port, '127.0.0.1', () => {
+          s.off('error', reject);
+          resolve();
+        });
+      });
+    } catch (e) {
+      if (e.code !== 'EADDRINUSE') {
+        router.error(`the intake's HTTP port 127.0.0.1:${httpState.port} could not be opened (${e.code || e.message}); it is tried again every ${httpRetryMs} ms`, null);
+      } else if (httpState.squat === false) {
+        httpState.squat = lookups.holderPid(httpState.port);
+        router.error(
+          `squat: another process (${httpState.squat === null ? 'pid not known' : `pid ${httpState.squat}`}) holds the intake's HTTP port 127.0.0.1:${httpState.port}, so Claude Code's HTTP hook payloads go to it until the intake takes the port back; tried again every ${httpRetryMs} ms`,
+          null,
+        );
+      }
+      if (server) httpTimer = setTimeout(listenHttp, httpRetryMs);
+      return;
+    }
+    if (!server) {
+      s.close();
+      return;
+    }
+    s.on('error', (e) => router.error(`the intake's HTTP port failed: ${e.code || e.message}`, null));
+    httpServer = s;
+    httpState.port = s.address().port;
+    httpState.listening = true;
+    if (httpState.squat !== false) {
+      router.gap(`HTTP hook payloads sent to 127.0.0.1:${httpState.port} while another process (${httpState.squat === null ? 'pid not known' : `pid ${httpState.squat}`}) held it may have gone to that process (test 83)`);
+    }
+  }
 
   // The lock (B1f, LD136). It is placed whole, so it always names its holder. A
   // dead holder's lock is removed only by the starter holding the takeover lock
@@ -227,7 +341,7 @@ function createServer({ home, router, pollMs = 100, statusTimeoutMs = 1000, maxL
     if (lockPid(p.lock) === process.pid) fs.rmSync(p.lock, { force: true });
   }
 
-  const status = () => ({ intake: 'orunmila', pid: process.pid, started_at: startedAt, held: router.held(), socket: p.sock });
+  const status = () => ({ intake: 'orunmila', pid: process.pid, started_at: startedAt, held: router.held(), socket: p.sock, http: httpState && { ...httpState } });
 
   function handle(line, c) {
     if (!line.trim()) return;
@@ -323,7 +437,11 @@ function createServer({ home, router, pollMs = 100, statusTimeoutMs = 1000, maxL
           router.error(`the intake's poll failed: ${e.message}`, null);
         }
       }, pollMs);
-      return { ok: true, squat, resumed, sock: p.sock };
+      if (httpPort !== null) {
+        httpState = { port: httpPort, listening: false, squat: false };
+        await listenHttp();
+      }
+      return { ok: true, squat, resumed, sock: p.sock, http: httpState && { ...httpState } };
     } catch (e) {
       releaseLock();
       return { ok: false, code: 'error', reason: e.message };
@@ -333,11 +451,19 @@ function createServer({ home, router, pollMs = 100, statusTimeoutMs = 1000, maxL
   async function stop(reason) {
     if (!server) return null;
     clearInterval(timer);
+    clearTimeout(httpTimer);
     const out = router.stop(reason);
     const s = server;
     server = null;
     for (const c of conns) c.destroy();
     await new Promise((resolve) => s.close(resolve));
+    if (httpServer) {
+      const h = httpServer;
+      httpServer = null;
+      httpState.listening = false;
+      h.closeAllConnections();
+      await new Promise((resolve) => h.close(resolve));
+    }
     fs.rmSync(p.sock, { force: true });
     releaseLock();
     return out;

@@ -33,6 +33,8 @@
  *   router.error(reason, payload)
  *                       a line to <home>/intake/errors.jsonl, redacted (LD124);
  *                       the server's unreadable lines and squats (LD132)
+ *   router.gap(lost)    a gap in every held session, naming what was lost and
+ *                       the sessions held (the HTTP port's squat, LD139)
  *   router.held()       the ids of the sessions held, sorted
  *
  * Turns (test 63; D-Q2): a turn opens at the first payload after the previous
@@ -323,7 +325,16 @@ function createRouter(o) {
     return out;
   }
 
-  return { payload, poll, resume, stop, error, held: engine.held };
+  /** A gap in every held session, naming what was lost (a squat on the HTTP port, LD139). */
+  function gap(lost) {
+    const now = clock();
+    const named = engine.held();
+    return named.map((id) =>
+      engine.receive({ schema_version: 1, session_id: id, source: 'process', agent: null, turn: null, sub_agent: null, target: null, observed_at: now.wall, says: 'gap', detail: { lost: String(lost), sessions: named }, cause_hint: null }, {}),
+    );
+  }
+
+  return { payload, poll, resume, stop, error, gap, held: engine.held };
 }
 
 module.exports = { createRouter, RELEASE_MS };

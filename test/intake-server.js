@@ -334,4 +334,145 @@ it('B1f (silence): twelve processes reading the install key at once, three times
   }
 });
 
+// --- H1 (LD139): the HTTP channel, pinned to the posting process ------------------
+
+const http = require('http');
+
+/** POST a JSON body to the intake's HTTP port from this process; resolves { status, body }. */
+function post(port, body) {
+  return new Promise((resolve, reject) => {
+    const data = typeof body === 'string' ? body : JSON.stringify(body);
+    const r = http.request({ host: '127.0.0.1', port, path: '/hook', method: 'POST', headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(data) }, agent: false }, (res) => {
+      let got = '';
+      res.on('data', (d) => (got += d));
+      res.on('end', () => resolve({ status: res.statusCode, body: got }));
+    });
+    r.on('error', reject);
+    r.end(data);
+  });
+}
+
+/** POST from a child process (another pid), as a forger on the same machine would; never blocks this process's loop. */
+function postFromChild(port, body) {
+  const { spawn } = require('child_process');
+  const code = `const h=require('http');const d=process.argv[1];const r=h.request({host:'127.0.0.1',port:${port},path:'/hook',method:'POST',headers:{'content-type':'application/json','content-length':Buffer.byteLength(d)}},(s)=>{s.resume();s.on('end',()=>{process.stdout.write(String(process.pid)+' '+s.statusCode)})});r.end(d);`;
+  return new Promise((resolve) => {
+    const c = spawn(process.execPath, ['-e', code, JSON.stringify(body)], { stdio: ['ignore', 'pipe', 'ignore'] });
+    let out = '';
+    c.stdout.on('data', (d) => (out += d));
+    const t = setTimeout(() => c.kill('SIGKILL'), 10000);
+    c.on('exit', () => {
+      clearTimeout(t);
+      const [pid, status] = out.split(' ').map(Number);
+      resolve({ pid, status });
+    });
+  });
+}
+
+const mine = { checkSender: (pid) => pid === process.pid };
+
+it(
+  'H1: a POST to the HTTP port reaches the session log on channel http, pinned to the posting process, with a 200 and an empty body',
+  withHome(async ({ home, project, serve }) => {
+    const r = await serve({ httpPort: 0, routerOpts: mine }).start();
+    assert.strictEqual(r.ok, true, JSON.stringify(r));
+    assert.ok(r.http && Number.isInteger(r.http.port) && r.http.port > 0 && r.http.listening === true, JSON.stringify(r.http));
+    const res = await post(r.http.port, cc(project).prompt('over http'));
+    assert.deepStrictEqual(res, { status: 200, body: '' }, 'an empty 2xx is success with no output for Claude Code');
+    assert.ok(await until(() => raw(home, 'ses_s1').length === 2));
+    const mark = raw(home, 'ses_s1')[1];
+    assert.deepStrictEqual([mark.says, mark.detail.channel, mark.detail.sender_pid], ['prompted', 'http', process.pid]);
+  }),
+);
+
+it(
+  'test 82 (over HTTP): a payload for a pinned session posted by another process is a tampered mark naming both pids, never the session\'s mark',
+  withHome(async ({ home, project, serve }) => {
+    const r = await serve({ httpPort: 0, routerOpts: mine }).start();
+    await post(r.http.port, cc(project).prompt('pinned to me'));
+    const forged = await postFromChild(r.http.port, cc(project).prompt('forged'));
+    assert.strictEqual(forged.status, 200, 'the forger learns nothing from the answer');
+    assert.ok(await until(() => raw(home, 'ses_s1').some((m) => m.says === 'tampered')));
+    const t = raw(home, 'ses_s1').find((m) => m.says === 'tampered');
+    assert.deepStrictEqual([t.detail.what, t.detail.sender_pid, t.detail.pinned_pid], ['foreign_sender', forged.pid, process.pid]);
+    assert.ok(!raw(home, 'ses_s1').some((m) => m.says === 'prompted' && m.detail.prompt === 'forged'), 'the forged prompt is not the session\'s');
+  }),
+);
+
+it(
+  'H1: for a pinned session, an HTTP payload whose sender cannot be named (the lookup failed) is tampered, never the session\'s mark',
+  withHome(async ({ home, project, serve }) => {
+    const peer = require('../src/opon/intake/peer');
+    const lookups = { peerPid: peer.peerPid, holderPid: peer.holderPid };
+    const r = await serve({ httpPort: 0, routerOpts: mine, lookups }).start();
+    await post(r.http.port, cc(project).prompt('pinned'));
+    lookups.peerPid = async () => null;
+    await post(r.http.port, cc(project).prompt('unnamed'));
+    assert.ok(await until(() => raw(home, 'ses_s1').some((m) => m.says === 'tampered')));
+    const t = raw(home, 'ses_s1').find((m) => m.says === 'tampered');
+    assert.deepStrictEqual(['sender_pid' in t.detail, t.detail.pinned_pid], [false, process.pid], 'no pid is written where none is known');
+    assert.ok(!raw(home, 'ses_s1').some((m) => m.says === 'prompted' && m.detail.prompt === 'unnamed'));
+  }),
+);
+
+it(
+  'H1: a first HTTP sender the agent-program check refuses pins nothing and is tampered (LD58)',
+  withHome(async ({ home, project, serve }) => {
+    const r = await serve({ httpPort: 0 }).start(); // routerFor's checkSender refuses every pid
+    await post(r.http.port, cc(project).prompt('not the agent'));
+    assert.ok(await until(() => raw(home, 'ses_s1').some((m) => m.says === 'tampered')));
+    const t = raw(home, 'ses_s1').find((m) => m.says === 'tampered');
+    assert.deepStrictEqual([t.detail.sender_pid, 'pinned_pid' in t.detail], [process.pid, false]);
+  }),
+);
+
+it(
+  'test 83 (TCP form): the HTTP port held by another process is recorded with its pid; the intake takes the port when it frees, and the held session\'s gap names the squat',
+  withHome(async ({ home, project, serve, p }) => {
+    const before = routerFor(home);
+    before.payload(cc(project).start(), { channel: 'command' });
+    before.payload(cc(project).prompt('one'), { channel: 'command' });
+    const squatter = net.createServer((c) => c.end());
+    await new Promise((res) => squatter.listen(0, '127.0.0.1', res));
+    const port = squatter.address().port;
+    const r = await serve({ httpPort: port, httpRetryMs: 50, routerOpts: mine }).start();
+    assert.strictEqual(r.ok, true, 'the socket channel still serves');
+    assert.deepStrictEqual([r.http.listening, r.http.squat], [false, process.pid], JSON.stringify(r.http));
+    const errs = lines(p.errors);
+    assert.ok(errs.length === 1 && errs[0].reason.startsWith('squat:') && errs[0].reason.includes(`pid ${process.pid}`) && errs[0].reason.includes(String(port)), JSON.stringify(errs));
+    await new Promise((res) => squatter.close(res));
+    assert.ok(await until(() => raw(home, 'ses_s1').some((m) => m.says === 'gap' && m.detail.lost.includes(`127.0.0.1:${port}`))), 'a gap naming the squat once the port is taken back');
+    const res = await post(port, cc(project).prompt('back'));
+    assert.strictEqual(res.status, 200);
+  }),
+);
+
+it('H1: the agent-program check accepts a process whose program is named claude and refuses others; the peer lookup names the posting pid', async () => {
+  const { isAgentProgram, peerPid } = require('../src/opon/intake/peer');
+  assert.strictEqual(isAgentProgram(process.pid), false, 'node is not the agent');
+  assert.strictEqual(isAgentProgram(999999999), false, 'a dead pid is not the agent');
+  const base = tmpDir();
+  const { spawn } = require('child_process');
+  const link = path.join(base, 'claude');
+  fs.symlinkSync(process.execPath, link);
+  const k = spawn(link, ['-e', 'setTimeout(()=>{},3000)']);
+  try {
+    await sleep(300);
+    assert.strictEqual(isAgentProgram(k.pid), true, 'a program named claude (the stated limit: any program so named passes)');
+  } finally {
+    k.kill();
+    rmrf(base);
+  }
+  const srv = http.createServer((req, res) => {
+    peerPid(req.socket).then((pid) => res.end(String(pid)));
+  });
+  await new Promise((res) => srv.listen(0, '127.0.0.1', res));
+  try {
+    const got = await post(srv.address().port, {});
+    assert.strictEqual(Number(got.body), process.pid);
+  } finally {
+    srv.close();
+  }
+});
+
 runAll('intake-server');

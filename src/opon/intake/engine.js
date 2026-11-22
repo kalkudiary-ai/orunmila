@@ -84,7 +84,8 @@ function createIntake({ openLog, clock, checkSender, tickMs = TICK_MS }) {
    * contact, one the sender check refused (LD58: no pinned_pid then).
    */
   function foreign(s, id, m, pid, now) {
-    const detail = { what: 'foreign_sender', sender_pid: pid, received: JSON.stringify(m) };
+    const detail = { what: 'foreign_sender', received: JSON.stringify(m) };
+    if (pid !== null) detail.sender_pid = pid; // an HTTP sender not named by the lookup has none (LD139)
     if (s.pin !== null) detail.pinned_pid = s.pin;
     const t = {
       schema_version: 1,
@@ -108,6 +109,7 @@ function createIntake({ openLog, clock, checkSender, tickMs = TICK_MS }) {
           ? `a payload for session ${id} came from another process (pid ${pid}; the session is pinned to pid ${s.pin}): recorded as tampered, not as the session's mark`
           : `a payload for session ${id} came from pid ${pid}, which the sender check says is not running the agent's own program: recorded as tampered, and nothing is pinned`,
       tampered: r.ok ? r.seq : null,
+      ...(r.ok ? {} : { refused: (r.reasons || [r.reason]).join('; ') }),
     };
   }
 
@@ -135,6 +137,9 @@ function createIntake({ openLog, clock, checkSender, tickMs = TICK_MS }) {
         s.pin = pid;
         pins = true;
       } else if (s.pin !== pid) return foreign(s, id, m, pid, now);
+    } else if (glove && from.channel === 'http' && pid === null && s.pin !== null) {
+      // An HTTP sender that could not be named is not the pinned process as far as the record can show (LD139).
+      return foreign(s, id, m, null, now);
     }
     if (glove && isObject(m.detail) && 'sender_pid' in m.detail) {
       // Only intake writes sender_pid on a Glove mark (LD58).

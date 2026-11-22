@@ -36,6 +36,12 @@
  *   router.gap(lost)    a gap in every held session, naming what was lost and
  *                       the sessions held (the HTTP port's squat, LD139)
  *   router.held()       the ids of the sessions held, sorted
+ *   router.watching()   the project roots the Sentinel watches, sorted (slice
+ *                       B4, LD145): with `sentinel: true`, each session's root
+ *                       is watched from its first payload until it is released,
+ *                       and its `sentinel` marks and watch gaps go into every
+ *                       session of that root (src/opon/intake/sentinel.js); the
+ *                       header's config.exclusions is then what it does not watch
  *
  * Turns (test 63; D-Q2): a turn opens at the first payload after the previous
  * turn's Stop, or at the session's first: a prompt, or, for a continuation, a
@@ -67,6 +73,7 @@ const { readRegular } = require('./regular-file');
 const { unifiedDiff } = require('../../reconcile/difftool');
 const { looksBinary } = require('../../capture/fs-sentinel/hasher');
 const { getAdapter } = require('../../capture/agents');
+const { createSentinels } = require('./sentinel');
 
 const CC = getAdapter('claude-code');
 const RELEASE_MS = 30 * 60 * 1000;
@@ -149,6 +156,29 @@ function createRouter(o) {
   const states = new Map(); // session id -> { log, root, ci, n, open, pre, last, limit }
   const engine = createIntake({ openLog: (id) => states.get(id).log, clock, checkSender: o.checkSender, tickMs: o.tickMs });
   let heldText = null;
+  // The Sentinel inside the intake (B4): its marks go to every watching session of the root.
+  const sentinels = o.sentinel
+    ? createSentinels({
+        clock,
+        key: o.installKey,
+        diffOf,
+        emit: (root, mark, keep) => {
+          for (const [id, s] of [...states].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+            if (s.watched && s.root === root) engine.receive(normalise(s, { ...mark, session_id: id }), {}, keep);
+          }
+        },
+      })
+    : null;
+  function watchFor(s) {
+    if (!sentinels || s.watched) return;
+    s.watched = true;
+    sentinels.watch(s.root, s.limit);
+  }
+  function unwatchFor(s) {
+    if (!sentinels || !s.watched) return;
+    s.watched = false;
+    sentinels.unwatch(s.root);
+  }
 
   const ensureDir = (d) => fs.mkdirSync(d, { recursive: true, mode: 0o700 });
 
@@ -192,7 +222,7 @@ function createRouter(o) {
       codeRoot: o.codeRoot,
       lawPacks: lawPacksFor(root),
       hookSettings: hookSettingsFor(root),
-      config: o.config,
+      config: sentinels ? { ...(o.config || {}), exclusions: sentinels.ignoreFor(root) } : o.config,
       observedAt: now.wall,
       monoNs: now.mono,
       envValues: entries.map((e) => e.value),
@@ -224,6 +254,7 @@ function createRouter(o) {
       states.set(id, s);
     }
     s.last = BigInt(clock().mono);
+    watchFor(s);
     const ev = p.hook_event_name;
     if (ev === 'SessionStart') {
       writeHeld();
@@ -288,9 +319,11 @@ function createRouter(o) {
     const now = BigInt(clock().mono);
     const ms = releaseNs / NS_PER_MS;
     const quiet = ms % 60000n === 0n ? `${ms / 60000n} minutes` : `${ms} ms`;
-    for (const id of engine.held()) {
-      const s = states.get(id);
-      if (s && now - s.last >= releaseNs) engine.release(id, `released: no payload for ${quiet}`);
+    const held = new Set(engine.held());
+    for (const [id, s] of states) {
+      if (now - s.last < releaseNs) continue;
+      if (held.has(id)) engine.release(id, `released: no payload for ${quiet}`);
+      unwatchFor(s);
     }
     writeHeld();
     return ticks;
@@ -309,6 +342,7 @@ function createRouter(o) {
       try {
         const s = reopen(id, path.join(sessionsDir, sessionFolderName(id)));
         states.set(id, s);
+        watchFor(s);
         entries.push({ id, log: s.log });
       } catch (e) {
         failed.push({ id, reason: e.message });
@@ -321,6 +355,7 @@ function createRouter(o) {
   }
 
   function stop(reason) {
+    if (sentinels) sentinels.stop();
     const out = engine.stop(reason);
     return out;
   }
@@ -334,7 +369,9 @@ function createRouter(o) {
     );
   }
 
-  return { payload, poll, resume, stop, error, gap, held: engine.held };
+  const watching = () => (sentinels ? sentinels.roots() : []);
+
+  return { payload, poll, resume, stop, error, gap, held: engine.held, watching };
 }
 
 module.exports = { createRouter, RELEASE_MS };

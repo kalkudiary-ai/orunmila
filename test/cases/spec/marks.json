@@ -3097,6 +3097,30 @@
         "path": "/target/kind",
         "keyword": "const"
       }
+    },
+    {
+      "name": "/detail/root of the wrong type (B4, LD145)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/root": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/root",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/root empty (B4, LD145)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/root": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/root",
+        "keyword": "minLength"
+      }
     }
   ]
 }

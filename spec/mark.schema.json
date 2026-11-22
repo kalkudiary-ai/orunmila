@@ -448,6 +448,12 @@
           "$comment": "brief v3 lines 242, 575; agent's choice of name, LD36; the session end's and the closing note's use, LD55 and LD56",
           "type": "string"
         },
+        "root": {
+          "description": "The folder the Sentinel watches, as an absolute real path, on each of its marks and its watch gaps, so a Glove mark and a Sentinel mark for one file always join.",
+          "$comment": "brief v4 line 345 (NF11); the field name is the agent's choice, LD145",
+          "type": "string",
+          "minLength": 1
+        },
         "lost": {
           "description": "A gap mark names what was lost.",
           "$comment": "brief v3 line 341; the field name is the agent's choice, LD15",

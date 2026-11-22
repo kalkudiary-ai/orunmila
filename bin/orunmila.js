@@ -1209,6 +1209,7 @@ async function cmdIntake() {
       codeRoot: path.join(__dirname, '..', 'src'),
       orunmilaVersion: require('../package.json').version,
       installKey: readInstallKey(home),
+      sentinel: true, // the Sentinel runs inside the intake (B4, LD145)
     });
     const server = createServer({ home, router, httpPort: intakePort() });
     const r = await server.start();

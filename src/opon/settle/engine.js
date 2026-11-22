@@ -29,7 +29,14 @@
  * ceiling never cuts it; once the process has exited it waits one quiet
  * window. A turn's group holds until its `ended` mark, subject to the ceiling;
  * a held group force-settled at the ceiling is still running, so its next mark
- * continues it however late (LD154). Children of a running command: slice G2. A mark for a settled group (in its
+ * continues it however late (LD154). Children of a running command: slice G2.
+ *
+ * Renames and temp files (rule 4, LD155): an editor's temp file joins the
+ * group of the file it stands for (src/opon/group/keys.js aliasPath), and vim's
+ * `4913` its folder's latest open file group; their marks are listed but do
+ * not count for the action, so a temp file's own creation never makes an edit
+ * look like one. A `renamed` mark moves the old path's open group into the new
+ * path's (merged with it if it has one). A mark for a settled group (in its
  * grace) joins it and opens it again, its timer restarted: the grace is there
  * for a slow source's marks of the same event. A sealed group is never
  * reopened (rule 8, slice S6). Ticks only move time.
@@ -38,7 +45,8 @@
  * not odù records: no net change, attribution, confidence or conflicts yet.
  */
 
-const { keyOf } = require('../group/keys');
+const path = require('path');
+const { keyOf, aliasPath } = require('../group/keys');
 
 const NS_PER_MS = 1000000n;
 const DISK = new Set(['created', 'modified', 'deleted', 'renamed']);
@@ -87,7 +95,7 @@ function createOpon({ sessionId, config }) {
       session_id: sessionId,
       state: g.state,
       target: g.target,
-      action: actionOf(g.says),
+      action: actionOf(g.realSays.length ? g.realSays : g.says),
       window: { first_seq: g.seqs[0], last_seq: g.seqs[g.seqs.length - 1] },
       mark_seqs: [...g.seqs],
       settled_at_ns: g.settledAt === null ? null : String(g.settledAt),
@@ -134,18 +142,69 @@ function createOpon({ sessionId, config }) {
     });
   }
 
+  /** The open file group in `dir` that had a mark last (vim's 4913 joins it), or null. */
+  function latestOpenIn(dir) {
+    let best = null;
+    for (const g of live.values()) {
+      if (g.state !== 'open' || !g.key.startsWith('file:') || path.posix.dirname(g.target.path) !== dir) continue;
+      if (!best || g.last > best.last || (g.last === best.last && g.n > best.n)) best = g;
+    }
+    return best;
+  }
+
+  /** Rule 4: the old path's open group goes to the new path, merged with the new path's own. */
+  function rename(fromKey, toKey, target) {
+    const a = live.get(fromKey);
+    if (!a || a.state !== 'open') return;
+    live.delete(fromKey);
+    const b = live.get(toKey);
+    if (!b) {
+      a.key = toKey;
+      a.target = target;
+      live.set(toKey, a);
+      return;
+    }
+    const rows = [...a.seqs.map((s, i) => [s, a.says[i], a.real[i]]), ...b.seqs.map((s, i) => [s, b.says[i], b.real[i]])].sort((x, y) => x[0] - y[0]);
+    b.seqs = rows.map((r) => r[0]);
+    b.says = rows.map((r) => r[1]);
+    b.real = rows.map((r) => r[2]);
+    b.realSays = rows.filter((r) => r[2]).map((r) => r[1]);
+    if (a.first < b.first) b.first = a.first;
+    if (a.last > b.last) b.last = a.last;
+    unsealed.delete(a.id);
+    all.splice(all.indexOf(a), 1);
+  }
+
   function push(m) {
     const t = BigInt(m.mono_ns);
     now = now === null || t > now ? t : now;
     const out = advance(now);
     if (m.says === 'tick') return out;
-    const key = keyOf(m);
+    let key = keyOf(m);
+    let target = m.target;
+    let real = true;
+    if (m.target && m.target.kind === 'file' && typeof m.target.path === 'string') {
+      const p = m.target.path;
+      if (path.posix.basename(p) === '4913') {
+        const host = latestOpenIn(path.posix.dirname(p));
+        if (host) {
+          key = host.key;
+          target = host.target;
+          real = false;
+        }
+      } else if (aliasPath(p) !== p) {
+        target = { ...m.target, path: aliasPath(p) };
+        key = `file:${target.path}`;
+        real = false;
+      }
+      if (m.says === 'renamed' && m.detail && typeof m.detail.from === 'string') rename(`file:${m.detail.from}`, key, target);
+    }
     let g = live.get(key);
     if (!g) {
       const f = forcedLast.get(key);
       forcedLast.delete(key);
       const continues = f && (f.held || now - f.at < quiet) ? f.id : null;
-      g = { n: ++made, id: id(made), key, state: 'open', target: m.target, seqs: [], says: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues, isCommand: key.startsWith('command:'), isTurn: key.startsWith('turn:'), turnEnded: false };
+      g = { n: ++made, id: id(made), key, state: 'open', target, seqs: [], says: [], real: [], realSays: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues, isCommand: key.startsWith('command:'), isTurn: key.startsWith('turn:'), turnEnded: false };
       live.set(key, g);
       unsealed.set(g.id, g);
       all.push(g);
@@ -155,6 +214,8 @@ function createOpon({ sessionId, config }) {
     }
     g.seqs.push(m.seq);
     g.says.push(m.says);
+    g.real.push(real);
+    if (real) g.realSays.push(m.says);
     g.last = now;
     if (m.says === 'ended' && m.target && m.target.kind === 'turn') g.turnEnded = true;
     return out;

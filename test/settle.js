@@ -123,4 +123,54 @@ it(
   }),
 );
 
+it(
+  'test 1 (rule 4): an edit saved through a temp file and a rename, then a formatter 1 s later, is one group on the file, modified, with every mark',
+  withBase((base) => {
+    const s = makeLog(base);
+    const seqs = [
+      s.append(M.started(0, 'e1', { kind: 'file', path: 'src/a.ts' })),
+      s.append(M.disk(100, 'src/a.ts.tmp', 'created')),
+      s.append(M.disk(120, 'src/a.ts.tmp', 'deleted')),
+      s.append(M.disk(130, 'src/a.ts')),
+      s.append(M.edited(150, 'e1', 'src/a.ts')),
+      s.append(M.disk(1150, 'src/a.ts')), // the formatter
+    ];
+    s.append(M.tick(20000));
+    const g = groups(s.dir);
+    assert.deepStrictEqual(g.map((x) => [x.target, x.action, x.mark_seqs]), [[{ kind: 'file', path: 'src/a.ts' }, 'modified', seqs]]);
+  }),
+);
+
+it("rule 4: an editor's temp names (~, .#, .swp, vim's 4913) join their file's group; a 4913 with no file open in its folder stands alone", withBase((base) => {
+  const s = makeLog(base);
+  const a = s.append(M.disk(0, 'lib/foo.c'));
+  const b = s.append(M.disk(10, 'lib/foo.c~', 'created'));
+  const c = s.append(M.disk(20, 'lib/.#foo.c', 'created'));
+  const d = s.append(M.disk(30, 'lib/.foo.c.swp', 'created'));
+  const e = s.append(M.disk(40, 'lib/4913', 'created'));
+  const lone = s.append(M.disk(50, 'other/4913', 'created'));
+  s.append(M.tick(20000));
+  const g = groups(s.dir);
+  assert.deepStrictEqual(g.map((x) => [x.target.path, x.mark_seqs]), [
+    ['lib/foo.c', [a, b, c, d, e]],
+    ['other/4913', [lone]],
+  ]);
+  assert.strictEqual(g[0].action, 'modified', 'the temp files\' own creations do not make the file look created');
+}));
+
+it('rule 4: a rename moves the old path\'s group into the new one; a rename alone is renamed', withBase((base) => {
+  const s = makeLog(base);
+  const a1 = s.append(M.disk(0, 'old.txt'));
+  const r = s.append({ ...M.disk(100, 'new.txt', 'renamed'), detail: { root: '/r', size: 4, from: 'old.txt', fingerprint_before: null, fingerprint: 'sha256:' + 'e'.repeat(64), lines_added: null, lines_removed: null } });
+  const n1 = s.append(M.disk(200, 'new.txt'));
+  const lone = s.append({ ...M.disk(5000, 'z.txt', 'renamed'), detail: { root: '/r', size: 4, from: 'y.txt', fingerprint_before: null, fingerprint: 'sha256:' + 'f'.repeat(64), lines_added: null, lines_removed: null } });
+  s.append(M.tick(30000));
+  const g = groups(s.dir);
+  assert.deepStrictEqual(g.map((x) => [x.target.path, x.mark_seqs]), [
+    ['new.txt', [a1, r, n1]],
+    ['z.txt', [lone]],
+  ]);
+  assert.strictEqual(g[1].action, 'renamed');
+}));
+
 runAll('settle');

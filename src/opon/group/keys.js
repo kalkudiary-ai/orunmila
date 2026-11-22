@@ -15,9 +15,28 @@
  * end) group by the turn. The session's end groups by the session. Anything
  * else (a gap, a tampering mark, the intake's own note) is its own group.
  * Ticks never reach here: they are the clock, not an event.
+ *
+ *   aliasPath(path) -> the file an editor's temp file stands for (rule 4,
+ *                      line 366): `x.tmp` and `x~` are `x`, `.#x` is `x`, and
+ *                      vim's swap file `.x.swp` (or `x.swp`) is `x`; any other
+ *                      path is itself. Vim's `4913` names no file: the engine
+ *                      joins it to its folder's latest open file group.
  */
 
+const path = require('path');
+
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+
+function aliasPath(p) {
+  const dir = path.posix.dirname(p);
+  const base = path.posix.basename(p);
+  const at = (b) => (dir === '.' ? b : `${dir}/${b}`);
+  if (base.length > 4 && base.endsWith('.tmp')) return at(base.slice(0, -4));
+  if (base.length > 1 && base.endsWith('~')) return at(base.slice(0, -1));
+  if (base.length > 2 && base.startsWith('.#')) return at(base.slice(2));
+  if (base.length > 4 && base.endsWith('.swp')) return at(base.startsWith('.') && base.length > 5 ? base.slice(1, -4) : base.slice(0, -4));
+  return p;
+}
 
 function keyOf(m) {
   const t = isObject(m.target) ? m.target : null;
@@ -30,4 +49,4 @@ function keyOf(m) {
   return alone;
 }
 
-module.exports = { keyOf };
+module.exports = { keyOf, aliasPath };

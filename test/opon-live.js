@@ -260,4 +260,88 @@ it(
   }),
 );
 
+/** L1d: a session through one router, a restart (a second router over the same home, resumed), then more through the second. */
+function restarted(base, between = () => {}) {
+  const home = path.join(base, 'home');
+  const project = path.join(base, 'project');
+  fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+  const clock = fakeClock();
+  const make = () => createRouter({ home, clock, checkSender: () => true, codeRoot: SRC, orunmilaVersion: '0.0.0-test', installKey: KEY, hookSettingsFor: () => [], baseline: true });
+  const p = cc(project, 'ses_live3');
+  const dir = path.join(home, 'sessions', 'ses_live3');
+  const write = (router, id, name, text) => {
+    const file = path.join(project, 'src', name);
+    router.payload(p.pre('Write', { file_path: file }, id));
+    fs.writeFileSync(file, text);
+    assert.strictEqual(router.payload(p.post('Write', { file_path: file }, {}, id)).ok, true);
+  };
+  const polls = (router, n) => {
+    for (let i = 0; i < n; i++) {
+      clock.advance(600);
+      router.poll();
+    }
+  };
+  const one = make();
+  assert.strictEqual(one.payload(p.prompt('go'), { channel: 'command' }).ok, true);
+  write(one, 'w1', 'a.js', 'a\n');
+  assert.strictEqual(one.payload(p.stop('I wrote src/a.js.')).ok, true); // its turn ends, so a.js may seal (C3d2)
+  polls(one, 12); // a.js settles, gets its fingerprint and seals, and so does the turn
+  assert.strictEqual(one.payload(p.prompt('more'), { channel: 'command' }).ok, true);
+  write(one, 'w2', 'b.js', 'b\n'); // b.js still open at the restart
+  between(dir);
+  clock.advance(2000);
+  const two = make();
+  const r = two.resume();
+  assert.deepStrictEqual(r.failed, []);
+  write(two, 'w3', 'c.js', 'c\n');
+  assert.strictEqual(two.payload(p.stop('Done.')).ok, true);
+  polls(two, 25);
+  return { dir, home };
+}
+
+it(
+  'L1d guarantee 3: after a restart the reopened session is replayed into a fresh engine and its odù log goes on, equal to replay of the whole raw log; one a crash cut short of its last odù is caught up',
+  withBase((base) => {
+    for (const [name, between] of [
+      ['a plain restart', () => {}],
+      ['a crash before the last odù was written', (dir) => {
+        const f = path.join(dir, 'odu.jsonl');
+        const lines = fs.readFileSync(f, 'utf8').split('\n').slice(0, -1);
+        assert.ok(lines.length >= 2, 'an odù was written before the restart');
+        fs.writeFileSync(f, lines.slice(0, -1).map((l) => l + '\n').join(''));
+      }],
+    ]) {
+      const sub = path.join(base, name.replace(/ /g, '_'));
+      fs.mkdirSync(sub);
+      const { dir } = restarted(sub, between);
+      const live = fs.readFileSync(path.join(dir, 'odu.jsonl'), 'utf8');
+      const out = replayFolder(dir);
+      assert.strictEqual(out.ok, true, out.words);
+      assert.strictEqual(live, out.odu, name);
+      const odus = live.split('\n').slice(1, -1).map((l) => JSON.parse(l));
+      // The restart's gap covers b.js (open at the restart) and c.js (written as it resumed): the Sentinel is down there, from that recorded fact.
+      for (const [f, sentinel] of [['src/a.js', 'saw_nothing'], ['src/b.js', 'down'], ['src/c.js', 'down']]) {
+        const o = odus.find((x) => x.target && x.target.path === f);
+        assert.deepStrictEqual([f, o.witness_status.glove.status, o.witness_status.sentinel.status], [f, 'saw', sentinel], name);
+      }
+      assert.ok(rawRecords(dir).some((m) => m.says === 'gap'), 'the restart\'s gap is in the raw log, and so in both');
+    }
+  }),
+);
+
+it(
+  'L1d: an odù log on disk that is not the start of replay\'s is never edited: the live engine stops for that session with a line in the error log, and capture goes on',
+  withBase((base) => {
+    let kept = null;
+    const { dir, home } = restarted(base, (d) => {
+      fs.appendFileSync(path.join(d, 'odu.jsonl'), '{"not":"an odù"}\n');
+      kept = fs.readFileSync(path.join(d, 'odu.jsonl'), 'utf8');
+    });
+    assert.strictEqual(fs.readFileSync(path.join(dir, 'odu.jsonl'), 'utf8'), kept, 'never edited');
+    const errors = fs.readFileSync(path.join(home, 'intake', 'errors.jsonl'), 'utf8').split('\n').slice(0, -1).map((l) => JSON.parse(l));
+    assert.deepStrictEqual(errors.map((e) => e.reason.startsWith('the live Ọpọ́n stopped for session ses_live3: its odù log on disk is not the start of replay\'s')), [true]);
+    assert.ok(rawRecords(dir).some((m) => m.says === 'claimed'), 'capture went on');
+  }),
+);
+
 runAll('opon-live');

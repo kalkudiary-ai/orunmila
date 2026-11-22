@@ -231,7 +231,13 @@ function createRouter(o) {
   function reopen(id, dir) {
     const t = turnsFrom(dir);
     const root = t.header.project_root;
-    const log = openSessionLog(dir, { envEntries: readEnvEntries(root).entries });
+    let lv = null; // L1d: the reopened session's live Ọpọ́n, from a replay of its raw log so far
+    const log = openSessionLog(dir, { envEntries: readEnvEntries(root).entries, onRecord: live ? (rec) => lv && live.feed(lv, rec) : null });
+    if (live) {
+      const marks = checkLog(dir, 'raw').records.filter((r) => !(r.part > 1 && r.line === 1)).map((r) => r.rec).slice(1);
+      const header = log.header();
+      lv = live.resume(dir, header, header.baseline ? baselineMap(fs.readFileSync(path.join(dir, 'baseline.jsonl'), 'utf8')) : null, marks);
+    }
     const tamper = createTamperWatch({ header: t.header, codeRoot: o.codeRoot, lawPacks: lawPacksFor(root), prior: t.tampered, clock });
     return { log, root, ci: isCaseInsensitive(root), n: t.n, open: t.open, pre: new Map(), last: BigInt(clock().mono), limit: t.header.config.diff_size_limit_bytes, tamper };
   }

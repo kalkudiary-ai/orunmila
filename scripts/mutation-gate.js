@@ -1979,7 +1979,7 @@ const MUTANTS = [
     from: 'while (st.on && st.due.length) receive(', to: 'while (false) receive(',
     fails: ['L1c guarantee 3'] },
   { id: 'L1c-2 no odù is written to odu.jsonl', file: 'src/opon/intake/live.js', test: 'test/opon-live.js',
-    from: "if (r) fs.appendFileSync(st.file, canonicalize(r) + '\\n');", to: 'void r;',
+    from: "for (const r of step(st, rec)) fs.appendFileSync(st.file, canonicalize(r) + '\\n');", to: 'for (const r of step(st, rec)) void r;',
     fails: ['L1c guarantee 3'] },
   { id: 'L1c-3 a live failure breaks capture', file: 'src/opon/intake/live.js', test: 'test/opon-live.js',
     from: "stop(st, `its odù log could not be begun (${e.code || e.message})`);", to: 'throw e;',
@@ -1996,6 +1996,16 @@ const MUTANTS = [
   { id: "L1c-7 an ended session's span never closes", file: 'src/opon/intake/live.js', test: 'test/opon-live.js',
     from: 'st.span.to = rec.mono_ns;', to: 'void 0;',
     fails: ['L1c LD200 (5)'] },
+  // Slice L1d: a reopened session replayed into a fresh engine (LD200 (6)).
+  { id: 'L1d-1 a reopened session has no live engine', file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
+    from: 'lv = live.resume(dir, header,', to: 'lv = null && live.resume(dir, header,',
+    fails: ['L1d guarantee 3'] },
+  { id: "L1d-2 an odù log that is not replay's start is appended to", file: 'src/opon/intake/live.js', test: 'test/opon-live.js',
+    from: 'else if (!text.startsWith(disk)) stop(st,', to: 'else if (false) stop(st,',
+    fails: ['L1d: an odù log on disk'] },
+  { id: 'L1d-3 an odù log a crash cut short is not caught up', file: 'src/opon/intake/live.js', test: 'test/opon-live.js',
+    from: 'else if (text.length > disk.length) fs.appendFileSync(st.file, text.slice(disk.length));', to: 'else if (false) void 0;',
+    fails: ['L1d guarantee 3'] },
 ];
 
 function copyRepo(root) {

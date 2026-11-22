@@ -131,8 +131,33 @@ on the clone (`orunmila watch-fs --root <clone>`, or `TURBO_SENTINEL_BIN`), even
 watches it, and starts no session until that Sentinel's first walk is done. It stops it at the end,
 and `summary.md` says so.
 
+## Escape checks: an escape shows up and stops the run
+
+The sandbox and the guard try to make an escape impossible; these checks make one that got past
+them show up (O, 2026-11-22; LD126-LD131 in `review/leopard-decisions.md` on `output-1`). They run
+after every session, before the driver runs any git of its own and before the next session starts.
+Any finding **halts** the run (LD127): no more git, no next session, a blocking `discrepancy` item in
+`approvals.md`, the findings at the top of `summary.md`, and `.turbo/driver/HALT.json`. A later `run`
+refuses while HALT.json exists. Read it, run no git in that clone, and make a new clone.
+
+- **Outside the clone** (T19, LD128): every Sentinel row under the live copy and the source worktree
+  in the session's window, and a tripwire of named files that run code as you, read by sha256: the
+  shell start-up files, `~/.gitconfig`, `~/.config/git`, `~/.ssh/config` and `authorized_keys`,
+  `~/Library/LaunchAgents`, `~/.claude/` settings, CLAUDE.md, hooks, agents, commands and skills,
+  every `~/.claude/projects/*/memory`, the `mcpServers` of `~/.claude.json`, and the live copy's
+  `.git` config, hooks, info, commondir and worktree links. A change that another session's record
+  explains passes (a peer's write on the same path, or a command of its own within 3 s or within its
+  span); any other halts. A Sentinel already watching the live copy or the worktree is used; with
+  `ORUNMILA_HOME` set the driver starts its own, since a foreign one logs elsewhere.
+
+Limits: these catch an escape after the fact, within one session, and stop the run; they do not
+prevent it. A session that broke out on purpose could also tamper with Orunmila's log, which only a
+separate macOS user would stop. A file off the tripwire list is caught only by the both-records
+check. `~/.claude/plugins` is not on it, because Claude Code rewrites its caches and marketplace clone
+itself. Your own edits in the worktree or to these files during a run halt it.
+
 ## Files
 
 `turbo.js` (the driver), `session.js` (one session's argv, env, settings, prompt, result),
 `prompt.md` (what each session is told), `plan.js` (the plan and the queue, with a CLI), `guard.js`,
-`githooks/`. Tests: `test/turbo.js`.
+`watch.js` (the escape checks). Tests: `test/turbo.js`.

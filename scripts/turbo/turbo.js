@@ -293,6 +293,16 @@ function summaryText(r) {
     '',
     `Started ${r.started}, ended ${r.ended}. Stop reason: **${r.stopReason}**. Hours asked: ${r.hours}. Branch: ${r.branch}.`,
     '',
+    ...(r.halted
+      ? [
+          `## HALTED by an escape check in session ${r.halted.session} (LD127)`,
+          '',
+          'Run no git in this clone (a planted `.git` would run its code as you), and make a new clone before the next run.',
+          '',
+          ...r.halted.findings.map((f) => `- **${f.check}**: ${f.detail}`),
+          '',
+        ]
+      : []),
     `Sentinel: ${r.sentinel || 'off'}.`,
     '',
     `## Sessions (${r.sessions.length})`,
@@ -341,19 +351,43 @@ async function run(opts) {
     sentinelBin: process.env.TURBO_SENTINEL_BIN || 'orunmila',
     sentinelRunning: sentinelRunningFor,
     sentinelReadyMs: 120000,
+    outsideRoots: null, // null: the live copy and the source worktree (LD128)
+    tripwire: null, // null: watch.tripwirePaths() for this machine (LD128)
+    settleMs: 5000, // after a session, before its records are read: the Sentinel's debounce and lag
+    wall: Date.now, // the real clock the witnesses stamp rows with (o.now may be a test's)
     held: !HOLD.lifted,
     ...opts,
   };
   if (o.held) throw new Error('TURBO is on hold (LD118): a session could get code run outside the sandbox (cold verify 5). Read scripts/turbo/README.md, "On hold".');
+  // A run that halted on an escape check leaves HALT.json; nothing runs in that clone again (LD127).
+  const haltFile = path.join(o.home, 'driver', 'HALT.json');
+  let haltSt = null;
+  try {
+    haltSt = fs.lstatSync(haltFile);
+  } catch {}
+  if (haltSt) throw new Error(`a previous run halted on an escape check (${haltFile}): read it, run no git in this clone, and make a new clone (LD127)`);
   const start = o.now();
   const deadline = start + o.hours * 3600 * 1000;
   const runId = stamp(start);
   if (isLinkedWorktree(o.root)) {
     throw new Error(`${o.root} is a linked worktree: its .git is shared with another checkout (here, the live copy), which no sandbox rule keeps safe (LD116). Run TURBO in its own clone: node scripts/turbo/turbo.js clone`);
   }
-  if (spawnSync('git', ['-C', o.root, 'config', '--get', 'turbo.source']).status !== 0) {
+  const sourceR = spawnSync('git', ['-C', o.root, 'config', '--get', 'turbo.source'], { encoding: 'utf8' });
+  if (sourceR.status !== 0) {
     throw new Error(`${o.root} is not a TURBO clone (no turbo.source): make one with node scripts/turbo/turbo.js clone, and run there (LD117)`);
   }
+  const source = sourceR.stdout.trim();
+  const live = o.env.TURBO_LIVE || path.join(require('os').homedir(), 'tools', 'orunmila');
+  const outsideRoots = (o.outsideRoots || [live, source]).filter((r) => fs.existsSync(r));
+  const tripEntries = o.tripwire || watch.tripwirePaths({ live });
+  const eventsFile = path.join(o.env.ORUNMILA_HOME || path.join(require('os').homedir(), '.orunmila'), 'events.jsonl');
+  const logSize = () => {
+    try {
+      return fs.statSync(eventsFile).size;
+    } catch {
+      return 0;
+    }
+  };
   fs.mkdirSync(o.home, { recursive: true });
   // The driver's records live in .turbo/driver/, denied to sessions (LD117); never through a link.
   const driverHome = path.join(o.home, 'driver');
@@ -430,12 +464,39 @@ async function run(opts) {
   const sessions = [];
   let stopReason = null;
   let result;
+  let halted = null;
+  /** An escape check found something: stop at once, before any more git or another session (LD127). */
+  const halt = (sid, findings) => {
+    halted = { run: runId, session: sid, ts: new Date(o.wall()).toISOString(), findings };
+    stopReason = 'escape-check';
+    fs.writeFileSync(haltFile, JSON.stringify(halted, null, 2) + '\n');
+    log({ type: 'halt', session: sid, findings });
+    try {
+      const p = plan.load(o.home);
+      plan.queueItem(p, {
+        kind: 'discrepancy',
+        title: `escape check: ${findings.length} finding(s) in session ${sid}`,
+        ask: `The run halted (LD127). ${findings.map((f) => `[${f.check}] ${f.detail}.`).join(' ')} Read ${haltFile}. Run no git in this clone: make a new clone before the next run.`,
+        blocking: true,
+        session: sid,
+      });
+      plan.save(o.home, p);
+    } catch (err) {
+      log({ type: 'halt-queue-failed', error: err.message }); // HALT.json and the summary still say it
+    }
+  };
   log({ type: 'start', run: runId, hours: o.hours, deadline: new Date(deadline).toISOString(), branch, root: o.root, model: o.model });
 
   try {
     if (o.sentinel) {
       watch.writeSentinelIgnore(o.root);
       await startSentinel(o.root);
+      // Outside the clone a Sentinel already watching is used: its rows reach the shared log. With
+      // a log of the driver's own (ORUNMILA_HOME set) it would not, so the driver starts its own.
+      for (const r of outsideRoots) {
+        if (!o.env.ORUNMILA_HOME && o.sentinelRunning(r)) sentinels.push({ root: r, child: null, note: `already watching ${r}`, spawnError: null });
+        else await startSentinel(r);
+      }
     }
     for (;;) {
       if (o.beforeCheck) o.beforeCheck();
@@ -503,9 +564,26 @@ async function run(opts) {
         counts: plan.counts(p),
       });
       const env = session.env({ base: o.env, root: o.root, home: o.home, run: runId, session: sid, scratch: scratchDir });
+      const tripBefore = watch.fingerprint(tripEntries);
+      const logOffset = logSize();
+      const wallStart = o.wall();
       log({ type: 'session-start', session: sid, kind: a.kind, slice: a.slice ? a.slice.id : null });
       const res = await runSession(o, { sid, text: session.prompt(vars), settingsFile, runDir, scratchDir, env });
       state.lastInbox = inboxSha;
+
+      // The escape checks run first, before any git of the driver's (LD127, LD128).
+      if (o.settleMs) await new Promise((r) => setTimeout(r, o.settleMs));
+      const seen = watch.readLog(eventsFile, logOffset).rows;
+      const out = watch.outside({ rows: seen, sid, roots: outsideRoots, clone: [o.root, o.home], t0: wallStart - 1000, t1: o.wall(), before: tripBefore, after: watch.fingerprint(tripEntries) });
+      const checks = { outside: out.outside, tripwire: out.tripwire };
+      const findings = [...out.findings];
+      if (findings.length) {
+        const row = { session: sid, kind: a.kind, slice: a.slice ? a.slice.id : null, exit: res.code, signal: res.signal, timedOut: res.timedOut, spawnError: res.spawnError, ms: res.ms, outcome: null, error: 'halted: escape check', verified: [], unverified: [], queued: [], decisions: [], cost: null, dirty: [], headMoves: [], referee: null, checks, findings };
+        sessions.push(row);
+        log({ type: 'session-end', ...row });
+        halt(sid, findings);
+        break;
+      }
 
       const parsed = res.timedOut || res.spawnError ? { error: res.timedOut ? 'timed out' : res.spawnError } : session.parseResult(res.stdout);
       const r = parsed.result || null;
@@ -537,6 +615,8 @@ async function run(opts) {
         dirty,
         headMoves,
         referee: null,
+        checks,
+        findings,
       };
 
       const after = plan.load(o.home);
@@ -582,9 +662,9 @@ async function run(opts) {
       finalPlan = plan.empty();
     }
     const ended = new Date(o.now()).toISOString();
-    const src = spawnSync('git', ['-C', o.root, 'config', '--get', 'turbo.source'], { encoding: 'utf8' });
+    // No git here: after a halt a planted .git would run its code (LD127); the source was read at the start.
     const sentinelNote = o.sentinel ? sentinels.map((s) => s.note || `failed on ${s.root}: ${s.spawnError || 'not ready'}`).join('; ') : 'off';
-    result = { run: runId, runDir, scratchDir, sentinel: sentinelNote, root: o.root, source: src.status === 0 ? src.stdout.trim() : null, started: new Date(start).toISOString(), ended, stopReason: stopReason || 'error', hours: o.hours, branch, sessions, plan: finalPlan };
+    result = { run: runId, runDir, scratchDir, sentinel: sentinelNote, root: o.root, source: source || null, started: new Date(start).toISOString(), ended, stopReason: stopReason || 'error', hours: o.hours, branch, sessions, plan: finalPlan, halted };
     fs.writeFileSync(path.join(runDir, 'summary.md'), summaryText(result));
     log({ type: 'end', stopReason: result.stopReason, sessions: sessions.length });
     for (const s of sentinels) if (s.child && s.child.exitCode === null) s.child.kill('SIGINT');

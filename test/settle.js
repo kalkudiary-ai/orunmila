@@ -228,7 +228,7 @@ it('test 8 (rule 8): a mark that arrives after its group sealed never reopens it
   assert.deepStrictEqual(first.conflicts.map((c) => [c.kind, c.ref, c.why]), [['outcome_missing', 'e1', null]], 'judged at the end of its turn, and kept: the late outcome never rewrites it');
   assert.deepStrictEqual(amend.mark_seqs, [late]);
   assert.strictEqual(amend.amends, first.group_id);
-  assert.deepStrictEqual(amend.conflicts.filter((c) => c.kind === 'outcome_missing'), [], 'the late report is not ignored: it is a record of its own, pointing at the one it amends');
+  assert.deepStrictEqual(amend.conflicts, [], 'the late report is not ignored: it is a record of its own, pointing at the one it amends, the Sentinel\'s sighting there confirming it (C3a2)');
   assert.deepStrictEqual(again.mark_seqs, [fresh]);
   assert.strictEqual(again.amends, null);
   assert.strictEqual(byPath('src/b.ts')[0].mark_seqs[0], stale);

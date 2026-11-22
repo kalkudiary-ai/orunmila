@@ -77,6 +77,28 @@ it('C3a: the same change seen by both witnesses, a human edit, and marks that ch
   }
 });
 
+it('C3a2 (line 438): a late Glove edit amending an odù of its own call whose Sentinel saw the change is not unconfirmed_by_filesystem; one amending an odù no witness saw change still is', () => {
+  const odus = replay((append) => {
+    append(M.started(0, 'e1', { kind: 'file', path: 'src/seen.ts' }));
+    append(M.disk(100, 'src/seen.ts'));
+    append(M.started(0, 'e2', { kind: 'file', path: 'src/unseen.ts' }));
+    append(M.disk(200, 'src/other.ts')); // a hand edit only the Sentinel saw: settled at 1,700, sealed at 4,700
+    append(M.turnEnded(200));
+    append(M.tick(5000));
+    append(M.edited(5100, 'e1', 'src/seen.ts')); // the outcomes, after both odùs sealed: each amends its own
+    append(M.edited(5200, 'e2', 'src/unseen.ts'));
+    append(M.edited(4400, 'e9', 'src/other.ts')); // seen before that odù sealed (4,700), arriving after: amends it, but is not its call
+    append(M.tick(20000));
+  });
+  const other = of(odus, (o) => file('src/other.ts')(o) && o.amends !== null);
+  assert.deepStrictEqual(other.conflicts.map((c) => c.kind), ['unconfirmed_by_filesystem'], 'the Sentinel saw a change there, but not this call\'s');
+  const amending = (p) => of(odus, (o) => file(p)(o) && o.amends !== null);
+  const seen = amending('src/seen.ts');
+  assert.deepStrictEqual([witnesses(seen), seen.conflicts], [['saw', 'saw_nothing'], []], 'the Sentinel saw it, in the odù this one amends');
+  const unseen = amending('src/unseen.ts');
+  assert.deepStrictEqual([witnesses(unseen), unseen.conflicts.map((c) => c.kind)], [['saw', 'saw_nothing'], ['unconfirmed_by_filesystem']]);
+});
+
 const DOWN = (fromMs, toMs) => ({ ...M.gap(toMs, 'every mark sent to intake while it was not running'), detail: { lost: 'every mark sent to intake while it was not running', since: { mono_ns: ns(fromMs), observed_at: wall(fromMs) }, until: { mono_ns: ns(toMs), observed_at: wall(toMs) }, sessions: ['ses_replay_test'] } });
 const missing = (ref, why, said = { hook: ['started'] }) => ({ kind: 'outcome_missing', sources: Object.keys(said).sort(), said, ref, why });
 

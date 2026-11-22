@@ -154,7 +154,9 @@
  * Conflicts (station 6, slice C3a, LD188; lines 328, 411, 438): every sealed
  * group carries `conflicts`, empty when there is none; each names the sources
  * that bear on it and what each said (`sources`, `said`). Station 5 gives
- * `concurrent_sessions`; `conflictsOf` gives `unconfirmed_by_filesystem`, and
+ * `concurrent_sessions`; `conflictsOf` gives `unconfirmed_by_filesystem` (not
+ * for a late edit of a call whose earlier odù, the one it amends, the Sentinel
+ * or git saw change: C3a2, LD190), and
  * `outcome_missing` (C3b, LD189) for each call with a `started` mark in the
  * group and no outcome when it seals, or an outcome its payload says was
  * interrupted: `ref` the call, `why` interrupted, gap (a Glove or intake capture
@@ -344,7 +346,9 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
   function conflictsOf(g) {
     const out = [];
     const gloveEdit = g.says.some((v, i) => CHANGES_A_FILE.has(v) && g.sources[i] === 'hook');
-    if (g.key.startsWith('file:') && gloveEdit && !g.sources.includes('git') && witness(g, 'sentinel').status === 'saw_nothing') out.push(conflictOf(g, 'unconfirmed_by_filesystem', ['hook', 'sentinel']));
+    // C3a2 (LD190): a late edit of a call whose earlier odù the Sentinel or git saw change was seen, in the odù it amends.
+    const seenBefore = g.amended && g.amended.seen && g.hints.some((h, i) => h && CHANGES_A_FILE.has(g.says[i]) && g.sources[i] === 'hook' && g.amended.causes.has(h));
+    if (g.key.startsWith('file:') && gloveEdit && !seenBefore && !g.sources.includes('git') && witness(g, 'sentinel').status === 'saw_nothing') out.push(conflictOf(g, 'unconfirmed_by_filesystem', ['hook', 'sentinel']));
     // C3b (LD189; line 439, test 71): a started call with no outcome by the end of its turn, or one its payload says was interrupted.
     for (const id of startedIn(g)) {
       const t = inFlight.get(id);
@@ -499,7 +503,8 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       g.conflicts = [...(g.attr.conflicts || []), ...conflictsOf(g)];
       const disk = (g.key.startsWith('file:') || g.key.startsWith('dirchange:')) && g.says.some((v) => DISK.has(v));
       g.notCredited = disk && g.attr.attribution === 'unexplained' ? notCreditedOf(g) : undefined;
-      sealedLast.set(g.key, { id: g.id, at: g.sealedAt, causes: g.causes });
+      const seen = g.says.some((v, i) => DISK.has(v) && (g.sources[i] === 'sentinel' || g.sources[i] === 'git')); // C3a2
+      sealedLast.set(g.key, { id: g.id, at: g.sealedAt, causes: g.causes, seen });
       if (live.get(g.key) === g) live.delete(g.key);
       unsealed.delete(g.id);
       return record(g);
@@ -614,7 +619,8 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       const continues = f && (f.held || now - f.at < quiet) ? f.id : null;
       const s = sealedLast.get(key);
       const amends = s && ((m.cause_hint && s.causes.has(m.cause_hint)) || BigInt(m.mono_ns) <= s.at) ? s.id : null;
-      g = { n: ++made, id: id(made), key, state: 'open', parentId: null, childIds: [], startAt: null, exitAt: null, lost: false, target, seqs: [], says: [], real: [], realSays: [], sources: [], slots: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues, amends, causes: new Set(), isCommand: key.startsWith('command:'), isTurn: key.startsWith('turn:'), turnEnded: false, fp: null, lastOther: 0, net: undefined, hints: [], changeSeen: [], atChange: null, besideExit: null, overlap: null, attr: null, confidence: null, conflicts: null, notCredited: undefined };
+      const amended = amends ? s : null; // C3a2: what the odù it amends saw
+      g = { n: ++made, id: id(made), key, state: 'open', parentId: null, childIds: [], startAt: null, exitAt: null, lost: false, target, seqs: [], says: [], real: [], realSays: [], sources: [], slots: [], first: now, last: now, settledAt: null, sealedAt: null, forced: false, continues, amends, amended, causes: new Set(), isCommand: key.startsWith('command:'), isTurn: key.startsWith('turn:'), turnEnded: false, fp: null, lastOther: 0, net: undefined, hints: [], changeSeen: [], atChange: null, besideExit: null, overlap: null, attr: null, confidence: null, conflicts: null, notCredited: undefined };
       live.set(key, g);
       unsealed.set(g.id, g);
       all.push(g);

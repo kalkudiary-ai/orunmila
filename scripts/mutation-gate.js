@@ -1840,6 +1840,16 @@ const MUTANTS = [
   { id: 'C3b-10 the schema does not ask an outcome_missing for its call', file: 'spec/odu.schema.json', test: 'test/conflicts.js',
     from: '"ref",\n            "why"', to: '"why"',
     fails: ['C3b: a call with its outcome'] },
+  // Slice C3a2: a late Glove edit confirmed by the Sentinel's sighting in the odù of its call it amends (LD190).
+  { id: 'C3a2-1 the amended odù\'s sighting never counts', file: 'src/opon/settle/engine.js', test: 'test/conflicts.js',
+    from: 'const seenBefore = g.amended && g.amended.seen &&', to: 'const seenBefore = false &&',
+    fails: ['C3a2'] },
+  { id: 'C3a2-2 an amended odù counts as seen though no witness saw it change', file: 'src/opon/settle/engine.js', test: 'test/conflicts.js',
+    from: 'g.amended && g.amended.seen && g.hints', to: 'g.amended && g.hints',
+    fails: ['C3a2'] },
+  { id: "C3a2-3 another call's sighting confirms the edit", file: 'src/opon/settle/engine.js', test: 'test/conflicts.js',
+    from: '&& g.amended.causes.has(h));', to: ');',
+    fails: ['C3a2'] },
 ];
 
 function copyRepo(root) {

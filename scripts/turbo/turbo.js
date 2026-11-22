@@ -69,6 +69,49 @@ function headActions(root) {
 const COMMIT_ACTIONS = new Set(['commit', 'commit (initial)']);
 const porcelain = (root) => git(root, ['status', '--porcelain=v1']).split('\n').filter(Boolean);
 
+/** True when root is a linked worktree: its git common dir lies outside it, shared with another checkout. */
+function isLinkedWorktree(root) {
+  const common = fs.realpathSync(path.resolve(root, git(root, ['rev-parse', '--git-common-dir']).trim()));
+  const r = fs.realpathSync(root);
+  return !(common === r || common.startsWith(r + path.sep));
+}
+
+/**
+ * Make TURBO's own clone (LD116): its own .git, on `branch`, the ledger branch local, no remote,
+ * the source recorded as turbo.source (the driver's summary names the fetch that brings work
+ * back). Copies the hook settings, links CLAUDE.md and the rules doc where the source links them,
+ * and links the clone's Claude Code memory folder to `memoryFrom`.
+ */
+function cloneRepo({ source, dest, branch, ledger = 'output-1', claudeHome = path.join(require('os').homedir(), '.claude'), memoryFrom = null }) {
+  if (fs.existsSync(dest)) throw new Error(`${dest} exists; TURBO makes its clone fresh`);
+  execFileSync('git', ['clone', '-q', '--no-hardlinks', '--branch', branch, source, dest], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const g = (a) => execFileSync('git', ['-C', dest, ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  if (spawnSync('git', ['-C', dest, 'rev-parse', '--verify', '-q', `refs/remotes/origin/${ledger}`]).status === 0 && ledger !== branch) g(['branch', ledger, `origin/${ledger}`]);
+  g(['remote', 'remove', 'origin']);
+  g(['config', 'turbo.source', fs.realpathSync(source)]);
+  const settings = path.join(source, '.claude', 'settings.local.json');
+  if (fs.existsSync(settings)) {
+    fs.mkdirSync(path.join(dest, '.claude'), { recursive: true });
+    fs.copyFileSync(settings, path.join(dest, '.claude', 'settings.local.json'));
+  }
+  for (const f of ['CLAUDE.md', path.join('docs', 'AGENT_OPERATING_RULES.md')]) {
+    let target = null;
+    try {
+      target = fs.readlinkSync(path.join(source, f));
+    } catch {}
+    if (target && !fs.existsSync(path.join(dest, f))) {
+      fs.mkdirSync(path.dirname(path.join(dest, f)), { recursive: true });
+      fs.symlinkSync(target, path.join(dest, f));
+    }
+  }
+  if (memoryFrom) {
+    const dir = path.join(claudeHome, 'projects', fs.realpathSync(dest).replace(/[^A-Za-z0-9]/g, '-'));
+    fs.mkdirSync(dir, { recursive: true });
+    if (!fs.existsSync(path.join(dir, 'memory'))) fs.symlinkSync(memoryFrom, path.join(dir, 'memory'));
+  }
+  return { dest, branch };
+}
+
 function isCommit(root, s) {
   const r = spawnSync('git', ['-C', root, 'cat-file', '-t', s], { encoding: 'utf8' });
   return r.status === 0 && r.stdout.trim() === 'commit';
@@ -217,6 +260,10 @@ function summaryText(r) {
   const decisions = r.sessions.flatMap((s) => s.decisions || []);
   out.push('', `## Decisions logged (${decisions.length})`, '', decisions.length ? decisions.join(', ') : 'None.');
   out.push('', '## Plan', '', '`' + JSON.stringify(plan.counts(r.plan)) + '`');
+  if (r.source) {
+    out.push('', '## Bringing the work back (O\'s step)', '', 'The run worked in its own clone. To look at its commits from the source, without moving any branch there:', '');
+    out.push('```sh', `git -C ${r.source} fetch ${r.root} ${r.branch}:refs/turbo/${r.branch} output-1:refs/turbo/output-1`, `git -C ${r.source} log --oneline ${r.branch}..refs/turbo/${r.branch}`, '```');
+  }
   if (r.gates) {
     out.push('', '## Final gates (run by the driver, each alone)', '');
     for (const g of r.gates) out.push(`- \`${g.command}\`: exit ${g.exit} (${g.file})`);
@@ -257,6 +304,9 @@ async function run(opts) {
       held = JSON.parse(fs.readFileSync(lockFile, 'utf8'));
     } catch {}
     if (held && alive(held.pid)) throw new Error(`another driver is running (pid ${held.pid}, run ${held.run})`);
+  }
+  if (isLinkedWorktree(o.root)) {
+    throw new Error(`${o.root} is a linked worktree: its .git is shared with another checkout (here, the live copy), which no sandbox rule keeps safe (LD116). Run TURBO in its own clone: node scripts/turbo/turbo.js clone`);
   }
   const baseline = porcelain(o.root);
   const tracked = baseline.filter((l) => !l.startsWith('??'));
@@ -433,7 +483,8 @@ async function run(opts) {
       });
     }
     const ended = new Date(o.now()).toISOString();
-    result = { run: runId, runDir, started: new Date(start).toISOString(), ended, stopReason: stopReason || 'error', hours: o.hours, branch, sessions, plan: finalPlan, gates };
+    const src = spawnSync('git', ['-C', o.root, 'config', '--get', 'turbo.source'], { encoding: 'utf8' });
+    result = { run: runId, runDir, root: o.root, source: src.status === 0 ? src.stdout.trim() : null, started: new Date(start).toISOString(), ended, stopReason: stopReason || 'error', hours: o.hours, branch, sessions, plan: finalPlan, gates };
     fs.writeFileSync(path.join(runDir, 'summary.md'), summaryText(result));
     log({ type: 'end', stopReason: result.stopReason, sessions: sessions.length, gates });
     try {
@@ -486,6 +537,18 @@ async function main(argv) {
       process.stdout.write(`TURBO home: ${home}\n`);
       return 0;
     }
+    if (cmd === 'clone') {
+      let dest = path.join(require('os').homedir(), 'tools', 'orunmila-turbo');
+      for (let i = 0; i < rest.length; i++) if (rest[i] === '--dest' && i + 1 < rest.length) dest = path.resolve(rest[++i]);
+      const branch = branchOf(ROOT);
+      // This project's memory folder: Claude Code keys it by the main checkout's folder.
+      const common = fs.realpathSync(path.resolve(ROOT, git(ROOT, ['rev-parse', '--git-common-dir']).trim()));
+      const key = path.dirname(common).replace(/[^A-Za-z0-9]/g, '-');
+      const memoryFrom = path.join(require('os').homedir(), '.claude', 'projects', key, 'memory');
+      cloneRepo({ source: ROOT, dest, branch, memoryFrom: fs.existsSync(memoryFrom) ? memoryFrom : null });
+      process.stdout.write(`TURBO clone: ${dest} (branch ${branch}, no remote). Start runs there: cd ${dest} && node scripts/turbo/turbo.js init\n`);
+      return 0;
+    }
     if (cmd === 'status') {
       const p = plan.load(home);
       process.stdout.write(`plan: ${JSON.stringify(plan.counts(p))}\n`);
@@ -510,4 +573,4 @@ async function main(argv) {
 
 if (require.main === module) main(process.argv.slice(2)).then((code) => process.exit(code));
 
-module.exports = { run, choose, leopardReferee, summaryText, parseArgs, main };
+module.exports = { run, choose, leopardReferee, summaryText, parseArgs, main, cloneRepo, isLinkedWorktree };

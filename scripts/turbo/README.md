@@ -1,18 +1,27 @@
 # TURBO
 
-An unattended Leopard run for the Orunmila build (O, 2026-11-22; decisions LD108-LD112 in
+An unattended Leopard run for the Orunmila build (O, 2026-11-22; decisions LD108-LD116 in
 `review/leopard-decisions.md` on `output-1`). It keeps working for the hours you give it. It does
 everything that does not need you, queues what does, and works around it.
 
 ## Start a run
 
-From a terminal, in the worktree (not inside a Claude session, so the run outlives it):
+TURBO runs in its own clone, never in the worktree: the worktree shares the live copy's `.git`, and no
+sandbox rule kept that safe (LD116). From a terminal (not inside a Claude session, so the run
+outlives it):
 
 ```sh
 cd ~/tools/orunmila-dev
+node scripts/turbo/turbo.js clone            # once: ~/tools/orunmila-turbo, on this branch, no remote
+cd ~/tools/orunmila-turbo
 node scripts/turbo/turbo.js init
 nohup node scripts/turbo/turbo.js run --hours 6 > .turbo/driver.out 2>&1 &
 ```
+
+The work comes back only when you fetch it: the run's `summary.md` ends with the two commands
+(`git fetch` from the clone into `refs/turbo/*` of the worktree, then `git log` to read it), which move
+no branch. Merging it into `n10-redo` is then your own step. To start the next run from new work,
+delete the clone and make it again.
 
 Options: `--hours N` (default 6), `--session-minutes N` (the most one session may take, default 75),
 `--model opus`, `--effort high`, `--budget-usd N` (per session), `--poll-minutes N` (how often a
@@ -63,16 +72,12 @@ keeps or repeals them as a set (LD111).
 The base layer is the OS sandbox (LD113, after a cold verify got 14 of 20 bypasses past the guard
 and switched the git hooks off with `-c core.hooksPath=/dev/null`). Every Bash command and all its
 children (`node -e` and scripts included) run under macOS Seatbelt with no network at all. Writes
-go to the worktree, TURBO_HOME and scratch, the temp dir, and the git common dir (the live copy's
-`.git`, which Claude Code opens for a worktree itself). In that dir, everything a commit here does
-not need is denied by exact path, rebuilt when each session starts (LD115): `main`, every other
-branch but `output-1`, tags and every other ref namespace, the live copy's `HEAD`, index, config,
-hooks, `packed-refs`, `info/`, `logs/HEAD` and other reflogs, other worktrees, `objects/info`, and this
-worktree's `HEAD`, `gitdir` and `commondir`. Every session scratchpad under
-`/private/tmp/claude-<uid>/` is denied too. Checked live with every path kept off the command line,
-so only the sandbox stood in the way: probe `40ebdabd` (19 of 20 denied paths EPERM, all 7 needed
-paths open) and probe `652a1d15` (a commit goes through; a branch switch by rename, a hooks-off
-update of `main` from a script, and a move of another branch all fail). There is no retry outside it
+go only to the clone (with its own `.git`), TURBO_HOME and scratch inside it, and the temp dir; the
+clone's git `hooks` and `config`, `scripts/turbo/`, `.claude/` and every session scratchpad under
+`/private/tmp/claude-<uid>/` are denied. Nothing of the live copy or the worktree is writable, and the
+driver refuses to run in a linked worktree. (LD113-LD115 tried to keep the shared `.git` safe by deny
+lists; three cold verifies each found a new gap, the last one `commondir`, branches kept in
+`packed-refs`, and deletable pack files, so the method changed.) There is no retry outside it
 (`allowUnsandboxedCommands: false`), and a session will not start without it (`failIfUnavailable`).
 The file tools (Edit, Write) are not sandboxed; the guard checks them by real path.
 
@@ -92,13 +97,12 @@ The layers below are second checks:
 No MCP servers are loaded. A refused action becomes a queue item.
 
 **Known limits:** the guard and the git hooks can be got round (variables, aliases, `send-pack`,
-`-c core.hooksPath=`); the sandbox is what holds. What a session can still write: any file in the
-worktree outside `scripts/turbo/` and `.claude/`; this worktree's branch and `output-1`; git objects;
-and a brand-new branch name (not `main`; it was the one denied path probe `40ebdabd` could create).
-All are reversible by git. A refused checkout can rewrite the worktree's files before it fails on
-`HEAD`; the driver reads `HEAD`'s reflog after each session, and any entry that is not a commit makes
-the next session a recovery. The deny list is built from git's layout as it is at session start: a
-special name git adds in a later version is not on it.
+`-c core.hooksPath=`); the sandbox is what holds. Inside the clone a session can write anything but
+the paths above, including its branches and its object store: damage there stays in the clone, and
+reaches the worktree only through your fetch. A refused checkout can rewrite the clone's files before
+it fails on `HEAD`; the driver reads `HEAD`'s reflog after each session, and any entry that is not a
+commit makes the next session a recovery. The Sentinel does not watch the clone, so in a witness join
+its writes are Glove rows "outside the watched folder".
 
 ## Files
 

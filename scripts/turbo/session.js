@@ -131,8 +131,6 @@ const DENY = [
   'Glob',
 ];
 
-const LEDGER_BRANCH = 'output-1';
-
 /** The worktree's git dirs and branch: { common, own, branch }, real paths; null when git cannot say (then no git write is allowed). */
 function gitDirs(root) {
   try {
@@ -147,57 +145,13 @@ function gitDirs(root) {
   }
 }
 
-// git's special names in a common dir that a commit in a linked worktree never writes, denied
-// even before they exist (a MERGE_HEAD or grafts file in the live copy's .git would change it).
-const TOP_NAMES = ['HEAD', 'config', 'config.worktree', 'index', 'packed-refs', 'shallow', 'ORIG_HEAD', 'FETCH_HEAD', 'MERGE_HEAD', 'MERGE_MSG', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'REBASE_HEAD', 'BISECT_LOG', 'COMMIT_EDITMSG', 'description', 'info', 'hooks', 'branches', 'remotes', 'modules', 'rebase-merge', 'rebase-apply', 'sequencer'];
-const LOCKED = ['HEAD', 'config', 'index', 'packed-refs', 'shallow', 'ORIG_HEAD'];
-const REF_SPACES = ['tags', 'remotes', 'stash', 'replace', 'notes', 'bisect', 'rewritten', 'worktree', 'prefetch'];
-
 /**
- * The exact paths to deny in the git common dir (LD115). Claude Code opens a worktree's common
- * dir itself, and a deny beats any allow inside it, so the dir stays open and everything a commit
- * here does not need is denied by name: rebuilt when each session starts, from what is there.
- */
-function carveCommon(g) {
-  const ls = (d) => {
-    try {
-      return fs.readdirSync(d);
-    } catch {
-      return [];
-    }
-  };
-  const c = g.common;
-  const keep = new Set([g.branch, LEDGER_BRANCH].filter((x) => x && x !== 'main'));
-  const out = new Set();
-  const add = (...p) => out.add(path.join(...p));
-  for (const e of ls(c)) if (!['objects', 'refs', 'logs', 'worktrees'].includes(e)) add(c, e);
-  for (const n of TOP_NAMES) add(c, n);
-  for (const n of LOCKED) add(c, `${n}.lock`);
-  for (const e of ls(path.join(c, 'refs'))) if (e !== 'heads') add(c, 'refs', e);
-  for (const n of REF_SPACES) add(c, 'refs', n);
-  for (const e of ls(path.join(c, 'refs', 'heads'))) if (!keep.has(e) && !keep.has(e.replace(/\.lock$/, ''))) add(c, 'refs', 'heads', e);
-  add(c, 'refs', 'heads', 'main');
-  add(c, 'refs', 'heads', 'main.lock');
-  add(c, 'logs', 'HEAD');
-  for (const e of ls(path.join(c, 'logs', 'refs'))) if (e !== 'heads') add(c, 'logs', 'refs', e);
-  for (const e of ls(path.join(c, 'logs', 'refs', 'heads'))) if (!keep.has(e)) add(c, 'logs', 'refs', 'heads', e);
-  for (const e of ls(path.join(c, 'worktrees'))) if (path.join(c, 'worktrees', e) !== g.own) add(c, 'worktrees', e);
-  add(c, 'objects', 'info');
-  // This worktree's own folder: its HEAD (a branch switch renames HEAD.lock onto it), and the
-  // links that tie it to its folder. HEAD.lock stays open: a commit takes it.
-  add(g.own, 'HEAD');
-  add(g.own, 'gitdir');
-  add(g.own, 'commondir');
-  return [...out];
-}
-
-/**
- * The OS sandbox for every Bash command and its children (LD113, LD115): no
- * network at all, and writes only where a slice needs them. The worktree (cwd),
- * TURBO_HOME and scratch (--add-dir) and the per-user temp dir are writable by
- * default, and so is the git common dir (the live copy's .git), which Claude
- * Code opens itself; carveCommon() denies in it everything a commit here does
- * not need. Every session scratchpad under /private/tmp/claude-<uid>/ is denied.
+ * The OS sandbox for every Bash command and its children (LD113, LD116): no
+ * network at all, and writes only to the TURBO clone (cwd, with its own .git),
+ * TURBO_HOME and scratch (--add-dir) and the per-user temp dir. Nothing of the
+ * live copy or the worktree is writable: the driver refuses a linked worktree,
+ * whose .git would be shared. Every session scratchpad under
+ * /private/tmp/claude-<uid>/ is denied.
  */
 function sandbox(root) {
   const g = gitDirs(root);
@@ -210,10 +164,9 @@ function sandbox(root) {
     pads = fs.readdirSync(tmp).filter((n) => n.startsWith('-')).map((n) => path.join(tmp, n));
   } catch {}
   const denyWrite = [path.join(root, 'scripts', 'turbo'), path.join(root, '.claude'), `${tmp}/-*`, ...pads];
-  if (g) {
-    allowWrite.push(g.common);
-    denyWrite.push(...carveCommon(g));
-  }
+  // In a TURBO clone (LD116) the git dir is its own, inside the cwd; only its hooks and config,
+  // which could run code or turn the git hooks off, are denied.
+  if (g) denyWrite.push(path.join(g.common, 'hooks'), path.join(g.common, 'config'), path.join(g.common, 'config.lock'));
   return {
     enabled: true,
     failIfUnavailable: true,

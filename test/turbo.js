@@ -773,54 +773,69 @@ it('sandbox: on, fail-closed, no unsandboxed retry, no network, nothing excluded
   assert.strictEqual(sb.network.strictAllowlist, true);
 });
 
-it('sandbox: in the git common dir everything a commit does not need is denied by exact path (LD115)', () => {
-  const root = path.join(__dirname, '..');
-  const fsx = session.settings({ root }).sandbox.filesystem;
-  const { execFileSync: x } = require('child_process');
-  const common = fs.realpathSync(path.resolve(root, x('git', ['-C', root, 'rev-parse', '--git-common-dir'], { encoding: 'utf8' }).trim()));
-  const own = x('git', ['-C', root, 'rev-parse', '--absolute-git-dir'], { encoding: 'utf8' }).trim();
-  const branch = x('git', ['-C', root, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
-  // LD115: Claude Code opens the common dir itself (probe b4c091e8), and a deny beats any allow
-  // inside it (probe dd32b768), so it stays open and every entry a commit does not need is denied.
-  assert.deepStrictEqual(fsx.allowWrite, [common]);
-  const ls = (d) => (fs.existsSync(d) ? fs.readdirSync(d) : []);
-  const denied = (p) => assert.ok(fsx.denyWrite.includes(p), `denyWrite lacks ${p}`);
-  const keep = [branch, 'output-1'];
-  for (const e of ls(common)) if (!['objects', 'refs', 'logs', 'worktrees'].includes(e)) denied(path.join(common, e));
-  for (const n of ['HEAD', 'config', 'index', 'packed-refs', 'shallow', 'ORIG_HEAD', 'FETCH_HEAD', 'MERGE_HEAD', 'info', 'hooks']) denied(path.join(common, n));
-  for (const n of ['HEAD', 'config', 'index', 'packed-refs', 'shallow']) denied(path.join(common, `${n}.lock`));
-  for (const e of ls(path.join(common, 'refs'))) if (e !== 'heads') denied(path.join(common, 'refs', e));
-  for (const n of ['tags', 'remotes', 'stash', 'replace', 'notes']) denied(path.join(common, 'refs', n));
-  for (const e of ls(path.join(common, 'refs', 'heads'))) if (!keep.includes(e)) denied(path.join(common, 'refs', 'heads', e));
-  denied(path.join(common, 'refs', 'heads', 'main'));
-  denied(path.join(common, 'refs', 'heads', 'main.lock'));
-  denied(path.join(common, 'logs', 'HEAD'));
-  for (const e of ls(path.join(common, 'logs', 'refs'))) if (e !== 'heads') denied(path.join(common, 'logs', 'refs', e));
-  for (const e of ls(path.join(common, 'logs', 'refs', 'heads'))) if (!keep.includes(e)) denied(path.join(common, 'logs', 'refs', 'heads', e));
-  for (const e of ls(path.join(common, 'worktrees'))) if (path.join(common, 'worktrees', e) !== own) denied(path.join(common, 'worktrees', e));
-  denied(path.join(common, 'objects', 'info'));
-  // What a commit here needs is not denied.
-  const need = [path.join(common, 'objects'), own, path.join(own, 'index'), path.join(own, 'index.lock'), path.join(own, 'HEAD.lock'), path.join(own, 'logs')];
-  for (const b of keep) need.push(path.join(common, 'refs', 'heads', b), path.join(common, 'refs', 'heads', `${b}.lock`), path.join(common, 'logs', 'refs', 'heads', b));
-  for (const p of need) assert.ok(!fsx.denyWrite.includes(p), `a path a commit needs is denied: ${p}`);
-  for (const w of [
-    path.join(own, 'HEAD'),
-    path.join(own, 'gitdir'),
-    path.join(own, 'commondir'),
-    path.join(root, 'scripts', 'turbo'),
-    path.join(root, '.claude'),
-    `/private/tmp/claude-${require('os').userInfo().uid}/-*`,
-  ])
-    assert.ok(fsx.denyWrite.includes(w), `denyWrite lacks ${w}`);
-  // The wildcard alone did not deny (probe effb4a37 created a file in a scratchpad), so every
-  // session scratchpad folder that exists is also denied by its exact path.
-  const tmp = `/private/tmp/claude-${require('os').userInfo().uid}`;
-  const pads = fs.existsSync(tmp) ? fs.readdirSync(tmp).filter((n) => n.startsWith('-')).map((n) => path.join(tmp, n)) : [];
-  for (const p of pads) assert.ok(fsx.denyWrite.includes(p), `denyWrite lacks the scratchpad ${p}`);
-  // A commit locks the worktree's HEAD (HEAD.lock, then removed): denying it broke git commit
-  // in the sandboxed probe (session 2cacf12e, exit 128). A branch switch must rename the lock
-  // onto HEAD, which stays denied.
-  assert.ok(!fsx.denyWrite.includes(path.join(own, 'HEAD.lock')), "the worktree's HEAD.lock is denied, so no commit can be made");
+it('sandbox: in a TURBO clone, only its own git hooks and config, TURBO, .claude and the scratchpads are denied (LD116)', () => {
+  const base = fs.realpathSync(tmpDir());
+  try {
+    const root = path.join(base, 'clone');
+    fs.mkdirSync(root);
+    gitIn(root, ['init', '-q', '-b', 'work']);
+    const fsx = session.settings({ root }).sandbox.filesystem;
+    assert.deepStrictEqual(fsx.allowWrite, []);
+    for (const p of [path.join(root, '.git', 'hooks'), path.join(root, '.git', 'config'), path.join(root, '.git', 'config.lock'), path.join(root, 'scripts', 'turbo'), path.join(root, '.claude')])
+      assert.ok(fsx.denyWrite.includes(p), `denyWrite lacks ${p}`);
+    const tmp = `/private/tmp/claude-${require('os').userInfo().uid}`;
+    assert.ok(fsx.denyWrite.includes(`${tmp}/-*`));
+    const pads = fs.existsSync(tmp) ? fs.readdirSync(tmp).filter((n) => n.startsWith('-')).map((n) => path.join(tmp, n)) : [];
+    for (const p of pads) assert.ok(fsx.denyWrite.includes(p), `denyWrite lacks the scratchpad ${p}`);
+  } finally {
+    rmrf(base);
+  }
+});
+
+it('driver: refuses a linked worktree (its .git is shared with another checkout); TURBO runs in its own clone', async () => {
+  const d = driverSetup([], { slices: [S('a')] });
+  try {
+    gitIn(d.root, ['worktree', 'add', '-q', path.join(d.base, 'wt'), '-b', 'wtb']);
+    await assert.rejects(() => turbo.run({ ...d.opts, root: path.join(d.base, 'wt') }), /linked worktree/);
+    assert.ok(!fs.existsSync(path.join(d.home, 'driver.lock')), 'the lock was left behind');
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('clone: an isolated repo on the branch, the ledger branch local, no remote, hooks settings, rule links, memory link, source recorded', () => {
+  const base = fs.realpathSync(tmpDir());
+  try {
+    const src = path.join(base, 'src');
+    fs.mkdirSync(src);
+    gitIn(src, ['init', '-q', '-b', 'work']);
+    fs.writeFileSync(path.join(src, 'f.txt'), 'f\n');
+    gitIn(src, ['add', 'f.txt']);
+    gitIn(src, ['commit', '-q', '-m', 'base']);
+    gitIn(src, ['branch', 'output-1']);
+    fs.mkdirSync(path.join(src, '.claude'));
+    fs.writeFileSync(path.join(src, '.claude', 'settings.local.json'), '{"hooks":{}}\n');
+    fs.writeFileSync(path.join(base, 'rules.md'), 'rules\n');
+    fs.symlinkSync(path.join(base, 'rules.md'), path.join(src, 'CLAUDE.md'));
+    const mem = path.join(base, 'memory');
+    fs.mkdirSync(mem);
+    const claudeHome = path.join(base, 'claude-home');
+    const dest = path.join(base, 'turbo-clone');
+    turbo.cloneRepo({ source: src, dest, branch: 'work', claudeHome, memoryFrom: mem });
+    const g = (...a) => gitIn(dest, a).stdout.trim();
+    assert.strictEqual(fs.realpathSync(path.resolve(dest, g('rev-parse', '--git-common-dir'))), path.join(fs.realpathSync(dest), '.git'));
+    assert.strictEqual(g('symbolic-ref', '--short', 'HEAD'), 'work');
+    assert.strictEqual(g('rev-parse', 'output-1'), gitIn(src, ['rev-parse', 'output-1']).stdout.trim());
+    assert.strictEqual(g('remote'), '', 'the clone has a remote');
+    assert.strictEqual(g('config', '--get', 'turbo.source'), fs.realpathSync(src));
+    assert.strictEqual(fs.readFileSync(path.join(dest, '.claude', 'settings.local.json'), 'utf8'), '{"hooks":{}}\n');
+    assert.strictEqual(fs.readlinkSync(path.join(dest, 'CLAUDE.md')), path.join(base, 'rules.md'));
+    const key = fs.realpathSync(dest).replace(/[^A-Za-z0-9]/g, '-');
+    assert.strictEqual(fs.readlinkSync(path.join(claudeHome, 'projects', key, 'memory')), mem);
+    assert.throws(() => turbo.cloneRepo({ source: src, dest, branch: 'work', claudeHome }), /exists/);
+  } finally {
+    rmrf(base);
+  }
 });
 
 it('driver: a HEAD reflog entry that is not a commit (a checkout, even one put back) makes the next session a recovery', async () => {

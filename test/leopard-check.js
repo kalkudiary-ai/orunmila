@@ -466,4 +466,81 @@ it(
   }),
 );
 
+// --- LC2 (LD137): only this session's Slice commits are judged ----------------
+
+const PEER = 'sess-peer';
+const peerRow = (row) => ({ ...row, session_id: PEER });
+
+it(
+  "report (LC2): another session's Slice commit in the span is listed as theirs and never judged on this session's runs; --gate judges only this session's",
+  withRepo((repo) => {
+    const own = goodSlice(repo); // red 20, writes 10/40, green 50, gates 60-64, commit 70 (run at 71)
+    // The peer's slice: a shell write seen only by the Sentinel (no session), the same Test: line
+    // as ours, and its own commit run. Old behaviour: judged on our red, green and gates, and shown.
+    const peerSha = commit(repo, 100, ['src/z.js'], 'feat: peer\n\nSlice: P1\nTest: node test/a.js\n');
+    const rows = [
+      ...own.rows,
+      peerRow(prompt(1)),
+      sentinelWrite(repo, 80, 'src/z.js'),
+      cmd(75, 'node test/a.js > /tmp/r2.txt', true),
+      cmd(85, 'node test/a.js > /tmp/g2.txt', false),
+      ...gateRows(86),
+      peerRow(cmd(101, 'git commit -F /tmp/pm', false)),
+      prompt(110), // this session goes on, so the peer's commit is inside its span
+    ];
+    const r = check(repo, rows);
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.deepStrictEqual(r.json.commits.map((c) => c.slice), ['L9'], JSON.stringify(r.json.commits.map((c) => [c.slice, c.shown])));
+    assert.deepStrictEqual(r.json.others, [{ sha: peerSha, slice: 'P1', session: PEER }]);
+    assert.strictEqual(check(repo, rows, ['--gate']).status, 0, 'the peer commit neither passes nor fails this session');
+    // From the peer's side the same log judges P1, and lists L9 as this session's.
+    const log = path.join(repo, '..', `${path.basename(repo)}-peer.jsonl`);
+    fs.writeFileSync(log, rows.map((x) => JSON.stringify(x)).join('\n') + '\n');
+    const pr = run('scripts/leopard-check.js', { args: ['--session', PEER, '--log', log, '--repo', repo, '--json'] });
+    fs.rmSync(log, { force: true });
+    const pj = JSON.parse(pr.stdout);
+    assert.deepStrictEqual(pj.commits.map((c) => c.slice), ['P1']);
+    assert.deepStrictEqual(pj.others.map((o) => [o.slice, o.session]), [['L9', SID]]);
+  }),
+);
+
+it(
+  'report (LC2): a Slice commit no recorded run made is listed as not recorded, and --gate exits 1 over that span',
+  withRepo((repo) => {
+    const own = goodSlice(repo);
+    const sha = commit(repo, 100, ['src/z.js'], 'feat: by hand\n\nSlice: H1\nTest: node test/z.js\n');
+    own.rows.push(prompt(110)); // inside this session's span
+    const r = check(repo, own.rows);
+    assert.deepStrictEqual(r.json.commits.map((c) => c.slice), ['L9']);
+    assert.deepStrictEqual(r.json.others, [{ sha, slice: 'H1', session: null }]);
+    const g = check(repo, own.rows, ['--gate']);
+    assert.strictEqual(g.status, 1, 'a Slice commit nobody is recorded making cannot be vouched for');
+    const log = path.join(repo, '..', `${path.basename(repo)}-text2.jsonl`);
+    fs.writeFileSync(log, own.rows.map((x) => JSON.stringify(x)).join('\n') + '\n');
+    const t = run('scripts/leopard-check.js', { args: ['--session', SID, '--log', log, '--repo', repo] });
+    fs.rmSync(log, { force: true });
+    const tl = t.stdout.split('\n');
+    assert.ok(tl.some((l) => l.trim() === `${sha.slice(0, 7)}  Slice: H1  no recorded commit run made it (--gate cannot pass over it)`), t.stdout);
+  }),
+);
+
+it(
+  "report (LC2): a commit run is read through a heredoc message, an env prefix, git -C and a leading cd; a commit run that ended before the commit is not its maker",
+  withRepo((repo) => {
+    const own = goodSlice(repo);
+    for (const command of [
+      `cd ${repo} && git commit -q -F - <<'EOF'\nfeat: a thing\n\nSlice: L9\nEOF`,
+      'GIT_INDEX_FILE=/tmp/idx git commit -q -m x',
+      `git -C ${repo} -c core.hooksPath=/dev/null commit -q -F /tmp/m`,
+      'printf x | git commit-tree abc -p def',
+    ]) {
+      const rows = own.rows.map((e) => (e.call_id === 'c71' ? { ...e, command } : e));
+      const r = check(repo, rows);
+      assert.deepStrictEqual(r.json.commits.map((c) => c.slice), ['L9'], `${command}: ${JSON.stringify(r.json.others)}`);
+    }
+    const before = [...own.rows.map((e) => (e.call_id === 'c71' ? { ...e, ts: iso(69) } : e)), prompt(110)]; // the commit stays in the span
+    assert.deepStrictEqual(check(repo, before).json.others.map((o) => o.session), [null]);
+  }),
+);
+
 runAll('leopard-check');

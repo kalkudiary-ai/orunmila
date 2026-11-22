@@ -5,8 +5,11 @@
  * ORUNMILA OVERRIDES, "The checker").
  *
  * Reads Orunmila's own records for one session, never files the agent writes.
- * For each commit made in the session's span whose message carries a
- * `Slice: <id>` trailer, it reports from those records:
+ * For each commit this session made in its span whose message carries a
+ * `Slice: <id>` trailer, it reports from those records (LC2, LD137: a commit's
+ * maker is the session whose recorded `git commit` / `git commit-tree` run
+ * ended first at or after it, within ten minutes; another session's Slice
+ * commits are listed under `others`, never judged on this session's runs):
  *
  *   red    a failing run of the commit's `Test: <command>`, run alone, before
  *          the slice's first write outside test/ ("n/a" if it wrote only there)
@@ -29,10 +32,13 @@
  *   node scripts/leopard-check.js --session <id> [--log <events.jsonl>]
  *        [--repo <dir>] [--json] [--gate | --pending --test "<command>"]
  *
- * Exit 0 as a reporter. With --gate, exit 1 unless every Slice commit is fully
- * shown, and also when there is none (a gate over nothing is not a pass).
+ * Exit 0 as a reporter. With --gate, exit 1 unless every one of this session's
+ * Slice commits is fully shown, and also when there is none (a gate over
+ * nothing is not a pass) or when a Slice commit in the span has no recorded
+ * maker (it cannot be vouched for).
  * With --pending, it judges the slice before its commit (O, 2026-11-16): the
- * staged files, from the session's last Slice commit (or first record) to now,
+ * staged files, from the latest earlier Slice commit sharing a staged file (or
+ * the session's first record; LD135) to now,
  * against the given Test: command; exit 0 only when fully shown, 1 otherwise,
  * nothing staged included. Run it in its own call before the commit.
  * Exit 2 on a usage error or a session with no records.
@@ -52,7 +58,7 @@ const GATES = [
 ];
 
 const LIMITS =
-  'Limits: a recorded exit code is the hook payload\'s; a pass is recorded as null and a failure as 1 whatever the real code (NF22). ' +
+  'Limits: a recorded exit code is the hook payload\'s; a pass is recorded as null, and a failure as 1 whatever the real code (NF22) unless the hook ran with ORUNMILA_EXACT_CAPTURE=1, which records the stated code. ' +
   'A command run in the background is recorded when it is launched, so it reads as passed (NF66). ' +
   'A run\'s working folder is not recorded beyond a leading cd.';
 
@@ -65,7 +71,7 @@ const LIMITS =
  * command substitution, heredocs, unbalanced quotes): such a run is never
  * treated as alone.
  */
-function steps(command) {
+function steps(command, { untilHeredoc = false } = {}) {
   const out = [];
   let argv = [];
   let word = null;
@@ -143,7 +149,12 @@ function steps(command) {
       // An fd number glued to the operator (2>, 1>>) belongs to it, not the word.
       if (word !== null && /^[0-9]+$/.test(word)) word = null;
       else endWord();
-      if (ch === '<' && s[i + 1] === '<') return null; // heredoc / herestring
+      if (ch === '<' && s[i + 1] === '<') {
+        // heredoc / herestring: not modelled, except to read the steps before it (LC2)
+        if (!untilHeredoc) return null;
+        if (argv.length) out.push({ op, argv });
+        return out.filter((st, k) => st.argv.length || k === 0);
+      }
       if (ch === '<' && s[i + 1] === '(') return null; // process substitution
       if (ch === '>' && s[i + 1] === '(') return null;
       if (s[i + 1] === '>' || s[i + 1] === '|') i++;
@@ -185,6 +196,44 @@ function aloneArgv(command, roots) {
 
 function sameArgv(a, b) {
   return a.length === b.length && a.every((x, i) => x === b[i]);
+}
+
+// git's own options that take the next word as their value.
+const GIT_VALUE_OPTS = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env']);
+
+/**
+ * Whether a recorded command made a commit (LC2): one of its steps, read up to
+ * any heredoc, is `git commit` or `git commit-tree`, after leading VAR=value
+ * words and git's own options. A command this reader does not model (a
+ * subshell, a substitution) is not read as a commit run.
+ */
+function isCommitRun(command) {
+  const st = steps(command, { untilHeredoc: true });
+  if (!st) return false;
+  return st.some(({ argv }) => {
+    let k = 0;
+    while (k < argv.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(argv[k])) k++;
+    if (argv[k] !== 'git' && !String(argv[k] || '').endsWith('/git')) return false;
+    for (k++; k < argv.length && argv[k].startsWith('-'); k++) if (GIT_VALUE_OPTS.has(argv[k])) k++;
+    return argv[k] === 'commit' || argv[k] === 'commit-tree';
+  });
+}
+
+const COMMIT_RUN_MAX_MS = 10 * 60 * 1000;
+
+/**
+ * Which session made a commit (LC2, LD137): the session whose recorded commit
+ * run ended first at or after the commit's time (committer time, whole
+ * seconds), within ten minutes; null when no recorded run fits. The record is
+ * Orunmila's own command rows, from every session in the log.
+ */
+function commitOwner(c, commitRuns) {
+  let best = null;
+  for (const r of commitRuns) {
+    const d = r.t - c.t;
+    if (d >= 0 && d <= COMMIT_RUN_MAX_MS && (!best || d < best.d)) best = { d, session: r.session };
+  }
+  return best ? best.session : null;
 }
 
 // --- records -------------------------------------------------------------------
@@ -350,21 +399,34 @@ function check({ rows, session, repo, pending = null }) {
   const head = { session, records: own.length, span: { from: new Date(span.from).toISOString(), to: new Date(span.to).toISOString() }, limits: LIMITS };
 
   if (pending) {
-    // The slice not yet committed: its staged files, from the session's last
-    // Slice commit (or its first record) to now.
+    // The slice not yet committed: its staged files, from the latest earlier
+    // Slice commit sharing one of them (or the session's first record; LD135) to now.
     const done = sliceCommits(repo, span.from, Date.now());
     const staged = git(repo, ['diff', '--cached', '--name-only']).split('\n').filter(Boolean).sort();
     if (!staged.length) return { ...head, pending: { test: pending.test, files: [], status: 'nothing staged', shown: false } };
     return { ...head, pending: judgeSlice({ test: pending.test, files: staged }, windowStart(done, staged), Infinity) };
   }
 
+  // Every Slice commit in the span is a possible window boundary (LD135), but only
+  // this session's are judged (LC2): another session's slice was not made with
+  // this session's runs, and judging it on them could pass it on work it never had.
   const commits = sliceCommits(repo, span.from, span.to);
+  const commitRuns = rows
+    .filter((e) => e.type === 'command_run' && e.session_id && isCommitRun(e.command))
+    .map((e) => ({ t: ms(e.ts), session: e.session_id }))
+    .filter((r) => !Number.isNaN(r.t));
   const report = [];
+  const others = [];
   commits.forEach((c, k) => {
+    const owner = commitOwner(c, commitRuns);
+    if (owner !== session) {
+      others.push({ sha: c.sha, slice: c.slice, session: owner });
+      return;
+    }
     const end = c.t + 999; // committer time has whole seconds
     report.push(judgeSlice(c, windowStart(commits.slice(0, k), c.files), end));
   });
-  return { ...head, commits: report };
+  return { ...head, commits: report, others };
 }
 
 // --- CLI -----------------------------------------------------------------------
@@ -403,6 +465,10 @@ function text(r) {
   }
   const shown = r.commits.filter((c) => c.shown).length;
   out.push(`${r.commits.length} Slice commit(s), ${shown} fully shown.`);
+  if (r.others.length) {
+    out.push('', "Other Slice commits in this span, not judged here (another session's, by its recorded commit run):");
+    for (const o of r.others) out.push(`  ${o.sha.slice(0, 7)}  Slice: ${o.slice}  ${o.session ? `session ${o.session}` : 'no recorded commit run made it (--gate cannot pass over it)'}`);
+  }
   return out.join('\n') + '\n';
 }
 
@@ -447,7 +513,7 @@ function main(argv) {
   process.stdout.write(o.json ? JSON.stringify(r, null, 2) + '\n' : r.pending ? pendingText(r) : text(r));
   if (r.pending) return r.pending.shown ? 0 : 1;
   if (!o.gate) return 0;
-  return r.commits.length && r.commits.every((c) => c.shown) ? 0 : 1;
+  return r.commits.length && r.commits.every((c) => c.shown) && r.others.every((o) => o.session !== null) ? 0 : 1;
 }
 
 if (require.main === module) process.exit(main(process.argv.slice(2)));

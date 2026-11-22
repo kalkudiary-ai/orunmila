@@ -8,7 +8,7 @@
  * gitignored). Every save also writes approvals.md, the queue for O to read; O
  * answers in inbox.md, and a session applies the answer with `answer`.
  *
- * A slice: { id, title, phase, kind: strike|closeout, test, depends_on[],
+ * A slice: { id, title, phase, kind: strike|closeout|evidence-fix, test, depends_on[],
  *            blocked_by[], status: todo|done|dropped, session, commits[], notes[] }
  * A queue item: { id: Q<n>, slice, kind, title, ask, blocking, phase,
  *                 status: open|answered, answer, opened, answered_at }
@@ -32,7 +32,7 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const STATUSES = ['todo', 'done', 'dropped'];
-const KINDS = ['strike', 'closeout'];
+const KINDS = ['strike', 'closeout', 'evidence-fix'];
 
 function home() {
   return process.env.TURBO_HOME || path.join(ROOT, '.turbo');

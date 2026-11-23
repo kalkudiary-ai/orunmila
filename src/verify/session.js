@@ -62,10 +62,19 @@ function footerOf(dir, raw) {
     if (!r) return `Record broken: the session footer names line ${line.seq + 1} of the ${log}, which the log does not hold.`;
     return r.hash === line.hash ? null : `Record broken: the session footer names line ${line.seq + 1} of the ${log} with a hash that line does not have.`;
   };
-  const rawProblem = named(raw.records.map((r) => r.rec), f.raw, 'raw log');
+  const recs = raw.records.map((r) => r.rec);
+  // K4b (LD210 (5)): the footer is this session's, and its raw line is the closeout's end.
+  if (recs[0] && f.session_id !== recs[0].session_id) return { ok: false, words: 'Record broken: the session footer names another session.' };
+  const rawProblem = named(recs, f.raw, 'raw log');
   if (rawProblem) return { ok: false, words: rawProblem };
+  const end = recs.find((x) => x && x.seq === f.raw.seq);
+  if (!(end.says === 'exited' && end.source === 'process' && end.target && end.target.kind === 'process' && end.target.name === 'closeout')) {
+    return { ok: false, words: `Record broken: the session footer names line ${f.raw.seq + 1} of the raw log, which is not the closeout's end.` };
+  }
   if (f.odu) {
     const text = fs.existsSync(path.join(dir, 'odu.jsonl')) ? fs.readFileSync(path.join(dir, 'odu.jsonl'), 'utf8') : '';
+    const chain = verifyText(text); // K4b: the odù log the footer names must verify as a chain, not only at its named line
+    if (!chain.ok && !chain.cut) return { ok: false, words: `Record broken at ${where('odù log', 1, chain.line)}: ${chainWords(chain.reason, chain.line, 'odù log', 1)}.` };
     const odu = records(text);
     const oduProblem = named(odu, f.odu, 'odù log');
     if (oduProblem) return { ok: false, words: oduProblem };

@@ -664,4 +664,44 @@ it(
   }),
 );
 
+it(
+  'K4b (LD210 (5)): verify checks the odù log\'s own chain when the footer names it, and that the footer names the closeout\'s exited mark and this session',
+  withBase((base) => {
+    const home = path.join(base, 'home');
+    const project = path.join(base, 'project');
+    fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+    const clock = fakeClock();
+    const router = createRouter({ home, clock, checkSender: () => true, codeRoot: SRC, orunmilaVersion: '0.0.0-test', installKey: KEY, hookSettingsFor: () => [], baseline: true });
+    const p = cc(project, 'ses_k4b');
+    assert.strictEqual(router.payload(p.prompt('go'), { channel: 'command' }).ok, true);
+    assert.strictEqual(router.payload(p.stop('Nothing to do.')).ok, true);
+    assert.strictEqual(router.payload({ session_id: 'ses_k4b', transcript_path: '/tmp/t.jsonl', cwd: project, hook_event_name: 'SessionEnd', reason: 'clear' }).ok, true);
+    for (let i = 0; i < 10; i++) {
+      clock.advance(600);
+      router.poll();
+    }
+    const dir = path.join(home, 'sessions', 'ses_k4b');
+    const { verifySession } = require('../src/verify/session');
+    const footerFile = path.join(dir, 'footer.json');
+    const footer = JSON.parse(fs.readFileSync(footerFile, 'utf8'));
+    const raw = rawRecords(dir);
+    const first = raw[1];
+    const words = (f) => {
+      fs.writeFileSync(footerFile, JSON.stringify(f));
+      const v = verifySession(dir);
+      return [v.ok, v.words];
+    };
+    assert.deepStrictEqual(words({ ...footer, raw: { seq: first.seq, hash: first.hash } }), [false, `Record broken: the session footer names line ${first.seq + 1} of the raw log, which is not the closeout's end.`]);
+    assert.deepStrictEqual(words({ ...footer, session_id: 'ses_other' }), [false, 'Record broken: the session footer names another session.']);
+    fs.writeFileSync(footerFile, JSON.stringify(footer));
+    const oduFile = path.join(dir, 'odu.jsonl');
+    const lines = fs.readFileSync(oduFile, 'utf8').split('\n');
+    const odu1 = JSON.parse(lines[1]);
+    lines[1] = JSON.stringify({ ...odu1, action: 'deleted' });
+    fs.writeFileSync(oduFile, lines.join('\n'));
+    const v = verifySession(dir);
+    assert.deepStrictEqual([v.ok, v.words.startsWith('Record broken at line 2 of the odù log')], [false, true], v.words);
+  }),
+);
+
 runAll('opon-live');

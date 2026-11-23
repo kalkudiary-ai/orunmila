@@ -2098,6 +2098,16 @@ const MUTANTS = [
   { id: 'K5b-2 a restart inside the lag grace never sweeps', file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
     from: 'else if (t.ended && lv) facts.closeoutAt = BigInt(clock().mono) + facts.graceNs;', to: 'else if (false) void 0;',
     fails: ['K5b'] },
+  // Slice K4b: the footer pinned, the odù log chain-checked (LD210 (5)).
+  { id: "K4b-1 a footer of another session verifies", file: 'src/verify/session.js', test: 'test/opon-live.js',
+    from: 'if (recs[0] && f.session_id !== recs[0].session_id) return', to: 'if (false) return',
+    fails: ['K4b'] },
+  { id: "K4b-2 a footer naming another line than the closeout's end verifies", file: 'src/verify/session.js', test: 'test/opon-live.js',
+    from: "if (!(end.says === 'exited' && end.source === 'process'", to: "if (false && !(end.says === 'exited' && end.source === 'process'",
+    fails: ['K4b'] },
+  { id: 'K4b-3 the odù log the footer names is not chain-checked', file: 'src/verify/session.js', test: 'test/opon-live.js',
+    from: 'if (!chain.ok && !chain.cut) return', to: 'if (false) return',
+    fails: ['K4b'] },
   // Slice C3d3b: a mention in a table row or a code block (LD210 (4)).
   { id: 'C3d3b-1 the text is cleaned before mentions are read', file: 'src/opon/corroborate/claims.js', test: 'test/conflicts.js',
     from: 'extractTargets(text).filter(', to: "extractTargets(require('../../reconcile/sanitize').sanitize(text)).filter(",

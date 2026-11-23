@@ -1939,7 +1939,7 @@ const MUTANTS = [
     from: 'g.after = [g.amends, g.continues].filter((x) => x !== null && waiting.some((w) => w.id === x));', to: 'g.after = [];',
     fails: ['C3d2: an odù that amends'] },
   { id: 'C3d2-10 only a claim with an action verb mentions a path', file: 'src/opon/corroborate/claims.js', test: 'test/conflicts.js',
-    from: "return text === null ? [] : [...new Set(extractTargets(text).filter((t) => t.kind === 'path').map((t) => t.raw))];", to: "return [...new Set(claimsOf(mark).flatMap((c) => c.files))];",
+    from: 'if (text === null) return [];\n  const own', to: 'return [...new Set(claimsOf(mark).flatMap((c) => c.files))];\n  const own',
     fails: ['C3d2: a change its turn'] },
   { id: 'C3d2-11 the schema does not ask a silent_change for its turns', file: 'spec/odu.schema.json', test: 'test/conflicts.js',
     from: '"turns",\n                "claim_seqs"', to: '"claim_seqs"',
@@ -2114,7 +2114,7 @@ const MUTANTS = [
     fails: ['K4b'] },
   // Slice C3d3b: a mention in a table row or a code block (LD210 (4)).
   { id: 'C3d3b-1 the text is cleaned before mentions are read', file: 'src/opon/corroborate/claims.js', test: 'test/conflicts.js',
-    from: 'extractTargets(text).filter(', to: "extractTargets(require('../../reconcile/sanitize').sanitize(text)).filter(",
+    from: 'const own = stripWrapperTags(text);', to: "const own = require('../../reconcile/sanitize').sanitize(text);",
     fails: ['C3d3b'] },
   // Slice K1b: no fingerprint after the closeout (LD210 (3)).
   { id: 'K1b-1 a fingerprint is asked after the closeout', file: 'src/opon/settle/engine.js', test: 'test/opon-live.js',
@@ -2139,10 +2139,21 @@ const MUTANTS = [
   { id: "K4c-1 a cut at the footer's own odù line is excused", file: 'src/verify/session.js', test: 'test/opon-live.js',
     from: '(!chain.cut || chain.line <= f.odu.seq + 1)', to: '!chain.cut',
     fails: ['K4c'] },
+  // Slice Q22a: the checklist's renamed-away path (LD213).
+  { id: 'Q22-A7-1 a renamed-away path keeps its old state', file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
+    from: "if (!waiting.length) lastState.set(fromKey, 'absent');", to: 'void 0;',
+    fails: ['Q22 A7'] },
   // Slice C3d3: a mention read in any sentence (LD203).
   { id: 'C3d3-1 only a sentence the reader takes as a claim mentions a path', file: 'src/opon/corroborate/claims.js', test: 'test/conflicts.js',
-    from: "return text === null ? [] : [...new Set(extractTargets(text)", to: "return text === null ? [] : [...new Set(extractClaims(text).flatMap((c) => c.targets)",
+    from: 'const pathsIn = (t) => extractTargets(t).filter(', to: 'const pathsIn = (t) => extractClaims(t).flatMap((c) => c.targets).filter(',
     fails: ['C3d3'] },
+  // Slice C3d3c: wrapper text and a code block's bare names (LD211 (2), LD215).
+  { id: 'C3d3c-1 harness wrapper text counts as a mention', file: 'src/opon/corroborate/claims.js', test: 'test/conflicts.js',
+    from: 'const own = stripWrapperTags(text);', to: 'const own = text;',
+    fails: ['C3d3c'] },
+  { id: "C3d3c-2 a code block's bare name counts as a mention", file: 'src/opon/corroborate/claims.js', test: 'test/conflicts.js',
+    from: ".filter((p) => p.replace(/^\\.\\//, '').includes('/'));", to: ';',
+    fails: ['C3d3c'] },
 ];
 
 function copyRepo(root) {

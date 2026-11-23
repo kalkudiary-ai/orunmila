@@ -578,6 +578,26 @@ it('C3d3b (LD210 (4)): a path named only in a table row or only in a code block 
   }
 });
 
+it('C3d3c (LD211 (2), LD215): harness wrapper text is not the agent\'s mention, and in a code block only a path with a folder part is one: require(\'./w.ts\') does not hide a silent change of src/deep/w.ts; a bare name in prose still mentions its file', () => {
+  const odus = replay((append) => {
+    append(M.edited(0, 'e1', 'src/deep/w.ts'));
+    append(M.disk(50, 'src/deep/w.ts'));
+    append(M.edited(10, 'e2', 'src/x.ts'));
+    append(M.disk(60, 'src/x.ts'));
+    append(M.edited(20, 'e3', 'src/v.ts'));
+    append(M.disk(70, 'src/v.ts'));
+    append(claimed(1000, 't1', "Done.\n\n```js\nconst w = require('./w.ts');\n```\n\n<system-reminder>Read src/x.ts first.</system-reminder>\n\nI touched v.ts too."));
+    append(M.turnEnded(1000));
+    append(M.tick(20000));
+  });
+  for (const f of ['src/deep/w.ts', 'src/x.ts']) {
+    const o = of(odus, file(f));
+    assert.deepStrictEqual([f, witnesses(o), o.conflicts.map((c) => c.kind)], [f, ['saw', 'saw'], ['silent_change']]);
+  }
+  const v = of(odus, file('src/v.ts'));
+  assert.deepStrictEqual([witnesses(v), v.conflicts], [['saw', 'saw'], []], 'a bare name in prose');
+});
+
 // C3e (LD199; line 435): the witnesses disagree on what happened to a file, rather than follow one another.
 const contradiction = (said) => ({ kind: 'contradiction', sources: ['hook', 'sentinel'], said });
 

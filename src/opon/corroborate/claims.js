@@ -26,7 +26,9 @@
  * For a silent change (line 434: a change "the agent never mentioned in its
  * claims"; slice C3d2, LD194; C3d3, LD203; C3d3b, LD210 (4)): every path
  * target the reader's target finder sees anywhere in the text (a table row and
- * a code block included), in any sentence, a claim or not: the reader takes no claim from
+ * a code block included), in any sentence, a claim or not, less the harness's wrapper text, and in a code
+ * block only a path with a folder part (C3d3c, LD215: `require('./w.ts')` names no file the session can
+ * place, and as a bare name it would match every w.ts): the reader takes no claim from
  * "I edited src/a.ts." (its verbs have no `edited`), and that sentence still
  * mentions the file. None for a claim that could not be confirmed.
  */
@@ -34,6 +36,7 @@
 const { extractClaims } = require('../../reconcile/claim-extractor');
 const { findExecutionClaims } = require('../../reconcile/verification-claim');
 const { extractTargets } = require('../../reconcile/task-extractor');
+const { stripWrapperTags, stripCodeFences } = require('../../reconcile/sanitize');
 
 /** A `claimed` mark's text, or null for one that could not be confirmed (N10) or is not a claim. */
 function confirmedText(mark) {
@@ -59,10 +62,17 @@ function claimsOf(mark, { strictProof = false } = {}) {
   return out;
 }
 
+const FENCE = /```[\s\S]*?```/g; // a fenced code block, as sanitize.js reads one
+
 function mentionsOf(mark) {
-  // C3d3, C3d3b (LD203, LD210 (4)): every path anywhere in the confirmed text, a table row and a code block included.
+  // C3d3, C3d3b (LD203, LD210 (4)): every path anywhere in the confirmed text, a table row and a code block included;
+  // C3d3c (LD215): less harness wrapper text, and in a code block only a path with a folder part.
   const text = confirmedText(mark);
-  return text === null ? [] : [...new Set(extractTargets(text).filter((t) => t.kind === 'path').map((t) => t.raw))];
+  if (text === null) return [];
+  const own = stripWrapperTags(text);
+  const pathsIn = (t) => extractTargets(t).filter((x) => x.kind === 'path').map((x) => x.raw);
+  const fenced = (own.match(FENCE) || []).flatMap(pathsIn).filter((p) => p.replace(/^\.\//, '').includes('/'));
+  return [...new Set([...pathsIn(stripCodeFences(own)), ...fenced])];
 }
 
 module.exports = { claimsOf, mentionsOf };

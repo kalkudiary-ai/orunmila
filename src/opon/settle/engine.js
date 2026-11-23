@@ -998,7 +998,14 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
   /** K7 (LD216): the closeout's rescan walked the path written as `w` and wrote no mark for it: a baseline, a walk that passed, inside the root, not excluded. */
   function walkedUnchanged(w) {
     const p = asWritten(w);
-    return baseline !== null && sweepPassed && !p.startsWith('/') && !p.startsWith('../') && !isIgnored(p, exclusions) && ![...rescannedPaths].some((t) => named(t, p));
+    return baseline !== null && sweepPassed && !p.startsWith('/') && !p.startsWith('../') && !isIgnored(p, exclusions) && !hiddenFromWalk(p) && ![...rescannedPaths].some((t) => named(t, p));
+  }
+
+  /** F1 (LD226): the walk could not fingerprint the path written as `p`: a baseline entry with no fingerprint (a link, other, unreadable) is it or a folder above it; a bare name could sit under any such entry, or any exclusion. */
+  function hiddenFromWalk(p) {
+    const bare = !p.includes('/');
+    for (const [k, fp] of baseline) if (fp === null && (bare || named(k, p) || p.startsWith(k + '/'))) return true;
+    return bare && exclusions.length > 0;
   }
 
   /** The groups not yet sealed, as they stand, then each phantom file claim still waiting for its rescan, low (K7, LD216). */

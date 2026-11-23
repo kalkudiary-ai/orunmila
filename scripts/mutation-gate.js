@@ -2233,6 +2233,13 @@ const MUTANTS = [
   { id: 'F3-1 a git mark outside a sweep opens an odù of its own', file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
     from: "      if (sweepKey === null || !live.get(sweepKey)) return out; // F3 (LD225): outside a sweep taking marks, a git mark joins nothing\n", to: '',
     fails: ['F3 (LD225'] },
+  // F1 (LD226).
+  { id: 'F1-1 a claim on a path the walk could not fingerprint rates high', file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
+    from: ' && !hiddenFromWalk(p) && ', to: ' && ',
+    fails: ['F1 (LD226'] },
+  { id: 'F1-2 a bare name rates high though a folder is excluded', file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
+    from: 'return bare && exclusions.length > 0;', to: 'return false;',
+    fails: ['F1 (LD226'] },
 ];
 
 function copyRepo(root) {

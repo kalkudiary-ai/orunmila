@@ -326,6 +326,54 @@ it('K7 tests 4 and 73 (LD216): a phantom file claim is sealed at the closeout, h
   }
 });
 
+/** The phantom file claims sealed in an odù list, by the path as the claim wrote it (K7, F1). */
+const fileClaims = (list) => Object.fromEntries(list.filter((o) => o.target && o.target.kind === 'claim' && o.conflicts && o.conflicts.some((c) => c.kind === 'phantom_claim' && c.claim === 'file')).map((o) => [o.conflicts[0].path, o]));
+
+it("F1 (LD226; Q24 checklist rows P-k7-*, W-*-baseline): a phantom file claim is high only for a path the walk could fingerprint: low for a path the baseline lists as a link, other or unreadable entry, or under one, and for a bare name while any such entry or any exclusion exists; high for a regular file or a path absent with nothing above it hiding it, however the path is written", () => {
+  const cases = [
+    { label: 'entries without a fingerprint', exclusions: [], extra: [{ path: 'src/l.ts', kind: 'link' }, { path: 'src/linkdir', kind: 'link' }, { path: 'src/locked', kind: 'unreadable', error: 'EACCES' }, { path: 'src/o.ts', kind: 'other' }, { path: 'src/u.ts', kind: 'unreadable', error: 'EACCES' }] },
+    { label: 'all regular, nothing excluded', exclusions: [], extra: [] },
+    { label: 'all regular, an exclusion', exclusions: ['vendor'], extra: [] },
+  ];
+  for (const k of cases) {
+    const base = tmpDir();
+    try {
+      const log = makeLog(base, { exclusions: k.exclusions }, { baseline: [...[['r', '1'], ['h', '2'], ['a', '3']].map(([n, f]) => ({ path: `src/${n}.ts`, size: 4, fingerprint: FP(f) })), ...k.extra] });
+      const root = log.header.project_root;
+      const written = ['src/r.ts', './src/r.ts', `${root}/src/r.ts`, './src/h.ts', `${root}/src/h.ts`, 'h.ts', 'src/a.ts', 'src/l.ts', 'src/o.ts', 'src/u.ts', 'src/locked/new.ts', 'src/linkdir/new.ts', 'src/absent.ts', '/elsewhere/x.ts', '../x.ts', 'r.ts'];
+      log.append(said(2000, written.map((w) => `I updated ${w}.`).join(' ')));
+      log.append(M.turnEnded(2000));
+      log.append(M.tick(9000));
+      log.append(sweep(10000, 'started'));
+      log.append(rescan(10010, 'src/h.ts', FP('9'))); // h.ts changed by a hand no witness saw
+      log.append(rescan(10020, 'src/a.ts~', FP('7'))); // a leftover backup of a.ts; a.ts itself unchanged
+      log.append(sweep(10100, 'exited'));
+      const r = replayFolder(log.dir);
+      assert.strictEqual(r.ok, true, r.words);
+      const odus = r.odu.split('\n').slice(1, -1).map((l) => JSON.parse(l));
+      for (const o of odus) assert.deepStrictEqual(checkOdu(o), [], JSON.stringify(o));
+      const sealed = fileClaims(odus);
+      assert.deepStrictEqual(Object.keys(sealed).sort(), [...written].sort(), `${k.label}: every claim sealed`);
+      const hiddenEntries = k.extra.length > 0;
+      const want = {
+        'src/r.ts': 'high', './src/r.ts': 'high', [`${root}/src/r.ts`]: 'high', // a regular file, walked, unchanged
+        './src/h.ts': 'low', [`${root}/src/h.ts`]: 'low', 'h.ts': 'low', // the rescan found it changed
+        'src/a.ts': 'high', // only its temp file was rescanned
+        'src/l.ts': hiddenEntries ? 'low' : 'high', 'src/o.ts': hiddenEntries ? 'low' : 'high', 'src/u.ts': hiddenEntries ? 'low' : 'high',
+        'src/locked/new.ts': hiddenEntries ? 'low' : 'high', 'src/linkdir/new.ts': hiddenEntries ? 'low' : 'high',
+        'src/absent.ts': 'high', '/elsewhere/x.ts': 'low', '../x.ts': 'low',
+        'r.ts': hiddenEntries || k.exclusions.length ? 'low' : 'high', // a bare name could sit anywhere the walk did not see
+      };
+      for (const [w, conf] of Object.entries(want)) {
+        const o = sealed[w];
+        assert.deepStrictEqual([o.witness_status.glove.status, o.witness_status.sentinel.status, o.conflicts[0].why, o.confidence], ['saw', 'out_of_scope', 'no_event', conf], `${k.label}: ${w}`);
+      }
+    } finally {
+      rmrf(base);
+    }
+  }
+});
+
 // K6 (LD218; lines 614, 644, 691): the agent's closeout feedback read from the odù log, side by side with the old path.
 it('K6 line 614 (LD218): the agent\'s JSON feedback from the odù log: phantom claims by turn, silent changes as undisclosed, the other conflicts as findings; side by side with the old path; the CLI reads it only with ORUNMILA_FEEDBACK_FROM_ODU=1', () => {
   const { feedbackFromOdu, sideBySide } = require('../src/opon/feedback/from-odu');

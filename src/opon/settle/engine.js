@@ -825,7 +825,8 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
         target = live.get(sweepKey).target;
       }
     }
-    if (fromGit && key.startsWith('file:') && !live.get(key) && sweepKey !== null && live.get(sweepKey)) {
+    if (fromGit && key.startsWith('file:') && !live.get(key)) {
+      if (sweepKey === null || !live.get(sweepKey)) return out; // F3 (LD225): outside a sweep taking marks, a git mark joins nothing
       key = sweepKey; // K3 (LD217): git corroborates a group still taking marks, else it is the sweep's receipt
       target = live.get(sweepKey).target;
       real = false; // a receipt never makes the sweep's action

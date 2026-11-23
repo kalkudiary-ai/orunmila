@@ -253,6 +253,32 @@ it('K3 step 3 (LD217): a missed change git also saw is high and names git in its
   }
 });
 
+it("F3 (LD225; Q24 checklist rows S-git-before, S-git-after): a git mark outside a sweep that is taking marks joins nothing, before the sweep began or after it ended: never an odù of its own; one whose path's group is still taking marks joins that group", () => {
+  const base = tmpDir();
+  try {
+    const log = makeLog(base, {}, { baseline: [{ path: 'src/a.ts', size: 4, fingerprint: FP('a') }] });
+    const s = {};
+    s.before = log.append(gitSaw(500, 'src/a.ts')); // before any sweep
+    s.disk = log.append(M.disk(900, 'src/o.ts')); // a hand edit, its group still taking marks
+    s.join = log.append(gitSaw(1000, 'src/o.ts'));
+    log.append(sweep(10000, 'started'));
+    log.append(sweep(10100, 'exited'));
+    s.after = log.append(gitSaw(10200, 'src/a.ts', 'deleted')); // after the sweep's end
+    log.append(M.tick(30000));
+    const r = replayFolder(log.dir);
+    assert.strictEqual(r.ok, true, r.words);
+    const groups = r.lines.slice(1).map((l) => JSON.parse(l));
+    const odus = r.odu.split('\n').slice(1, -1).map((l) => JSON.parse(l));
+    for (const o of odus) assert.deepStrictEqual(checkOdu(o), [], JSON.stringify(o));
+    assert.deepStrictEqual(groups.filter((g) => g.mark_seqs.includes(s.before) || g.mark_seqs.includes(s.after)).map((g) => g.target), [], 'in no group, sealed or not');
+    assert.deepStrictEqual(odus.filter((o) => o.target && o.target.path === 'src/a.ts'), []);
+    const o = at(odus, 'src/o.ts');
+    assert.deepStrictEqual([witnesses(o), o.witness_status.git.mark_seqs, o.mark_seqs], [['saw_nothing', 'saw'], [s.join], [s.disk, s.join]]);
+  } finally {
+    rmrf(base);
+  }
+});
+
 // K7 (Q21 (a), LD216; line 441; tests 4 and 73): a phantom file claim waits for the closeout's rescan.
 const said = (ms, text, turn = 't1') => ({ ...M.claimed(ms, turn), detail: { text } });
 

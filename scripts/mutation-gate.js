@@ -2229,6 +2229,10 @@ const MUTANTS = [
   { id: "F2-1 git's paths left in their own case on a root that ignores case", file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
     from: 'out.set(ci ? rel.toLowerCase() : rel,', to: 'out.set(rel,',
     fails: ['F2 (LD224'] },
+  // F3 (LD225).
+  { id: 'F3-1 a git mark outside a sweep opens an odù of its own', file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
+    from: "      if (sweepKey === null || !live.get(sweepKey)) return out; // F3 (LD225): outside a sweep taking marks, a git mark joins nothing\n", to: '',
+    fails: ['F3 (LD225'] },
 ];
 
 function copyRepo(root) {

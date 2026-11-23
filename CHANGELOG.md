@@ -8,6 +8,25 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ## [Unreleased]
 
+## [0.2.4] — unreleased (built 2026-11-23, waiting for the maintainer's go-ahead)
+
+### Fixed
+
+- **`orunmila --version` prints the version.** It printed the 49-line usage
+  text and exited 1. `--version`, `-v` and `version` now print the installed
+  version on one line and exit 0. An unknown command still prints the usage and
+  exits 1.
+
+### Documented
+
+- **Where Claude Code runs, and the hook paths `orunmila install` writes.**
+  The README lists Claude Code in the terminal, VS Code, Antigravity and the
+  app, each with how it was checked, and says that each hook is written as
+  `node "<path to the installed package>/src/capture/claude-code/<hook>.js"`:
+  the hooks work only where that path exists, so install the package globally
+  or as a dev dependency rather than through `npx`, and run `orunmila install`
+  again on each machine or cloud environment the project's sessions run on.
+
 ## [0.2.3] — 2026-11-20
 
 ### Fixed

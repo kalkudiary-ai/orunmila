@@ -1065,6 +1065,12 @@ const COMMANDS = {
   'debug-transcript': cmdDebugTranscript,
 };
 
+// Issue 2 (0.2.4): the version, one line, exit 0 (it printed the usage text and exited 1).
+if (cmd === '--version' || cmd === '-v' || cmd === 'version') {
+  console.log(require('../package.json').version);
+  process.exit(0);
+}
+
 if (!cmd || !COMMANDS[cmd]) {
   console.log(`orunmila - claim-vs-reality verification for AI coding agents
 

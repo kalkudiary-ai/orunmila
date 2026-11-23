@@ -2091,6 +2091,13 @@ const MUTANTS = [
   { id: "K4-4 verify never checks the footer's odù line", file: 'src/verify/session.js', test: 'test/opon-live.js',
     from: '  if (f.odu) {\n', to: '  if (false) {\n',
     fails: ['K4 line 454'] },
+  // Slice K5b: the closeout across a restart (LD210 (1)).
+  { id: 'K5b-1 a session swept before a restart is swept again', file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
+    from: '    if (t.swept) facts.closeoutAt = true;\n    else if', to: '    if',
+    fails: ['K5b'] },
+  { id: 'K5b-2 a restart inside the lag grace never sweeps', file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
+    from: 'else if (t.ended && lv) facts.closeoutAt = BigInt(clock().mono) + facts.graceNs;', to: 'else if (false) void 0;',
+    fails: ['K5b'] },
   // Slice C3d3: a mention read in any sentence (LD203).
   { id: 'C3d3-1 only a sentence the reader takes as a claim mentions a path', file: 'src/opon/corroborate/claims.js', test: 'test/conflicts.js',
     from: "return text === null ? [] : [...new Set(extractTargets(sanitize(text))", to: "return text === null ? [] : [...new Set(extractClaims(text).flatMap((c) => c.targets)",

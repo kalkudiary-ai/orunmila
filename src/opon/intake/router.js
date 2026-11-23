@@ -118,7 +118,10 @@ function turnsFrom(dir) {
   const id = `t${n}`;
   const open = n > 0 && !recs.some((r) => r.says === 'ended' && isObject(r.target) && r.target.kind === 'turn' && r.target.id === id);
   const tampered = recs.filter((r) => r.says === 'tampered' && isObject(r.detail) && r.detail.what !== 'foreign_sender');
-  return { header: recs[0], n, open, tampered };
+  // K5b (LD210 (1)): whether the session ended, and whether its closeout already ran.
+  const ended = recs.some((r) => r.says === 'ended' && isObject(r.target) && r.target.kind === 'session');
+  const swept = recs.some((r) => r.says === 'exited' && r.source === 'process' && isObject(r.target) && r.target.kind === 'process' && r.target.name === 'closeout');
+  return { header: recs[0], n, open, tampered, ended, swept };
 }
 
 /** A file's state at hook time: exists, and, for a regular file, its bytes, size and fingerprint. */
@@ -274,7 +277,11 @@ function createRouter(o) {
       lv = live.resume(dir, header, baseMap, marks);
     }
     const tamper = createTamperWatch({ header: t.header, codeRoot: o.codeRoot, lawPacks: lawPacksFor(root), prior: t.tampered, clock });
-    return { log, root, ci: isCaseInsensitive(root), n: t.n, open: t.open, pre: new Map(), last: BigInt(clock().mono), limit: t.header.config.diff_size_limit_bytes, tamper, lv, ...closeoutFacts(header, baseMap) };
+    const facts = closeoutFacts(header, baseMap);
+    // K5b (LD210 (1)): swept before: never again; ended and not swept: a lag grace after this reopen.
+    if (t.swept) facts.closeoutAt = true;
+    else if (t.ended && lv) facts.closeoutAt = BigInt(clock().mono) + facts.graceNs;
+    return { log, root, ci: isCaseInsensitive(root), n: t.n, open: t.open, pre: new Map(), last: BigInt(clock().mono), limit: t.header.config.diff_size_limit_bytes, tamper, lv, ...facts };
   }
 
   function start(id, p) {

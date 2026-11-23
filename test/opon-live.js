@@ -565,4 +565,41 @@ it(
   }),
 );
 
+it(
+  'K5b (LD210 (1)): a restart inside the lag grace after the session ended still runs the closeout, once; a session swept before a restart is never swept again, though another SessionEnd comes',
+  withBase((base) => {
+    const home = path.join(base, 'home');
+    const project = path.join(base, 'project');
+    fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+    const clock = fakeClock();
+    const make = () => createRouter({ home, clock, checkSender: () => true, codeRoot: SRC, orunmilaVersion: '0.0.0-test', installKey: KEY, hookSettingsFor: () => [], baseline: true });
+    const polls = (router, n) => {
+      for (let i = 0; i < n; i++) {
+        clock.advance(600);
+        router.poll();
+      }
+    };
+    const p = cc(project, 'ses_k5b');
+    const end = { session_id: 'ses_k5b', transcript_path: '/tmp/t.jsonl', cwd: project, hook_event_name: 'SessionEnd', reason: 'clear' };
+    const one = make();
+    assert.strictEqual(one.payload(p.prompt('go'), { channel: 'command' }).ok, true);
+    assert.strictEqual(one.payload(end).ok, true);
+    polls(one, 1); // inside the lag grace: no sweep yet
+    const dir = path.join(home, 'sessions', 'ses_k5b');
+    const sweeps = () => rawRecords(dir).filter((m) => m.target && m.target.kind === 'process' && m.target.name === 'closeout').map((m) => m.says);
+    assert.deepStrictEqual(sweeps(), []);
+    const two = make(); // the restart
+    assert.deepStrictEqual(two.resume().failed, []);
+    polls(two, 10);
+    assert.deepStrictEqual(sweeps(), ['started', 'exited'], 'swept after the restart');
+    assert.ok(fs.existsSync(path.join(dir, 'footer.json')));
+    const three = make(); // another restart, and another SessionEnd
+    assert.deepStrictEqual(three.resume().failed, []);
+    assert.strictEqual(three.payload(end).ok, true);
+    polls(three, 10);
+    assert.deepStrictEqual(sweeps(), ['started', 'exited'], 'never swept twice');
+    assert.strictEqual(fs.readFileSync(path.join(dir, 'odu.jsonl'), 'utf8'), replayFolder(dir).odu);
+  }),
+);
+
 runAll('opon-live');

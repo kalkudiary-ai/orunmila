@@ -286,6 +286,9 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
   const rescannedPaths = new Set(); // K7: the paths the sweep's rescan marks name
   let sweepPassed = false; // K7: the sweep's exited mark said pass (its walk ran)
   let closedOut = false; // F6 (LD228): the closeout has sealed everything; a later claim's rescan came before it
+  const unknownPaths = new Set(); // F9 (LD234): the paths the rescan found and could not fingerprint; nothing under them was walked
+  // Q25 (LD233): whether the root folds case, from the header; null in a header written before the field (F4a's reading then).
+  const ci = typeof config.case_insensitive === 'boolean' ? config.case_insensitive : null;
   const all = [];
   let now = null;
   let made = 0;
@@ -412,6 +415,8 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     if (g.key.startsWith('file:') && hookEnds.size && sentinelEnds.size && ![...hookEnds].some((e) => sentinelEnds.has(e))) out.push(conflictOf(g, 'contradiction', ['hook', 'sentinel']));
     // K2 (LD207; line 450): a change only the closeout's rescan saw, naming the rescan's marks.
     if (g.missed && g.net.changed === true) out.push(conflictOf(g, 'missed_live', ['hook', 'sentinel', 'process'], { marks: g.seqs.filter((s, i) => g.sources[i] === 'process') }));
+    // F9 (LD234, Q26): the rescan found an entry it could not fingerprint where the session knew a regular file or nothing: reported on its own, never as a missed change.
+    if (g.unfp) out.push(conflictOf(g, 'unfingerprinted', ['hook', 'sentinel', 'process'], { entry: g.unfp.entry, marks: [...g.unfp.seqs] }));
     // C3b (LD189; line 439, test 71): a started call with no outcome by the end of its turn, or one its payload says was interrupted.
     for (const id of startedIn(g)) {
       const t = inFlight.get(id);
@@ -438,10 +443,15 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     return record(cg);
   }
 
-  /** C3d1 (LD192 (2)): a path as the agent wrote it, made comparable with targets: less a leading ./, an absolute path under the root relative. */
+  /**
+   * C3d1 (LD192 (2)): a path as the agent wrote it, made comparable with targets: less a leading ./, an absolute path under the root
+   * relative. Q25 (LD233): on a root the header says folds case, the root is matched ignoring case and a path inside it lower-cased,
+   * as intake names every mark's target there.
+   */
   function asWritten(w) {
     let p = w.replace(/^\.\//, '');
-    if (root && p.startsWith(root + '/')) p = p.slice(root.length + 1);
+    if (root && (ci === true ? p.toLowerCase().startsWith(root.toLowerCase() + '/') : p.startsWith(root + '/'))) p = p.slice(root.length + 1);
+    if (ci === true && !p.startsWith('/')) p = p.toLowerCase();
     return p;
   }
   /** C3d1: target path `t` is the path written as `p`, or ends with `/` and it (a bare name matches every file of that name). */
@@ -822,6 +832,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       const before = stateBefore({ key, target });
       const after = fingerprintedState(m);
       if (before !== null && after !== null && before !== after) missed = { before, after };
+      else if (before !== null && after === null && m.detail.exists === true) missed = { before, after: null }; // F9 (LD234): found, not fingerprinted: unknown, its own odù
       else if (sweepKey !== null && live.get(sweepKey)) {
         key = sweepKey; // nothing missed: the mark is the sweep's receipt
         target = live.get(sweepKey).target;
@@ -881,6 +892,10 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       real = false;
       g.fp = { seq: m.seq, state: fingerprintedState(m) };
       if (rescanned && typeof m.target.path === 'string') rescannedPaths.add(m.target.path); // K7
+      if (rescanned && m.detail.exists === true && g.fp.state === null && typeof m.target.path === 'string') {
+        unknownPaths.add(m.target.path); // F9 (LD234): K7 reads it, and anything under it, as hidden from the walk
+        if (key.startsWith('file:')) g.unfp = { entry: m.detail.entry, seqs: [...((g.unfp && g.unfp.seqs) || []), m.seq] };
+      }
     } else g.lastOther = m.seq;
     g.seqs.push(m.seq);
     g.says.push(m.says);
@@ -1001,18 +1016,26 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
   /** K7 (LD216): the closeout's rescan walked the path written as `w` and wrote no mark for it: a baseline, a walk that passed, inside the root, not excluded. */
   function walkedUnchanged(w) {
     const p = asWritten(w);
-    return baseline !== null && sweepPassed && !p.startsWith('/') && !p.startsWith('../') && !isIgnored(p, exclusions) && !hiddenFromWalk(p) && ![...rescannedPaths].some((t) => named(t.toLowerCase(), p.toLowerCase())); // F4a (LD227): ignoring case
+    return baseline !== null && sweepPassed && !p.startsWith('/') && !p.startsWith('../') && !isIgnored(p, exclusions) && !hiddenFromWalk(p) && ![...rescannedPaths].some((t) => named(fold(t), fold(p))); // F4a (LD227): ignoring case when the header cannot say (Q25)
   }
 
-  /** F1 (LD226): the walk could not fingerprint the path written as `p`: a baseline entry with no fingerprint (a link, other, unreadable) is it or a folder above it; a bare name could sit under any such entry, or any exclusion. */
+  /** F4a (LD227), Q25 (LD233): a path folded for K7's comparisons only when the header does not say whether the root folds case; with the field, asWritten has already named it as intake does. */
+  const fold = (s) => (ci === null ? s.toLowerCase() : s);
+
+  /**
+   * F1 (LD226): the walk could not fingerprint the path written as `p`: a baseline entry with no fingerprint (a link, other, unreadable)
+   * is it or a folder above it; a bare name could sit under any such entry, or any exclusion. F9 (LD234): so for an entry the closeout's
+   * rescan found and could not fingerprint (the path itself is a rescanned path).
+   */
   function hiddenFromWalk(p) {
     const bare = !p.includes('/');
-    const lp = p.toLowerCase(); // F4a (LD227): compared ignoring case; replay does not know whether the root folds it
+    const lp = fold(p);
     for (const [k, fp] of baseline) {
-      const lk = k.toLowerCase();
+      const lk = fold(k);
       if (fp === null && (bare || named(lk, lp) || lp.startsWith(lk + '/'))) return true;
-      if (named(lk, lp) && !named(k, p)) return true; // F4a: the same path but for case: one file or two, the engine cannot tell
+      if (ci === null && named(lk, lp) && !named(k, p)) return true; // F4a: the same path but for case: one file or two, the engine cannot tell
     }
+    for (const u of unknownPaths) if (bare || lp.startsWith(fold(u) + '/')) return true;
     return bare && exclusions.length > 0;
   }
 

@@ -910,4 +910,59 @@ it(
   }),
 );
 
+it(
+  "Q25 (LD233): the intake records in the header whether the root's file system ignores case (config.case_insensitive), as its own probe reads it, so replay matches claims as the live intake does",
+  withBase((base) => {
+    const { isCaseInsensitive } = require('../src/opon/intake/paths');
+    const home = path.join(base, 'home');
+    const project = path.join(base, 'project');
+    fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+    const router = createRouter({ home, clock: fakeClock(), checkSender: () => true, codeRoot: SRC, orunmilaVersion: '0.0.0-test', installKey: KEY, hookSettingsFor: () => [] });
+    assert.strictEqual(router.payload(cc(project, 'ses_q25').prompt('go'), { channel: 'command' }).ok, true);
+    const header = rawRecords(path.join(home, 'sessions', 'ses_q25'))[0];
+    assert.deepStrictEqual([header.record, header.config.case_insensitive], ['session_header', isCaseInsensitive(project)]);
+  }),
+);
+
+it(
+  "F9 live (LD234; Q26): at the closeout a regular file that became a link and a folder that became a link get the rescan's unknown mark naming the entry, and the files under the folder are not read as deleted; live equals replay",
+  withBase((base) => {
+    const home = path.join(base, 'home');
+    const project = path.join(base, 'project');
+    const elsewhere = path.join(base, 'elsewhere');
+    fs.mkdirSync(path.join(project, 'src', 'dir'), { recursive: true });
+    fs.mkdirSync(elsewhere);
+    fs.writeFileSync(path.join(project, 'src', 'a.js'), 'a\n');
+    fs.writeFileSync(path.join(project, 'src', 'dir', 'x.js'), 'x\n');
+    fs.writeFileSync(path.join(elsewhere, 'x.js'), 'x\n');
+    const clock = fakeClock();
+    const router = createRouter({ home, clock, checkSender: () => true, codeRoot: SRC, orunmilaVersion: '0.0.0-test', installKey: KEY, hookSettingsFor: () => [], baseline: true });
+    const p = cc(project, 'ses_f9');
+    const send = (x) => assert.strictEqual(router.payload(x, { channel: 'command' }).ok, true, x.hook_event_name);
+    send(p.prompt('go'));
+    send(p.stop('I updated src/a.js. I updated src/dir/x.js.'));
+    fs.rmSync(path.join(project, 'src', 'a.js'));
+    fs.symlinkSync(path.join(elsewhere, 'x.js'), path.join(project, 'src', 'a.js')); // by hand, no hook, no Sentinel here
+    fs.rmSync(path.join(project, 'src', 'dir'), { recursive: true });
+    fs.symlinkSync(elsewhere, path.join(project, 'src', 'dir'));
+    send({ session_id: 'ses_f9', transcript_path: '/tmp/t.jsonl', cwd: project, hook_event_name: 'SessionEnd', reason: 'clear' });
+    for (let i = 0; i < 10; i++) {
+      clock.advance(600);
+      router.poll();
+    }
+    const dir = path.join(home, 'sessions', 'ses_f9');
+    const rescans = rawRecords(dir).filter((m) => m.says === 'fingerprinted' && m.detail.rescan).map((m) => [m.target.path, m.detail]);
+    assert.deepStrictEqual(rescans, [['src/a.js', { exists: true, size: null, fingerprint: null, rescan: true, entry: 'link' }], ['src/dir', { exists: true, size: null, fingerprint: null, rescan: true, entry: 'link' }]], 'no exists:false for src/dir/x.js');
+    const live = fs.readFileSync(path.join(dir, 'odu.jsonl'), 'utf8');
+    assert.strictEqual(live, replayFolder(dir).odu, 'live equals replay');
+    const odus = live.split('\n').slice(1, -1).map((l) => JSON.parse(l));
+    for (const w of ['src/a.js', 'src/dir']) {
+      const o = odus.find((x) => x.target && x.target.path === w);
+      assert.deepStrictEqual([o.witness_status.glove.status, o.witness_status.sentinel.status, o.conflicts.map((c) => [c.kind, c.entry])], ['saw_nothing', 'saw_nothing', [['unfingerprinted', 'link']]], w);
+    }
+    const claims = odus.filter((o) => o.target && o.target.kind === 'claim').map((o) => [o.conflicts[0].path, o.confidence]).sort();
+    assert.deepStrictEqual(claims, [['src/a.js', 'low'], ['src/dir/x.js', 'low']]);
+  }),
+);
+
 runAll('opon-live');

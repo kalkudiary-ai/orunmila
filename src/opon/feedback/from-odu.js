@@ -10,8 +10,9 @@
  *     `phantom_verification` for a command claim), its `verdict_confidence` the odù's confidence and its
  *     evidence the odù's id, mark_seqs and `why`; a `silent_change` is an undisclosed change of each turn
  *     it names. Added: `source: "odu_log"`, and `findings`, the conflicts the old path has no word for
- *     (missed_live, unconfirmed_by_filesystem, outcome_missing, contradiction, concurrent_sessions), each
- *     with its odù's id, target, confidence and mark_seqs. The odù log records no backed claim and no
+ *     (missed_live, unfingerprinted, unconfirmed_by_filesystem, outcome_missing, contradiction,
+ *     concurrent_sessions), each with its odù's id, target, confidence and mark_seqs; an unfingerprinted
+ *     finding also names the entry the closeout's walk found (F9, LD234: link, other or unreadable). The odù log records no backed claim and no
  *     prompt's subtasks, so verified, partial, unverifiable and silently_dropped count 0 here.
  *
  *   sideBySide(old, odu) -> rows
@@ -22,7 +23,7 @@
 const { buildRedactor } = require('../../render/redact');
 
 const OUTCOMES = ['verified', 'partial', 'phantom', 'phantom_verification', 'unverifiable', 'undisclosed', 'silently_dropped'];
-const FINDINGS = new Set(['missed_live', 'unconfirmed_by_filesystem', 'outcome_missing', 'contradiction', 'concurrent_sessions']);
+const FINDINGS = new Set(['missed_live', 'unfingerprinted', 'unconfirmed_by_filesystem', 'outcome_missing', 'contradiction', 'concurrent_sessions']);
 const byTurn = (a, b) => (a.length - b.length || (a < b ? -1 : a > b ? 1 : 0)); // t2 before t10
 
 function feedbackFromOdu({ sessionId, agent = null, oduText, turn = null, redactOpts = {} }) {
@@ -42,7 +43,7 @@ function feedbackFromOdu({ sessionId, agent = null, oduText, turn = null, redact
       } else if (c.kind === 'silent_change') {
         for (const t of c.turns) of(t).undisclosed_changes.push({ ref: R.path(o.target.path), odu_id: o.odu_id });
       } else if (FINDINGS.has(c.kind)) {
-        findings.push({ kind: c.kind, odu_id: o.odu_id, target: where(o), confidence: o.confidence, mark_seqs: [...o.mark_seqs] });
+        findings.push({ kind: c.kind, odu_id: o.odu_id, target: where(o), ...(c.kind === 'unfingerprinted' ? { entry: c.entry } : {}), confidence: o.confidence, mark_seqs: [...o.mark_seqs] }); // F9 (LD234): what the walk found
       }
     }
   }

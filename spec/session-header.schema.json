@@ -97,6 +97,11 @@
           "type": "integer",
           "minimum": 0
         },
+        "case_insensitive": {
+          "description": "Whether the project root's file system ignores case, as the intake probed it at session start. Intake lower-cases every mark's path and the baseline's on such a root (line 345), so replay folds a claim's path the same way before matching it; absent in headers written before the field existed, where replay cannot tell and matches as it did then.",
+          "$comment": "agent's proposal (LD227), approved by O as Q25 (2026-11-23, \"ok, go\"), LD233; brief v4 lines 283, 345, 859 rule 4",
+          "type": "boolean"
+        },
         "byproducts": {
           "description": "The byproducts list (`.orunmila/byproducts`) as it was at session start: one entry per line, trimmed, blank lines and `#` comments left out, matched as the ignore list's entries are. Its fingerprint is `frozen.byproducts`, of the same bytes. Absent when the header does not carry the list (the live path off, slice A1a); station 5 then has no list to match.",
           "$comment": "brief v4 lines 283, 349, 399; the list in the header is the agent's proposal (LD175, Q9), so replay reads it from the header and never from current settings",

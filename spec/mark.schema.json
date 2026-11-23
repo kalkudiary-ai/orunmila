@@ -427,7 +427,7 @@
           }
         },
         "pattern": { "description": "The pattern, for a search.", "$comment": "brief v3 line 261", "type": "string" },
-        "size": { "description": "The file's size in bytes.", "$comment": "brief v3 lines 228, 261, 264", "type": "integer", "minimum": 0 },
+        "size": { "description": "The file's size in bytes; null when unknown (a fingerprinted mark for an entry that is not a regular file, or one the Opon could not read).", "$comment": "brief v3 lines 228, 261, 264; null as brief v4 line 241 (unknown, nothing else) and Q8's approved shape (LD171, LD174: null only when unknown), which this schema had refused (F11, LD235)", "type": ["integer", "null"], "minimum": 0 },
         "fingerprint": {
           "description": "The file's fingerprint (for a read, of the whole file as it was when the hook ran; it does not prove what the agent saw).",
           "$comment": "brief v3 lines 261, 264",
@@ -574,6 +574,11 @@
           "description": "On a fingerprinted mark: true when the closeout's full rescan took it, between the sweep's started and exited marks.",
           "$comment": "brief v4 line 450; the field is the agent's proposal (LD207, Q19; provisional, Q17)",
           "type": "boolean"
+        },
+        "entry": {
+          "description": "On a rescan's fingerprinted mark whose fingerprint is unknown: what the closeout's walk found at the path, which it could not fingerprint: a symbolic link (never followed), another kind of entry that is not a regular file, or one it could not read.",
+          "$comment": "agent's proposal for F9, approved by O as Q26 (2026-11-23), LD234",
+          "enum": ["link", "other", "unreadable"]
         },
         "session": {
           "description": "On an overlapped mark: the other session sharing this one's folder that the intake names (its `root` and `from` beside it: its project root and its header's mono_ns).",

@@ -483,4 +483,78 @@ it('K6 line 614 (LD218): the agent\'s JSON feedback from the odù log: phantom c
   }
 });
 
+it("Q25 (LD233): with the header's config.case_insensitive, a claim's path is matched as the root names files: on a root that folds case, a claim written src/Config.ts backs the agent's edit of src/config.ts (no phantom, no silent change) and K7 reads src/R.ts as the baseline's src/r.ts (high), src/B.ts as the rescanned src/b.ts (low); on one that does not, they are other files", () => {
+  for (const ci of [true, false]) {
+    const base = tmpDir();
+    try {
+      const log = makeLog(base, { case_insensitive: ci }, { baseline: [{ path: 'src/config.ts', size: 4, fingerprint: FP('1') }, { path: 'src/r.ts', size: 4, fingerprint: FP('2') }, { path: 'src/b.ts', size: 4, fingerprint: FP('3') }] });
+      log.append(M.prompted(0));
+      log.append(M.edited(10, 'e1', 'src/config.ts')); // marks name the file as intake folds it
+      log.append(M.disk(60, 'src/config.ts'));
+      log.append(M.fingerprinted(1600, 'src/config.ts', FP('f')));
+      log.append(said(2000, 'I updated src/Config.ts. I updated src/R.ts. I updated src/B.ts.'));
+      log.append(M.turnEnded(2000));
+      log.append(M.tick(9000));
+      log.append(sweep(10000, 'started'));
+      log.append(rescan(10010, 'src/b.ts', FP('9'))); // b.ts changed by a hand no witness saw
+      log.append(sweep(10100, 'exited'));
+      const r = replayFolder(log.dir);
+      assert.strictEqual(r.ok, true, r.words);
+      const odus = r.odu.split('\n').slice(1, -1).map((l) => JSON.parse(l));
+      for (const o of odus) assert.deepStrictEqual(checkOdu(o), [], JSON.stringify(o));
+      const config = odus.filter((o) => o.target && o.target.path === 'src/config.ts' && o.action === 'modified');
+      assert.deepStrictEqual(config.map((o) => [witnesses(o), o.attribution, o.conflicts.map((c) => c.kind)]), [[['saw', 'saw'], 'explained', ci ? [] : ['silent_change']]], `${ci}: the edit`);
+      const sealed = fileClaims(odus);
+      const want = ci ? { 'src/R.ts': 'high', 'src/B.ts': 'low' } : { 'src/Config.ts': 'high', 'src/R.ts': 'high', 'src/B.ts': 'high' };
+      assert.deepStrictEqual(Object.keys(sealed).sort(), Object.keys(want).sort(), `${ci}: the phantom file claims`);
+      for (const [w, conf] of Object.entries(want)) assert.deepStrictEqual([witnesses(sealed[w]), sealed[w].conflicts[0].why, sealed[w].confidence], [['saw', 'out_of_scope'], 'no_event', conf], `${ci}: ${w}`);
+    } finally {
+      rmrf(base);
+    }
+  }
+});
+
+/** F9 (LD234): the rescan's mark for an entry it found and could not fingerprint (a link, other or unreadable entry). */
+const unreadable = (ms, file, entry) => ({ ...M.fingerprinted(ms, file, FP('0')), detail: { exists: true, size: null, fingerprint: null, rescan: true, entry } });
+
+it("F9 (LD234; Q26; Q24 checklist rows W-*-closeout): an entry the rescan found and could not fingerprint, where the session last knew a regular file or nothing, is an odù of its own: unexplained, net change unknown, an unfingerprinted conflict naming the entry and the rescan's mark, never missed_live; a claim on it or on a path under it is low; the agent's feedback reports it as a finding of its own; one the baseline already listed without a fingerprint is the sweep's receipt", () => {
+  const base = tmpDir();
+  try {
+    const log = makeLog(base, {}, { baseline: [{ path: 'src/a.ts', size: 4, fingerprint: FP('a') }, { path: 'src/dir/x.ts', size: 4, fingerprint: FP('x') }, { path: 'src/l.ts', kind: 'link' }] });
+    log.append(M.prompted(0));
+    log.append(said(2000, 'I updated src/a.ts. I updated src/dir/x.ts. I updated src/dir/new.ts.'));
+    log.append(M.turnEnded(2000));
+    log.append(M.tick(9000));
+    log.append(sweep(10000, 'started'));
+    const s = {};
+    s.a = log.append(unreadable(10010, 'src/a.ts', 'link')); // a regular file that became a link
+    s.dir = log.append(unreadable(10020, 'src/dir', 'unreadable')); // a folder the walk could not read
+    s.l = log.append(unreadable(10030, 'src/l.ts', 'link')); // a link before and after: nothing known changed
+    log.append(sweep(10100, 'exited'));
+    const r = replayFolder(log.dir);
+    assert.strictEqual(r.ok, true, r.words);
+    const odus = r.odu.split('\n').slice(1, -1).map((l) => JSON.parse(l));
+    for (const o of odus) assert.deepStrictEqual(checkOdu(o), [], JSON.stringify(o));
+    const conflict = (seq, entry) => ({ kind: 'unfingerprinted', sources: ['hook', 'process', 'sentinel'], said: { hook: [], process: ['fingerprinted'], sentinel: [] }, entry, marks: [seq] });
+    const a = at(odus, 'src/a.ts');
+    assert.deepStrictEqual([witnesses(a), a.action, a.attribution, a.confidence, a.net_change, a.mark_seqs, a.conflicts], [['saw_nothing', 'saw_nothing'], 'modified', 'unexplained', 'medium', { before: FP('a'), after: null, changed: null }, [s.a], [conflict(s.a, 'link')]]);
+    const dir = at(odus, 'src/dir');
+    assert.deepStrictEqual([witnesses(dir), dir.action, dir.net_change, dir.conflicts], [['saw_nothing', 'saw_nothing'], 'created', { before: 'absent', after: null, changed: null }, [conflict(s.dir, 'unreadable')]]);
+    assert.deepStrictEqual(odus.filter((o) => o.target && o.target.path === 'src/l.ts'), [], 'a link before and after: no odù');
+    const sweepOdu = odus.find((o) => o.target && o.target.kind === 'process' && o.action === 'started');
+    assert.ok(sweepOdu.mark_seqs.includes(s.l), "its mark is the sweep's receipt");
+    assert.deepStrictEqual(odus.filter((o) => o.conflicts.some((c) => c.kind === 'missed_live')), [], 'no missed change claimed');
+    const sealed = fileClaims(odus);
+    for (const w of ['src/a.ts', 'src/dir/x.ts', 'src/dir/new.ts']) assert.deepStrictEqual([witnesses(sealed[w]), sealed[w].conflicts[0].why, sealed[w].confidence], [['saw', 'out_of_scope'], 'no_event', 'low'], w);
+    const { feedbackFromOdu } = require('../src/opon/feedback/from-odu');
+    const fb = feedbackFromOdu({ sessionId: 'ses_replay_test', agent: 'claude-code', oduText: r.odu });
+    assert.deepStrictEqual(fb.findings.map((f) => [f.kind, f.target, f.entry, f.confidence]), [['unfingerprinted', 'src/a.ts', 'link', 'medium'], ['unfingerprinted', 'src/dir', 'unreadable', 'medium']]);
+    const { entry: _e, ...noEntry } = a.conflicts[0];
+    assert.ok(checkOdu({ ...a, conflicts: [noEntry] }).length > 0, 'an unfingerprinted conflict names the entry');
+    assert.deepStrictEqual(checkMark({ ...unreadable(10010, 'src/a.ts', 'link'), seq: 9, prev_hash: 'sha256:' + '1'.repeat(64), hash: 'sha256:' + '2'.repeat(64) }), [], 'a valid mark');
+  } finally {
+    rmrf(base);
+  }
+});
+
 runAll('closeout');

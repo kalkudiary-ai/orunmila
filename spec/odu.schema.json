@@ -356,7 +356,7 @@
     },
     "conflicts": {
       "description": "A list of disagreements, each naming the sources and what each said. Never dropped: on every odù, empty when there is none.",
-      "$comment": "brief v4 lines 314, 328, 405, 411, 429-439; station 6 (slices C3a-C3e). `sources` and `said` are the agent's names for line 328's \"naming the sources and what each said\" (LD188, Q13); concurrent_sessions's `sessions` (LD180, Q11 (1), approved LD184); outcome_missing's `ref` and `why` (LD189, Q14); silent_change's `turns` and `claim_seqs` (LD194, Q16)",
+      "$comment": "brief v4 lines 314, 328, 405, 411, 429-439; station 6 (slices C3a-C3e). `sources` and `said` are the agent's names for line 328's \"naming the sources and what each said\" (LD188, Q13); concurrent_sessions's `sessions` (LD180, Q11 (1), approved LD184); outcome_missing's `ref` and `why` (LD189, Q14); silent_change's `turns` and `claim_seqs` (LD194, Q16); unfingerprinted's `entry` and `marks` (LD234, Q26)",
       "type": "array",
       "items": {
         "type": "object",
@@ -488,11 +488,30 @@
                 "marks"
               ]
             }
+          },
+          {
+            "$comment": "agent's proposal for F9, approved by O as Q26 (2026-11-23), LD234",
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "unfingerprinted"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "required": [
+                "entry",
+                "marks"
+              ]
+            }
           }
         ],
         "properties": {
           "kind": {
-            "description": "The conflict's kind. concurrent_sessions: a change during overlapping sessions that cannot be pinned to one session. unconfirmed_by_filesystem: an agent reported an edit inside the Sentinel's root that the Sentinel and git never saw. outcome_missing: a tool call's `started` mark with no outcome by the end of its turn, or an outcome its payload says was interrupted. phantom_claim: on a claim's own odù, a claim the evidence does not support. silent_change: an agent-caused change of a file that its turn's claims never mention. contradiction: the Glove's and the Sentinel's own marks of a file disagree on whether it is there at the end, one saying only that it is (created, modified, renamed) and the other only that it is gone (deleted). missed_live: a change the closeout's full rescan found that no odù of the session holds.",
+            "description": "The conflict's kind. concurrent_sessions: a change during overlapping sessions that cannot be pinned to one session. unconfirmed_by_filesystem: an agent reported an edit inside the Sentinel's root that the Sentinel and git never saw. outcome_missing: a tool call's `started` mark with no outcome by the end of its turn, or an outcome its payload says was interrupted. phantom_claim: on a claim's own odù, a claim the evidence does not support. silent_change: an agent-caused change of a file that its turn's claims never mention. contradiction: the Glove's and the Sentinel's own marks of a file disagree on whether it is there at the end, one saying only that it is (created, modified, renamed) and the other only that it is gone (deleted). missed_live: a change the closeout's full rescan found that no odù of the session holds. unfingerprinted: the closeout's full rescan found an entry it could not fingerprint (a link, another kind of entry, or one it could not read) where the session last knew a regular file or nothing, so whether the file changed is unknown; files under such a folder are hidden from the walk.",
             "type": "string",
             "minLength": 1
           },
@@ -544,7 +563,7 @@
             }
           },
           "marks": {
-            "description": "For missed_live: the seq of each of the rescan's fingerprinted marks behind it, in order.",
+            "description": "For missed_live and unfingerprinted: the seq of each of the rescan's fingerprinted marks behind it, in order.",
             "$comment": "brief v4 line 450 (its missed_live conflict names the rescan's fingerprinted marks); agent's proposal (LD207, Q19)",
             "type": "array",
             "minItems": 1,
@@ -653,6 +672,15 @@
               "type": "string",
               "minLength": 1
             }
+          },
+          "entry": {
+            "description": "For unfingerprinted: what the closeout's walk found at the path: link, other or unreadable.",
+            "$comment": "agent's proposal (LD234, Q26)",
+            "enum": [
+              "link",
+              "other",
+              "unreadable"
+            ]
           }
         }
       }

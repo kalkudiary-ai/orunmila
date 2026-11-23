@@ -23,7 +23,10 @@
  *       change of a file gets its `fingerprinted` mark, and each sealed odù
  *       goes to odu.jsonl beside the raw log; and, a lag grace after the
  *       session's end, the closeout, slice K5, LD208, provisional: the sweep's
- *       marks with a rescan mark for each file that differs from the baseline);
+ *       marks with a rescan mark for each file that differs from the baseline,
+ *       and, F9 (LD234), the unknown shape naming the entry for one the walk
+ *       could not fingerprint where the session last knew a regular file or
+ *       nothing, a path under such an entry never read as gone);
  *       a write's file facts are measured, before at PreToolUse and after
  *       at PostToolUse, and a read's at PostToolUse (the whole file at hook time,
  *       test 55); the adapter translates (A8); paths are normalised (line 345);
@@ -279,15 +282,26 @@ function createRouter(o) {
         const known = s.lv && s.lv.on ? s.lv.opon.lastStates() : new Map();
         const last = (p) => (known.has(p) ? known.get(p) : s.baseMap.has(p) ? s.baseMap.get(p) : 'absent');
         const now = new Set();
+        const hidden = []; // F9 (LD234): entries the walk could not fingerprint; nothing under them was seen
         for (const e of snap.entries) {
           now.add(e.path);
-          if (typeof e.fingerprint !== 'string' || (s.baseMap.get(e.path) === e.fingerprint && last(e.path) === e.fingerprint)) continue;
+          if (typeof e.fingerprint !== 'string') {
+            hidden.push(e.path);
+            // F9 (LD234, Q26): where the session last knew a regular file or nothing, the change is unknown: the existing unknown shape, naming the entry.
+            if (typeof last(e.path) === 'string') {
+              engine.receive(mark({ kind: 'file', path: e.path }, 'fingerprinted', { exists: true, size: null, fingerprint: null, rescan: true, entry: e.kind }), {});
+              rescanned.push(e.path);
+            }
+            continue;
+          }
+          if (s.baseMap.get(e.path) === e.fingerprint && last(e.path) === e.fingerprint) continue;
           engine.receive(mark({ kind: 'file', path: e.path }, 'fingerprinted', { exists: true, size: e.size, fingerprint: e.fingerprint, rescan: true }), {});
           rescanned.push(e.path);
         }
         const gone = [...new Set([...s.baseMap.keys(), ...known.keys()])].sort();
         for (const p of gone) {
           if (now.has(p) || typeof last(p) !== 'string' || last(p) === 'absent') continue;
+          if (hidden.some((h) => h === '.' || p.startsWith(h + '/'))) continue; // F9: under a link or an unreadable folder: not seen, never read as gone
           engine.receive(mark({ kind: 'file', path: p }, 'fingerprinted', { exists: false, rescan: true }), {});
           rescanned.push(p);
         }
@@ -333,9 +347,11 @@ function createRouter(o) {
     const root = fs.realpathSync(p.cwd);
     const entries = readEnvEntries(root).entries;
     const now = clock();
+    const ci = isCaseInsensitive(root);
     const header = buildHeader({
       sessionId: id,
       root,
+      caseInsensitive: ci, // Q25 (LD233): the probe the marks are folded by, in the header for replay
       agent: { name: CC.id, version: null },
       orunmilaVersion: o.orunmilaVersion,
       codeRoot: o.codeRoot,
@@ -360,7 +376,7 @@ function createRouter(o) {
     const baseMap = baseline === null ? null : baselineMap(baseline);
     if (live) lv = live.open(dir, log.header(), baseMap);
     const tamper = createTamperWatch({ header: { ...header, project_root: root }, codeRoot: o.codeRoot, lawPacks: lawPacksFor(root), clock });
-    return { log, root, ci: isCaseInsensitive(root), n: 0, open: false, pre: new Map(), last: BigInt(now.mono), limit: header.config.diff_size_limit_bytes, tamper, lv, ...closeoutFacts(header, baseMap) };
+    return { log, root, ci, n: 0, open: false, pre: new Map(), last: BigInt(now.mono), limit: header.config.diff_size_limit_bytes, tamper, lv, ...closeoutFacts(header, baseMap) };
   }
 
   function normalise(s, m) {

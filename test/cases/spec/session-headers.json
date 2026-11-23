@@ -1599,6 +1599,18 @@
         "path": "/config/byproducts/0",
         "keyword": "type"
       }
+    },
+    {
+      "name": "case_insensitive that is not a boolean (Q25, LD233)",
+      "from": "header",
+      "set": {
+        "/config/case_insensitive": "yes"
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/case_insensitive",
+        "keyword": "type"
+      }
     }
   ]
 }

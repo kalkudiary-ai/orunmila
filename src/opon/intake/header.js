@@ -9,7 +9,10 @@
  *   buildHeader({ sessionId, root, agent, orunmilaVersion, codeRoot, lawPacks,
  *                 hookSettings, config?, observedAt?, monoNs?, envValues?,
  *                 byproducts? })
- *     -> the header without seq / prev_hash / hash (intake seals it); its
+ *     -> the header without seq / prev_hash / hash (intake seals it); with a
+ *        boolean `caseInsensitive` (the intake's probe of the root, Q25,
+ *        LD233), config.case_insensitive, so replay matches a claim's path
+ *        as intake names files; its
  *        test_command is the project's test command, frozen (slice B8, LD70);
  *        with `byproducts: true` (the live path, slice A1a, LD175), the
  *        entries of `.orunmila/byproducts` as config.byproducts, from the
@@ -105,6 +108,7 @@ function buildHeader(o) {
   const lawPacks = {};
   for (const [name, p] of Object.entries(o.lawPacks || {})) lawPacks[name] = fileFingerprint(p);
   const config = { ...DEFAULT_CONFIG, exclusions: [...DEFAULT_CONFIG.exclusions], ...(o.config || {}) };
+  if (typeof o.caseInsensitive === 'boolean') config.case_insensitive = o.caseInsensitive; // Q25 (LD233): replay folds a claim's path as intake folds marks
   const byproducts = readRegular(path.join(orunmilaDir, 'byproducts')); // read once: the fingerprint and the list are of the same bytes
   if (o.byproducts) config.byproducts = byproductsFrom(byproducts);
   return {

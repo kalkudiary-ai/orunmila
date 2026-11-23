@@ -144,11 +144,15 @@ it(
 // MG2 (LD230): no process a suite starts outlives the gate, and none the gate starts outlives this test.
 const HANG = { ...KILL, id: 'H add never returns', to: '(() => { for (;;); })()' };
 
-/** test/kid.js: starts a child that never ends, records its own pid and the child's in `pidFile`, then tests add. */
-function addKidSuite(root, pidFile) {
+/**
+ * test/kid.js: starts a child that never ends, records its own pid and the child's in `pidFile`, then tests add. The
+ * child stays in the suite's group with its environment cleared, so only the group kill reaches it (MG2); with
+ * `detached`, it leaves for a session and group of its own with its environment kept, so only the sweep does (MG3).
+ */
+function addKidSuite(root, pidFile, detached = false) {
   fs.writeFileSync(
     path.join(root, 'test', 'kid.js'),
-    `const k = require('child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1e6)'], { stdio: 'ignore' });
+    `const k = require('child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1e6)'], { stdio: 'ignore', ${detached ? 'detached: true' : 'env: {}'} });
 require('fs').appendFileSync(${JSON.stringify(pidFile)}, process.pid + ' ' + k.pid + '\\n');
 const ok = require('../src/add')(2, 3) === 5;
 ${line('ok', 'add works')}
@@ -219,6 +223,25 @@ it(
         4000,
       );
       assert.ok(r.timedOut, `the gate ended by itself: exit ${r.status}`);
+      const pids = pidsIn(pidFile);
+      assert.strictEqual(pids.length, 4, `baseline and mutant runs, suite and child each: ${pids.join(' ')}`);
+      assert.deepStrictEqual(survivors(pids), []);
+    } finally {
+      reap(pidFile);
+      rmrf(pidDir);
+    }
+  }),
+);
+
+it(
+  "MG3 (LD239): a suite's child that leaves the suite's group (detached: a session and group of its own, as setsid makes) is killed too, when the suite ends and when it times out",
+  withRepo((root) => {
+    const pidDir = tmpDir();
+    const pidFile = path.join(pidDir, 'pids');
+    addKidSuite(root, pidFile, true);
+    try {
+      const r = gate(root, [{ ...HANG, test: 'test/kid.js' }], { suiteTimeoutMs: 2000 });
+      assert.strictEqual(r.code, 0, r.lines.join('\n'));
       const pids = pidsIn(pidFile);
       assert.strictEqual(pids.length, 4, `baseline and mutant runs, suite and child each: ${pids.join(' ')}`);
       assert.deepStrictEqual(survivors(pids), []);

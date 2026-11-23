@@ -2260,11 +2260,18 @@ const MUTANTS = [
     from: "  clearTimeout(hard);\n  group('SIGKILL');", to: '  clearTimeout(hard);',
     fails: ["MG2: a suite's own child"] },
   { id: "MG2-2 the launcher's own SIGTERM leaves its group running", file: 'scripts/mutation-gate.js', test: 'test/mutation-gate.js',
-    from: "Number(ms));\nfor (const s of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(s, () => { group('SIGKILL'); process.exit(1); });", to: 'Number(ms));',
+    from: "Number(ms));\nfor (const s of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(s, () => { group('SIGKILL'); sweep(); process.exit(1); });", to: 'Number(ms));',
     fails: ['MG2: a gate that overruns'] },
   { id: 'MG2-3 the command not given a group of its own', file: 'scripts/mutation-gate.js', test: 'test/mutation-gate.js',
-    from: 'process.argv.slice(1);\nconst c = spawn(cmd, args, { detached: true,', to: 'process.argv.slice(1);\nconst c = spawn(cmd, args, {',
+    from: "].join(',');\nconst c = spawn(cmd, args, { detached: true,", to: "].join(',');\nconst c = spawn(cmd, args, {",
     fails: ["MG2: a suite's own child", 'MG2: a gate that overruns'] },
+  // MG3 (LD239): a process that leaves the suite's group is found by its environment.
+  { id: 'MG3-1 nothing is swept when the command ends', file: 'scripts/mutation-gate.js', test: 'test/mutation-gate.js',
+    from: "  group('SIGKILL');\n  sweep();\n  if (timedOut)", to: "  group('SIGKILL');\n  if (timedOut)",
+    fails: ['MG3 (LD239)'] },
+  { id: "MG3-2 the command runs without the launcher's tag", file: 'scripts/mutation-gate.js', test: 'test/mutation-gate.js',
+    from: "env: { ...process.env, [KEY]: tags } });\nconst group", to: "});\nconst group",
+    fails: ['MG3 (LD239)'] },
   // Q25 (LD233): the header records whether the root folds case, and claims are matched by it.
   { id: 'Q25-1 a claim keeps its own case on a root that folds case', file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
     from: "    if (ci === true && !p.startsWith('/')) p = p.toLowerCase();\n", to: '',
@@ -2313,23 +2320,47 @@ const SUITE_TIMEOUT_MS = 300000; // MG1: one suite run's limit; a mutant that ha
 
 // MG2 (LD230): the command runs in a process group of its own under this launcher. When the command ends,
 // when it times out (SIGTERM to the group, SIGKILL a second later), and when the launcher itself gets
-// SIGTERM, SIGINT or SIGHUP, the whole group is killed: no process the command started outlives it. A
-// process that leaves the group (spawned detached, or setsid) is not reached. A timeout is reported on fd 3.
+// SIGTERM, SIGINT or SIGHUP, the whole group is killed: no process the command started outlives it. MG3 (LD239):
+// a process that leaves the group (spawned detached, or setsid) is reached by its environment: the command runs
+// with ORUNMILA_MG_RUN holding every enclosing launcher's tag and this one's, and after each group kill every
+// process whose ORUNMILA_MG_RUN names this tag is killed too (macOS: ps -E; Linux: /proc/<pid>/environ). A process
+// that clears its environment, or runs as another user, is not reached. A timeout is reported on fd 3.
 const LAUNCHER = `'use strict';
 const fs = require('fs');
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 const [ms, cmd, ...args] = process.argv.slice(1);
-const c = spawn(cmd, args, { detached: true, stdio: ['ignore', 'inherit', 'inherit'] });
+const TAG = process.pid + '-' + Date.now();
+const KEY = 'ORUNMILA_MG_RUN';
+const tags = [...(process.env[KEY] ? process.env[KEY].split(',') : []), TAG].join(',');
+const c = spawn(cmd, args, { detached: true, stdio: ['ignore', 'inherit', 'inherit'], env: { ...process.env, [KEY]: tags } });
 const group = (sig) => { try { process.kill(-c.pid, sig); } catch (e) { void e; } };
+const mine = (v) => v.startsWith(KEY + '=') && v.slice(KEY.length + 1).split(',').includes(TAG);
+function tagged() {
+  const out = [];
+  if (process.platform === 'darwin') {
+    for (const row of execFileSync('ps', ['-axww', '-E', '-o', 'pid=,command='], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }).split('\\n')) {
+      const t = row.trim().split(/\\s+/);
+      if (t.slice(1).some(mine)) out.push(Number(t[0]));
+    }
+  } else if (process.platform === 'linux') {
+    for (const d of fs.readdirSync('/proc')) {
+      if (!/^[0-9]+$/.test(d)) continue;
+      try { if (fs.readFileSync('/proc/' + d + '/environ', 'utf8').split('\\0').some(mine)) out.push(Number(d)); } catch (e) { void e; }
+    }
+  }
+  return out.filter((p) => p !== process.pid);
+}
+const sweep = () => { for (let i = 0; i < 5; i++) { let left = []; try { left = tagged(); } catch (e) { return; } if (!left.length) return; for (const p of left) { try { process.kill(p, 'SIGKILL'); } catch (e) { void e; } } } };
 let timedOut = false;
 let hard = null;
 const t = setTimeout(() => { timedOut = true; group('SIGTERM'); hard = setTimeout(() => group('SIGKILL'), 1000); }, Number(ms));
-for (const s of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(s, () => { group('SIGKILL'); process.exit(1); });
+for (const s of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(s, () => { group('SIGKILL'); sweep(); process.exit(1); });
 c.on('error', (e) => { process.stderr.write(String(e) + '\\n'); process.exit(127); });
 c.on('exit', (code, sig) => {
   clearTimeout(t);
   clearTimeout(hard);
   group('SIGKILL');
+  sweep();
   if (timedOut) fs.writeSync(3, 'timeout');
   process.exit(code === null ? 128 + (require('os').constants.signals[sig] || 0) : code);
 });`;

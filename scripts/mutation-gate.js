@@ -2060,16 +2060,21 @@ function copyRepo(root) {
 const DEFAULT_SUITE = 'test/secure.js';
 const suiteOf = (m) => m.test || DEFAULT_SUITE;
 
-/** Run one suite in `dir`; returns its exit status and the titles that passed and failed. */
-function runSuite(dir, suite) {
+const SUITE_TIMEOUT_MS = 300000; // MG1: one suite run's limit; a mutant that hangs its suite is caught, never waited on
+
+/** Run one suite in `dir`; returns its exit status, the titles that passed and failed, and whether it timed out. */
+function runSuite(dir, suite, timeoutMs = SUITE_TIMEOUT_MS) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'orunmila-mutant-home-'));
   const r = spawnSync('node', [path.join(dir, suite)], {
     cwd: dir,
     encoding: 'utf8',
     env: { ...process.env, ORUNMILA_HOME: home },
     maxBuffer: 64 * 1024 * 1024,
+    timeout: timeoutMs,
+    killSignal: 'SIGKILL',
   });
   fs.rmSync(home, { recursive: true, force: true });
+  if (r.error && r.error.code === 'ETIMEDOUT') return { status: r.status, passed: [], failed: [], timedOut: true };
   // The runner prints one line per test: a coloured PASS or FAIL, two spaces, the title.
   const lines = (r.stdout || '')
     .split('\n')
@@ -2079,25 +2084,27 @@ function runSuite(dir, suite) {
   return { status: r.status, passed: titled('PASS'), failed: titled('FAIL') };
 }
 
-/** The titles of the tests that failed when `suite` ran in `dir`. */
-function failingTests(dir, suite) {
-  return runSuite(dir, suite).failed;
-}
-
 /**
  * Run the gate over a copy of `root` with `mutants`, printing through `log`;
  * returns the exit code (0 = every mutant failed as predicted). test/mutation-gate.js
- * runs it on a tiny synthetic repo.
+ * runs it on a tiny synthetic repo. A suite run past `suiteTimeoutMs` (MG1) is
+ * killed: unmutated, it fails the baseline; mutated, the mutant broke the suite,
+ * so it is killed, and the line says it timed out.
  */
-function runGate({ root = ROOT, mutants = MUTANTS, log = console.log } = {}) {
+function runGate({ root = ROOT, mutants = MUTANTS, log = console.log, suiteTimeoutMs = SUITE_TIMEOUT_MS } = {}) {
   const dir = copyRepo(root);
   let ok = true;
   try {
     // Every suite a mutant names must be fully green unmutated, or a mutant
     // could look killed by a test that was failing anyway.
     const suites = [...new Set(mutants.map(suiteOf))];
+    const secs = `${Math.round(suiteTimeoutMs / 1000)} s`;
     for (const suite of suites) {
-      const base = runSuite(dir, suite);
+      const base = runSuite(dir, suite, suiteTimeoutMs);
+      if (base.timedOut) {
+        log(`baseline: FAIL (${suite}, unmutated: timed out after ${secs})`);
+        return 1;
+      }
       if (base.status !== 0 || base.failed.length || !base.passed.length) {
         log(`baseline: FAIL (${suite}, unmutated: exit ${base.status}, ${base.passed.length} passed, ${base.failed.length} failed${base.failed.length ? ': ' + base.failed.join('; ') : ''})`);
         return 1;
@@ -2114,8 +2121,13 @@ function runGate({ root = ROOT, mutants = MUTANTS, log = console.log } = {}) {
         continue;
       }
       fs.writeFileSync(p, orig.replace(m.from, () => m.to));
-      const failed = failingTests(dir, suiteOf(m));
+      const run = runSuite(dir, suiteOf(m), suiteTimeoutMs);
       fs.writeFileSync(p, orig);
+      if (run.timedOut) {
+        log(`killed  ${m.id} (timed out after ${secs}: the suite never ended)`);
+        continue;
+      }
+      const failed = run.failed;
       const survived = m.fails.filter((name) => !failed.some((f) => f.startsWith(name)));
       if (survived.length) {
         log(`SURVIVED  ${m.id}: still passing: ${survived.join('; ')}`);

@@ -23,12 +23,12 @@ function node(code, timeout = 30000) {
   return JSON.parse(r.stdout);
 }
 
-/** Run runGate on `root` with `mutants`; returns { code, lines }. */
-function gate(root, mutants) {
+/** Run runGate on `root` with `mutants` (and `more` options); returns { code, lines }. */
+function gate(root, mutants, more = {}) {
   return node(
     `const g = require(${JSON.stringify(GATE)});
      const lines = [];
-     const code = g.runGate({ root: ${JSON.stringify(root)}, mutants: ${JSON.stringify(mutants)}, log: (l) => lines.push(l) });
+     const code = g.runGate({ root: ${JSON.stringify(root)}, mutants: ${JSON.stringify(mutants)}, log: (l) => lines.push(l), ...${JSON.stringify(more)} });
      process.stdout.write(JSON.stringify({ code, lines }));`,
   );
 }
@@ -110,6 +110,26 @@ it(
     assert.strictEqual(r.code, 1);
     assert.strictEqual(r.lines[0], 'baseline: FAIL (test/red.js, unmutated: exit 1, 0 passed, 1 failed: always red)');
     assert.strictEqual(r.lines.length, 1);
+  }),
+);
+
+it(
+  'MG1: a mutant that makes its suite never end is killed by the suite timeout, and the gate goes on (the Phase 3 close-out hung 31 minutes on one)',
+  withRepo((root) => {
+    const hang = { ...KILL, id: 'H add never returns', to: '(() => { for (;;); })()' };
+    const r = gate(root, [hang, KILL], { suiteTimeoutMs: 2000 });
+    assert.strictEqual(r.code, 0, r.lines.join('\n'));
+    assert.deepStrictEqual(r.lines.slice(1, 3), ['killed  H add never returns (timed out after 2 s: the suite never ended)', 'killed  K add subtracts (1 test(s) failed)']);
+  }),
+);
+
+it(
+  'MG1: a suite that times out unmutated fails the baseline, naming it',
+  withRepo((root) => {
+    fs.writeFileSync(path.join(root, 'test', 'slow.js'), 'for (;;);\n');
+    const r = gate(root, [{ ...KILL, id: 'T', test: 'test/slow.js' }], { suiteTimeoutMs: 1000 });
+    assert.strictEqual(r.code, 1);
+    assert.deepStrictEqual(r.lines, ['baseline: FAIL (test/slow.js, unmutated: timed out after 1 s)']);
   }),
 );
 

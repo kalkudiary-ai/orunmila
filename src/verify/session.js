@@ -41,6 +41,37 @@ const checkMark = load('mark.schema.json');
 const closedHeader = compile(closed(read('session-header.schema.json')));
 const closedMark = compile(closed(read('mark.schema.json')));
 const checkContinuation = load('continuation.schema.json');
+const checkFooter = load('session-footer.schema.json');
+
+/**
+ * K4 (LD209): the session footer, when one was written: each line it names must be in its log with that
+ * hash. Returns null when there is no footer, else { ok, words?, odu } (words name the first problem).
+ */
+function footerOf(dir, raw) {
+  const file = path.join(dir, 'footer.json');
+  if (!fs.existsSync(file)) return null;
+  let f;
+  try {
+    f = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return { ok: false, words: 'Record broken: the session footer is not JSON.' };
+  }
+  if (checkFooter(f).length) return { ok: false, words: 'Record broken: the session footer is not a valid footer.' };
+  const named = (recs, line, log) => {
+    const r = recs.find((x) => x && x.seq === line.seq);
+    if (!r) return `Record broken: the session footer names line ${line.seq + 1} of the ${log}, which the log does not hold.`;
+    return r.hash === line.hash ? null : `Record broken: the session footer names line ${line.seq + 1} of the ${log} with a hash that line does not have.`;
+  };
+  const rawProblem = named(raw.records.map((r) => r.rec), f.raw, 'raw log');
+  if (rawProblem) return { ok: false, words: rawProblem };
+  if (f.odu) {
+    const text = fs.existsSync(path.join(dir, 'odu.jsonl')) ? fs.readFileSync(path.join(dir, 'odu.jsonl'), 'utf8') : '';
+    const odu = records(text);
+    const oduProblem = named(odu, f.odu, 'odù log');
+    if (oduProblem) return { ok: false, words: oduProblem };
+  }
+  return { ok: true, odu: Boolean(f.odu) };
+}
 const REF_SLOTS = ['diff_ref', 'output_ref'];
 const REF = /^sha256:[0-9a-f]{64}$/;
 const LOG_NAMES = { raw: 'raw log', quarantine: 'quarantine log' };
@@ -210,6 +241,8 @@ function verifySession(dir) {
     }
   }
 
+  const footer = footerOf(dir, raw);
+
   const counts = {
     marks: marks.length,
     quarantined: quarantine.records.filter((r) => !(r.part === 1 && r.line === 1) && !isContinuation(r)).length,
@@ -227,6 +260,8 @@ function verifySession(dir) {
     words = failWords(quarantine, 'quarantine');
   } else if (files.bad.length) {
     words = fileWords(files.bad[0]);
+  } else if (footer && !footer.ok) {
+    words = footer.words;
   } else {
     const cuts = [
       ...raw.cuts.map((c) => `${where('raw log', c.part, c.line)} was cut by a crash and continues in part ${c.part + 1}`),
@@ -236,11 +271,12 @@ function verifySession(dir) {
       ? [`${plural(undeclared.length, 'field', 'fields')} the spec does not declare: ${undeclared.map((u) => `${u.path} at ${where('raw log', u.part, u.line)}`).join(', ')}`]
       : [];
     const base = baseline ? [`the baseline snapshot of ${plural(baseline.entries, 'entry', 'entries')} matches the header`] : [];
+    const foot = footer ? [`the session footer matches the raw log${footer.odu ? ' and the odù log' : ''}`] : [];
     words =
       `Record intact: ${plural(counts.marks, 'mark', 'marks')}, ${plural(counts.quarantined, 'quarantined input', 'quarantined inputs')}, ` +
-      `${plural(counts.kept_files, 'kept file', 'kept files')}, unbroken${[...cuts, ...fields, ...base].map((c) => `; ${c}`).join('')}.`;
+      `${plural(counts.kept_files, 'kept file', 'kept files')}, unbroken${[...cuts, ...fields, ...base, ...foot].map((c) => `; ${c}`).join('')}.`;
   }
-  return { ok: raw.ok && schema.ok && quarantine.ok && files.bad.length === 0, words, counts, raw: summary(raw), schema, quarantine: summary(quarantine), files, undeclared };
+  return { ok: raw.ok && schema.ok && quarantine.ok && files.bad.length === 0 && (!footer || footer.ok), words, counts, raw: summary(raw), schema, quarantine: summary(quarantine), files, undeclared };
 }
 
 module.exports = { verifySession, checkLog, fileWords };

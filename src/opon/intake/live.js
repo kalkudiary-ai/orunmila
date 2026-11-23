@@ -73,6 +73,8 @@ function createLive({ key, clock, receive, error }) {
       others,
       opon: createOpon({ sessionId: id, config, baseline, byproducts: Array.isArray(config.byproducts) ? config.byproducts : null, root: header.project_root, others }),
       odu: createOduWriter(header),
+      oduLast: null,
+      footed: false,
       sources: new Map(),
       due: [],
       draining: false,
@@ -114,6 +116,7 @@ function createLive({ key, clock, receive, error }) {
 
   function open(dir, header, baseline) {
     const st = make(dir, header, baseline);
+    st.oduLast = st.odu.head;
     try {
       fs.writeFileSync(st.file, canonicalize(st.odu.head) + '\n', { flag: 'wx', mode: 0o600 });
     } catch (e) {
@@ -131,6 +134,7 @@ function createLive({ key, clock, receive, error }) {
    */
   function resume(dir, header, baseline, marks) {
     const st = make(dir, header, baseline);
+    st.oduLast = st.odu.head;
     try {
       let text = canonicalize(st.odu.head) + '\n';
       for (const rec of marks) {
@@ -165,7 +169,28 @@ function createLive({ key, clock, receive, error }) {
   function step(st, rec) {
     st.sources.set(rec.seq, rec.source);
     if (rec.says === 'overlapped') applyOverlapped(st.others, rec);
-    return st.opon.push(rec).map((g) => st.odu.add(g, (s) => st.sources.get(s))).filter(Boolean);
+    const out = st.opon.push(rec).map((g) => st.odu.add(g, (s) => st.sources.get(s))).filter(Boolean);
+    if (out.length) st.oduLast = out[out.length - 1];
+    return out;
+  }
+
+  /**
+   * K4 (LD209; line 454): footer.json beside the logs, once, at the closeout's end: the raw log's last
+   * line (the sweep's exited mark) and the odù log's, by seq and hash; the verdict log's is null until
+   * Phase 6. Placed whole; a failure is in the error log and never stops capture.
+   */
+  function writeFooter(st, rec) {
+    if (st.footed) return;
+    st.footed = true;
+    const dir = path.dirname(st.file);
+    const footer = { schema_version: 1, record: 'session_footer', session_id: st.header.session_id, raw: { seq: rec.seq, hash: rec.hash }, odu: st.on ? { seq: st.oduLast.seq, hash: st.oduLast.hash } : null, verdict: null };
+    try {
+      const tmp = path.join(dir, `footer.json.${process.pid}.tmp`);
+      fs.writeFileSync(tmp, canonicalize(footer) + '\n', { mode: 0o600 });
+      fs.renameSync(tmp, path.join(dir, 'footer.json'));
+    } catch (e) {
+      error(`the session footer of ${st.header.session_id} could not be written: ${e.code || e.message}`, { session_id: st.header.session_id });
+    }
   }
 
   function fingerprintMark(st, rel) {
@@ -196,6 +221,7 @@ function createLive({ key, clock, receive, error }) {
         stop(st, e.message);
       }
     }
+    if (rec.says === 'exited' && rec.source === 'process' && isObject(rec.target) && rec.target.kind === 'process' && rec.target.name === 'closeout') writeFooter(st, rec); // K4
     // L2: the end of this session, named to each session it was named to.
     if (ended) for (const t of held.values()) if (t !== st && t.others.some((s) => s.id === st.span.id && !s.ended)) receive(overlapMark(t, st));
     if (st.draining) return; // a fingerprint written below feeds back in: the loop below takes what it adds

@@ -15,6 +15,7 @@ still change. After that, fields may be added but never renamed or removed witho
 | `odu.schema.json` | The odù record: one real event, reconciled from the marks behind it (Phase 3; the fields stations 4-6 fill are optional until they are built) |
 | `odu-header.schema.json` | The odù log's header: its first line, naming the raw log it came from |
 | `baseline.schema.json` | One line of `baseline.jsonl`, the baseline snapshot at session start; the header's `baseline.fingerprint` covers the file (Phase 3) |
+| `session-footer.schema.json` | `footer.json`, written at the closeout's end: the last line of the raw and odù logs by seq and hash, `orunmila verify` checking each (Phase 4, provisional) |
 
 The verdict record comes later (Phase 6). The odù record follows the G2b amendment (open question
 5, approved 2026-11-16).

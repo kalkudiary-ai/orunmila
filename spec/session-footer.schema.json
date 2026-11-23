@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:orunmila:spec:v1:session-footer",
+  "title": "Orunmila session footer, schema version 1: DRAFT",
+  "description": "footer.json beside a session's logs, written at the closeout's end: the final line of each log by seq and hash, so the logs as they stood at the close can be checked. Provisional (Phase 4, slice K4, LD209; Q17, Q20).",
+  "$comment": "brief v4 line 454 (the session footer containing the final hashes of all three logs); the fields are the agent's proposal (LD209, Q20). Unknown fields are allowed (brief v4 line 209).",
+  "type": "object",
+  "required": ["schema_version", "record", "session_id", "raw", "odu", "verdict"],
+  "properties": {
+    "schema_version": {
+      "description": "All carry a schema_version.",
+      "$comment": "brief v4 line 209",
+      "const": 1
+    },
+    "record": {
+      "description": "Marks this file as a session footer.",
+      "$comment": "agent's choice, LD209",
+      "const": "session_footer"
+    },
+    "session_id": {
+      "description": "The session.",
+      "$comment": "brief v4 line 293",
+      "type": "string",
+      "minLength": 1
+    },
+    "raw": {
+      "description": "The raw log's last line at the closeout's end (the sweep's exited mark).",
+      "$comment": "brief v4 line 454; agent's proposal (LD209)",
+      "$ref": "#/definitions/line"
+    },
+    "odu": {
+      "description": "The odù log's last line at the closeout's end, or null when no live odù log was written.",
+      "$comment": "brief v4 line 454; agent's proposal (LD209)",
+      "anyOf": [{ "$ref": "#/definitions/line" }, { "type": "null" }]
+    },
+    "verdict": {
+      "description": "The verdict log's last line: null until the verdict log exists (Phase 6).",
+      "$comment": "brief v4 lines 453-454, 617; agent's proposal (LD209)",
+      "type": "null"
+    }
+  },
+  "definitions": {
+    "line": {
+      "type": "object",
+      "required": ["seq", "hash"],
+      "properties": {
+        "seq": {
+          "description": "The line's seq.",
+          "$comment": "agent's choice, LD209: as spec/hash-chain.md defines it",
+          "type": "integer",
+          "minimum": 0
+        },
+        "hash": {
+          "description": "The line's hash.",
+          "$comment": "agent's choice, LD209: as spec/hash-chain.md defines it",
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

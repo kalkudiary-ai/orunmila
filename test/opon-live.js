@@ -528,4 +528,41 @@ it(
   }),
 );
 
+it(
+  'K4 line 454 (LD209; provisional, Q17): at the closeout\'s end the live intake writes footer.json naming the raw log\'s and the odù log\'s last lines by seq and hash, the verdict log not yet (Phase 6); verify checks it, and names a footer whose hash its log does not hold',
+  withBase((base) => {
+    const home = path.join(base, 'home');
+    const project = path.join(base, 'project');
+    fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+    const clock = fakeClock();
+    const router = createRouter({ home, clock, checkSender: () => true, codeRoot: SRC, orunmilaVersion: '0.0.0-test', installKey: KEY, hookSettingsFor: () => [], baseline: true });
+    const p = cc(project, 'ses_k4');
+    assert.strictEqual(router.payload(p.prompt('go'), { channel: 'command' }).ok, true);
+    assert.strictEqual(router.payload(p.stop('Nothing to do.')).ok, true);
+    assert.strictEqual(router.payload({ session_id: 'ses_k4', transcript_path: '/tmp/t.jsonl', cwd: project, hook_event_name: 'SessionEnd', reason: 'clear' }).ok, true);
+    for (let i = 0; i < 10; i++) {
+      clock.advance(600);
+      router.poll();
+    }
+    const dir = path.join(home, 'sessions', 'ses_k4');
+    const footer = JSON.parse(fs.readFileSync(path.join(dir, 'footer.json'), 'utf8'));
+    const raw = rawRecords(dir);
+    const exited = raw.find((m) => m.target && m.target.name === 'closeout' && m.says === 'exited');
+    const odu = fs.readFileSync(path.join(dir, 'odu.jsonl'), 'utf8').split('\n').slice(0, -1).map((l) => JSON.parse(l));
+    assert.deepStrictEqual([footer.record, footer.session_id, footer.raw, footer.odu, footer.verdict], ['session_footer', 'ses_k4', { seq: exited.seq, hash: exited.hash }, { seq: odu[odu.length - 1].seq, hash: odu[odu.length - 1].hash }, null]);
+    const { compile } = require('../src/verify/schema');
+    const checkFooter = compile(JSON.parse(fs.readFileSync(path.join(SRC, '..', 'spec', 'session-footer.schema.json'), 'utf8')));
+    assert.deepStrictEqual(checkFooter(footer), []);
+    const { verifySession } = require('../src/verify/session');
+    const v = verifySession(dir);
+    assert.deepStrictEqual([v.ok, v.words.includes('the session footer matches the raw log and the odù log')], [true, true], v.words);
+    fs.writeFileSync(path.join(dir, 'footer.json'), JSON.stringify({ ...footer, raw: { ...footer.raw, hash: 'sha256:' + '0'.repeat(64) } }));
+    const bad = verifySession(dir);
+    assert.deepStrictEqual([bad.ok, bad.words], [false, `Record broken: the session footer names line ${footer.raw.seq + 1} of the raw log with a hash that line does not have.`]);
+    fs.writeFileSync(path.join(dir, 'footer.json'), JSON.stringify({ ...footer, odu: { ...footer.odu, hash: 'sha256:' + '0'.repeat(64) } }));
+    const badOdu = verifySession(dir);
+    assert.deepStrictEqual([badOdu.ok, badOdu.words], [false, `Record broken: the session footer names line ${footer.odu.seq + 1} of the odù log with a hash that line does not have.`]);
+  }),
+);
+
 runAll('opon-live');

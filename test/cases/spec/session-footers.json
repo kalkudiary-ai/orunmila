@@ -1,0 +1,259 @@
+{
+  "good": {
+    "footer": {
+      "schema_version": 1,
+      "record": "session_footer",
+      "session_id": "ses_test_0001",
+      "raw": {
+        "seq": 41,
+        "hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "odu": {
+        "seq": 12,
+        "hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "verdict": null
+    },
+    "footer_no_odu": {
+      "schema_version": 1,
+      "record": "session_footer",
+      "session_id": "ses_test_0001",
+      "raw": {
+        "seq": 41,
+        "hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "odu": null,
+      "verdict": null
+    }
+  },
+  "bad": [
+    {
+      "name": "a footer with no schema_version",
+      "from": "footer",
+      "set": {},
+      "unset": [
+        "/schema_version"
+      ],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "a footer with no record",
+      "from": "footer",
+      "set": {},
+      "unset": [
+        "/record"
+      ],
+      "error": {
+        "path": "/record",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "a footer with no session_id",
+      "from": "footer",
+      "set": {},
+      "unset": [
+        "/session_id"
+      ],
+      "error": {
+        "path": "/session_id",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "a footer with no raw",
+      "from": "footer",
+      "set": {},
+      "unset": [
+        "/raw"
+      ],
+      "error": {
+        "path": "/raw",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "a footer with no odu",
+      "from": "footer",
+      "set": {},
+      "unset": [
+        "/odu"
+      ],
+      "error": {
+        "path": "/odu",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "a footer with no verdict",
+      "from": "footer",
+      "set": {},
+      "unset": [
+        "/verdict"
+      ],
+      "error": {
+        "path": "/verdict",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "schema version 2",
+      "from": "footer",
+      "set": {
+        "/schema_version": 2
+      },
+      "unset": [],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "not a session footer",
+      "from": "footer",
+      "set": {
+        "/record": "odu_header"
+      },
+      "unset": [],
+      "error": {
+        "path": "/record",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "a session id that is not a string",
+      "from": "footer",
+      "set": {
+        "/session_id": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/session_id",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "an empty session id",
+      "from": "footer",
+      "set": {
+        "/session_id": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/session_id",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "a raw line that is not an object",
+      "from": "footer",
+      "set": {
+        "/raw": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/raw",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "an odù line that is neither a line nor null",
+      "from": "footer",
+      "set": {
+        "/odu": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/odu",
+        "keyword": "anyOf"
+      }
+    },
+    {
+      "name": "a verdict log named before Phase 6",
+      "from": "footer",
+      "set": {
+        "/verdict": {}
+      },
+      "unset": [],
+      "error": {
+        "path": "/verdict",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a raw line with no seq",
+      "from": "footer",
+      "set": {},
+      "unset": [
+        "/raw/seq"
+      ],
+      "error": {
+        "path": "/raw/seq",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "a raw line with no hash",
+      "from": "footer",
+      "set": {},
+      "unset": [
+        "/raw/hash"
+      ],
+      "error": {
+        "path": "/raw/hash",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "a seq that is not an integer",
+      "from": "footer",
+      "set": {
+        "/raw/seq": "41"
+      },
+      "unset": [],
+      "error": {
+        "path": "/raw/seq",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a negative seq",
+      "from": "footer",
+      "set": {
+        "/raw/seq": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/raw/seq",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "a hash that is not a string",
+      "from": "footer",
+      "set": {
+        "/raw/hash": 5
+      },
+      "unset": [],
+      "error": {
+        "path": "/raw/hash",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a hash that is not a sha256",
+      "from": "footer",
+      "set": {
+        "/raw/hash": "sha256:zz"
+      },
+      "unset": [],
+      "error": {
+        "path": "/raw/hash",
+        "keyword": "pattern"
+      }
+    }
+  ]
+}

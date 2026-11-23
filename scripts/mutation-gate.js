@@ -2247,6 +2247,13 @@ const MUTANTS = [
   { id: 'F4a-2 a baseline entry that differs only in case reads as no entry', file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
     from: '      if (named(lk, lp) && !named(k, p)) return true;', to: '      if (false) return true;',
     fails: ['F4a (LD227'] },
+  // F6 (LD228).
+  { id: 'F6-1 a phantom file claim after the closeout waits for ever', file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
+    from: "          else if (closedOut) out.push(make('low')); // F6 (LD228): after the closeout, no rescan will come for it\n", to: '',
+    fails: ['F6 (LD228'] },
+  { id: 'F6-2 the closeout counts as over while it still seals', file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
+    from: '    if (sessionOver === null) sessionOver = now;\n    endCalls(() => true, now);', to: '    closedOut = true;\n    if (sessionOver === null) sessionOver = now;\n    endCalls(() => true, now);',
+    fails: ['F6 (LD228'] },
 ];
 
 function copyRepo(root) {

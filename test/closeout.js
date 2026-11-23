@@ -401,6 +401,36 @@ it("F4a (LD227; Q24 checklist rows P-k7-rescan-case, P-k7-baseline-case): K7 com
   }
 });
 
+it('F6 (LD228; Q24 checklist rows S-file-claim-inside, S-file-claim-after): a phantom file claim made after the closeout is sealed with its turn, low (the rescan came before it); one made inside the sweep waits and is rated with the rest', () => {
+  const base = tmpDir();
+  try {
+    const log = makeLog(base, {}, { baseline: [{ path: 'src/r.ts', size: 4, fingerprint: FP('1') }] });
+    log.append(M.prompted(0));
+    log.append(M.turnEnded(100));
+    log.append(M.tick(9000));
+    log.append(sweep(10000, 'started'));
+    log.append(M.prompted(10010, 't2'));
+    log.append(said(10020, 'I updated src/r.ts.', 't2')); // inside the sweep
+    const exited = log.append(sweep(10100, 'exited'));
+    log.append(M.prompted(20000, 't3')); // the session resumed after its closeout
+    log.append(said(20010, 'I updated src/r.ts.', 't3'));
+    log.append(M.turnEnded(20020, 't3'));
+    log.append(M.tick(40000));
+    const r = replayFolder(log.dir);
+    assert.strictEqual(r.ok, true, r.words);
+    const odus = r.odu.split('\n').slice(1, -1).map((l) => JSON.parse(l));
+    for (const o of odus) assert.deepStrictEqual(checkOdu(o), [], JSON.stringify(o));
+    const claim = (turn) => odus.filter((o) => o.target && o.target.kind === 'claim' && o.target.turn === turn && o.conflicts.some((c) => c.kind === 'phantom_claim' && c.claim === 'file'));
+    const [inside, after] = [claim('t2'), claim('t3')];
+    assert.deepStrictEqual([inside.length, after.length], [1, 1], 'each sealed once');
+    assert.deepStrictEqual([witnesses(inside[0]), inside[0].confidence], [['saw', 'out_of_scope'], 'high'], 'rated by the closeout');
+    assert.deepStrictEqual([witnesses(after[0]), after[0].confidence, after[0].seq > odus.find((o) => o.mark_seqs.includes(exited)).seq], [['saw', 'out_of_scope'], 'low', true]);
+    assert.deepStrictEqual(r.lines.slice(1).map((l) => JSON.parse(l)).filter((g) => g.target && g.target.kind === 'claim' && g.state !== 'sealed'), [], 'none left waiting');
+  } finally {
+    rmrf(base);
+  }
+});
+
 // K6 (LD218; lines 614, 644, 691): the agent's closeout feedback read from the odù log, side by side with the old path.
 it('K6 line 614 (LD218): the agent\'s JSON feedback from the odù log: phantom claims by turn, silent changes as undisclosed, the other conflicts as findings; side by side with the old path; the CLI reads it only with ORUNMILA_FEEDBACK_FROM_ODU=1', () => {
   const { feedbackFromOdu, sideBySide } = require('../src/opon/feedback/from-odu');

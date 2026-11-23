@@ -285,6 +285,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
   const awaiting = []; // K7 (LD216): phantom file claims waiting for the closeout's rescan, each { make, path }
   const rescannedPaths = new Set(); // K7: the paths the sweep's rescan marks name
   let sweepPassed = false; // K7: the sweep's exited mark said pass (its walk ran)
+  let closedOut = false; // F6 (LD228): the closeout has sealed everything; a later claim's rescan came before it
   const all = [];
   let now = null;
   let made = 0;
@@ -506,6 +507,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
           const make = (confidence) => claimRecord(g, at, c, f.cited.flatMap((ch) => ch.rows), confidence, (cg) => [conflictOf(cg, 'phantom_claim', cg.sources, { claim: 'file', path: w, hedged: c.hedged, why: f.why, targets }), ...(f.sessions.length ? [conflictOf(cg, 'concurrent_sessions', cg.sources, { sessions: f.sessions })] : [])]);
           // Line 441 (K7, LD216): a change that is not this session's is medium at once (test 38); any other waits for the closeout's rescan.
           if (f.why === 'not_credited') out.push(make('medium'));
+          else if (closedOut) out.push(make('low')); // F6 (LD228): after the closeout, no rescan will come for it
           else awaiting.push({ make, path: w });
         }
       }
@@ -992,6 +994,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     const out = sealing.flatMap(emit);
     // K7 (LD216; line 441): each waiting phantom file claim, high when the rescan walked its path and found it unchanged.
     for (const a of awaiting.splice(0, awaiting.length)) out.push({ ...a.make(walkedUnchanged(a.path) ? 'high' : 'low'), sealed_at_ns: String(now) });
+    closedOut = true;
     return out;
   }
 

@@ -21,22 +21,31 @@
  * - A claim whose text could not be confirmed (`claim_unconfirmed`, N10) gives
  *   none: text that may be another turn's is never read as this turn's.
  *
- *   mentionsOf(mark, { strictProof }) -> [path as written]
+ *   mentionsOf(mark) -> [path as written]
  *
  * For a silent change (line 434: a change "the agent never mentioned in its
- * claims"; slice C3d2, LD194): every path target in every claim the same reader
- * reads in the text, with or without an action verb, as the agent wrote it.
- * None for a claim that could not be confirmed.
+ * claims"; slice C3d2, LD194; C3d3, LD203): every path target the reader's
+ * target finder sees in the text, cleaned as the reader cleans it (table rows,
+ * code blocks), in any sentence, a claim or not: the reader takes no claim from
+ * "I edited src/a.ts." (its verbs have no `edited`), and that sentence still
+ * mentions the file. None for a claim that could not be confirmed.
  */
 
 const { extractClaims } = require('../../reconcile/claim-extractor');
 const { findExecutionClaims } = require('../../reconcile/verification-claim');
+const { extractTargets } = require('../../reconcile/task-extractor');
+const { sanitize } = require('../../reconcile/sanitize');
 
-/** The claims the shared reader reads in a `claimed` mark's text; none for one that could not be confirmed (N10). */
-function readClaims(mark, strictProof) {
+/** A `claimed` mark's text, or null for one that could not be confirmed (N10) or is not a claim. */
+function confirmedText(mark) {
   const d = mark && mark.detail && typeof mark.detail === 'object' ? mark.detail : {};
-  if (!mark || mark.says !== 'claimed' || d.claim_unconfirmed === true || typeof d.text !== 'string') return [];
-  return extractClaims(d.text, { strictProof });
+  if (!mark || mark.says !== 'claimed' || d.claim_unconfirmed === true || typeof d.text !== 'string') return null;
+  return d.text;
+}
+/** The claims the shared reader reads in a `claimed` mark's text; none for one that could not be confirmed. */
+function readClaims(mark, strictProof) {
+  const text = confirmedText(mark);
+  return text === null ? [] : extractClaims(text, { strictProof });
 }
 /** A claim's path targets, as written. */
 const pathsOf = (c) => c.targets.filter((t) => t.kind === 'path').map((t) => t.raw);
@@ -51,8 +60,10 @@ function claimsOf(mark, { strictProof = false } = {}) {
   return out;
 }
 
-function mentionsOf(mark, { strictProof = false } = {}) {
-  return [...new Set(readClaims(mark, strictProof).flatMap(pathsOf))];
+function mentionsOf(mark) {
+  // C3d3 (LD203): every path in the confirmed text, cleaned as the reader cleans it, in a sentence it takes as a claim or not.
+  const text = confirmedText(mark);
+  return text === null ? [] : [...new Set(extractTargets(sanitize(text)).filter((t) => t.kind === 'path').map((t) => t.raw))];
 }
 
 module.exports = { claimsOf, mentionsOf };

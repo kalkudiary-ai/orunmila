@@ -1939,7 +1939,7 @@ const MUTANTS = [
     from: 'g.after = [g.amends, g.continues].filter((x) => x !== null && waiting.some((w) => w.id === x));', to: 'g.after = [];',
     fails: ['C3d2: an odù that amends'] },
   { id: 'C3d2-10 only a claim with an action verb mentions a path', file: 'src/opon/corroborate/claims.js', test: 'test/conflicts.js',
-    from: 'return [...new Set(readClaims(mark, strictProof).flatMap(pathsOf))];', to: 'return [...new Set(claimsOf(mark, { strictProof }).flatMap((c) => c.files))];',
+    from: "return text === null ? [] : [...new Set(extractTargets(sanitize(text)).filter((t) => t.kind === 'path').map((t) => t.raw))];", to: 'return [...new Set(claimsOf(mark).flatMap((c) => c.files))];',
     fails: ['C3d2: a change its turn'] },
   { id: 'C3d2-11 the schema does not ask a silent_change for its turns', file: 'spec/odu.schema.json', test: 'test/conflicts.js',
     from: '"turns",\n                "claim_seqs"', to: '"claim_seqs"',
@@ -2028,6 +2028,10 @@ const MUTANTS = [
   { id: 'L2-7 an ended session may be named without its end', file: 'spec/mark.schema.json', test: 'test/opon-live.js',
     from: '"then": { "required": ["to"] },\n            "else": { "not": { "required": ["to"] } }', to: '"then": {},\n            "else": { "not": { "required": ["to"] } }',
     fails: ['L2 through the router'] },
+  // Slice C3d3: a mention read in any sentence (LD203).
+  { id: 'C3d3-1 only a sentence the reader takes as a claim mentions a path', file: 'src/opon/corroborate/claims.js', test: 'test/conflicts.js',
+    from: "return text === null ? [] : [...new Set(extractTargets(sanitize(text))", to: "return text === null ? [] : [...new Set(extractClaims(text).flatMap((c) => c.targets)",
+    fails: ['C3d3'] },
 ];
 
 function copyRepo(root) {

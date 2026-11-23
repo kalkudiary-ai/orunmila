@@ -543,6 +543,25 @@ it('C3d2: the schema asks a silent_change for its turns and the claims it read',
   }
 });
 
+it('C3d3 line 434 (LD203): a path named in a sentence the claim reader does not take as a claim ("I edited src/a.ts.", "Edited src/b.ts again.") is still mentioned: no silent change; a change named nowhere still is', () => {
+  const s = {};
+  const odus = replay((append) => {
+    for (const [i, f] of ['src/a.ts', 'src/b.ts', 'src/c.ts'].entries()) {
+      append(M.edited(i * 10, `e${i + 1}`, f));
+      append(M.disk(i * 10 + 50, f));
+    }
+    s.claim = append(claimed(1000, 't1', 'I edited src/a.ts. Edited src/b.ts again.'));
+    append(M.turnEnded(1000));
+    append(M.tick(20000));
+  });
+  for (const f of ['src/a.ts', 'src/b.ts']) {
+    const o = of(odus, file(f));
+    assert.deepStrictEqual([f, witnesses(o), o.conflicts], [f, ['saw', 'saw'], []]);
+  }
+  const c = of(odus, file('src/c.ts'));
+  assert.deepStrictEqual([witnesses(c), c.conflicts.map((x) => [x.kind, x.claim_seqs])], [['saw', 'saw'], [['silent_change', [s.claim]]]]);
+});
+
 // C3e (LD199; line 435): the witnesses disagree on what happened to a file, rather than follow one another.
 const contradiction = (said) => ({ kind: 'contradiction', sources: ['hook', 'sentinel'], said });
 

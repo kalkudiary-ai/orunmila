@@ -970,6 +970,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     }
     const sealing = [...waiting.splice(0, waiting.length), ...rest].sort((a, b) => a.n - b.n);
     for (const g of sealing) g.sealedAt = now;
+    due.length = 0; // K1b (LD210 (3)): every group is sealed with what it has; no fingerprint is asked after the closeout
     return sealing.flatMap(emit);
   }
 

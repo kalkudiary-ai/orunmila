@@ -2098,6 +2098,10 @@ const MUTANTS = [
   { id: 'K5b-2 a restart inside the lag grace never sweeps', file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
     from: 'else if (t.ended && lv) facts.closeoutAt = BigInt(clock().mono) + facts.graceNs;', to: 'else if (false) void 0;',
     fails: ['K5b'] },
+  // Slice K1b: no fingerprint after the closeout (LD210 (3)).
+  { id: 'K1b-1 a fingerprint is asked after the closeout', file: 'src/opon/settle/engine.js', test: 'test/opon-live.js',
+    from: '    due.length = 0; // K1b', to: '    void 0; // K1b',
+    fails: ['K1b'] },
   // Slice K5c: the rescan against what the session last knew (LD210 (2)).
   { id: 'K5c-1 the rescan reads the baseline only', file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
     from: 'const known = s.lv && s.lv.on ? s.lv.opon.lastStates() : new Map();', to: 'const known = new Map();',

@@ -638,4 +638,30 @@ it(
   }),
 );
 
+it(
+  'K1b (LD210 (3)): a group that settles inside the closeout\'s exited step is sealed with what it has, and no fingerprint is written after exited; nothing is left unsealed',
+  withBase((base) => {
+    const { createLive } = require('../src/opon/intake/live');
+    const { ns, wall } = require('./helpers-opon');
+    let now = 0;
+    let st = null;
+    let log = null;
+    const live = createLive({ key: KEY, clock: () => ({ mono: ns(now), wall: wall(now) }), receive: (m) => log.append(m), error: (r) => assert.fail(r) });
+    log = makeLog(base, {}, { onRecord: (r) => st && live.feed(st, r) });
+    st = live.open(log.dir, log.sealedHeader, null);
+    const sweepMark = (ms, says) => ({ schema_version: 1, session_id: 'ses_replay_test', source: 'process', agent: null, turn: null, sub_agent: null, observed_at: wall(ms), mono_ns: ns(ms), cause_hint: null, target: { kind: 'process', name: 'closeout' }, says, detail: says === 'exited' ? { exit_status: 'pass' } : {} });
+    for (const [ms, m] of [[9000, M.disk(9000, 'src/x.ts')], [10000, sweepMark(10000, 'started')], [11000, sweepMark(11000, 'exited')]]) {
+      now = ms;
+      log.append(m);
+    }
+    const raw = rawRecords(log.dir);
+    const exited = raw.findIndex((m) => m.says === 'exited' && m.target && m.target.name === 'closeout');
+    assert.deepStrictEqual(raw.slice(exited + 1).map((m) => m.says), [], 'nothing after the closeout\'s end');
+    const out = replayFolder(log.dir);
+    assert.deepStrictEqual(out.lines.slice(1).map((l) => JSON.parse(l)).filter((g) => g.state !== 'sealed').map((g) => g.target), []);
+    const x = out.odu.split('\n').slice(1, -1).map((l) => JSON.parse(l)).find((o) => o.target && o.target.path === 'src/x.ts');
+    assert.deepStrictEqual([x.witness_status.glove.status, x.witness_status.sentinel.status, x.net_change.after], ['saw_nothing', 'saw', null]);
+  }),
+);
+
 runAll('opon-live');

@@ -572,7 +572,7 @@ Code runs with that project. Checked on one machine, one user's work:
 
 | Claude Code running in | Stain Map | Closeout Gate | How it was checked |
 |---|---|---|---|
-| **VS Code** (the Claude Code extension) | ✅ | ✅ | a session on 2026-11-22/23: 428 events captured; the gate's records for 15 turns |
+| **VS Code** (the Claude Code extension) | ✅ | ✅ | a session on 2026-11-22/23: 428 events captured; the gate's records for 14 turns |
 | **Antigravity** (the Claude Code extension) | ✅ | ✅ | two sessions on 2026-11-22/23: 645 and 386 events captured; the gate's records for 30 and 11 turns |
 | **The Claude Code app** | ✅ | ✅ | reported from one session (Linux, 0.2.3): the gate blocked a "tests pass" claim no command backed |
 | **The terminal** (`claude`) | ✅ | ✅ | the original target |

@@ -74,7 +74,8 @@ function footerOf(dir, raw) {
   if (f.odu) {
     const text = fs.existsSync(path.join(dir, 'odu.jsonl')) ? fs.readFileSync(path.join(dir, 'odu.jsonl'), 'utf8') : '';
     const chain = verifyText(text); // K4b: the odù log the footer names must verify as a chain, not only at its named line
-    if (!chain.ok && !chain.cut) return { ok: false, words: `Record broken at ${where('odù log', 1, chain.line)}: ${chainWords(chain.reason, chain.line, 'odù log', 1)}.` };
+    // K4c (LD214): a crash cut is excused only after the footer's own line.
+    if (!chain.ok && (!chain.cut || chain.line <= f.odu.seq + 1)) return { ok: false, words: `Record broken at ${where('odù log', 1, chain.line)}: ${chainWords(chain.reason, chain.line, 'odù log', 1)}.` };
     const odu = records(text);
     const oduProblem = named(odu, f.odu, 'odù log');
     if (oduProblem) return { ok: false, words: oduProblem };

@@ -2110,7 +2110,7 @@ const MUTANTS = [
     from: "if (!(end.says === 'exited' && end.source === 'process'", to: "if (false && !(end.says === 'exited' && end.source === 'process'",
     fails: ['K4b'] },
   { id: 'K4b-3 the odù log the footer names is not chain-checked', file: 'src/verify/session.js', test: 'test/opon-live.js',
-    from: 'if (!chain.ok && !chain.cut) return', to: 'if (false) return',
+    from: 'if (!chain.ok && (!chain.cut || chain.line <= f.odu.seq + 1)) return', to: 'if (false) return',
     fails: ['K4b'] },
   // Slice C3d3b: a mention in a table row or a code block (LD210 (4)).
   { id: 'C3d3b-1 the text is cleaned before mentions are read', file: 'src/opon/corroborate/claims.js', test: 'test/conflicts.js',
@@ -2135,6 +2135,10 @@ const MUTANTS = [
   { id: 'K2r3-2 a missed change back to its before is still missed_live', file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
     from: 'if (g.missed && g.net.changed === true) out.push(', to: 'if (g.missed) out.push(',
     fails: ['K2r3'] },
+  // Slice K4c: a crash cut excused only after the footer's line (LD211 (4), LD214).
+  { id: "K4c-1 a cut at the footer's own odù line is excused", file: 'src/verify/session.js', test: 'test/opon-live.js',
+    from: '(!chain.cut || chain.line <= f.odu.seq + 1)', to: '!chain.cut',
+    fails: ['K4c'] },
   // Slice C3d3: a mention read in any sentence (LD203).
   { id: 'C3d3-1 only a sentence the reader takes as a claim mentions a path', file: 'src/opon/corroborate/claims.js', test: 'test/conflicts.js',
     from: "return text === null ? [] : [...new Set(extractTargets(text)", to: "return text === null ? [] : [...new Set(extractClaims(text).flatMap((c) => c.targets)",

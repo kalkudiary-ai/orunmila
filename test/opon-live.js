@@ -704,4 +704,68 @@ it(
   }),
 );
 
+it(
+  'K4c (LD211 (4), LD214; Q22 checklist rows footer-*): a line the footer names, edited or cut short, breaks the record in either log; a whole line after it is a late delivery (intact); a line cut after it is a crash, excused only in the odù log; a footer that is not one is broken',
+  withBase((base) => {
+    const { seal } = require('../src/verify/chain');
+    const { canonicalize } = require('../src/verify/canonical');
+    const { verifySession } = require('../src/verify/session');
+    const home = path.join(base, 'home');
+    const project = path.join(base, 'project');
+    fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+    const clock = fakeClock();
+    const router = createRouter({ home, clock, checkSender: () => true, codeRoot: SRC, orunmilaVersion: '0.0.0-test', installKey: KEY, hookSettingsFor: () => [], baseline: true });
+    const p = cc(project, 'ses_k4c');
+    assert.strictEqual(router.payload(p.prompt('go'), { channel: 'command' }).ok, true);
+    assert.strictEqual(router.payload(p.stop('Nothing to do.')).ok, true);
+    assert.strictEqual(router.payload({ session_id: 'ses_k4c', transcript_path: '/tmp/t.jsonl', cwd: project, hook_event_name: 'SessionEnd', reason: 'clear' }).ok, true);
+    for (let i = 0; i < 10; i++) {
+      clock.advance(600);
+      router.poll();
+    }
+    const dir = path.join(home, 'sessions', 'ses_k4c');
+    const files = { raw: path.join(dir, 'raw.jsonl'), odu: path.join(dir, 'odu.jsonl'), footer: path.join(dir, 'footer.json') };
+    const kept = Object.fromEntries(Object.entries(files).map(([k, f]) => [k, fs.readFileSync(f, 'utf8')]));
+    const footer = JSON.parse(kept.footer);
+    const restore = () => Object.entries(files).forEach(([k, f]) => fs.writeFileSync(f, kept[k]));
+    const lines = (k) => kept[k].split('\n').slice(0, -1);
+    const verdict = (k, text) => {
+      restore();
+      fs.writeFileSync(files[k], text);
+      const v = verifySession(dir);
+      return [v.ok, v.words];
+    };
+    assert.deepStrictEqual(verdict('raw', kept.raw)[0], true, 'intact as written');
+    for (const k of ['raw', 'odu']) {
+      const named = footer[k].seq; // the index of the line it names
+      assert.strictEqual(named, lines(k).length - 1, `${k}: the footer names its log's last line`);
+      const last = JSON.parse(lines(k)[named]);
+      const edited = canonicalize({ ...last, observed_at: '2000-01-01T00:00:00.000Z' });
+      const before = lines(k).slice(0, named);
+      // footer-*-named-edited: the named line edited, its hash field kept
+      assert.deepStrictEqual(verdict(k, [...before, edited].join('\n') + '\n')[0], false, `${k}: the named line edited`);
+      // footer-*-named-cut: the same edit, the line left without its line feed, as a crash leaves a line
+      const cut = verdict(k, [...before, edited].join('\n'));
+      assert.deepStrictEqual([cut[0], cut[1].startsWith('Record broken')], [false, true], `${k}: the named line edited and cut short: ${cut[1]}`);
+      // footer-raw-before-edited (the odù log's is K4b's): a line before the named one edited
+      if (k === 'raw') assert.deepStrictEqual(verdict(k, [lines(k)[0], canonicalize({ ...JSON.parse(lines(k)[1]), observed_at: '2000-01-01T00:00:00.000Z' }), ...lines(k).slice(2)].join('\n') + '\n')[0], false, 'raw: a line before');
+      // footer-*-after-appended: a whole line after the named one, sealed to it (a late delivery)
+      const next = canonicalize(seal({ ...last, seq: last.seq + 1 }, last.hash));
+      const late = verdict(k, kept[k] + next + '\n');
+      assert.deepStrictEqual(late, [true, late[1]], `${k}: a late delivery after the footer's line`);
+      assert.ok(late[1].includes('the session footer matches'), late[1]);
+      // footer-*-after-cut: a line after the named one cut by a crash
+      const crash = verdict(k, kept[k] + next.slice(0, 40));
+      assert.deepStrictEqual(crash[0], k === 'odu', `${k}: a cut after the footer's line: ${crash[1]}`);
+    }
+    // footer-not-json
+    restore();
+    fs.writeFileSync(files.footer, '{');
+    assert.deepStrictEqual([verifySession(dir).ok, verifySession(dir).words], [false, 'Record broken: the session footer is not JSON.']);
+    fs.writeFileSync(files.footer, '{}');
+    assert.deepStrictEqual([verifySession(dir).ok, verifySession(dir).words], [false, 'Record broken: the session footer is not a valid footer.']);
+    restore();
+  }),
+);
+
 runAll('opon-live');

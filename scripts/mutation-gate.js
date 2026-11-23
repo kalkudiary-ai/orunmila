@@ -2045,6 +2045,10 @@ const MUTANTS = [
   { id: "K1-3 a call's wait does not end at the closeout", file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
     from: '    endCalls(() => true, now);\n    const rest = [...unsealed.values()];', to: '    const rest = [...unsealed.values()];',
     fails: ['K1 lines 451-452'] },
+  // Slice L1f: a reopen whose odù log cannot be read (from the Phase 3 prose cold pass).
+  { id: 'L1f-1 an unreadable odù log at a reopen breaks the restart', file: 'src/opon/intake/live.js', test: 'test/opon-live.js',
+    from: 'stop(st, `it could not be resumed (${e.code || e.message})`);', to: 'throw e;',
+    fails: ['L1f'] },
   // Slice C3d3: a mention read in any sentence (LD203).
   { id: 'C3d3-1 only a sentence the reader takes as a claim mentions a path', file: 'src/opon/corroborate/claims.js', test: 'test/conflicts.js',
     from: "return text === null ? [] : [...new Set(extractTargets(sanitize(text))", to: "return text === null ? [] : [...new Set(extractClaims(text).flatMap((c) => c.targets)",

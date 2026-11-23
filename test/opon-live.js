@@ -394,6 +394,20 @@ it(
 );
 
 it(
+  'L1f: an odù log that cannot be read at a reopen for a reason other than its absence (a folder in its place) stops that session\'s live engine with a line in the error log; the restart and capture go on',
+  withBase((base) => {
+    const { dir, home } = restarted(base, (d) => {
+      fs.rmSync(path.join(d, 'odu.jsonl'));
+      fs.mkdirSync(path.join(d, 'odu.jsonl'));
+    });
+    const errors = fs.readFileSync(path.join(home, 'intake', 'errors.jsonl'), 'utf8').split('\n').slice(0, -1).map((l) => JSON.parse(l));
+    assert.deepStrictEqual(errors.map((e) => e.reason.startsWith('the live Ọpọ́n stopped for session ses_live3: it could not be resumed (EISDIR)')), [true]);
+    const says = rawRecords(dir).map((m) => m.says);
+    assert.ok(says.includes('gap') && says.includes('claimed'), 'the restart\'s gap and the later marks are written');
+  }),
+);
+
+it(
   'L1d: an odù log on disk that is not the start of replay\'s is never edited: the live engine stops for that session with a line in the error log, and capture goes on',
   withBase((base) => {
     let kept = null;

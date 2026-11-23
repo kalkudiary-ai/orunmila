@@ -2028,6 +2028,13 @@ const MUTANTS = [
   { id: 'L2-7 an ended session may be named without its end', file: 'spec/mark.schema.json', test: 'test/opon-live.js',
     from: '"then": { "required": ["to"] },\n            "else": { "not": { "required": ["to"] } }', to: '"then": {},\n            "else": { "not": { "required": ["to"] } }',
     fails: ['L2 through the router'] },
+  // Slice L1e: a reopened session's arms (LD200 (6)), from the Phase 3 close-out's cold verify.
+  { id: "L1e-1 a reopened session's replay writes its fingerprints", file: 'src/opon/intake/live.js', test: 'test/opon-live.js',
+    from: '      st.opon.fingerprintsDue();\n', to: '      st.due.push(...st.opon.fingerprintsDue());\n',
+    fails: ['L1e'] },
+  { id: 'L1e-2 a missing odù log is not written at a reopen', file: 'src/opon/intake/live.js', test: 'test/opon-live.js',
+    from: "if (disk === null) fs.writeFileSync(st.file, text, { flag: 'wx', mode: 0o600 });", to: 'if (disk === null) void 0;',
+    fails: ['L1e'] },
   // Slice C3d3: a mention read in any sentence (LD203).
   { id: 'C3d3-1 only a sentence the reader takes as a claim mentions a path', file: 'src/opon/corroborate/claims.js', test: 'test/conflicts.js',
     from: "return text === null ? [] : [...new Set(extractTargets(sanitize(text))", to: "return text === null ? [] : [...new Set(extractClaims(text).flatMap((c) => c.targets)",

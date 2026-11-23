@@ -563,6 +563,31 @@ All agents write the **same** `~/.orunmila/events.jsonl`. The stain model, the
 glove, and the HTML report never know or care which agent produced an event —
 that's the whole point of "one global truth."
 
+### Claude Code, wherever it runs: terminal, VS Code, Antigravity, the app
+
+**Both lenses work with Claude Code inside VS Code and inside Antigravity, not
+only in the terminal.** The `claude-code` adapter is Claude Code's own hooks,
+read from your project's `.claude/settings.json`, so it goes wherever Claude
+Code runs with that project. Checked on one machine, one user's work:
+
+| Claude Code running in | Stain Map | Closeout Gate | How it was checked |
+|---|---|---|---|
+| **VS Code** (the Claude Code extension) | ✅ | ✅ | a session on 2026-11-22/23: 428 events captured; the gate's records for 15 turns |
+| **Antigravity** (the Claude Code extension) | ✅ | ✅ | two sessions on 2026-11-22/23: 645 and 386 events captured; the gate's records for 30 and 11 turns |
+| **The Claude Code app** | ✅ | ✅ | reported from one session (Linux, 0.2.3): the gate blocked a "tests pass" claim no command backed |
+| **The terminal** (`claude`) | ✅ | ✅ | the original target |
+
+Antigravity has two rows on this page for two different things: here, Claude
+Code running inside the Antigravity IDE (`--agent claude-code`, the default);
+above, Antigravity's own agent (`--agent antigravity`, Stain Map only).
+
+One thing to know wherever Claude Code runs: `orunmila install` writes each
+hook as `node "<path to the installed package>/src/capture/claude-code/<hook>.js"`.
+The hooks work only where that path exists, so install the package globally
+or as a dev dependency rather than through `npx`, whose cache can be cleared,
+and run `orunmila install` again on each machine (or cloud environment) the
+project's sessions run on.
+
 ## What it cannot see
 
 Before you rely on a green stain, know the edges. The throughline:

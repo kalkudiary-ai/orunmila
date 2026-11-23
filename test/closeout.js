@@ -483,6 +483,45 @@ it('K6 line 614 (LD218): the agent\'s JSON feedback from the odù log: phantom c
   }
 });
 
+it('F7 (LD248): the odù feedback\'s generated_at and included_fields are the old path\'s: the latest observed_at of the session\'s raw log (null without one), and the --include fields it honours (claim_text: each phantom claim\'s text, redacted)', () => {
+  const { feedbackFromOdu } = require('../src/opon/feedback/from-odu');
+  const { spawnSync } = require('child_process');
+  const base = tmpDir();
+  try {
+    const log = makeLog(base);
+    log.append(M.prompted(0));
+    log.append(said(2000, 'I updated src/nowhere.ts.')); // a phantom file claim
+    log.append(M.turnEnded(2000));
+    log.append(M.tick(9000));
+    log.append(sweep(10000, 'started'));
+    log.append(sweep(10100, 'exited'));
+    const r = replayFolder(log.dir);
+    assert.strictEqual(r.ok, true, r.words);
+    const fb = feedbackFromOdu({ sessionId: 'ses_replay_test', oduText: r.odu, include: ['claim_text', 'not_a_field'], generatedAt: wall(10100) });
+    assert.deepStrictEqual([fb.generated_at, fb.included_fields], [wall(10100), ['claim_text']]);
+    assert.deepStrictEqual(fb.turns[0].claims.map((c) => [c.outcome, c.claim_text]), [['phantom', 'I updated src/nowhere.ts.']]);
+    // Redacted as the old path's: a home path in a claim's text is collapsed.
+    const homed = r.odu.split(JSON.stringify('I updated src/nowhere.ts.')).join(JSON.stringify(`I updated ${require('os').homedir()}/made-up/nowhere.ts.`));
+    const red = feedbackFromOdu({ sessionId: 'ses_replay_test', oduText: homed, include: ['claim_text'], redactOpts: { home: true } });
+    assert.strictEqual(red.turns[0].claims[0].claim_text, 'I updated ~/made-up/nowhere.ts.');
+    const plain = feedbackFromOdu({ sessionId: 'ses_replay_test', oduText: r.odu });
+    assert.deepStrictEqual([plain.generated_at, plain.included_fields, 'claim_text' in plain.turns[0].claims[0]], [null, [], false], 'nothing asked: no text, no time');
+    // The CLI: the raw log beside the odù log gives the time; --include gives the fields.
+    const home = path.join(base, 'home');
+    const folder = path.join(home, 'sessions', 'ses_replay_test');
+    fs.mkdirSync(folder, { recursive: true });
+    fs.writeFileSync(path.join(folder, 'odu.jsonl'), r.odu);
+    fs.copyFileSync(path.join(log.dir, 'raw.jsonl'), path.join(folder, 'raw.jsonl'));
+    const latest = fs.readFileSync(path.join(log.dir, 'raw.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l).observed_at).filter(Boolean).sort().pop();
+    const cli = spawnSync('node', [path.join(__dirname, '..', 'bin', 'orunmila.js'), 'json', '--session', 'ses_replay_test', '--include', 'claim_text'], { encoding: 'utf8', env: { ...process.env, ORUNMILA_HOME: home, ORUNMILA_FEEDBACK_FROM_ODU: '1' } });
+    assert.strictEqual(cli.status, 0, cli.stderr);
+    const out = JSON.parse(cli.stdout);
+    assert.deepStrictEqual([out.generated_at, out.included_fields, out.turns[0].claims[0].claim_text], [latest, ['claim_text'], 'I updated src/nowhere.ts.']);
+  } finally {
+    rmrf(base);
+  }
+});
+
 it('Q30 (LD246), Q29 (LD245): in the agent\'s feedback a silent change outside the project is listed apart (undisclosed_outside), never counted as undisclosed; one judged across the intake\'s downtime names the gap', () => {
   const { feedbackFromOdu } = require('../src/opon/feedback/from-odu');
   const base = tmpDir();

@@ -1147,7 +1147,21 @@ function cmdJson() {
       console.error(`No odù log for session ${sessionId} (${file}): the intake writes one only with ORUNMILA_OPON_LIVE=1.`);
       process.exit(1);
     }
-    return feedbackFromOdu({ sessionId, agent: detectAgent(), oduText: fs.readFileSync(file, 'utf8'), turn, redactOpts: { home, root: process.cwd() } });
+    // F7 (LD248): the old path's generated_at is its latest event's time; here, the latest observed_at of the raw log beside the odù log.
+    const raw = path.join(path.dirname(file), 'raw.jsonl');
+    let generatedAt = null;
+    if (fs.existsSync(raw)) {
+      for (const l of fs.readFileSync(raw, 'utf8').split('\n')) {
+        let r;
+        try {
+          r = l ? JSON.parse(l) : null;
+        } catch {
+          r = null; // a line a crash cut: not a record
+        }
+        if (r && typeof r.observed_at === 'string' && (generatedAt === null || r.observed_at > generatedAt)) generatedAt = r.observed_at;
+      }
+    }
+    return feedbackFromOdu({ sessionId, agent: detectAgent(), oduText: fs.readFileSync(file, 'utf8'), turn, include, generatedAt, redactOpts: { home, root: process.cwd() } });
   };
   let json;
   if (both) {

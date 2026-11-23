@@ -4,7 +4,10 @@
  * src/opon/feedback/from-odu.js — the agent's closeout feedback read from the odù log (brief v4 line 614;
  * lines 644, 691; Phase 4 slice K6, LD218). Plain code, no clock, no fs.
  *
- *   feedbackFromOdu({ sessionId, agent, oduText, turn?, redactOpts? }) -> payload
+ *   feedbackFromOdu({ sessionId, agent, oduText, turn?, redactOpts?, include?, generatedAt? }) -> payload
+ *     F7 (LD248): `generated_at` is the caller's `generatedAt` (the CLI: the latest observed_at of the session's raw
+ *     log, the old path's "latest event"; null without one), and `included_fields` the `include` fields the old path
+ *     knows; `claim_text` gives each phantom claim its text, redacted.
  *     The same shape as `orunmila json` (src/render/json.js, schema 1.0), built from the odù log alone:
  *     a `phantom_claim` odù is a claim entry of its turn (`phantom` for a file claim,
  *     `phantom_verification` for a command claim), its `verdict_confidence` the odù's confidence and its
@@ -23,13 +26,15 @@
  */
 
 const { buildRedactor } = require('../../render/redact');
+const { KNOWN_INCLUDE_FIELDS } = require('../../render/json');
 
 const OUTCOMES = ['verified', 'partial', 'phantom', 'phantom_verification', 'unverifiable', 'undisclosed', 'silently_dropped'];
 const FINDINGS = new Set(['missed_live', 'unfingerprinted', 'unconfirmed_by_filesystem', 'outcome_missing', 'contradiction', 'concurrent_sessions']);
 const byTurn = (a, b) => (a.length - b.length || (a < b ? -1 : a > b ? 1 : 0)); // t2 before t10
 
-function feedbackFromOdu({ sessionId, agent = null, oduText, turn = null, redactOpts = {} }) {
+function feedbackFromOdu({ sessionId, agent = null, oduText, turn = null, redactOpts = {}, include = [], generatedAt = null }) {
   const R = buildRedactor(redactOpts);
+  const included = new Set((include || []).filter((f) => KNOWN_INCLUDE_FIELDS.has(f))); // F7 (LD248): as the old path filters them
   const odus = oduText.split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((r) => r.record === 'odu');
   const turns = new Map();
   const of = (t) => {
@@ -41,7 +46,8 @@ function feedbackFromOdu({ sessionId, agent = null, oduText, turn = null, redact
   for (const o of odus) {
     for (const c of o.conflicts) {
       if (c.kind === 'phantom_claim' && o.target && o.target.turn) {
-        of(o.target.turn).claims.push({ id: o.odu_id, outcome: c.claim === 'file' ? 'phantom' : 'phantom_verification', verdict_confidence: o.confidence, evidence: { odu_id: o.odu_id, mark_seqs: [...o.mark_seqs], why: c.why, ...(c.claim === 'file' ? { path: R.path(c.path) } : { phrases: [...c.phrases] }) } });
+        const text = included.has('claim_text') && typeof o.target.text === 'string' ? { claim_text: R.text(o.target.text) } : {}; // F7: opt-in, redacted, as the old path
+        of(o.target.turn).claims.push({ id: o.odu_id, outcome: c.claim === 'file' ? 'phantom' : 'phantom_verification', verdict_confidence: o.confidence, evidence: { odu_id: o.odu_id, mark_seqs: [...o.mark_seqs], why: c.why, ...(c.claim === 'file' ? { path: R.path(c.path) } : { phrases: [...c.phrases] }) }, ...text });
       } else if (c.kind === 'silent_change') {
         // Q30 (LD246): a change outside the project is listed apart; Q29 (LD245): a verdict reached across the intake's downtime names it.
         const list = o.target.outside === true ? 'undisclosed_outside' : 'undisclosed_changes';
@@ -60,7 +66,7 @@ function feedbackFromOdu({ sessionId, agent = null, oduText, turn = null, redact
     t.summary.undisclosed_outside = t.undisclosed_outside.length;
     for (const k of [...OUTCOMES, 'undisclosed_outside']) summary[k] += t.summary[k];
   }
-  return { schema_version: '1.0', source: 'odu_log', session_id: sessionId, agent, generated_at: null, included_fields: [], turns: list, summary, findings };
+  return { schema_version: '1.0', source: 'odu_log', session_id: sessionId, agent, generated_at: generatedAt, included_fields: [...included].sort(), turns: list, summary, findings };
 }
 
 function sideBySide(old, odu) {

@@ -281,6 +281,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
   const freedAt = new Map(); // a waiting group's id -> when it sealed (C3d2)
   const exclusions = Array.isArray(config.exclusions) ? config.exclusions : [];
   const due = []; // L1b: the paths of settled file changes due a fingerprint, in the order they settled
+  let sweepKey = null; // K2: the key of the closeout sweep's own group, once it has begun
   const all = [];
   let now = null;
   let made = 0;
@@ -308,6 +309,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     if (g.isCommand && g.says.includes('started') && !g.says.some((v) => v === 'exited' || v === 'ended') && !g.lost) return 'process';
     if (startedIn(g).some((id) => inFlight.get(id).end === null)) return 'call'; // line 439: judged by the end of its turn
     if (g.isTurn && !g.turnEnded) return 'turn';
+    if (g.sweep) return 'sweep'; // K2: open until the closeout's end seals it
     return null;
   }
 
@@ -328,7 +330,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
   function witness(g, name) {
     const mine = g.sources.map((s, i) => (name === 'glove' ? GLOVE.has(s) : s === 'sentinel') ? i : -1).filter((i) => i >= 0);
     if (mine.length) return { status: 'saw', mark_seqs: mine.map((i) => g.seqs[i]), says: mine.map((i) => g.says[i]), slots: mine.map((i) => g.slots[i]) };
-    const disk = (g.key.startsWith('file:') || g.key.startsWith('dirchange:')) && g.says.some((v) => DISK.has(v));
+    const disk = ((g.key.startsWith('file:') || g.key.startsWith('dirchange:')) && g.says.some((v) => DISK.has(v))) || Boolean(g.missed);
     if (name === 'sentinel') {
       if (!disk) return { status: 'out_of_scope', scope: 'not_a_disk_event' };
       if (g.target && g.target.outside) return { status: 'out_of_scope', scope: 'outside_root' };
@@ -363,6 +365,10 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
 
   /** A sealed group's net change, or undefined for marks that change nothing on disk (line 389). */
   function netChange(g) {
+    if (g.missed) {
+      lastState.set(g.key, g.missed.after); // K2 (LD207): the rescan's reading of a change no witness recorded
+      return { before: g.missed.before, after: g.missed.after, changed: true };
+    }
     if (!g.key.startsWith('file:') || !g.says.some((v) => DISK.has(v))) return undefined;
     const before = stateBefore(g);
     const after = g.fp && g.fp.seq > g.lastOther ? g.fp.state : null;
@@ -398,6 +404,8 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     const ends = (s) => new Set(g.says.filter((v, i) => g.real[i] && g.sources[i] === s && DISK.has(v)).map((v) => v === 'deleted'));
     const [hookEnds, sentinelEnds] = [ends('hook'), ends('sentinel')];
     if (g.key.startsWith('file:') && hookEnds.size && sentinelEnds.size && ![...hookEnds].some((e) => sentinelEnds.has(e))) out.push(conflictOf(g, 'contradiction', ['hook', 'sentinel']));
+    // K2 (LD207; line 450): a change only the closeout's rescan saw, naming the rescan's marks.
+    if (g.missed) out.push(conflictOf(g, 'missed_live', ['hook', 'sentinel', 'process'], { marks: g.seqs.filter((s, i) => g.sources[i] === 'process') }));
     // C3b (LD189; line 439, test 71): a started call with no outcome by the end of its turn, or one its payload says was interrupted.
     for (const id of startedIn(g)) {
       const t = inFlight.get(id);
@@ -501,6 +509,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
 
   /** Station 5 (A1b): one label and its cause, by the brief's steps in order. */
   function attributionOf(g) {
+    if (g.missed) return UNEXPLAINED; // K2 (LD207, line 450)
     const glove = (keep) => [...new Set(g.hints.filter((h, i) => h && GLOVE.has(g.sources[i]) && keep(g.says[i])))];
     const disk = (g.key.startsWith('file:') || g.key.startsWith('dirchange:')) && g.says.some((v) => DISK.has(v));
     if (!disk) {
@@ -536,6 +545,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
    * only `started`: line 423, "medium at most"), else high (Orunmila's own record: a gap, a note).
    */
   function confidenceOf(g, attr) {
+    if (g.missed) return 'medium'; // K2 (LD207): Orunmila's own rescan saw it, neither the Sentinel nor git
     if (g.sources.every((s) => s === 'agent_claim')) return 'low';
     const kind = attr.cause && attr.cause.kind;
     if (kind === 'time_match' || kind === 'agent_command') return 'medium';
@@ -578,7 +588,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       session_id: sessionId,
       state: g.state,
       target: g.target,
-      action: actionOf(g.realSays.length ? g.realSays : g.says),
+      action: g.missed ? (g.missed.before === 'absent' ? 'created' : g.missed.after === 'absent' ? 'deleted' : 'modified') : actionOf(g.realSays.length ? g.realSays : g.says),
       window: { first_seq: g.seqs[0], last_seq: g.seqs[g.seqs.length - 1] },
       mark_seqs: [...g.seqs],
       settled_at_ns: g.settledAt === null ? null : String(g.settledAt),
@@ -616,7 +626,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
         // A command that was seen starting is held until it exits, never cut by the ceiling (rule 3); a call in
         // flight likewise until it stops waiting, and a wait that outlasted the ceiling restarts it (C3b, LD189).
         const cut = released !== null && released > g.first + ceiling ? released + ceiling : g.first + ceiling;
-        const byCeiling = hold === 'call' || (g.isCommand && g.says.includes('started')) ? null : cut;
+        const byCeiling = hold === 'call' || hold === 'sweep' || (g.isCommand && g.says.includes('started')) ? null : cut;
         const at = byQuiet === null ? byCeiling : byCeiling === null || byQuiet <= byCeiling ? byQuiet : byCeiling;
         if (at !== null && t >= at) {
           g.state = 'settled';
@@ -797,6 +807,16 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
         real = false;
       }
     }
+    let missed = null; // K2 (LD207): the rescan's reading of a change the session has no odù of
+    if (fingerprint && m.detail && m.detail.rescan === true && key.startsWith('file:') && !live.get(key) && !(forcedLast.get(key) && unsealed.has(forcedLast.get(key).id))) {
+      const before = stateBefore({ key, target });
+      const after = fingerprintedState(m);
+      if (before !== null && after !== null && before !== after) missed = { before, after };
+      else if (sweepKey !== null && live.get(sweepKey)) {
+        key = sweepKey; // nothing missed: the mark is the sweep's receipt
+        target = live.get(sweepKey).target;
+      }
+    }
     let g = live.get(key);
     if (!g && fingerprint) {
       // A group the ceiling settled is out of `live`, but its fingerprint is still its own (N2).
@@ -835,6 +855,11 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     } else if (g.state === 'settled') {
       g.state = 'open';
       g.settledAt = null;
+    }
+    if (missed && g.seqs.length === 0) g.missed = missed;
+    if (m.says === 'started' && m.source === 'process' && m.target && m.target.kind === 'process' && m.target.name === 'closeout' && sweepKey === null) {
+      sweepKey = key; // K2: the sweep's own group, held until the closeout's end
+      g.sweep = true;
     }
     if (fingerprint) {
       real = false;

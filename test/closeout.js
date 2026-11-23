@@ -86,4 +86,52 @@ it('K1 test 13: a log with its closeout replayed twice gives byte-identical odù
   for (const says of ['started', 'exited']) assert.deepStrictEqual(checkMark({ ...sweep(400, says), seq: 9, prev_hash: 'sha256:' + '1'.repeat(64), hash: 'sha256:' + '2'.repeat(64) }), [], says);
 });
 
+// K2 (LD207; line 450; test 32's replay half): the full rescan's fingerprints, read against the last sealed state or the baseline.
+const { FP } = require('./helpers-opon');
+const rescan = (ms, file, fp) => ({ ...M.fingerprinted(ms, file, fp), detail: { ...M.fingerprinted(ms, file, fp).detail, rescan: true } });
+
+it('K2 line 450: a rescanned file that differs from what the session last knew, with no odù, becomes an odù of its own: unexplained, missed_live naming the rescan\'s mark, each live witness saw_nothing; one that matches joins the sweep\'s own odù; one with a group still open joins that group', () => {
+  const base = tmpDir();
+  try {
+    const log = makeLog(base, { exclusions: ['node_modules'] }, { baseline: [{ path: 'src/a.ts', size: 4, fingerprint: FP('a') }, { path: 'src/b.ts', size: 4, fingerprint: FP('b') }, { path: 'src/e.ts', size: 4, fingerprint: FP('e') }] });
+    const s = {};
+    log.append(M.edited(0, 'e1', 'src/e.ts'));
+    log.append(M.disk(50, 'src/e.ts'));
+    log.append(M.fingerprinted(1600, 'src/e.ts', FP('f'))); // e.ts's agent edit settles with after f
+    log.append(M.turnEnded(100));
+    log.append(M.tick(9000)); // e.ts sealed
+    log.append(M.disk(9500, 'src/o.ts', 'created')); // a hand edit still open at the sweep
+    log.append(sweep(10000, 'started'));
+    s.a = log.append(rescan(10010, 'src/a.ts', FP('a'))); // as the baseline: nothing missed
+    s.b = log.append(rescan(10020, 'src/b.ts', FP('9'))); // changed, and no odù: missed live
+    s.c = log.append(rescan(10030, 'src/c.ts', FP('c'))); // not in the baseline: created, missed live
+    s.e = log.append(rescan(10040, 'src/e.ts', FP('f'))); // as its last sealed state: nothing missed
+    s.o = log.append(rescan(10050, 'src/o.ts', FP('7'))); // its group still open: joins it
+    s.x = log.append(rescan(10060, 'node_modules/x.js', FP('5'))); // excluded: its before is unknown, never read as a change
+    s.late = log.append(rescan(15000, 'src/a.ts', FP('a'))); // past a quiet window and the lag grace: the sweep is still held open
+    log.append(sweep(15100, 'exited'));
+    const r = replayFolder(log.dir);
+    assert.strictEqual(r.ok, true, r.words);
+    const odus = r.odu.split('\n').slice(1, -1).map((l) => JSON.parse(l));
+    for (const o of odus) assert.deepStrictEqual(checkOdu(o), [], JSON.stringify(o));
+    const missed = (seq) => ({ kind: 'missed_live', sources: ['hook', 'process', 'sentinel'], said: { hook: [], process: ['fingerprinted'], sentinel: [] }, marks: [seq] });
+    const b = at(odus, 'src/b.ts');
+    assert.deepStrictEqual([witnesses(b), b.action, b.attribution, b.cause, b.net_change, b.mark_seqs, b.conflicts], [['saw_nothing', 'saw_nothing'], 'modified', 'unexplained', null, { before: FP('b'), after: FP('9'), changed: true }, [s.b], [missed(s.b)]]);
+    const c = at(odus, 'src/c.ts');
+    assert.deepStrictEqual([witnesses(c), c.action, c.net_change, c.conflicts], [['saw_nothing', 'saw_nothing'], 'created', { before: 'absent', after: FP('c'), changed: true }, [missed(s.c)]]);
+    assert.deepStrictEqual(odus.filter((o) => o.target && o.target.path === 'src/a.ts'), [], 'a.ts: no odù of its own');
+    assert.deepStrictEqual(odus.filter((o) => o.target && o.target.path === 'src/e.ts').map((o) => o.mark_seqs.includes(s.e)), [false], 'e.ts: only its edit\'s odù, the rescan not in it');
+    const sweepOdu = odus.find((o) => o.target && o.target.kind === 'process' && o.target.name === 'closeout' && o.action === 'started');
+    assert.deepStrictEqual([s.a, s.e, s.x, s.late].map((q) => sweepOdu.mark_seqs.includes(q)), [true, true, true, true], 'the unchanged and unknown files\' rescan marks are the sweep\'s receipts');
+    assert.deepStrictEqual(odus.filter((o) => o.target && o.target.path === 'node_modules/x.js'), [], 'an unknown before is not a missed change');
+    const o = at(odus, 'src/o.ts');
+    assert.deepStrictEqual([witnesses(o), o.mark_seqs.includes(s.o), o.net_change.after, o.conflicts], [['saw_nothing', 'saw'], true, FP('7'), []]);
+    assert.strictEqual(b.confidence, 'medium', 'seen by the rescan alone, neither the Sentinel nor git');
+    const { marks: _m, ...noMarks } = b.conflicts[0];
+    assert.ok(checkOdu({ ...b, conflicts: [noMarks] }).length > 0, 'a missed_live names the rescan\'s marks');
+  } finally {
+    rmrf(base);
+  }
+});
+
 runAll('closeout');

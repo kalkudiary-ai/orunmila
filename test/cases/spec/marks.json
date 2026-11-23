@@ -966,6 +966,31 @@
       "cause_hint": null,
       "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
       "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_fingerprinted_rescan": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "file",
+        "path": "src/auth.ts"
+      },
+      "says": "fingerprinted",
+      "detail": {
+        "exists": true,
+        "size": 4211,
+        "fingerprint": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "rescan": true
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
     }
   },
   "bad": [
@@ -3380,6 +3405,7 @@
     {"name":"overlapped with an end that is not a decimal (L2)","from":"process_overlapped_ended","set":{"/detail/to":"later"},"unset":[],"error":{"path":"/detail/to","keyword":"pattern"}},
     {"name":"overlapped with an end that is a number (L2)","from":"process_overlapped_ended","set":{"/detail/to":4900000000},"unset":[],"error":{"path":"/detail/to","keyword":"type"}},
     {"name":"overlapped ended with no end (L2)","from":"process_overlapped_ended","set":{},"unset":["/detail/to"],"error":{"path":"/detail/to","keyword":"required"}},
-    {"name":"overlapped not ended with an end (L2)","from":"process_overlapped","set":{"/detail/to":"4900000000"},"unset":[],"error":{"path":"/detail","keyword":"not"}}
+    {"name":"overlapped not ended with an end (L2)","from":"process_overlapped","set":{"/detail/to":"4900000000"},"unset":[],"error":{"path":"/detail","keyword":"not"}},
+    {"name":"rescan that is not a boolean (K2, LD207)","from":"process_fingerprinted_rescan","set":{"/detail/rescan":"yes"},"unset":[],"error":{"path":"/detail/rescan","keyword":"type"}}
   ]
 }

@@ -570,6 +570,11 @@
           "$comment": "agent's choice, LD171 (Q8): brief v4 line 241, null means unknown and nothing else, so an absence needs a value of its own",
           "type": "boolean"
         },
+        "rescan": {
+          "description": "On a fingerprinted mark: true when the closeout's full rescan took it, between the sweep's started and exited marks.",
+          "$comment": "brief v4 line 450; the field is the agent's proposal (LD207, Q19; provisional, Q17)",
+          "type": "boolean"
+        },
         "session": {
           "description": "On an overlapped mark: the other session sharing this one's folder that the intake names (its `root` and `from` beside it: its project root and its header's mono_ns).",
           "$comment": "agent's choice, Q11 (2) (a), adopted LD184, LD202",

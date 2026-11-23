@@ -2060,7 +2060,7 @@ const MUTANTS = [
     from: "if (g.sweep) return 'sweep';", to: 'void 0;',
     fails: ['K2 line 450'] },
   { id: 'K2-4 no missed_live conflict', file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
-    from: "if (g.missed) out.push(conflictOf(g, 'missed_live',", to: "if (false) out.push(conflictOf(g, 'missed_live',",
+    from: "if (g.missed && g.net.changed === true) out.push(conflictOf(g, 'missed_live',", to: "if (false) out.push(conflictOf(g, 'missed_live',",
     fails: ['K2 line 450'] },
   { id: 'K2-5 a change only the rescan saw is high', file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
     from: "if (g.missed) return 'medium';", to: 'void 0;',
@@ -2128,6 +2128,13 @@ const MUTANTS = [
   { id: 'K2r2-1 a rescan of a temp or swap file is read as the file it stands for', file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
     from: "typeof m.target.path === 'string' && !rescanned) {", to: "typeof m.target.path === 'string') {",
     fails: ['K2r2'] },
+  // Slice K2r3: a missed change's action and conflict read its latest rescan (LD211 (3), LD214).
+  { id: "K2r3-1 a missed change's action follows its first rescan", file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
+    from: "net.after === 'absent' ? 'deleted' : 'modified') : actionOf(", to: "g.missed.after === 'absent' ? 'deleted' : 'modified') : actionOf(",
+    fails: ['K2r3'] },
+  { id: 'K2r3-2 a missed change back to its before is still missed_live', file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
+    from: 'if (g.missed && g.net.changed === true) out.push(', to: 'if (g.missed) out.push(',
+    fails: ['K2r3'] },
   // Slice C3d3: a mention read in any sentence (LD203).
   { id: 'C3d3-1 only a sentence the reader takes as a claim mentions a path', file: 'src/opon/corroborate/claims.js', test: 'test/conflicts.js',
     from: "return text === null ? [] : [...new Set(extractTargets(text)", to: "return text === null ? [] : [...new Set(extractClaims(text).flatMap((c) => c.targets)",

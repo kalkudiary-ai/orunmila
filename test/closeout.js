@@ -179,4 +179,27 @@ it('K2r2 (LD210/LD211 (1), (6); Q22 checklist rows alias-*-rescan): a rescan mar
   }
 });
 
+it('K2r3 (LD211 (3), LD214): a missed change\'s action reads its latest rescan, as its net change does; one back to its before is kept with changed false and no missed_live', () => {
+  const base = tmpDir();
+  try {
+    const log = makeLog(base, {}, { baseline: [{ path: 'src/b.ts', size: 4, fingerprint: FP('b') }, { path: 'src/d.ts', size: 4, fingerprint: FP('d') }] });
+    log.append(sweep(1000, 'started'));
+    const b1 = log.append(rescan(1010, 'src/b.ts', FP('9')));
+    const b2 = log.append(rescan(1020, 'src/b.ts', FP('b'))); // back to the baseline
+    log.append({ ...rescan(1030, 'src/d.ts', FP('d')), detail: { exists: false, rescan: true } }); // first read gone
+    log.append(rescan(1040, 'src/d.ts', FP('e'))); // then there, changed
+    log.append(sweep(1100, 'exited'));
+    const r = replayFolder(log.dir);
+    assert.strictEqual(r.ok, true, r.words);
+    const odus = r.odu.split('\n').slice(1, -1).map((l) => JSON.parse(l));
+    for (const o of odus) assert.deepStrictEqual(checkOdu(o), [], JSON.stringify(o));
+    const b = at(odus, 'src/b.ts');
+    assert.deepStrictEqual([witnesses(b), b.net_change, b.conflicts, b.mark_seqs], [['saw_nothing', 'saw_nothing'], { before: FP('b'), after: FP('b'), changed: false }, [], [b1, b2]], 'kept, changed false, nothing missed');
+    const d = at(odus, 'src/d.ts');
+    assert.deepStrictEqual([witnesses(d), d.action, d.net_change, d.conflicts.map((c) => c.kind)], [['saw_nothing', 'saw_nothing'], 'modified', { before: FP('d'), after: FP('e'), changed: true }, ['missed_live']], 'its action from the latest rescan, not the first (deleted)');
+  } finally {
+    rmrf(base);
+  }
+});
+
 runAll('closeout');

@@ -407,7 +407,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     const [hookEnds, sentinelEnds] = [ends('hook'), ends('sentinel')];
     if (g.key.startsWith('file:') && hookEnds.size && sentinelEnds.size && ![...hookEnds].some((e) => sentinelEnds.has(e))) out.push(conflictOf(g, 'contradiction', ['hook', 'sentinel']));
     // K2 (LD207; line 450): a change only the closeout's rescan saw, naming the rescan's marks.
-    if (g.missed) out.push(conflictOf(g, 'missed_live', ['hook', 'sentinel', 'process'], { marks: g.seqs.filter((s, i) => g.sources[i] === 'process') }));
+    if (g.missed && g.net.changed === true) out.push(conflictOf(g, 'missed_live', ['hook', 'sentinel', 'process'], { marks: g.seqs.filter((s, i) => g.sources[i] === 'process') }));
     // C3b (LD189; line 439, test 71): a started call with no outcome by the end of its turn, or one its payload says was interrupted.
     for (const id of startedIn(g)) {
       const t = inFlight.get(id);
@@ -590,7 +590,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       session_id: sessionId,
       state: g.state,
       target: g.target,
-      action: g.missed ? (g.missed.before === 'absent' ? 'created' : g.missed.after === 'absent' ? 'deleted' : 'modified') : actionOf(g.realSays.length ? g.realSays : g.says),
+      action: g.missed ? (net.before === 'absent' ? 'created' : net.after === 'absent' ? 'deleted' : 'modified') : actionOf(g.realSays.length ? g.realSays : g.says), // K2r3 (LD214): a missed change's latest rescan
       window: { first_seq: g.seqs[0], last_seq: g.seqs[g.seqs.length - 1] },
       mark_seqs: [...g.seqs],
       settled_at_ns: g.settledAt === null ? null : String(g.settledAt),

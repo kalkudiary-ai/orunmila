@@ -1131,17 +1131,31 @@ function cmdJson() {
   const turn = flag('turn', null);
   const include = parseIncludes();
   const home = !args.includes('--no-redact-home');
-  const { reports } = loadReportsForRead(sessionId);
-  const events = eventlog.readSession(sessionId);
-  const json = renderJson({
-    sessionId,
-    agent: detectAgent(),
-    reports,
-    events,
-    turn,
-    include,
-    redactOpts: { home, root: process.cwd() },
-  });
+  // K6 (LD218): the odù log's feedback with ORUNMILA_FEEDBACK_FROM_ODU=1, or both with --side-by-side; else the old path, unchanged.
+  const fromOdu = process.env.ORUNMILA_FEEDBACK_FROM_ODU === '1';
+  const both = args.includes('--side-by-side');
+  const oldJson = () => {
+    const { reports } = loadReportsForRead(sessionId);
+    const events = eventlog.readSession(sessionId);
+    return renderJson({ sessionId, agent: detectAgent(), reports, events, turn, include, redactOpts: { home, root: process.cwd() } });
+  };
+  const oduJson = () => {
+    const { feedbackFromOdu } = require('../src/opon/feedback/from-odu');
+    const { sessionFolderName } = require('../src/opon/intake/paths');
+    const file = path.join(eventlog.dataDir(), 'sessions', sessionFolderName(sessionId), 'odu.jsonl');
+    if (!fs.existsSync(file)) {
+      console.error(`No odù log for session ${sessionId} (${file}): the intake writes one only with ORUNMILA_OPON_LIVE=1.`);
+      process.exit(1);
+    }
+    return feedbackFromOdu({ sessionId, agent: detectAgent(), oduText: fs.readFileSync(file, 'utf8'), turn, redactOpts: { home, root: process.cwd() } });
+  };
+  let json;
+  if (both) {
+    const { sideBySide } = require('../src/opon/feedback/from-odu');
+    const old = JSON.parse(oldJson());
+    const odu = oduJson();
+    json = JSON.stringify({ old, odu, compare: sideBySide(old, odu) }, null, 2);
+  } else json = fromOdu ? JSON.stringify(oduJson(), null, 2) : oldJson();
   const out = flag('out', null);
   if (out) {
     fs.writeFileSync(out, json);
@@ -1533,6 +1547,7 @@ The Stain Map — read what happened
   orunmila report [--session ID] [--turn ID] [--archive STAMP]   terminal stain report (live, or a pinned snapshot)
   orunmila html [--session ID] [--out path] [--archive STAMP]    mismatch-only HTML report
   orunmila json [--session ID] [--turn ID] [--include claim_text]   per-turn stain output (schema_version 1.0)
+  orunmila json --session ID --side-by-side       the same beside the odù log's (ORUNMILA_FEEDBACK_FROM_ODU=1: the odù log's alone)
   orunmila demo [--out path]                      sample report from a scripted session — no setup, for a first look
   orunmila watch [--root dir]                     live-tail new turn reports + run the filesystem sentinel
   orunmila watch-fs [--root dir]                  run ONLY the filesystem sentinel (independent disk observer)

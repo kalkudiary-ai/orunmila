@@ -300,4 +300,56 @@ it('K7 tests 4 and 73 (LD216): a phantom file claim is sealed at the closeout, h
   }
 });
 
+// K6 (LD218; lines 614, 644, 691): the agent's closeout feedback read from the odù log, side by side with the old path.
+it('K6 line 614 (LD218): the agent\'s JSON feedback from the odù log: phantom claims by turn, silent changes as undisclosed, the other conflicts as findings; side by side with the old path; the CLI reads it only with ORUNMILA_FEEDBACK_FROM_ODU=1', () => {
+  const { feedbackFromOdu, sideBySide } = require('../src/opon/feedback/from-odu');
+  const { spawnSync } = require('child_process');
+  const base = tmpDir();
+  try {
+    const log = makeLog(base, {}, { baseline: [{ path: 'src/config.ts', size: 4, fingerprint: FP('c') }, { path: 'src/h.ts', size: 4, fingerprint: FP('e') }] });
+    log.append(M.prompted(0));
+    log.append(M.edited(10, 'e1', 'src/s.ts')); // an agent change its claims never mention: silent
+    log.append(M.disk(60, 'src/s.ts'));
+    log.append(said(2000, 'I updated src/config.ts. All tests pass.')); // a phantom file claim and a phantom command claim
+    log.append(M.turnEnded(2000));
+    log.append(M.tick(9000));
+    log.append(sweep(10000, 'started'));
+    log.append(rescan(10010, 'src/h.ts', FP('9'))); // a hand change no live witness saw
+    log.append(sweep(10100, 'exited'));
+    const r = replayFolder(log.dir);
+    assert.strictEqual(r.ok, true, r.words);
+    const odus = r.odu.split('\n').slice(1, -1).map((l) => JSON.parse(l));
+    const s = at(odus, 'src/s.ts');
+    assert.deepStrictEqual([witnesses(s), s.conflicts.map((c) => c.kind)], [['saw', 'saw'], ['silent_change']]);
+    const fb = feedbackFromOdu({ sessionId: 'ses_replay_test', agent: 'claude-code', oduText: r.odu });
+    assert.deepStrictEqual(fb, feedbackFromOdu({ sessionId: 'ses_replay_test', agent: 'claude-code', oduText: r.odu }), 'deterministic');
+    assert.deepStrictEqual([fb.schema_version, fb.source, fb.turns.map((t) => t.turn)], ['1.0', 'odu_log', ['t1']]);
+    const t1 = fb.turns[0];
+    assert.deepStrictEqual(t1.claims.map((c) => [c.outcome, c.evidence.why, c.verdict_confidence]).sort(), [['phantom', 'no_event', 'high'], ['phantom_verification', 'no_command', 'high']]);
+    for (const c of t1.claims) assert.ok(odus.some((o) => o.odu_id === c.evidence.odu_id && o.mark_seqs.join() === c.evidence.mark_seqs.join()), 'each claim cites its odù and marks');
+    assert.deepStrictEqual([t1.undisclosed_changes.map((u) => u.ref), t1.summary.phantom, t1.summary.phantom_verification, t1.summary.undisclosed, fb.summary.phantom], [['src/s.ts'], 1, 1, 1, 1]);
+    assert.deepStrictEqual(fb.findings.map((f) => [f.kind, f.target, f.confidence]), [['missed_live', 'src/h.ts', 'medium']]);
+    const old = { turns: [{ turn: 't1', claims: [{ outcome: 'phantom' }, { outcome: 'phantom' }, { outcome: 'phantom_verification' }, { outcome: 'verified' }], undisclosed_changes: [{ ref: 'src/s.ts' }, { ref: 'src/z.ts' }] }] };
+    assert.deepStrictEqual(sideBySide(old, fb), [
+      { turn: 't1', kind: 'phantom', old: 2, odu: 1, in: 'old' },
+      { turn: 't1', kind: 'phantom_verification', old: 1, odu: 1, in: 'both' },
+      { turn: 't1', kind: 'undisclosed', ref: 'src/s.ts', in: 'both' },
+      { turn: 't1', kind: 'undisclosed', ref: 'src/z.ts', in: 'old' },
+    ]);
+    // The CLI: the old path unless the flag is on.
+    const home = path.join(base, 'home');
+    fs.mkdirSync(path.join(home, 'sessions', 'ses_replay_test'), { recursive: true });
+    fs.writeFileSync(path.join(home, 'sessions', 'ses_replay_test', 'odu.jsonl'), r.odu);
+    const cli = (on) => spawnSync('node', [path.join(__dirname, '..', 'bin', 'orunmila.js'), 'json', '--session', 'ses_replay_test'], { encoding: 'utf8', env: { ...process.env, ORUNMILA_HOME: home, ORUNMILA_FEEDBACK_FROM_ODU: on ? '1' : '' } });
+    const on = cli(true);
+    assert.strictEqual(on.status, 0, on.stderr);
+    assert.deepStrictEqual(JSON.parse(on.stdout).source, 'odu_log');
+    const off = cli(false);
+    assert.strictEqual(off.status, 0, off.stderr);
+    assert.deepStrictEqual(['source' in JSON.parse(off.stdout), 'findings' in JSON.parse(off.stdout)], [false, false], 'flag off: the old path, unchanged');
+  } finally {
+    rmrf(base);
+  }
+});
+
 runAll('closeout');

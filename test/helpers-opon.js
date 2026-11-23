@@ -38,9 +38,10 @@ function tinyCode() {
  * `byproducts`: { text, inHeader } writes the project's `.orunmila/byproducts` before the header is
  * built (its fingerprint is then frozen), and with `inHeader` the header carries the list (A1a).
  * `sessionId`, `root` and `startMs` build a second session beside the first (A2): its own id, the
- * same or another project folder, and when its header was written.
+ * same or another project folder, and when its header was written. `onRecord` is the session log's
+ * callback (L1c), so a test can feed a live engine; `sealedHeader` is the header as written.
  */
-function makeLog(base, config = {}, { baseline = null, byproducts = null, sessionId = SID, root: rootIn = null, startMs = 0 } = {}) {
+function makeLog(base, config = {}, { baseline = null, byproducts = null, sessionId = SID, root: rootIn = null, startMs = 0, onRecord = null } = {}) {
   const root = rootIn || fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'orunmila-root-')));
   const dir = path.join(base, sessionId);
   if (byproducts) {
@@ -53,13 +54,13 @@ function makeLog(base, config = {}, { baseline = null, byproducts = null, sessio
     text = [...baseline].sort((a, b) => (a.path < b.path ? -1 : 1)).map((e) => canonicalize(e) + '\n').join('');
     header.baseline = { fingerprint: 'sha256:' + crypto.createHash('sha256').update(text, 'utf8').digest('hex') };
   }
-  const log = createSessionLog(dir, header, { baseline: text });
+  const log = createSessionLog(dir, header, { baseline: text, onRecord });
   const append = (m, files = []) => {
     const r = log.append(m, files);
     if (!r.ok) throw new Error(`the test's mark was refused: ${JSON.stringify(r)}`);
     return r.seq;
   };
-  return { dir, root, append, header };
+  return { dir, root, append, header, sealedHeader: log.header() };
 }
 
 const base = (ms, over) => ({ schema_version: 1, session_id: SID, agent: null, turn: null, sub_agent: null, observed_at: wall(ms), mono_ns: ns(ms), cause_hint: null, ...over });

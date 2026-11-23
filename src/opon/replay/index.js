@@ -24,7 +24,10 @@
  * One whose log does not verify is named as lost evidence
  * (`other_session_unverified`) and counted as active at every time in every
  * folder, so it can only take credits away. A folder removed since the session
- * cannot be seen (LD181 (2), Q11).
+ * cannot be seen (LD181 (2), Q11). A log that holds `overlapped` marks (L2,
+ * LD202: the intake named in it each session sharing its folder) is read from
+ * them alone, in seq order, as the live engine read them, so a folder removed
+ * later changes nothing.
  * A file kept beside the log that is missing or
  * changed is named as lost evidence in the first line (open question 4), and
  * replay goes on: stations 2-3 read no diff, and nothing is ever read as an
@@ -42,7 +45,7 @@ const { canonicalize } = require('../../verify/canonical');
 const { configFromHeader } = require('../intake/header');
 const { createOpon } = require('../settle/engine');
 const { oduLog } = require('../ledger/odu-log');
-const { spanOf } = require('../intake/overlap');
+const { spanOf, applyOverlapped } = require('../intake/overlap');
 const { baselineMap } = require('../net/baseline');
 const fs = require('fs');
 const path = require('path');
@@ -83,10 +86,15 @@ function replayFolder(dir) {
   const recs = raw.records.filter((r) => !(r.part > 1 && r.line === 1)).map((r) => r.rec);
   const header = recs[0];
   const config = configFromHeader(header);
-  const others = othersBeside(dir, header.session_id);
+  // L2 (LD202): a log whose intake named the sessions sharing its folder is read from those marks alone; any other, from the folders beside it (LD179).
+  const marked = recs.slice(1).some((m) => m.says === 'overlapped');
+  const others = marked ? { spans: [], lost: [] } : othersBeside(dir, header.session_id);
   const opon = createOpon({ sessionId: header.session_id, config, byproducts: Array.isArray(config.byproducts) ? config.byproducts : null, baseline: baselineOf(dir, header, v), root: header.project_root, others: others.spans });
   const groups = [];
-  for (const m of recs.slice(1)) groups.push(...opon.push(m));
+  for (const m of recs.slice(1)) {
+    if (marked && m.says === 'overlapped') applyOverlapped(others.spans, m);
+    groups.push(...opon.push(m));
+  }
   const odu = oduLog({ header, marks: recs.slice(1), groups }).text;
   groups.push(...opon.end());
   const head = {

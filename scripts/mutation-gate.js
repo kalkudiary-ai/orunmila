@@ -1995,7 +1995,7 @@ const MUTANTS = [
     fails: ['L1c: an odù log that stops'] },
   { id: "L1c-7 an ended session's span never closes", file: 'src/opon/intake/live.js', test: 'test/opon-live.js',
     from: 'st.span.to = rec.mono_ns;', to: 'void 0;',
-    fails: ['L1c LD200 (5)'] },
+    fails: ['L2 Q11 (2) (a)'] },
   // Slice L1d: a reopened session replayed into a fresh engine (LD200 (6)).
   { id: 'L1d-1 a reopened session has no live engine', file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
     from: 'lv = live.resume(dir, header,', to: 'lv = null && live.resume(dir, header,',
@@ -2006,6 +2006,28 @@ const MUTANTS = [
   { id: 'L1d-3 an odù log a crash cut short is not caught up', file: 'src/opon/intake/live.js', test: 'test/opon-live.js',
     from: 'else if (text.length > disk.length) fs.appendFileSync(st.file, text.slice(disk.length));', to: 'else if (false) void 0;',
     fails: ['L1d guarantee 3'] },
+  // Slice L2: overlap from the session's own log (Q11 (2) (a), LD202).
+  { id: 'L2-1 replay reads the folders though the log names its peers', file: 'src/opon/replay/index.js', test: 'test/opon-live.js',
+    from: "const marked = recs.slice(1).some((m) => m.says === 'overlapped');", to: 'const marked = false;',
+    fails: ['L2 Q11 (2) (a)'] },
+  { id: 'L2-2 replay does not apply the marks', file: 'src/opon/replay/index.js', test: 'test/opon-live.js',
+    from: "if (marked && m.says === 'overlapped') applyOverlapped(others.spans, m);", to: 'void 0;',
+    fails: ['L2 Q11 (2) (a)'] },
+  { id: 'L2-3 the live engine ignores the marks', file: 'src/opon/intake/live.js', test: 'test/opon-live.js',
+    from: "if (rec.says === 'overlapped') applyOverlapped(st.others, rec);", to: 'void 0;',
+    fails: ['L2 Q11 (2) (a)'] },
+  { id: "L2-4 a session's end is not named to its peers", file: 'src/opon/intake/live.js', test: 'test/opon-live.js',
+    from: 'if (ended) for (const t of held.values())', to: 'if (false) for (const t of held.values())',
+    fails: ['L2 Q11 (2) (a)', 'L2 through the router'] },
+  { id: 'L2-5 a new session is not named to its peers', file: 'src/opon/intake/live.js', test: 'test/opon-live.js',
+    from: 'if (!st.others.some((s) => s.id === t.span.id)) receive(overlapMark(st, t));', to: 'void 0;',
+    fails: ['L2 Q11 (2) (a)', 'L2 through the router'] },
+  { id: 'L2-6 the router never pairs', file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
+    from: 'if (s.lv) live.pair(s.lv);', to: 'void 0;',
+    fails: ['L2 through the router'] },
+  { id: 'L2-7 an ended session may be named without its end', file: 'spec/mark.schema.json', test: 'test/opon-live.js',
+    from: '"then": { "required": ["to"] },\n            "else": { "not": { "required": ["to"] } }', to: '"then": {},\n            "else": { "not": { "required": ["to"] } }',
+    fails: ['L2 through the router'] },
 ];
 
 function copyRepo(root) {

@@ -68,9 +68,9 @@
       "$ref": "#/definitions/target"
     },
     "says": {
-      "description": "A fixed verb list: created, modified, deleted, renamed, started, exited, ended (a turn finished, a tool call failed, or the session ended), prompted (a user prompt arrived), read, contacted, called, claimed, checked (the law gate checked a turn), fingerprinted (the Opon recorded a file's fingerprint), gap (a source lost or dropped events), tampered (source process: Orunmila's own logs, frozen configuration, code or the agent's hook settings changed during the session, or a payload arrived from a process other than the one pinned to the session). Also tick (heartbeat).",
-      "$comment": "brief v3 line 245; brief v4 line 245 adds tampered (decision I-1, 2026-11-16); ended for the session is the agent's choice, LD55",
-      "enum": ["created", "modified", "deleted", "renamed", "started", "exited", "ended", "prompted", "read", "contacted", "called", "claimed", "checked", "fingerprinted", "gap", "tampered", "tick"]
+      "description": "A fixed verb list: created, modified, deleted, renamed, started, exited, ended (a turn finished, a tool call failed, or the session ended), prompted (a user prompt arrived), read, contacted, called, claimed, checked (the law gate checked a turn), fingerprinted (the Opon recorded a file's fingerprint), gap (a source lost or dropped events), tampered (source process: Orunmila's own logs, frozen configuration, code or the agent's hook settings changed during the session, or a payload arrived from a process other than the one pinned to the session), overlapped (source process: the intake names in this session's log another session sharing its folder, when it first sees it and when that one ends). Also tick (heartbeat).",
+      "$comment": "brief v3 line 245; brief v4 line 245 adds tampered (decision I-1, 2026-11-16); ended for the session is the agent's choice, LD55; overlapped is the agent's proposal, Q11 (2) (a), adopted LD184, LD202",
+      "enum": ["created", "modified", "deleted", "renamed", "started", "exited", "ended", "prompted", "read", "contacted", "called", "claimed", "checked", "fingerprinted", "gap", "tampered", "overlapped", "tick"]
     },
     "detail": {
       "description": "Named detail slots (the spec gives each a schema).",
@@ -229,6 +229,26 @@
             "if": { "properties": { "exists": { "const": true } } },
             "then": { "required": ["size", "fingerprint"] },
             "else": { "not": { "required": ["fingerprint"] } }
+          }
+        }
+      }
+    },
+    {
+      "$comment": "brief v4 lines 344, 402-405, guarantee 3; the agent's proposal, Q11 (2) (a), adopted LD184, LD202: the intake names in this session's own log another session sharing its folder (its id, root and start), and later its end, so replay reads overlap from this log alone",
+      "if": { "properties": { "says": { "const": "overlapped" } } },
+      "then": {
+        "properties": {
+          "source": { "const": "process" },
+          "target": { "properties": { "kind": { "const": "process" } } },
+          "detail": {
+            "required": ["session", "root", "from", "ended"],
+            "properties": {
+              "from": { "pattern": "^[0-9]+$" },
+              "to": { "pattern": "^[0-9]+$" }
+            },
+            "if": { "properties": { "ended": { "const": true } } },
+            "then": { "required": ["to"] },
+            "else": { "not": { "required": ["to"] } }
           }
         }
       }
@@ -549,6 +569,22 @@
           "description": "On a fingerprinted mark: whether a file was at the target's path when the Opon fingerprinted it. False is a known absence, never an unknown.",
           "$comment": "agent's choice, LD171 (Q8): brief v4 line 241, null means unknown and nothing else, so an absence needs a value of its own",
           "type": "boolean"
+        },
+        "session": {
+          "description": "On an overlapped mark: the other session sharing this one's folder that the intake names (its `root` and `from` beside it: its project root and its header's mono_ns).",
+          "$comment": "agent's choice, Q11 (2) (a), adopted LD184, LD202",
+          "type": "string",
+          "minLength": 1
+        },
+        "ended": {
+          "description": "On an overlapped mark: whether the session it names has ended; when true, `to` is its end mark's mono_ns.",
+          "$comment": "agent's choice, Q11 (2) (a), adopted LD184, LD202",
+          "type": "boolean"
+        },
+        "to": {
+          "description": "On an overlapped mark naming a session's end: that end mark's mono_ns, a decimal string.",
+          "$comment": "agent's choice, Q11 (2) (a), adopted LD184, LD202",
+          "type": "string"
         },
         "received": {
           "description": "On a tampered mark for a foreign sender: the payload as it arrived, kept as text for evidence and redacted like any mark. It is never the session's own mark.",

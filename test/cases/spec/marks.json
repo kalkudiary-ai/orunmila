@@ -915,6 +915,57 @@
       "cause_hint": null,
       "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
       "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_overlapped": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "process",
+        "name": "intake"
+      },
+      "says": "overlapped",
+      "detail": {
+        "session": "ses_test_0002",
+        "root": "/r/project",
+        "from": "4000000000",
+        "ended": false
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_overlapped_ended": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "process",
+        "name": "intake"
+      },
+      "says": "overlapped",
+      "detail": {
+        "session": "ses_test_0002",
+        "root": "/r/project",
+        "from": "4000000000",
+        "ended": true,
+        "to": "4900000000"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
     }
   },
   "bad": [
@@ -3312,6 +3363,23 @@
         "path": "/detail/exists",
         "keyword": "type"
       }
-    }
+    },
+    {"name":"overlapped from a source that is not the intake (L2, LD202)","from":"process_overlapped","set":{"/source":"sentinel"},"unset":[],"error":{"path":"/source","keyword":"const"}},
+    {"name":"overlapped on a target that is not the intake (L2)","from":"process_overlapped","set":{"/target/kind":"tool"},"unset":[],"error":{"path":"/target/kind","keyword":"const"}},
+    {"name":"overlapped naming no session (L2)","from":"process_overlapped","set":{},"unset":["/detail/session"],"error":{"path":"/detail/session","keyword":"required"}},
+    {"name":"overlapped with no root (L2)","from":"process_overlapped","set":{},"unset":["/detail/root"],"error":{"path":"/detail/root","keyword":"required"}},
+    {"name":"overlapped with no start (L2)","from":"process_overlapped","set":{},"unset":["/detail/from"],"error":{"path":"/detail/from","keyword":"required"}},
+    {"name":"overlapped with no ended (L2)","from":"process_overlapped","set":{},"unset":["/detail/ended"],"error":{"path":"/detail/ended","keyword":"required"}},
+    {"name":"overlapped naming an empty session (L2)","from":"process_overlapped","set":{"/detail/session":""},"unset":[],"error":{"path":"/detail/session","keyword":"minLength"}},
+    {"name":"overlapped naming a session that is not a string (L2)","from":"process_overlapped","set":{"/detail/session":7},"unset":[],"error":{"path":"/detail/session","keyword":"type"}},
+    {"name":"overlapped with an empty root (L2)","from":"process_overlapped","set":{"/detail/root":""},"unset":[],"error":{"path":"/detail/root","keyword":"minLength"}},
+    {"name":"overlapped with a root that is not a string (L2)","from":"process_overlapped","set":{"/detail/root":7},"unset":[],"error":{"path":"/detail/root","keyword":"type"}},
+    {"name":"overlapped with a start that is not a decimal (L2)","from":"process_overlapped","set":{"/detail/from":"soon"},"unset":[],"error":{"path":"/detail/from","keyword":"pattern"}},
+    {"name":"overlapped with a start that is a number (L2)","from":"process_overlapped","set":{"/detail/from":4000000000},"unset":[],"error":{"path":"/detail/from","keyword":"type"}},
+    {"name":"overlapped with ended not a boolean (L2)","from":"process_overlapped","set":{"/detail/ended":"yes"},"unset":[],"error":{"path":"/detail/ended","keyword":"type"}},
+    {"name":"overlapped with an end that is not a decimal (L2)","from":"process_overlapped_ended","set":{"/detail/to":"later"},"unset":[],"error":{"path":"/detail/to","keyword":"pattern"}},
+    {"name":"overlapped with an end that is a number (L2)","from":"process_overlapped_ended","set":{"/detail/to":4900000000},"unset":[],"error":{"path":"/detail/to","keyword":"type"}},
+    {"name":"overlapped ended with no end (L2)","from":"process_overlapped_ended","set":{},"unset":["/detail/to"],"error":{"path":"/detail/to","keyword":"required"}},
+    {"name":"overlapped not ended with an end (L2)","from":"process_overlapped","set":{"/detail/to":"4900000000"},"unset":[],"error":{"path":"/detail","keyword":"not"}}
   ]
 }

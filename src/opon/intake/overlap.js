@@ -22,6 +22,10 @@
  *                    whole folder names: NF80, LD69) and whose span holds
  *                    `mono` (both ends included). mono_ns is compared as an
  *                    integer.
+ *   applyOverlapped(spans, mark)
+ *                    an `overlapped` mark (L2, LD202) applied to a session's
+ *                    own list: the session it names begins, or ends
+ *   sharesFiles(a, b) whether two roots share files
  *
  * Limits: a session whose agent died with no end mark counts as active while
  * the intake holds it (NF79; more overlap means fewer credits, never a false
@@ -58,6 +62,21 @@ function spanOf(records) {
   return { id: header.session_id, root: header.project_root, from: header.mono_ns, to, ended };
 }
 
+const OPEN = String(2n ** 63n); // a session named as begun and not yet as ended runs on
+
+/**
+ * L2 (Q11 (2) (a), LD202): an `overlapped` mark's news in a session's own list of the others:
+ * the session it names, from its start, open until a later mark names its end. Live and replay
+ * apply each such mark of the session's log, in seq order, to a list of their own.
+ */
+function applyOverlapped(spans, mark) {
+  const d = isObject(mark.detail) ? mark.detail : {};
+  const span = { id: d.session, root: d.root, from: d.from, to: d.ended === true ? d.to : OPEN, ended: d.ended === true };
+  const i = spans.findIndex((s) => s.id === span.id);
+  if (i >= 0) spans[i] = span;
+  else spans.push(span);
+}
+
 function concurrent(spans, root, mono) {
   const t = BigInt(mono);
   return spans
@@ -66,4 +85,4 @@ function concurrent(spans, root, mono) {
     .sort();
 }
 
-module.exports = { spanOf, concurrent };
+module.exports = { spanOf, concurrent, applyOverlapped, sharesFiles };

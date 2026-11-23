@@ -233,30 +233,49 @@ it('L1c line 386: a file\'s state now is streamed when it is a regular file; no 
 }));
 
 it(
-  'L1c LD200 (5), lines 402-405: live, a session sharing the folder counts as active while it is held and stops at its end mark: a command\'s child change in B is credited when A ended before it, and is unexplained with concurrent_sessions while A runs',
+  'L2 Q11 (2) (a), lines 402-405, guarantee 3: each session\'s own log gets an overlapped mark for every other held session sharing its folder, at the start and at that one\'s end; live and replay read overlap from those marks, so a peer\'s folder removed later changes nothing: a command\'s child change in B is concurrent while A runs, credited once A has ended',
   withBase((base) => {
     const { createLive } = require('../src/opon/intake/live');
-    const { as } = require('./helpers-opon');
+    const { as, ns, wall } = require('./helpers-opon');
     const run = (aEnds) => {
-      const spans = [];
-      const live = createLive({ spans, key: KEY, clock: () => ({ mono: '0', wall: '2026-11-23T00:00:00.000Z' }), receive: () => {}, error: (r) => assert.fail(r) });
       const sub = path.join(base, aEnds ? 'ended' : 'running');
       fs.mkdirSync(sub);
-      const la = makeLog(sub, {}, { sessionId: 'ses_a' });
-      const lb = makeLog(sub, {}, { sessionId: 'ses_b', root: la.root });
-      const A = live.open(la.dir, { ...la.header, hash: 'sha256:' + 'a'.repeat(64) }, null);
-      const B = live.open(lb.dir, { ...lb.header, hash: 'sha256:' + 'b'.repeat(64) }, null);
-      let seq = 0;
-      if (aEnds) live.feed(A, { ...as('ses_a', M.sessionEnded(100)), seq: 1 });
-      for (const m of [M.started(200, 'c1', { kind: 'command', text: 'make' }, 'Bash'), M.disk(300, 'src/made.ts'), M.exited(400, 'c1', 'make'), M.turnEnded(400), M.tick(12000)]) live.feed(B, { ...as('ses_b', m), seq: ++seq });
-      const odus = fs.readFileSync(path.join(lb.dir, 'odu.jsonl'), 'utf8').split('\n').slice(1, -1).map((l) => JSON.parse(l));
-      return { spans, made: odus.find((o) => o.target && o.target.path === 'src/made.ts') };
+      let now = 0;
+      const st = {};
+      const logs = {};
+      const live = createLive({ key: KEY, clock: () => ({ mono: ns(now), wall: wall(now) }), receive: (m) => logs[m.session_id].append(m), error: (r) => assert.fail(r) });
+      logs.ses_a = makeLog(sub, {}, { sessionId: 'ses_a', onRecord: (r) => st.a && live.feed(st.a, r) });
+      logs.ses_b = makeLog(sub, {}, { sessionId: 'ses_b', root: logs.ses_a.root, onRecord: (r) => st.b && live.feed(st.b, r) });
+      st.a = live.open(logs.ses_a.dir, logs.ses_a.sealedHeader, null);
+      live.pair(st.a);
+      st.b = live.open(logs.ses_b.dir, logs.ses_b.sealedHeader, null);
+      live.pair(st.b);
+      if (aEnds) {
+        now = 100;
+        logs.ses_a.append(as('ses_a', M.sessionEnded(100)));
+      }
+      for (const [ms, m] of [[200, M.started(200, 'c1', { kind: 'command', text: 'make' }, 'Bash')], [300, M.disk(300, 'src/made.ts')], [400, M.exited(400, 'c1', 'make')], [400, M.turnEnded(400)], [12000, M.tick(12000)]]) {
+        now = ms;
+        logs.ses_b.append(as('ses_b', m));
+      }
+      const odu = fs.readFileSync(path.join(logs.ses_b.dir, 'odu.jsonl'), 'utf8');
+      const before = replayFolder(logs.ses_b.dir);
+      rmrf(logs.ses_a.dir); // the peer's folder removed (retention, test 45, or by hand)
+      const after = replayFolder(logs.ses_b.dir);
+      const odus = odu.split('\n').slice(1, -1).map((l) => JSON.parse(l));
+      const marks = rawRecords(logs.ses_b.dir).filter((m) => m.says === 'overlapped').map((m) => [m.source, m.target.kind, m.detail.session, m.detail.ended]);
+      return { odu, before: before.odu, after: after.odu, made: odus.find((o) => o.target && o.target.path === 'src/made.ts'), marks };
     };
-    const ended = run(true);
-    assert.deepStrictEqual(ended.spans.find((s) => s.id === 'ses_a').ended, true);
-    assert.deepStrictEqual([ended.made.witness_status.glove.status, ended.made.witness_status.sentinel.status, ended.made.attribution, ended.made.cause, ended.made.conflicts], ['saw_nothing', 'saw', 'explained', { kind: 'agent_command', ref: 'c1' }, []]);
     const running = run(false);
+    assert.deepStrictEqual(running.marks, [['process', 'process', 'ses_a', false]], "A named in B's own log when B began");
     assert.deepStrictEqual([running.made.witness_status.glove.status, running.made.witness_status.sentinel.status, running.made.attribution, running.made.conflicts.map((c) => [c.kind, c.sessions])], ['saw_nothing', 'saw', 'unexplained', [['concurrent_sessions', ['ses_a', 'ses_b']]]]);
+    assert.strictEqual(running.before, running.odu, 'replay gives the live odù log');
+    assert.strictEqual(running.after, running.odu, "and still does with A's folder gone");
+    const ended = run(true);
+    assert.deepStrictEqual(ended.marks, [['process', 'process', 'ses_a', false], ['process', 'process', 'ses_a', true]], "A's end named in B's own log");
+    assert.deepStrictEqual([ended.made.witness_status.glove.status, ended.made.witness_status.sentinel.status, ended.made.attribution, ended.made.cause, ended.made.conflicts], ['saw_nothing', 'saw', 'explained', { kind: 'agent_command', ref: 'c1' }, []]);
+    assert.strictEqual(ended.before, ended.odu);
+    assert.strictEqual(ended.after, ended.odu);
   }),
 );
 
@@ -341,6 +360,58 @@ it(
     const errors = fs.readFileSync(path.join(home, 'intake', 'errors.jsonl'), 'utf8').split('\n').slice(0, -1).map((l) => JSON.parse(l));
     assert.deepStrictEqual(errors.map((e) => e.reason.startsWith('the live Ọpọ́n stopped for session ses_live3: its odù log on disk is not the start of replay\'s')), [true]);
     assert.ok(rawRecords(dir).some((m) => m.says === 'claimed'), 'capture went on');
+  }),
+);
+
+it(
+  'L2 through the router: two sessions in one folder are each named in the other\'s log when the second begins, the first\'s end is named in the second\'s, and each session\'s odù log equals its replay, before and after the other\'s folder is removed; with the flag off no overlapped mark is written',
+  withBase((base) => {
+    for (const on of [true, false]) {
+      const sub = path.join(base, on ? 'on' : 'off');
+      const home = path.join(sub, 'home');
+      const project = path.join(sub, 'project');
+      fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+      const clock = fakeClock();
+      const router = createRouter({ home, clock, checkSender: () => true, codeRoot: SRC, orunmilaVersion: '0.0.0-test', installKey: KEY, hookSettingsFor: () => [], baseline: on });
+      const a = cc(project, 'ses_pa');
+      const b = cc(project, 'ses_pb');
+      const send = (x) => assert.strictEqual(router.payload(x, { channel: 'command' }).ok, true, x.hook_event_name);
+      send(a.prompt('one'));
+      clock.advance(100);
+      send(b.prompt('two'));
+      clock.advance(100);
+      send({ session_id: 'ses_pa', transcript_path: '/tmp/t.jsonl', cwd: project, hook_event_name: 'SessionEnd', reason: 'clear' });
+      const file = path.join(project, 'src', 'b.js');
+      send(b.pre('Write', { file_path: file }, 'w1'));
+      fs.writeFileSync(file, 'b\n');
+      send(b.post('Write', { file_path: file }, {}, 'w1'));
+      send(b.stop('I wrote src/b.js.'));
+      for (let i = 0; i < 25; i++) {
+        clock.advance(600);
+        router.poll();
+      }
+      const dir = (id) => path.join(home, 'sessions', id);
+      const named = (id) => rawRecords(dir(id)).filter((m) => m.says === 'overlapped').map((m) => [m.detail.session, m.detail.ended]);
+      if (!on) {
+        assert.deepStrictEqual([named('ses_pa'), named('ses_pb')], [[], []]);
+        continue;
+      }
+      assert.deepStrictEqual([named('ses_pa'), named('ses_pb')], [[['ses_pb', false]], [['ses_pa', false], ['ses_pa', true]]]);
+      const { compile } = require('../src/verify/schema');
+      const checkMark = compile(JSON.parse(fs.readFileSync(path.join(SRC, '..', 'spec', 'mark.schema.json'), 'utf8')));
+      const [began, endedMark] = rawRecords(dir('ses_pb')).filter((m) => m.says === 'overlapped');
+      assert.deepStrictEqual([checkMark(began), checkMark(endedMark), typeof endedMark.detail.to], [[], [], 'string']);
+      const { to: _to, ...noTo } = endedMark.detail;
+      assert.ok(checkMark({ ...endedMark, detail: noTo }).length > 0, 'an ended session is named with its end');
+      assert.ok(checkMark({ ...began, detail: { ...began.detail, to: endedMark.detail.to } }).length > 0, 'one not ended has no end');
+      const odu = fs.readFileSync(path.join(dir('ses_pb'), 'odu.jsonl'), 'utf8');
+      assert.strictEqual(replayFolder(dir('ses_pb')).odu, odu);
+      const bjs = odu.split('\n').slice(1, -1).map((l) => JSON.parse(l)).find((o) => o.target && o.target.path === 'src/b.js');
+      assert.deepStrictEqual([bjs.witness_status.glove.status, bjs.witness_status.sentinel.status], ['saw', 'saw_nothing']);
+      assert.strictEqual(replayFolder(dir('ses_pa')).odu, fs.readFileSync(path.join(dir('ses_pa'), 'odu.jsonl'), 'utf8'));
+      rmrf(dir('ses_pa'));
+      assert.strictEqual(replayFolder(dir('ses_pb')).odu, odu, "A's folder gone, B's replay unchanged");
+    }
   }),
 );
 

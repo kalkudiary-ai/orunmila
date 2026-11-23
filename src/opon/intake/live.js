@@ -7,17 +7,22 @@
  * session it starts, and the session log calls feed() with each mark as
  * written (session-log.js `onRecord`).
  *
- *   createLive({ spans, key, clock, receive, error })
- *     spans    one list shared by every session the router holds (LD200 (5),
- *              LD181 (1)): each session's span, open-ended while it is held and
- *              not ended, closed at its end mark; every engine reads it for
- *              overlap (station 5), as replay reads the folders beside a log
+ *   createLive({ key, clock, receive, error })
  *     receive  writes a mark to its session's log (the intake engine's receive)
  *     error    a line to the intake's error log
  *   live.open(dir, header, baseline) -> the session's live state: its engine
  *              (stations 2-6, settings from the header, as replay takes them),
  *              its odù log (odu.jsonl beside the raw log, its header line
  *              written now) and its span
+ *   live.pair(state)  once the router holds the session (L2, Q11 (2) (a),
+ *              LD202): for every other session it holds, not ended, whose root
+ *              shares files with this one's, an `overlapped` mark in each
+ *              session's log naming the other, where it is not named yet. When
+ *              a session's end mark is fed, each session it was named to gets
+ *              one naming its end. Each engine reads overlap (station 5) only
+ *              from its own log's `overlapped` marks, in seq order, as replay
+ *              does, so the two agree and a peer's folder removed later changes
+ *              nothing (LD181 (2))
  *   live.resume(dir, header, baseline, marks) -> the same for a session
  *              reopened after a restart (L1d): its marks so far replayed into a
  *              fresh engine, and its odù log continued only if it is the start
@@ -43,36 +48,68 @@ const { createOduWriter } = require('../ledger/odu-log');
 const { configFromHeader } = require('./header');
 const { canonicalize } = require('../../verify/canonical');
 const { fingerprintNow } = require('../net/baseline');
+const { applyOverlapped, sharesFiles } = require('./overlap');
 
-const OPEN = String(2n ** 63n); // a held session's span runs on while it is held
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
-function createLive({ spans, key, clock, receive, error }) {
+function createLive({ key, clock, receive, error }) {
+  const held = new Map(); // session id -> its live state, for pairing (L2)
+
   function stop(st, why) {
     st.on = false;
     error(`the live Ọpọ́n stopped for session ${st.header.session_id}: ${why}; its raw log goes on, and replay gives its odù log`, { session_id: st.header.session_id });
   }
 
-  /** A session's live state, its span in the shared list (replacing any older one of its id). */
+  /** A session's live state: its own span, and the others its log's overlapped marks name (L2). */
   function make(dir, header, baseline) {
     const config = configFromHeader(header);
     const id = header.session_id;
-    const old = spans.findIndex((s) => s.id === id);
-    if (old >= 0) spans.splice(old, 1);
-    const span = { id, root: header.project_root, from: header.mono_ns, to: OPEN, ended: false };
-    spans.push(span);
-    return {
+    const others = [];
+    const st = {
       header,
-      span,
+      span: { id, root: header.project_root, from: header.mono_ns, ended: false, to: null },
       root: header.project_root,
       file: path.join(dir, 'odu.jsonl'),
-      opon: createOpon({ sessionId: id, config, baseline, byproducts: Array.isArray(config.byproducts) ? config.byproducts : null, root: header.project_root, others: spans }),
+      others,
+      opon: createOpon({ sessionId: id, config, baseline, byproducts: Array.isArray(config.byproducts) ? config.byproducts : null, root: header.project_root, others }),
       odu: createOduWriter(header),
       sources: new Map(),
       due: [],
       draining: false,
       on: true,
     };
+    held.set(id, st);
+    return st;
+  }
+
+  /** L2 (LD202): the intake's note in `into`'s log of session `about`, as it stands. */
+  function overlapMark(into, about) {
+    const now = clock();
+    const s = about.span;
+    return {
+      schema_version: 1,
+      session_id: into.header.session_id,
+      source: 'process',
+      agent: null,
+      turn: null,
+      sub_agent: null,
+      observed_at: now.wall,
+      mono_ns: now.mono,
+      target: { kind: 'process', name: 'intake' },
+      says: 'overlapped',
+      detail: { session: s.id, root: s.root, from: s.from, ended: s.ended, ...(s.ended ? { to: s.to } : {}) },
+      cause_hint: null,
+    };
+  }
+
+  /** L2: name each held session sharing st's folder, and st to it, where not yet named. */
+  function pair(st) {
+    if (st.span.ended) return;
+    for (const t of held.values()) {
+      if (t === st || t.span.ended || !sharesFiles(t.root, st.root)) continue;
+      if (!st.others.some((s) => s.id === t.span.id)) receive(overlapMark(st, t));
+      if (!t.others.some((s) => s.id === st.span.id)) receive(overlapMark(t, st));
+    }
   }
 
   function open(dir, header, baseline) {
@@ -96,7 +133,10 @@ function createLive({ spans, key, clock, receive, error }) {
     const st = make(dir, header, baseline);
     try {
       let text = canonicalize(st.odu.head) + '\n';
-      for (const rec of marks) for (const r of step(st, rec)) text += canonicalize(r) + '\n';
+      for (const rec of marks) {
+        closes(st, rec);
+        for (const r of step(st, rec)) text += canonicalize(r) + '\n';
+      }
       st.opon.fingerprintsDue();
       let disk = null;
       try {
@@ -113,13 +153,18 @@ function createLive({ spans, key, clock, receive, error }) {
     return st;
   }
 
-  /** One record through the session's engine: its source kept, its span closed at the session's end; the odùs it seals. */
+  /** The session's own span closed at its end mark; true when this record closed it. */
+  function closes(st, rec) {
+    if (!(rec.says === 'ended' && isObject(rec.target) && rec.target.kind === 'session' && !st.span.ended)) return false;
+    st.span.to = rec.mono_ns;
+    st.span.ended = true;
+    return true;
+  }
+
+  /** One record through the session's engine: its source kept, an overlapped mark's news taken first (L2); the odùs it seals. */
   function step(st, rec) {
     st.sources.set(rec.seq, rec.source);
-    if (rec.says === 'ended' && isObject(rec.target) && rec.target.kind === 'session' && !st.span.ended) {
-      st.span.to = rec.mono_ns;
-      st.span.ended = true;
-    }
+    if (rec.says === 'overlapped') applyOverlapped(st.others, rec);
     return st.opon.push(rec).map((g) => st.odu.add(g, (s) => st.sources.get(s))).filter(Boolean);
   }
 
@@ -142,14 +187,17 @@ function createLive({ spans, key, clock, receive, error }) {
   }
 
   function feed(st, rec) {
-    if (!st.on) return;
-    try {
-      for (const r of step(st, rec)) fs.appendFileSync(st.file, canonicalize(r) + '\n');
-      st.due.push(...st.opon.fingerprintsDue());
-    } catch (e) {
-      stop(st, e.message);
-      return;
+    const ended = closes(st, rec); // kept even when this session's engine has stopped: the others' records depend on it
+    if (st.on) {
+      try {
+        for (const r of step(st, rec)) fs.appendFileSync(st.file, canonicalize(r) + '\n');
+        st.due.push(...st.opon.fingerprintsDue());
+      } catch (e) {
+        stop(st, e.message);
+      }
     }
+    // L2: the end of this session, named to each session it was named to.
+    if (ended) for (const t of held.values()) if (t !== st && t.others.some((s) => s.id === st.span.id && !s.ended)) receive(overlapMark(t, st));
     if (st.draining) return; // a fingerprint written below feeds back in: the loop below takes what it adds
     st.draining = true;
     try {
@@ -159,7 +207,7 @@ function createLive({ spans, key, clock, receive, error }) {
     }
   }
 
-  return { open, resume, feed };
+  return { open, resume, pair, feed };
 }
 
 module.exports = { createLive };

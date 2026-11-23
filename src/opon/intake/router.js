@@ -176,7 +176,7 @@ function createRouter(o) {
   const states = new Map(); // session id -> { log, root, ci, n, open, pre, last, limit }
   const engine = createIntake({ openLog: (id) => states.get(id).log, clock, checkSender: o.checkSender, tickMs: o.tickMs });
   // The Ọpọ́n live (slice L1c, LD200), with the live path's flag only: one engine per session it starts.
-  const live = o.baseline ? createLive({ spans: [], key: o.installKey, clock, receive: (m) => engine.receive(m, {}), error: (reason, payload) => error(reason, payload) }) : null;
+  const live = o.baseline ? createLive({ key: o.installKey, clock, receive: (m) => engine.receive(m, {}), error: (reason, payload) => error(reason, payload) }) : null;
   let heldText = null;
   // The Sentinel inside the intake (B4): its marks go to every watching session of the root.
   const sentinels = o.sentinel
@@ -239,7 +239,7 @@ function createRouter(o) {
       lv = live.resume(dir, header, header.baseline ? baselineMap(fs.readFileSync(path.join(dir, 'baseline.jsonl'), 'utf8')) : null, marks);
     }
     const tamper = createTamperWatch({ header: t.header, codeRoot: o.codeRoot, lawPacks: lawPacksFor(root), prior: t.tampered, clock });
-    return { log, root, ci: isCaseInsensitive(root), n: t.n, open: t.open, pre: new Map(), last: BigInt(clock().mono), limit: t.header.config.diff_size_limit_bytes, tamper };
+    return { log, root, ci: isCaseInsensitive(root), n: t.n, open: t.open, pre: new Map(), last: BigInt(clock().mono), limit: t.header.config.diff_size_limit_bytes, tamper, lv };
   }
 
   function start(id, p) {
@@ -275,7 +275,7 @@ function createRouter(o) {
     const log = createSessionLog(dir, header, { envEntries: entries, baseline, onRecord: live ? (rec) => lv && live.feed(lv, rec) : null });
     if (live) lv = live.open(dir, log.header(), baseline === null ? null : baselineMap(baseline));
     const tamper = createTamperWatch({ header: { ...header, project_root: root }, codeRoot: o.codeRoot, lawPacks: lawPacksFor(root), clock });
-    return { log, root, ci: isCaseInsensitive(root), n: 0, open: false, pre: new Map(), last: BigInt(now.mono), limit: header.config.diff_size_limit_bytes, tamper };
+    return { log, root, ci: isCaseInsensitive(root), n: 0, open: false, pre: new Map(), last: BigInt(now.mono), limit: header.config.diff_size_limit_bytes, tamper, lv };
   }
 
   function normalise(s, m) {
@@ -298,6 +298,7 @@ function createRouter(o) {
         return error(`the session's log could not be opened: ${e.message}`, p);
       }
       states.set(id, s);
+      if (s.lv) live.pair(s.lv); // L2 (LD202): the sessions sharing its folder, named in each other's logs
     }
     s.last = BigInt(clock().mono);
     watchFor(s);
@@ -404,6 +405,7 @@ function createRouter(o) {
       }
     }
     const out = engine.resume(entries, { also: opts.also });
+    for (const e of entries) if (states.get(e.id).lv) live.pair(states.get(e.id).lv); // L2: after the gaps, as the engine resumes first
     writeHeld();
     return { ...out, failed: [...out.failed, ...failed] };
   }

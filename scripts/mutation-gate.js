@@ -907,7 +907,7 @@ const MUTANTS = [
     from: 'for (const x of Object.values(o.definitions || {})) visit(x);', to: 'void 0;',
     fails: ['LD85: a mark naming a field the spec does not declare stays intact'] },
   { id: 'U3 undeclared fields left out of the answer', file: 'src/verify/session.js', test: 'test/verify.js',
-    from: 'unbroken${[...cuts, ...fields, ...base, ...foot]', to: 'unbroken${[...cuts, ...base, ...foot]',
+    from: 'unbroken${[...cuts, ...gapAt, ...other, ...fields, ...base, ...foot]', to: 'unbroken${[...cuts, ...gapAt, ...other, ...base, ...foot]', // moved with CR1 (LD250)
     fails: ['LD85: a mark naming a field the spec does not declare stays intact'] },
   { id: 'U4 a continuation record checked as a mark for undeclared fields', file: 'src/verify/session.js', test: 'test/verify.js',
     from: 'if (isContinuation({ part, line })) continue;\n      for (const e of', to: 'for (const e of',
@@ -2302,6 +2302,16 @@ const MUTANTS = [
   { id: "MG3-2 the command runs without the launcher's tag", file: 'scripts/mutation-gate.js', test: 'test/mutation-gate.js',
     from: 'const env = { ...process.env, [KEY]: tags };\nif (pre)', to: 'const env = { ...process.env };\nif (pre)',
     fails: ['MG3 (LD239)'] },
+  // CR1 (LD250; tests 12, 18): the verifier reports the gaps the log records.
+  { id: 'CR1-1 the downtime is not named', file: 'src/verify/session.js', test: 'test/crash.js',
+    from: '${[...cuts, ...gapAt, ...other', to: '${[...cuts, ...other',
+    fails: ['CR1 test 12', 'CR1 test 18'] },
+  { id: 'CR1-2 a downtime gap is counted as another gap', file: 'src/verify/session.js', test: 'test/crash.js',
+    from: "if (d.since && d.until && typeof d.since.observed_at === 'string'", to: "if (false && d.since && d.until && typeof d.since.observed_at === 'string'",
+    fails: ['CR1 test 12', 'CR1 test 18'] },
+  { id: 'CR1-3 other gaps are not said', file: 'src/verify/session.js', test: 'test/crash.js',
+    from: "const other = gaps.other ? [`${plural(gaps.other, 'other capture gap', 'other capture gaps')} recorded`] : [];", to: 'const other = [];',
+    fails: ["CR1 (LD250): verify counts"] },
   // LD249 (LD211 (5), (7)): a session resumed after its closeout.
   { id: 'LD249-1 the engine never reopens its closeout', file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
     from: "    if (closedOut && m.says === 'prompted' && GLOVE.has(m.source)) {", to: '    if (false) {',

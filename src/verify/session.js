@@ -20,7 +20,10 @@
  * starts with a continuation record naming the cut exactly. A record so
  * continued is intact, and the answer names every cut.
  *
- *   verifySession(dir) -> { ok, words, counts, raw, schema, quarantine, files, undeclared }
+ *   verifySession(dir) -> { ok, words, counts, raw, schema, quarantine, files, undeclared, gaps }
+ *     gaps (CR1, LD250; test 18): { downtime: [{ seq, since, until }], other }: the intake's downtime gaps, each named
+ *     in the words with its times and line, and how many other capture gaps the log records. A gap is the record
+ *     telling the truth about itself, so it never breaks the record.
  *   checkLog(dir, 'raw' | 'quarantine') -> one log across its parts:
  *     { ok, parts, file, records: [{ rec, part, line }], cuts: [{ part, line }],
  *       tail, fail }   tail: a cut last line no part continues yet
@@ -258,6 +261,19 @@ function verifySession(dir) {
 
   const footer = footerOf(dir, raw);
 
+  // CR1 (LD250; test 18, "verifier reports it"): the gaps the log records. The intake's downtime (a gap with `since`)
+  // is named with its times and line; every other capture gap (a Sentinel watch gap, a Glove gap) is counted.
+  const gaps = { downtime: [], other: 0 };
+  const gapAt = [];
+  for (const { rec, part, line } of marks) {
+    if (!rec || rec.says !== 'gap') continue;
+    const d = rec.detail && typeof rec.detail === 'object' ? rec.detail : {};
+    if (d.since && d.until && typeof d.since.observed_at === 'string' && typeof d.until.observed_at === 'string') {
+      gaps.downtime.push({ seq: rec.seq, since: d.since.observed_at, until: d.until.observed_at });
+      gapAt.push(`the intake was down from ${d.since.observed_at} to ${d.until.observed_at} (${where('raw log', part, line)})`);
+    } else gaps.other++;
+  }
+
   const counts = {
     marks: marks.length,
     quarantined: quarantine.records.filter((r) => !(r.part === 1 && r.line === 1) && !isContinuation(r)).length,
@@ -288,11 +304,12 @@ function verifySession(dir) {
     const base = baseline ? [`the baseline snapshot of ${plural(baseline.entries, 'entry', 'entries')} matches the header`] : [];
     const after = (n, log) => (n ? [`${plural(n, 'record', 'records')} after the footer's line in the ${log} (written after its closeout)`] : []);
     const foot = footer ? [`the session footer matches the raw log${footer.odu ? ' and the odù log' : ''}`, ...after(footer.after.raw, 'raw log'), ...after(footer.after.odu, 'odù log')] : [];
+    const other = gaps.other ? [`${plural(gaps.other, 'other capture gap', 'other capture gaps')} recorded`] : [];
     words =
       `Record intact: ${plural(counts.marks, 'mark', 'marks')}, ${plural(counts.quarantined, 'quarantined input', 'quarantined inputs')}, ` +
-      `${plural(counts.kept_files, 'kept file', 'kept files')}, unbroken${[...cuts, ...fields, ...base, ...foot].map((c) => `; ${c}`).join('')}.`;
+      `${plural(counts.kept_files, 'kept file', 'kept files')}, unbroken${[...cuts, ...gapAt, ...other, ...fields, ...base, ...foot].map((c) => `; ${c}`).join('')}.`;
   }
-  return { ok: raw.ok && schema.ok && quarantine.ok && files.bad.length === 0 && (!footer || footer.ok), words, counts, raw: summary(raw), schema, quarantine: summary(quarantine), files, undeclared };
+  return { ok: raw.ok && schema.ok && quarantine.ok && files.bad.length === 0 && (!footer || footer.ok), words, counts, raw: summary(raw), schema, quarantine: summary(quarantine), files, undeclared, gaps };
 }
 
 module.exports = { verifySession, checkLog, fileWords };

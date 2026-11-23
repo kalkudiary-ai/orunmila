@@ -33,7 +33,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { verifyText } = require('./chain');
+const { verifyText, verifyBuffer } = require('./chain');
 const { compile, closed } = require('./schema');
 
 const SPEC = path.join(__dirname, '..', '..', 'spec');
@@ -146,11 +146,11 @@ function checkLog(dir, name) {
       return out;
     }
     const bytes = readBytes(file);
-    const text = bytes.toString('utf8');
     out.parts = part;
     out.file = file;
-    const res = verifyText(text, part === 1 ? undefined : { prevHash: prev.hash, seq: prev.seq + 1 });
-    const recs = records(text, res.ok ? res.lines : res.checked);
+    // LR2b (LD252): a line at a time, never the whole log as one string.
+    const res = verifyBuffer(bytes, part === 1 ? undefined : { prevHash: prev.hash, seq: prev.seq + 1 });
+    const recs = res.records;
     if (part > 1 && recs.length) {
       const c = recs[0];
       const errors = checkContinuation(c);

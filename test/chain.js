@@ -132,4 +132,39 @@ it('known limit (spec/hash-chain.md): a log cut short at the end still verifies;
   assert.deepStrictEqual(verifyText(''), { ok: false, line: 1, reason: 'missing', checked: 0 });
 });
 
+it('LR2b (LD252): verifyBuffer, which reads a log a line at a time, gives verifyText\'s answer on every case of this suite, from the start and as a later part, with the records of the lines that held', () => {
+  const { verifyBuffer } = require('../src/verify/chain');
+  const good = buildLog();
+  const ls = lines(good);
+  const edited = [...ls];
+  edited[2] = canonicalize({ ...JSON.parse(ls[2]), seq: 99 });
+  const rehashed = buildLog();
+  rehashed[2] = seal({ ...rehashed[2], detail: { ...rehashed[2].detail, tool: 'Other' } }, rehashed[1].hash);
+  const header = { ...good[0], prev_hash: 'sha256:' + 'a'.repeat(64) };
+  delete header.hash;
+  const gap = [good[0]];
+  good.slice(1).forEach((r, i) => {
+    const o = { ...r, seq: i === 2 ? 9 : r.seq };
+    delete o.hash;
+    gap.push(seal(o, gap[gap.length - 1].hash));
+  });
+  const cases = [
+    text(good), join(edited), text(rehashed), join([ls[0], ls[1], ls[3], ls[4]]), join([ls[0], ls[2], ls[1], ls[3]]),
+    join([ls[0], ls[1].replace('{', '{ ')]), join([ls[0], '[]']), join([ls[0], '', ls[1]]), join([ls[0] + '\r']), join(ls).slice(0, -1),
+    join(ls).slice(0, -20), text([seal(header, header.prev_hash), ...good.slice(1)]), text(gap), join(ls.slice(0, 3)), '',
+  ];
+  const later = { prevHash: good[1].hash, seq: 2 }; // a part that continues after line 2 (LD57)
+  for (const [i, t] of cases.entries()) {
+    for (const start of [undefined, later, { prevHash: null, seq: 0 }]) {
+      const want = verifyText(t, start);
+      const { records, ...got } = verifyBuffer(Buffer.from(t, 'utf8'), start);
+      assert.deepStrictEqual(got, want, `case ${i}, start ${JSON.stringify(start)}`);
+      const held = want.ok ? want.lines : want.checked;
+      assert.deepStrictEqual(records, t.split('\n').slice(0, held).map((l) => JSON.parse(l)), `case ${i}: records`);
+    }
+  }
+  const tail = verifyBuffer(Buffer.from(join(ls.slice(2)), 'utf8'), later); // lines 3.. as a later part: it holds
+  assert.deepStrictEqual([tail.ok, tail.lines], [true, 3]);
+});
+
 runAll('chain');

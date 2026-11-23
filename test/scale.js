@@ -57,4 +57,52 @@ it('LR2a (LD251): the engine\'s time grows in proportion to the session: four ti
   assert.ok(large / small < 6, `4,000 turns ${Math.round(small)} ms, 16,000 turns ${Math.round(large)} ms: ratio ${(large / small).toFixed(1)}`);
 });
 
+/**
+ * LR2b (LD252): a raw log is read a line at a time. A log over V8's longest string (about 512 MB; a 1,000,000-mark
+ * log measured 586 MB) could not be read whole, so it could not be verified, replayed or reopened after a restart.
+ * Here any Buffer made into a string longer than 1 MB throws, and a log of about 2 MB must still verify, replay and
+ * reopen. Hand-built marks, sealed into a valid chain in a throwaway folder.
+ */
+it('LR2b (LD252): a raw log is checked a line at a time, never made into one string: a 2 MB log verifies, replays and reopens while no string over 1 MB can be made from a Buffer', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const { tmpDir, rmrf } = require('./helpers');
+  const { makeLog } = require('./helpers-opon');
+  const { seal } = require('../src/verify/chain');
+  const { canonicalize } = require('../src/verify/canonical');
+  const { verifySession, checkLog } = require('../src/verify/session');
+  const { replayFolder } = require('../src/opon/replay');
+  const { openSessionLog } = require('../src/opon/ledger/session-log');
+  const base = tmpDir();
+  const toString = Buffer.prototype.toString;
+  try {
+    const log = makeLog(base);
+    const file = path.join(log.dir, 'raw.jsonl');
+    let last = JSON.parse(fs.readFileSync(file, 'utf8').split('\n')[0]);
+    const lines = [];
+    for (const m of marks(1200)) {
+      last = seal({ ...m, seq: last.seq + 1 }, last.hash);
+      lines.push(canonicalize(last));
+    }
+    fs.appendFileSync(file, lines.join('\n') + '\n');
+    assert.ok(fs.statSync(file).size > 2 * 1024 * 1024, `the log is ${fs.statSync(file).size} bytes`);
+    const want = replayFolder(log.dir).odu; // made before the guard
+    Buffer.prototype.toString = function guarded(enc, start, end) {
+      const s = start === undefined ? 0 : start;
+      const e = end === undefined ? this.length : end;
+      if (e - s > 1024 * 1024) throw new Error(`a string of ${e - s} bytes was made from a Buffer`);
+      return toString.call(this, enc, start, end);
+    };
+    const v = verifySession(log.dir);
+    assert.ok(v.ok, v.words);
+    assert.strictEqual(v.counts.marks, lines.length);
+    assert.strictEqual(checkLog(log.dir, 'raw').records.length, lines.length + 1);
+    assert.strictEqual(replayFolder(log.dir).odu, want);
+    assert.strictEqual(openSessionLog(log.dir).last().seq, last.seq, 'reopened where it stopped');
+  } finally {
+    Buffer.prototype.toString = toString;
+    rmrf(base);
+  }
+});
+
 runAll('scale');

@@ -68,4 +68,30 @@ function verifyText(text, start = { prevHash: null, seq: 0 }) {
   return { ok: true, lines: lines.length };
 }
 
-module.exports = { hashRecord, seal, verifyText };
+/**
+ * LR2b (LD252): verifyText over a Buffer, a line at a time, so no string of the whole log is ever made (V8's longest
+ * string is about 512 MB, which a long session's raw log can pass). The same lines (0x0a never occurs inside a UTF-8
+ * character), the same rules and the same answers, plus `records`: the records of the lines that held.
+ */
+function verifyBuffer(buf, start = { prevHash: null, seq: 0 }) {
+  const records = [];
+  if (buf.length === 0) return { ok: false, line: 1, reason: 'missing', checked: 0, records };
+  let prev = null;
+  let from = 0;
+  for (let i = 0; ; i++) {
+    const nl = buf.indexOf(0x0a, from);
+    // A last line with no line feed is cut short, as a crash leaves it (a log in parts, LD57).
+    const fail = (reason) => ({ ok: false, line: i + 1, reason, checked: i, records, ...(nl === -1 ? { cut: true } : {}) });
+    const rec = nl === -1 ? null : readLine(buf.toString('utf8', from, nl));
+    if (!rec) return fail('not canonical');
+    if (typeof rec.hash !== 'string' || hashRecord(rec) !== rec.hash) return fail('changed');
+    if (rec.prev_hash !== (i === 0 ? start.prevHash : prev.hash)) return fail('does not follow');
+    if (rec.seq !== (i === 0 ? start.seq : prev.seq + 1)) return fail('out of sequence');
+    records.push(rec);
+    prev = rec;
+    from = nl + 1;
+    if (from === buf.length) return { ok: true, lines: i + 1, records };
+  }
+}
+
+module.exports = { hashRecord, seal, verifyText, verifyBuffer };

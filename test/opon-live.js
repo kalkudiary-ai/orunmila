@@ -602,4 +602,40 @@ it(
   }),
 );
 
+it(
+  'K5c (LD210 (2)): a file the agent changed and a hand then put back to its baseline bytes is rescanned, and the change no witness saw is missed_live; live equals replay',
+  withBase((base) => {
+    const home = path.join(base, 'home');
+    const project = path.join(base, 'project');
+    fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(project, 'src', 'old.js'), 'old\n');
+    const clock = fakeClock();
+    const router = createRouter({ home, clock, checkSender: () => true, codeRoot: SRC, orunmilaVersion: '0.0.0-test', installKey: KEY, hookSettingsFor: () => [], baseline: true });
+    const p = cc(project, 'ses_k5c');
+    const old = path.join(project, 'src', 'old.js');
+    const send = (x) => assert.strictEqual(router.payload(x, { channel: 'command' }).ok, true, x.hook_event_name);
+    send(p.prompt('go'));
+    send(p.pre('Edit', { file_path: old }, 'w1'));
+    fs.writeFileSync(old, 'new\n');
+    send(p.post('Edit', { file_path: old }, {}, 'w1'));
+    send(p.stop('I edited src/old.js.'));
+    for (let i = 0; i < 12; i++) {
+      clock.advance(600);
+      router.poll();
+    }
+    fs.writeFileSync(old, 'old\n'); // a hand puts the baseline bytes back
+    send({ session_id: 'ses_k5c', transcript_path: '/tmp/t.jsonl', cwd: project, hook_event_name: 'SessionEnd', reason: 'clear' });
+    for (let i = 0; i < 10; i++) {
+      clock.advance(600);
+      router.poll();
+    }
+    const dir = path.join(home, 'sessions', 'ses_k5c');
+    const live = fs.readFileSync(path.join(dir, 'odu.jsonl'), 'utf8');
+    assert.strictEqual(live, replayFolder(dir).odu);
+    const odus = live.split('\n').slice(1, -1).map((l) => JSON.parse(l)).filter((o) => o.target && o.target.path === 'src/old.js');
+    assert.deepStrictEqual(odus.map((o) => [o.witness_status.glove.status, o.witness_status.sentinel.status, o.action, o.conflicts.map((c) => c.kind)]), [['saw', 'saw_nothing', 'modified', ['unconfirmed_by_filesystem']], ['saw_nothing', 'saw_nothing', 'modified', ['missed_live']]]);
+    assert.strictEqual(odus[1].net_change.before, odus[0].net_change.after, 'the revert, from what the edit left');
+  }),
+);
+
 runAll('opon-live');

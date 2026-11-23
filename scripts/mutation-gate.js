@@ -2070,10 +2070,10 @@ const MUTANTS = [
     from: '        sweep(id, s);\n', to: '',
     fails: ['K5'] },
   { id: 'K5-2 an unchanged file is rescanned', file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
-    from: "if (typeof e.fingerprint !== 'string' || s.baseMap.get(e.path) === e.fingerprint) continue;", to: "if (typeof e.fingerprint !== 'string') continue;",
+    from: "|| (s.baseMap.get(e.path) === e.fingerprint && last(e.path) === e.fingerprint)) continue;", to: ") continue;",
     fails: ['K5'] },
   { id: 'K5-3 a baseline file now gone is not rescanned', file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
-    from: 'for (const [p, fp] of s.baseMap) if (!now.has(p)', to: 'for (const [p, fp] of []) if (!now.has(p)',
+    from: "for (const p of gone) if (!now.has(p)", to: "for (const p of []) if (!now.has(p)",
     fails: ['K5'] },
   { id: 'K5-4 the sweep never ends', file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
     from: "    engine.receive(mark(who, 'exited', { exit_status: 'pass' }), {});\n", to: '',
@@ -2098,6 +2098,10 @@ const MUTANTS = [
   { id: 'K5b-2 a restart inside the lag grace never sweeps', file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
     from: 'else if (t.ended && lv) facts.closeoutAt = BigInt(clock().mono) + facts.graceNs;', to: 'else if (false) void 0;',
     fails: ['K5b'] },
+  // Slice K5c: the rescan against what the session last knew (LD210 (2)).
+  { id: 'K5c-1 the rescan reads the baseline only', file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
+    from: 'const known = s.lv && s.lv.on ? s.lv.opon.lastStates() : new Map();', to: 'const known = new Map();',
+    fails: ['K5c'] },
   // Slice C3d3: a mention read in any sentence (LD203).
   { id: 'C3d3-1 only a sentence the reader takes as a claim mentions a path', file: 'src/opon/corroborate/claims.js', test: 'test/conflicts.js',
     from: "return text === null ? [] : [...new Set(extractTargets(sanitize(text))", to: "return text === null ? [] : [...new Set(extractClaims(text).flatMap((c) => c.targets)",

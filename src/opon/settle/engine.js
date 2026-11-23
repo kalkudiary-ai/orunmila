@@ -976,8 +976,10 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
   const end = () => all.filter((g) => g.state !== 'sealed').map(record);
   /** L1b: the paths due a fingerprint since the last call, each given once; the live intake writes them, replay reads them from the log. */
   const fingerprintsDue = () => due.splice(0, due.length);
+  /** K5c (LD210 (2)): each file's state as the session last knew it (its last sealed group's after, or absent after a rename), by path. */
+  const lastStates = () => new Map([...lastState].filter(([k]) => k.startsWith('file:')).map(([k, v]) => [k.slice('file:'.length), v]));
 
-  return { push, end, fingerprintsDue };
+  return { push, end, fingerprintsDue, lastStates };
 }
 
 module.exports = { createOpon, actionOf };

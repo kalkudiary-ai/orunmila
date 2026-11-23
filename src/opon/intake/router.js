@@ -250,13 +250,17 @@ function createRouter(o) {
     if (s.baseMap) {
       try {
         const snap = snapshot(s.root, { exclusions: s.exclusions, key: o.installKey, envValues: readEnvEntries(s.root).entries.map((e) => e.value) });
+        // K5c (LD210 (2)): against what the session last knew of each file, else the baseline, as the engine reads a rescan.
+        const known = s.lv && s.lv.on ? s.lv.opon.lastStates() : new Map();
+        const last = (p) => (known.has(p) ? known.get(p) : s.baseMap.has(p) ? s.baseMap.get(p) : 'absent');
         const now = new Set();
         for (const e of snap.entries) {
           now.add(e.path);
-          if (typeof e.fingerprint !== 'string' || s.baseMap.get(e.path) === e.fingerprint) continue;
+          if (typeof e.fingerprint !== 'string' || (s.baseMap.get(e.path) === e.fingerprint && last(e.path) === e.fingerprint)) continue;
           engine.receive(mark({ kind: 'file', path: e.path }, 'fingerprinted', { exists: true, size: e.size, fingerprint: e.fingerprint, rescan: true }), {});
         }
-        for (const [p, fp] of s.baseMap) if (!now.has(p) && typeof fp === 'string') engine.receive(mark({ kind: 'file', path: p }, 'fingerprinted', { exists: false, rescan: true }), {});
+        const gone = [...new Set([...s.baseMap.keys(), ...known.keys()])].sort();
+        for (const p of gone) if (!now.has(p) && typeof last(p) === 'string' && last(p) !== 'absent') engine.receive(mark({ kind: 'file', path: p }, 'fingerprinted', { exists: false, rescan: true }), {});
       } catch (e) {
         error(`the closeout's rescan of session ${id} failed: ${e.message}; the sweep ends without it`, { session_id: id });
       }

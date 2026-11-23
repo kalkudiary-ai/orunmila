@@ -349,6 +349,51 @@ it(
 );
 
 it(
+  'L1e LD200 (6): a session begun with the flag off and reopened with it on has its odù log written whole from replay, and the fingerprints replay asks for, of changes settled before the restart, are dropped; later ones are written; live equals replay',
+  withBase((base) => {
+    const home = path.join(base, 'home');
+    const project = path.join(base, 'project');
+    fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+    const clock = fakeClock();
+    const make = (live) => createRouter({ home, clock, checkSender: () => true, codeRoot: SRC, orunmilaVersion: '0.0.0-test', installKey: KEY, hookSettingsFor: () => [], baseline: live });
+    const p = cc(project, 'ses_live4');
+    const dir = path.join(home, 'sessions', 'ses_live4');
+    const write = (router, id, name) => {
+      const file = path.join(project, 'src', name);
+      router.payload(p.pre('Write', { file_path: file }, id));
+      fs.writeFileSync(file, name);
+      assert.strictEqual(router.payload(p.post('Write', { file_path: file }, {}, id)).ok, true);
+    };
+    const polls = (router, n) => {
+      for (let i = 0; i < n; i++) {
+        clock.advance(600);
+        router.poll();
+      }
+    };
+    const off = make(false);
+    assert.strictEqual(off.payload(p.prompt('go'), { channel: 'command' }).ok, true);
+    write(off, 'w1', 'a.js');
+    polls(off, 6); // a.js settles in the raw log's time, with no fingerprint: the flag was off
+    assert.strictEqual(fs.existsSync(path.join(dir, 'odu.jsonl')), false);
+    clock.advance(1000);
+    const on = make(true);
+    assert.deepStrictEqual(on.resume().failed, []);
+    write(on, 'w2', 'c.js');
+    assert.strictEqual(on.payload(p.stop('I wrote src/a.js and src/c.js.')).ok, true);
+    polls(on, 25);
+    const fps = rawRecords(dir).filter((m) => m.says === 'fingerprinted').map((m) => m.target.path);
+    assert.deepStrictEqual(fps, ['src/c.js'], 'a.js settled before the restart: its fingerprint, asked for by the replay, is dropped');
+    const live = fs.readFileSync(path.join(dir, 'odu.jsonl'), 'utf8');
+    assert.strictEqual(live, replayFolder(dir).odu);
+    const odus = live.split('\n').slice(1, -1).map((l) => JSON.parse(l));
+    const a = odus.find((o) => o.target && o.target.path === 'src/a.js');
+    const c = odus.find((o) => o.target && o.target.path === 'src/c.js');
+    assert.deepStrictEqual([a.witness_status.glove.status, a.witness_status.sentinel.status, a.net_change.after], ['saw', 'saw_nothing', null], 'no fingerprint, so after is unknown');
+    assert.deepStrictEqual([c.witness_status.glove.status, c.witness_status.sentinel.status, typeof c.net_change.after], ['saw', 'down', 'string']);
+  }),
+);
+
+it(
   'L1d: an odù log on disk that is not the start of replay\'s is never edited: the live engine stops for that session with a line in the error log, and capture goes on',
   withBase((base) => {
     let kept = null;

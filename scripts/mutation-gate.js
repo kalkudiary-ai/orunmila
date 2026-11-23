@@ -2302,6 +2302,16 @@ const MUTANTS = [
   { id: "MG3-2 the command runs without the launcher's tag", file: 'scripts/mutation-gate.js', test: 'test/mutation-gate.js',
     from: 'const env = { ...process.env, [KEY]: tags };\nif (pre)', to: 'const env = { ...process.env };\nif (pre)',
     fails: ['MG3 (LD239)'] },
+  // LR2a (LD251): endCalls walks only the calls still waiting.
+  { id: 'LR2a-1 every call the session made is walked again', file: 'src/opon/settle/engine.js', test: 'test/scale.js',
+    from: 'for (const id of [...waitingCalls]) {', to: 'for (const id of [...inFlight.keys()]) {',
+    fails: ['LR2a (LD251)'] },
+  { id: 'LR2a-2 a call with its outcome stays in the waiting set', file: 'src/opon/settle/engine.js', test: 'test/scale.js',
+    from: '      else waitingCalls.delete(m.cause_hint);\n', to: '',
+    fails: ['LR2a (LD251)'] },
+  { id: 'LR2a-3 a started call is never waiting', file: 'src/opon/settle/engine.js', test: 'test/conflicts.js',
+    from: 'if (c.start !== null && c.end === null) waitingCalls.add(m.cause_hint);', to: 'if (false) waitingCalls.add(m.cause_hint);',
+    fails: ['C3b test 71', 'C3b: "gap" only'] },
   // CR1 (LD250; tests 12, 18): the verifier reports the gaps the log records.
   { id: 'CR1-1 the downtime is not named', file: 'src/verify/session.js', test: 'test/crash.js',
     from: '${[...cuts, ...gapAt, ...other', to: '${[...cuts, ...other',

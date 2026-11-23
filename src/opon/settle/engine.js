@@ -267,6 +267,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
   const lastState = new Map(); // key -> the target's state at its last sealed group, or after a rename (N2)
   const calls = new Map(); // tool call id -> { keys, start, end }: the Glove's tool calls on files, for step 2 (A1b)
   const inFlight = new Map(); // tool call id -> { turn, start, done, interrupted, end }: every Glove call, for its outcome (C3b)
+  const waitingCalls = new Set(); // LR2a (LD251): the ids in inFlight with a start and no end yet, in the order they started
   const claimsAt = new Map(); // a claimed mark's seq -> { turn, row, claims }: its command claims (C3c)
   const commandsOf = new Map(); // turn -> Map(call id -> { ref, text, rows, outcome }): the turn's commands, for its claims (C3c)
   const turnsSeen = new Set(); // turns with an agent's own Glove mark, and the turns that ended: the Glove's health (line 352; C3c)
@@ -321,11 +322,16 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     return null;
   }
 
-  /** C3b: the calls still waiting that `pred` picks stop waiting at `at`; a running command's exit is then lost (as G3). */
+  /**
+   * C3b: the calls still waiting that `pred` picks stop waiting at `at`; a running command's exit is then lost (as G3).
+   * LR2a (LD251): only the calls still waiting are walked (`waitingCalls`), never every call the session made.
+   */
   function endCalls(pred, at) {
-    for (const [id, t] of inFlight) {
+    for (const id of [...waitingCalls]) {
+      const t = inFlight.get(id);
       if (t.start === null || t.end !== null || !pred(t)) continue;
       t.end = at;
+      waitingCalls.delete(id);
       for (const c of unsealed.values()) {
         if (c.key === `command:${id}` && c.exitAt === null) {
           c.lost = true;
@@ -980,6 +986,8 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
         if (m.detail && m.detail.interrupted === true) c.interrupted = true; // the payload says so (claude-code.js)
       }
       inFlight.set(m.cause_hint, c);
+      if (c.start !== null && c.end === null) waitingCalls.add(m.cause_hint); // LR2a (LD251)
+      else waitingCalls.delete(m.cause_hint);
     }
     if (m.says === 'ended' && m.target && m.target.kind === 'turn') endCalls((c) => c.turn !== null && c.turn === (m.target.id || m.turn), now);
     if (m.says === 'ended' && m.target && m.target.kind === 'session') endCalls(() => true, now);

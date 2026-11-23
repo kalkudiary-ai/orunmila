@@ -134,4 +134,20 @@ it('K2 line 450: a rescanned file that differs from what the session last knew, 
   }
 });
 
+it('K2r (LD210 (6), named K2b there): two rescans of one path: the missed change reads the latest, as any fingerprint (N2)', () => {
+  const base = tmpDir();
+  try {
+    const log = makeLog(base, {}, { baseline: [{ path: 'src/b.ts', size: 4, fingerprint: FP('b') }] });
+    log.append(sweep(1000, 'started'));
+    log.append(rescan(1010, 'src/b.ts', FP('9')));
+    log.append(rescan(1020, 'src/b.ts', FP('8')));
+    log.append(sweep(1100, 'exited'));
+    const r = replayFolder(log.dir);
+    const b = r.odu.split('\n').slice(1, -1).map((l) => JSON.parse(l)).find((o) => o.target && o.target.path === 'src/b.ts');
+    assert.deepStrictEqual([witnesses(b), b.net_change, b.conflicts.map((c) => [c.kind, c.marks.length])], [['saw_nothing', 'saw_nothing'], { before: FP('b'), after: FP('8'), changed: true }, [['missed_live', 2]]]);
+  } finally {
+    rmrf(base);
+  }
+});
+
 runAll('closeout');

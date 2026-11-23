@@ -2098,6 +2098,10 @@ const MUTANTS = [
   { id: 'K5b-2 a restart inside the lag grace never sweeps', file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
     from: 'else if (t.ended && lv) facts.closeoutAt = BigInt(clock().mono) + facts.graceNs;', to: 'else if (false) void 0;',
     fails: ['K5b'] },
+  // Slice K2r: a missed change reads its latest rescan (LD210 (6), which names it K2b).
+  { id: "K2r-1 a missed change keeps its first rescan", file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
+    from: 'const after = g.fp ? g.fp.state : g.missed.after;', to: 'const after = g.missed.after;',
+    fails: ['K2r'] },
   // Slice K4b: the footer pinned, the odù log chain-checked (LD210 (5)).
   { id: "K4b-1 a footer of another session verifies", file: 'src/verify/session.js', test: 'test/opon-live.js',
     from: 'if (recs[0] && f.session_id !== recs[0].session_id) return', to: 'if (false) return',

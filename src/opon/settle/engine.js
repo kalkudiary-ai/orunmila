@@ -366,8 +366,10 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
   /** A sealed group's net change, or undefined for marks that change nothing on disk (line 389). */
   function netChange(g) {
     if (g.missed) {
-      lastState.set(g.key, g.missed.after); // K2 (LD207): the rescan's reading of a change no witness recorded
-      return { before: g.missed.before, after: g.missed.after, changed: true };
+      // K2 (LD207), K2r (LD210 (6)): the rescan's reading of a change no witness recorded; its latest fingerprint, as N2 reads one.
+      const after = g.fp ? g.fp.state : g.missed.after;
+      lastState.set(g.key, after);
+      return { before: g.missed.before, after, changed: after === null ? null : g.missed.before !== after };
     }
     if (!g.key.startsWith('file:') || !g.says.some((v) => DISK.has(v))) return undefined;
     const before = stateBefore(g);

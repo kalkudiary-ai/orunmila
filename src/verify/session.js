@@ -63,6 +63,7 @@ function footerOf(dir, raw) {
     return r.hash === line.hash ? null : `Record broken: the session footer names line ${line.seq + 1} of the ${log} with a hash that line does not have.`;
   };
   const recs = raw.records.map((r) => r.rec);
+  let oduAfter = 0;
   // K4b (LD210 (5)): the footer is this session's, and its raw line is the closeout's end.
   if (recs[0] && f.session_id !== recs[0].session_id) return { ok: false, words: 'Record broken: the session footer names another session.' };
   const rawProblem = named(recs, f.raw, 'raw log');
@@ -79,8 +80,12 @@ function footerOf(dir, raw) {
     const odu = records(text);
     const oduProblem = named(odu, f.odu, 'odù log');
     if (oduProblem) return { ok: false, words: oduProblem };
+    oduAfter = odu.filter((x) => x && Number.isInteger(x.seq) && x.seq > f.odu.seq).length;
   }
-  return { ok: true, odu: Boolean(f.odu) };
+  // LD249 (LD211 (5)): what follows the footer's lines is said, not hidden: a session resumed after its closeout, or a late
+  // delivery. Each record is chained (intact); the footer only no longer names the log's end.
+  const rawAfter = raw.records.filter((r) => !isContinuation(r) && r.rec && Number.isInteger(r.rec.seq) && r.rec.seq > f.raw.seq).length;
+  return { ok: true, odu: Boolean(f.odu), after: { raw: rawAfter, odu: oduAfter } };
 }
 const REF_SLOTS = ['diff_ref', 'output_ref'];
 const REF = /^sha256:[0-9a-f]{64}$/;
@@ -281,7 +286,8 @@ function verifySession(dir) {
       ? [`${plural(undeclared.length, 'field', 'fields')} the spec does not declare: ${undeclared.map((u) => `${u.path} at ${where('raw log', u.part, u.line)}`).join(', ')}`]
       : [];
     const base = baseline ? [`the baseline snapshot of ${plural(baseline.entries, 'entry', 'entries')} matches the header`] : [];
-    const foot = footer ? [`the session footer matches the raw log${footer.odu ? ' and the odù log' : ''}`] : [];
+    const after = (n, log) => (n ? [`${plural(n, 'record', 'records')} after the footer's line in the ${log} (written after its closeout)`] : []);
+    const foot = footer ? [`the session footer matches the raw log${footer.odu ? ' and the odù log' : ''}`, ...after(footer.after.raw, 'raw log'), ...after(footer.after.odu, 'odù log')] : [];
     words =
       `Record intact: ${plural(counts.marks, 'mark', 'marks')}, ${plural(counts.quarantined, 'quarantined input', 'quarantined inputs')}, ` +
       `${plural(counts.kept_files, 'kept file', 'kept files')}, unbroken${[...cuts, ...fields, ...base, ...foot].map((c) => `; ${c}`).join('')}.`;

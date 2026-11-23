@@ -603,6 +603,58 @@ it(
 );
 
 it(
+  "LD211 (5) (7) (LD249): a session resumed after its closeout (a new prompt) is swept again at its next end, in the same intake or after a restart; the footer names the latest closeout's end, and until then verify names the records after the footer's line; a SessionEnd with no new prompt still never sweeps again",
+  withBase((base) => {
+    const { verifySession } = require('../src/verify/session');
+    const home = path.join(base, 'home');
+    const project = path.join(base, 'project');
+    fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+    const clock = fakeClock();
+    const make = () => createRouter({ home, clock, checkSender: () => true, codeRoot: SRC, orunmilaVersion: '0.0.0-test', installKey: KEY, hookSettingsFor: () => [], baseline: true });
+    const polls = (router, n) => {
+      for (let i = 0; i < n; i++) {
+        clock.advance(600);
+        router.poll();
+      }
+    };
+    const p = cc(project, 'ses_ld249');
+    const end = { session_id: 'ses_ld249', transcript_path: '/tmp/t.jsonl', cwd: project, hook_event_name: 'SessionEnd', reason: 'clear' };
+    const dir = path.join(home, 'sessions', 'ses_ld249');
+    const sweeps = () => rawRecords(dir).filter((m) => m.target && m.target.kind === 'process' && m.target.name === 'closeout' && m.says === 'exited').length;
+    const footerSeq = () => JSON.parse(fs.readFileSync(path.join(dir, 'footer.json'), 'utf8')).raw.seq;
+    const lastExit = () => rawRecords(dir).filter((m) => m.says === 'exited' && m.target && m.target.name === 'closeout').pop().seq;
+    const run = (router, text) => {
+      for (const x of [p.prompt(text), p.stop('Nothing to do.')]) assert.strictEqual(router.payload(x, { channel: 'command' }).ok, true);
+    };
+    const one = make();
+    run(one, 'go');
+    assert.strictEqual(one.payload(end).ok, true);
+    polls(one, 10);
+    assert.deepStrictEqual([sweeps(), footerSeq()], [1, lastExit()]);
+    run(one, 'again'); // resumed in the same intake
+    const between = verifySession(dir);
+    assert.ok(between.ok && between.words.includes("after the footer's line in the raw log"), between.words);
+    assert.strictEqual(one.payload(end).ok, true);
+    polls(one, 10);
+    assert.deepStrictEqual([sweeps(), footerSeq()], [2, lastExit()], 'swept again; the footer names the latest');
+    run(one, 'once more'); // resumed, then a restart before it ends
+    const two = make();
+    assert.deepStrictEqual(two.resume().failed, []);
+    polls(two, 10);
+    assert.strictEqual(sweeps(), 2, 'resumed and not ended: an earlier end does not sweep it');
+    assert.strictEqual(two.payload(end).ok, true);
+    polls(two, 10);
+    assert.deepStrictEqual([sweeps(), footerSeq()], [3, lastExit()], 'swept after the restart');
+    const v = verifySession(dir);
+    assert.ok(v.ok && !v.words.includes("after the footer's line"), v.words);
+    assert.strictEqual(fs.readFileSync(path.join(dir, 'odu.jsonl'), 'utf8'), replayFolder(dir).odu);
+    assert.strictEqual(two.payload(end).ok, true); // no new prompt
+    polls(two, 10);
+    assert.strictEqual(sweeps(), 3, 'never swept again without a new prompt');
+  }),
+);
+
+it(
   'K5c (LD210 (2)): a file the agent changed and a hand then put back to its baseline bytes is rescanned, and the change no witness saw is missed_live; live equals replay',
   withBase((base) => {
     const home = path.join(base, 'home');

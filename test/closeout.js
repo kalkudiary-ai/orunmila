@@ -401,7 +401,7 @@ it("F4a (LD227; Q24 checklist rows P-k7-rescan-case, P-k7-baseline-case): K7 com
   }
 });
 
-it('F6 (LD228; Q24 checklist rows S-file-claim-inside, S-file-claim-after): a phantom file claim made after the closeout is sealed with its turn, low (the rescan came before it); one made inside the sweep waits and is rated with the rest', () => {
+it('F6 (LD228; Q24 checklist rows S-file-claim-inside, S-file-claim-after), LD249: a phantom file claim delivered after the closeout with no new prompt is sealed with its turn, low (the rescan came before it); one made inside the sweep waits and is rated with the rest; one of a session resumed after it (a new prompt) waits for the next closeout and is rated by its rescan', () => {
   const base = tmpDir();
   try {
     const log = makeLog(base, {}, { baseline: [{ path: 'src/r.ts', size: 4, fingerprint: FP('1') }] });
@@ -412,19 +412,26 @@ it('F6 (LD228; Q24 checklist rows S-file-claim-inside, S-file-claim-after): a ph
     log.append(M.prompted(10010, 't2'));
     log.append(said(10020, 'I updated src/r.ts.', 't2')); // inside the sweep
     const exited = log.append(sweep(10100, 'exited'));
+    log.append(said(10200, 'I updated src/r.ts.', 't2')); // a Stop delivered late, no new prompt: its claim and its turn's end
+    log.append(M.turnEnded(10200, 't2'));
     log.append(M.prompted(20000, 't3')); // the session resumed after its closeout
     log.append(said(20010, 'I updated src/r.ts.', 't3'));
     log.append(M.turnEnded(20020, 't3'));
     log.append(M.tick(40000));
+    log.append(sweep(50000, 'started')); // its next closeout
+    const exited2 = log.append(sweep(50100, 'exited'));
     const r = replayFolder(log.dir);
     assert.strictEqual(r.ok, true, r.words);
     const odus = r.odu.split('\n').slice(1, -1).map((l) => JSON.parse(l));
     for (const o of odus) assert.deepStrictEqual(checkOdu(o), [], JSON.stringify(o));
     const claim = (turn) => odus.filter((o) => o.target && o.target.kind === 'claim' && o.target.turn === turn && o.conflicts.some((c) => c.kind === 'phantom_claim' && c.claim === 'file'));
-    const [inside, after] = [claim('t2'), claim('t3')];
-    assert.deepStrictEqual([inside.length, after.length], [1, 1], 'each sealed once');
-    assert.deepStrictEqual([witnesses(inside[0]), inside[0].confidence], [['saw', 'out_of_scope'], 'high'], 'rated by the closeout');
-    assert.deepStrictEqual([witnesses(after[0]), after[0].confidence, after[0].seq > odus.find((o) => o.mark_seqs.includes(exited)).seq], [['saw', 'out_of_scope'], 'low', true]);
+    const [inside, late] = claim('t2');
+    const after = claim('t3');
+    assert.deepStrictEqual([claim('t2').length, after.length], [2, 1], 'each sealed once');
+    const sealedBy = (seq) => odus.find((o) => o.mark_seqs.includes(seq)).seq;
+    assert.deepStrictEqual([witnesses(inside), inside.confidence], [['saw', 'out_of_scope'], 'high'], 'rated by the closeout');
+    assert.deepStrictEqual([witnesses(late), late.confidence, late.seq > sealedBy(exited), late.seq < after[0].seq], [['saw', 'out_of_scope'], 'low', true, true], 'late: low at once');
+    assert.deepStrictEqual([witnesses(after[0]), after[0].confidence, after[0].seq > sealedBy(exited2)], [['saw', 'out_of_scope'], 'high', true], 'resumed: rated by the next closeout');
     assert.deepStrictEqual(r.lines.slice(1).map((l) => JSON.parse(l)).filter((g) => g.target && g.target.kind === 'claim' && g.state !== 'sealed'), [], 'none left waiting');
   } finally {
     rmrf(base);
@@ -481,6 +488,32 @@ it('K6 line 614 (LD218): the agent\'s JSON feedback from the odù log: phantom c
   } finally {
     rmrf(base);
   }
+});
+
+it('LD211 (7) (LD249): a session resumed after its closeout (a new prompt) waits again: a change of the new turn is judged against that turn\'s claim, and the next closeout seals everything', () => {
+  const s = {};
+  const { groups, odus } = replay((append) => {
+    append(M.prompted(0));
+    append(M.edited(10, 'e1', 'src/first.ts'));
+    append(M.disk(60, 'src/first.ts'));
+    append(said(2000, 'I updated src/first.ts.'));
+    append(M.turnEnded(2000));
+    append(M.sessionEnded(2100));
+    append(sweep(9000, 'started'));
+    append(sweep(9100, 'exited'));
+    append(M.prompted(20000, 't2')); // resumed
+    append(M.edited(20010, 'e2', 'src/later.ts', 'modified', 't2'));
+    append(M.disk(20060, 'src/later.ts'));
+    append(M.tick(40000)); // long past its quiet window and grace: it waits for t2's end
+    s.claim = append(said(41000, 'All done.', 't2'));
+    append(M.turnEnded(41000, 't2'));
+    append(M.sessionEnded(41100));
+    append(sweep(50000, 'started'));
+    append(sweep(50100, 'exited'));
+  });
+  const later = at(odus, 'src/later.ts');
+  assert.deepStrictEqual([witnesses(later), later.conflicts.map((c) => [c.kind, c.turns, c.claim_seqs])], [['saw', 'saw'], [['silent_change', ['t2'], [s.claim]]]]);
+  assert.deepStrictEqual(groups.filter((g) => g.state !== 'sealed').map((g) => g.group_id), [], 'nothing left unsealed');
 });
 
 it('F7 (LD248): the odù feedback\'s generated_at and included_fields are the old path\'s: the latest observed_at of the session\'s raw log (null without one), and the --include fields it honours (claim_text: each phantom claim\'s text, redacted)', () => {

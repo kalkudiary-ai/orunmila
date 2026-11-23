@@ -175,13 +175,12 @@ function createLive({ key, clock, receive, error }) {
   }
 
   /**
-   * K4 (LD209; line 454): footer.json beside the logs, once, at the closeout's end: the raw log's last
+   * K4 (LD209; line 454): footer.json beside the logs at the closeout's end: the raw log's last
    * line (the sweep's exited mark) and the odù log's, by seq and hash; the verdict log's is null until
-   * Phase 6. Placed whole; a failure is in the error log and never stops capture.
+   * Phase 6. Placed whole; a failure is in the error log and never stops capture. LD249: at every
+   * closeout's end, so a session resumed and swept again is footed at its latest end.
    */
   function writeFooter(st, rec) {
-    if (st.footed) return;
-    st.footed = true;
     const dir = path.dirname(st.file);
     const footer = { schema_version: 1, record: 'session_footer', session_id: st.header.session_id, raw: { seq: rec.seq, hash: rec.hash }, odu: st.on ? { seq: st.oduLast.seq, hash: st.oduLast.hash } : null, verdict: null };
     try {

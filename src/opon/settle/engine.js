@@ -801,6 +801,17 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     now = now === null || t > now ? t : now;
     if (m.says === 'gap') registerGap(m); // before time moves on: a group it covers knows before it seals
     const out = advance(now);
+    if (closedOut && m.says === 'prompted' && GLOVE.has(m.source)) {
+      // LD249 (LD211 (7)): a new prompt after the closeout: the session resumed. Its turns wait for their ends again, its
+      // claims for the next closeout's rescan, and that closeout's sweep is a sweep of its own. A late delivery is no prompt.
+      // After time has moved to the prompt, so what was due before it seals as it would have.
+      closedOut = false;
+      sessionOver = null;
+      sweepKey = null;
+      sweepPassed = false;
+      rescannedPaths.clear();
+      unknownPaths.clear();
+    }
     if (m.says === 'tick') return out;
     let key = keyOf(m);
     let target = m.target;

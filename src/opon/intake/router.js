@@ -122,9 +122,12 @@ function turnsFrom(dir) {
   const id = `t${n}`;
   const open = n > 0 && !recs.some((r) => r.says === 'ended' && isObject(r.target) && r.target.kind === 'turn' && r.target.id === id);
   const tampered = recs.filter((r) => r.says === 'tampered' && isObject(r.detail) && r.detail.what !== 'foreign_sender');
-  // K5b (LD210 (1)): whether the session ended, and whether its closeout already ran.
-  const ended = recs.some((r) => r.says === 'ended' && isObject(r.target) && r.target.kind === 'session');
-  const swept = recs.some((r) => r.says === 'exited' && r.source === 'process' && isObject(r.target) && r.target.kind === 'process' && r.target.name === 'closeout');
+  // K5b (LD210 (1)): whether the session ended, and whether its closeout already ran. LD249 (LD211 (7)): both counted
+  // since its last prompt, so a session resumed after its closeout (a new prompt) is swept again at its next end.
+  const lastOf = (pred) => recs.reduce((at, r, i) => (pred(r) ? i : at), -1);
+  const lastPrompt = lastOf((r) => r.says === 'prompted' && ['hook', 'agent_claim'].includes(r.source));
+  const ended = lastOf((r) => r.says === 'ended' && isObject(r.target) && r.target.kind === 'session') > lastPrompt;
+  const swept = lastOf((r) => r.says === 'exited' && r.source === 'process' && isObject(r.target) && r.target.kind === 'process' && r.target.name === 'closeout') > lastPrompt;
   return { header: recs[0], n, open, tampered, ended, swept };
 }
 
@@ -416,6 +419,7 @@ function createRouter(o) {
       writeHeld();
       return { ok: results.every((r) => r.ok), results };
     }
+    if (s.closeoutAt === true && ev === 'UserPromptSubmit') s.closeoutAt = null; // LD249: resumed after its closeout: its next end sweeps again
     let turn = null;
     if (ev !== 'SessionEnd') {
       if (!s.open) {

@@ -202,4 +202,24 @@ it('K2r3 (LD211 (3), LD214): a missed change\'s action reads its latest rescan, 
   }
 });
 
+it('Q22 A7 (LD213; checklist row alias-renamed-rescan-oldpath): a file put back by hand at a path renamed away during the session is a missed change, created from absent, though its bytes are the baseline\'s', () => {
+  const base = tmpDir();
+  try {
+    const log = makeLog(base, {}, { baseline: [{ path: 'src/a.ts', size: 4, fingerprint: FP('a') }] });
+    log.append(M.disk(0, 'src/b.ts', 'renamed', { from: 'src/a.ts' }));
+    log.append(M.fingerprinted(1600, 'src/b.ts', FP('a')));
+    log.append(M.tick(9000)); // the rename sealed: a.ts left absent
+    log.append(sweep(10000, 'started'));
+    const s = log.append(rescan(10010, 'src/a.ts', FP('a'))); // a copy put back by hand, the baseline's bytes
+    log.append(sweep(10100, 'exited'));
+    const r = replayFolder(log.dir);
+    assert.strictEqual(r.ok, true, r.words);
+    const odus = r.odu.split('\n').slice(1, -1).map((l) => JSON.parse(l));
+    const a = at(odus, 'src/a.ts');
+    assert.deepStrictEqual([witnesses(a), a.action, a.net_change, a.mark_seqs, a.conflicts.map((c) => c.kind)], [['saw_nothing', 'saw_nothing'], 'created', { before: 'absent', after: FP('a'), changed: true }, [s], ['missed_live']]);
+  } finally {
+    rmrf(base);
+  }
+});
+
 runAll('closeout');

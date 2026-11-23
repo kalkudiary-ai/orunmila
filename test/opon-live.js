@@ -474,4 +474,58 @@ it(
   }),
 );
 
+it(
+  'K5 lines 445-452 (LD208; provisional, Q17): with the live flag, a lag grace after the session ends the intake runs the closeout: the sweep\'s marks, a rescan mark for each file that differs from the baseline, and every group sealed; a hand change no witness saw becomes missed_live; live equals replay; flag off, no sweep',
+  withBase((base) => {
+    for (const on of [true, false]) {
+      const sub = path.join(base, on ? 'on' : 'off');
+      const home = path.join(sub, 'home');
+      const project = path.join(sub, 'project');
+      fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+      fs.writeFileSync(path.join(project, 'src', 'old.js'), 'old\n');
+      fs.writeFileSync(path.join(project, 'src', 'same.js'), 'same\n');
+      fs.writeFileSync(path.join(project, 'src', 'gone.js'), 'gone\n');
+      const clock = fakeClock();
+      const router = createRouter({ home, clock, checkSender: () => true, codeRoot: SRC, orunmilaVersion: '0.0.0-test', installKey: KEY, hookSettingsFor: () => [], baseline: on });
+      const p = cc(project, 'ses_k5');
+      const send = (x) => assert.strictEqual(router.payload(x, { channel: 'command' }).ok, true, x.hook_event_name);
+      const old = path.join(project, 'src', 'old.js');
+      send(p.prompt('go'));
+      send(p.pre('Edit', { file_path: old }, 'w1'));
+      fs.writeFileSync(old, 'new\n');
+      send(p.post('Edit', { file_path: old }, {}, 'w1'));
+      send(p.stop('I edited src/old.js.'));
+      fs.writeFileSync(path.join(project, 'src', 'hand.js'), 'by hand\n'); // no hook, no Sentinel here: only the rescan can see it
+      fs.rmSync(path.join(project, 'src', 'gone.js')); // a baseline file removed by hand
+      clock.advance(100);
+      send({ session_id: 'ses_k5', transcript_path: '/tmp/t.jsonl', cwd: project, hook_event_name: 'SessionEnd', reason: 'clear' });
+      for (let i = 0; i < 15; i++) {
+        clock.advance(600);
+        router.poll();
+      }
+      const dir = path.join(home, 'sessions', 'ses_k5');
+      const raw = rawRecords(dir);
+      const sweepSays = raw.filter((m) => m.target && m.target.kind === 'process' && m.target.name === 'closeout').map((m) => m.says);
+      const rescanned = raw.filter((m) => m.says === 'fingerprinted' && m.detail.rescan === true).map((m) => m.target.path).sort();
+      if (!on) {
+        assert.deepStrictEqual([sweepSays, rescanned, fs.existsSync(path.join(dir, 'odu.jsonl'))], [[], [], false]);
+        continue;
+      }
+      assert.deepStrictEqual([sweepSays, rescanned], [['started', 'exited'], ['src/gone.js', 'src/hand.js', 'src/old.js']], 'the files that differ from the baseline; same.js not');
+      assert.deepStrictEqual(raw.filter((m) => m.detail && m.detail.rescan === true && m.target.path === 'src/gone.js').map((m) => m.detail.exists), [false]);
+      const live = fs.readFileSync(path.join(dir, 'odu.jsonl'), 'utf8');
+      const out = replayFolder(dir);
+      assert.strictEqual(live, out.odu);
+      assert.deepStrictEqual(out.lines.slice(1).map((l) => JSON.parse(l)).filter((g) => g.state !== 'sealed'), [], 'nothing left unsealed');
+      const odus = live.split('\n').slice(1, -1).map((l) => JSON.parse(l));
+      const hand = odus.find((o) => o.target && o.target.path === 'src/hand.js');
+      assert.deepStrictEqual([hand.witness_status.glove.status, hand.witness_status.sentinel.status, hand.action, hand.conflicts.map((c) => c.kind)], ['saw_nothing', 'saw_nothing', 'created', ['missed_live']]);
+      const gone = odus.find((o) => o.target && o.target.path === 'src/gone.js');
+      assert.deepStrictEqual([gone.witness_status.glove.status, gone.witness_status.sentinel.status, gone.action, gone.conflicts.map((c) => c.kind)], ['saw_nothing', 'saw_nothing', 'deleted', ['missed_live']]);
+      const edited = odus.filter((o) => o.target && o.target.path === 'src/old.js');
+      assert.deepStrictEqual(edited.map((o) => [o.witness_status.glove.status, o.conflicts.map((c) => c.kind)]), [['saw', ['unconfirmed_by_filesystem']]], 'the agent edit: one odù, not missed');
+    }
+  }),
+);
+
 runAll('opon-live');

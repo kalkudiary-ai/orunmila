@@ -21,7 +21,9 @@
  *       slice L1c, LD200, the session's live Ọpọ́n, src/opon/intake/live.js:
  *       every mark its log writes goes through stations 2-6, each settled
  *       change of a file gets its `fingerprinted` mark, and each sealed odù
- *       goes to odu.jsonl beside the raw log);
+ *       goes to odu.jsonl beside the raw log; and, a lag grace after the
+ *       session's end, the closeout, slice K5, LD208, provisional: the sweep's
+ *       marks with a rescan mark for each file that differs from the baseline);
  *       a write's file facts are measured, before at PreToolUse and after
  *       at PostToolUse, and a read's at PostToolUse (the whole file at hook time,
  *       test 55); the adapter translates (A8); paths are normalised (line 345);
@@ -227,19 +229,52 @@ function createRouter(o) {
     return { ok: false, reason, results: [] };
   }
 
+  /** K5 (LD208): what the closeout needs of a session: its baseline, exclusions and lag grace (from its header). */
+  const closeoutFacts = (header, baseMap) => ({ baseMap, exclusions: header.config.exclusions || [], graceNs: BigInt(header.config.lag_grace_ms) * NS_PER_MS, closeoutAt: null });
+
+  /**
+   * K5 (LD208; lines 445-452): the closeout, with the live flag: the sweep's started mark, a rescan mark
+   * for each file that differs from the baseline (changed, new, or gone), then exited, which seals every
+   * group (K1). A walk that fails is in the error log; the sweep still ends.
+   */
+  function sweep(id, s) {
+    const mark = (target, says, detail) => {
+      const now = clock();
+      return { schema_version: 1, session_id: id, source: 'process', agent: null, turn: null, sub_agent: null, observed_at: now.wall, mono_ns: now.mono, target, says, detail, cause_hint: null };
+    };
+    const who = { kind: 'process', name: 'closeout' };
+    engine.receive(mark(who, 'started', {}), {});
+    if (s.baseMap) {
+      try {
+        const snap = snapshot(s.root, { exclusions: s.exclusions, key: o.installKey, envValues: readEnvEntries(s.root).entries.map((e) => e.value) });
+        const now = new Set();
+        for (const e of snap.entries) {
+          now.add(e.path);
+          if (typeof e.fingerprint !== 'string' || s.baseMap.get(e.path) === e.fingerprint) continue;
+          engine.receive(mark({ kind: 'file', path: e.path }, 'fingerprinted', { exists: true, size: e.size, fingerprint: e.fingerprint, rescan: true }), {});
+        }
+        for (const [p, fp] of s.baseMap) if (!now.has(p) && typeof fp === 'string') engine.receive(mark({ kind: 'file', path: p }, 'fingerprinted', { exists: false, rescan: true }), {});
+      } catch (e) {
+        error(`the closeout's rescan of session ${id} failed: ${e.message}; the sweep ends without it`, { session_id: id });
+      }
+    }
+    engine.receive(mark(who, 'exited', { exit_status: 'pass' }), {});
+  }
+
   /** Reopen a session folder that exists (after a restart or a release), with its turns. */
   function reopen(id, dir) {
     const t = turnsFrom(dir);
     const root = t.header.project_root;
     let lv = null; // L1d: the reopened session's live Ọpọ́n, from a replay of its raw log so far
     const log = openSessionLog(dir, { envEntries: readEnvEntries(root).entries, onRecord: live ? (rec) => lv && live.feed(lv, rec) : null });
+    const header = log.header();
+    const baseMap = live && header.baseline ? baselineMap(fs.readFileSync(path.join(dir, 'baseline.jsonl'), 'utf8')) : null;
     if (live) {
       const marks = checkLog(dir, 'raw').records.filter((r) => !(r.part > 1 && r.line === 1)).map((r) => r.rec).slice(1);
-      const header = log.header();
-      lv = live.resume(dir, header, header.baseline ? baselineMap(fs.readFileSync(path.join(dir, 'baseline.jsonl'), 'utf8')) : null, marks);
+      lv = live.resume(dir, header, baseMap, marks);
     }
     const tamper = createTamperWatch({ header: t.header, codeRoot: o.codeRoot, lawPacks: lawPacksFor(root), prior: t.tampered, clock });
-    return { log, root, ci: isCaseInsensitive(root), n: t.n, open: t.open, pre: new Map(), last: BigInt(clock().mono), limit: t.header.config.diff_size_limit_bytes, tamper, lv };
+    return { log, root, ci: isCaseInsensitive(root), n: t.n, open: t.open, pre: new Map(), last: BigInt(clock().mono), limit: t.header.config.diff_size_limit_bytes, tamper, lv, ...closeoutFacts(header, baseMap) };
   }
 
   function start(id, p) {
@@ -273,9 +308,10 @@ function createRouter(o) {
     ensureDir(sessionsDir);
     let lv = null; // the session's live Ọpọ́n (L1c): fed each mark its log writes
     const log = createSessionLog(dir, header, { envEntries: entries, baseline, onRecord: live ? (rec) => lv && live.feed(lv, rec) : null });
-    if (live) lv = live.open(dir, log.header(), baseline === null ? null : baselineMap(baseline));
+    const baseMap = baseline === null ? null : baselineMap(baseline);
+    if (live) lv = live.open(dir, log.header(), baseMap);
     const tamper = createTamperWatch({ header: { ...header, project_root: root }, codeRoot: o.codeRoot, lawPacks: lawPacksFor(root), clock });
-    return { log, root, ci: isCaseInsensitive(root), n: 0, open: false, pre: new Map(), last: BigInt(now.mono), limit: header.config.diff_size_limit_bytes, tamper, lv };
+    return { log, root, ci: isCaseInsensitive(root), n: 0, open: false, pre: new Map(), last: BigInt(now.mono), limit: header.config.diff_size_limit_bytes, tamper, lv, ...closeoutFacts(header, baseMap) };
   }
 
   function normalise(s, m) {
@@ -365,6 +401,7 @@ function createRouter(o) {
       results.push(engine.receive(normalise(s, gap), {}));
     }
     if (ev === 'Stop') s.open = false;
+    if (ev === 'SessionEnd' && s.lv && s.closeoutAt === null) s.closeoutAt = BigInt(clock().mono) + s.graceNs; // K5: a lag grace after the end
     writeHeld();
     return { ok: t.rejects.length === 0 && results.every((r) => r.ok), results };
   }
@@ -372,6 +409,12 @@ function createRouter(o) {
   function poll() {
     const ticks = engine.poll();
     const now = BigInt(clock().mono);
+    for (const [id, s] of states) {
+      if (s.closeoutAt !== null && s.closeoutAt !== true && now >= s.closeoutAt) {
+        s.closeoutAt = true; // once per session
+        sweep(id, s);
+      }
+    }
     const ms = releaseNs / NS_PER_MS;
     const quiet = ms % 60000n === 0n ? `${ms / 60000n} minutes` : `${ms} ms`;
     const held = new Set(engine.held());

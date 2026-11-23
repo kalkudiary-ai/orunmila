@@ -2304,6 +2304,10 @@ const MUTANTS = [
   { id: "MG3-2 the command runs without the launcher's tag", file: 'scripts/mutation-gate.js', test: 'test/mutation-gate.js',
     from: 'const env = { ...process.env, [KEY]: tags };\nif (pre)', to: 'const env = { ...process.env };\nif (pre)',
     fails: ['MG3 (LD239)'] },
+  // LR2c (LD253): the baseline snapshot's one read buffer.
+  { id: 'LR2c-1 a read buffer for every file again', file: 'src/opon/net/baseline.js', test: 'test/scale.js',
+    from: 'const h = attempt(rel, () => hashFile(abs, rel, key, buf));', to: 'const h = attempt(rel, () => hashFile(abs, rel, key, Buffer.alloc(chunkBytes)));',
+    fails: ['LR2c (LD253)'] },
   // LR2b (LD252): a raw log is checked a line at a time. V2, V3 (verifyText) and V22 (now verifyBuffer, which checkLog uses)
   // moved to snippets with their function's own next line; verifyBuffer's copies of V2 and V3 are V2b and V3b.
   { id: 'V2b prev_hash not checked (verifyBuffer)', file: 'src/verify/chain.js', test: 'test/chain.js',

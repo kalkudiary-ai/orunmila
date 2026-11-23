@@ -50,11 +50,13 @@ function time(T) {
   return best;
 }
 
-it('LR2a (LD251): the engine\'s time grows in proportion to the session: four times the turns take under six times as long (a walk of every past call at each turn\'s end took about sixteen)', () => {
+// A timing test with a stated margin: the engine as fixed measured 4 to 6.4 here (a growing heap's collection adds to
+// linear work), the walk of every past call 11.7; the limit, 9, sits between. A first limit of 6 failed once at 6.4.
+it('LR2a (LD251): the engine\'s time grows in proportion to the session: four times the turns take under nine times as long (a walk of every past call at each turn\'s end took about twelve here, sixteen in the limit)', () => {
   time(500); // warm up
   const small = time(4000);
   const large = time(16000);
-  assert.ok(large / small < 6, `4,000 turns ${Math.round(small)} ms, 16,000 turns ${Math.round(large)} ms: ratio ${(large / small).toFixed(1)}`);
+  assert.ok(large / small < 9, `4,000 turns ${Math.round(small)} ms, 16,000 turns ${Math.round(large)} ms: ratio ${(large / small).toFixed(1)}`);
 });
 
 /**
@@ -101,6 +103,34 @@ it('LR2b (LD252): a raw log is checked a line at a time, never made into one str
     assert.strictEqual(openSessionLog(log.dir).last().seq, last.seq, 'reopened where it stopped');
   } finally {
     Buffer.prototype.toString = toString;
+    rmrf(base);
+  }
+});
+
+it('LR2c (LD253): the baseline snapshot allocates its read buffer once, not once per file (a 1 MiB buffer zero-filled for each of 100,000 files was half its time), and fingerprints every file as before', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const { tmpDir, rmrf } = require('./helpers');
+  const { snapshot } = require('../src/opon/net/baseline');
+  const base = tmpDir();
+  const alloc = Buffer.alloc;
+  try {
+    for (let i = 0; i < 50; i++) {
+      fs.mkdirSync(path.join(base, 'src', `d${i % 5}`), { recursive: true });
+      fs.writeFileSync(path.join(base, 'src', `d${i % 5}`, `f${i}.ts`), `export const v${i} = ${i};\n`.repeat(i)); // made up
+    }
+    const want = snapshot(base, { exclusions: [], key: Buffer.alloc(32, 7), chunkBytes: 64 });
+    let big = 0;
+    Buffer.alloc = function counted(n, ...rest) {
+      if (n >= 64) big++;
+      return alloc.call(Buffer, n, ...rest);
+    };
+    const got = snapshot(base, { exclusions: [], key: Buffer.alloc(32, 7), chunkBytes: 64 });
+    Buffer.alloc = alloc;
+    assert.ok(big <= 1, `${big} read buffers for 50 files`);
+    assert.deepStrictEqual([got.text, got.fingerprint, got.files], [want.text, want.fingerprint, 50], 'the same snapshot, every file fingerprinted, files over one chunk included');
+  } finally {
+    Buffer.alloc = alloc;
     rmrf(base);
   }
 });

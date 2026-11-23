@@ -41,19 +41,20 @@ const { onRedactionList, redactText } = require('../intake/redact');
 const { isCaseInsensitive } = require('../intake/paths');
 
 const CHUNK = 1024 * 1024;
+let nowBuf = null; // fingerprintNow's read buffer, made on its first call (LR2c, LD253)
 
-function hashFile(abs, rel, key, chunkBytes) {
+/** `buf`: the read buffer, one per snapshot (LR2c, LD253): only the bytes read into it are hashed, so it is never cleared. */
+function hashFile(abs, rel, key, buf) {
   let h;
   if (onRedactionList(rel)) {
     if (!key || !key.length) throw new Error(`a file on the redaction list needs the install key to be fingerprinted: ${rel}`);
     h = { hash: crypto.createHmac('sha256', key), prefix: 'hmac-sha256:' };
   } else h = { hash: crypto.createHash('sha256'), prefix: 'sha256:' };
   const fd = fs.openSync(abs, 'r');
-  const buf = Buffer.alloc(chunkBytes);
   let size = 0;
   try {
     for (;;) {
-      const n = fs.readSync(fd, buf, 0, chunkBytes, null);
+      const n = fs.readSync(fd, buf, 0, buf.length, null);
       if (n === 0) break;
       h.hash.update(buf.subarray(0, n));
       size += n;
@@ -67,6 +68,7 @@ function hashFile(abs, rel, key, chunkBytes) {
 function snapshot(root, { exclusions = [], key = null, envValues = [], caseInsensitive, chunkBytes = CHUNK } = {}) {
   const top = fs.realpathSync(root);
   const ci = caseInsensitive === undefined ? isCaseInsensitive(top) : caseInsensitive;
+  const buf = Buffer.allocUnsafe(chunkBytes); // LR2c (LD253): one read buffer for the whole walk, not one per file
   const entries = [];
   const push = (rel, fields) => {
     const r = redactText(ci ? rel.toLowerCase() : rel, envValues);
@@ -98,7 +100,7 @@ function snapshot(root, { exclusions = [], key = null, envValues = [], caseInsen
       const noted = r.kinds.length ? { redactions: r.kinds } : {};
       if (e.isSymbolicLink()) entries.push({ path: r.text, kind: 'link', ...noted });
       else if (e.isFile()) {
-        const h = attempt(rel, () => hashFile(abs, rel, key, chunkBytes));
+        const h = attempt(rel, () => hashFile(abs, rel, key, buf));
         if (h) entries.push({ path: r.text, ...h, ...noted });
       }
       else entries.push({ path: r.text, kind: 'other', ...noted });
@@ -143,7 +145,8 @@ function fingerprintNow(abs, rel, key) {
   }
   if (!st.isFile()) return { exists: true, size: null, fingerprint: null };
   try {
-    return { exists: true, ...hashFile(abs, rel, key, CHUNK) };
+    if (!nowBuf) nowBuf = Buffer.allocUnsafe(CHUNK); // LR2c (LD253): one buffer for every call (synchronous, never re-entered)
+    return { exists: true, ...hashFile(abs, rel, key, nowBuf) };
   } catch {
     return { exists: true, size: null, fingerprint: null };
   }

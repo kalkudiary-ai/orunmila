@@ -127,9 +127,10 @@ function turnsFrom(dir) {
 
 /**
  * K3 (LD217): what git lists as changed under `root`, as path (relative to the root) -> verb, or null when the
- * root is not in a git work tree. fsmonitor off and GIT_OPTIONAL_LOCKS=0, so status writes no index lock.
+ * root is not in a git work tree. fsmonitor off and GIT_OPTIONAL_LOCKS=0, so status writes no index lock. F2
+ * (LD224): with `ci` (the root's file system ignores case) each path is lower-cased, as the snapshot names its own.
  */
-function gitChanged(root) {
+function gitChanged(root, ci = false) {
   const run = (args) => spawnSync('git', ['-C', root, '-c', 'core.fsmonitor=false', ...args], { encoding: 'utf8', env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' }, timeout: 10000, maxBuffer: 64 * 1024 * 1024 });
   const top = run(['rev-parse', '--show-prefix']);
   if (top.error || top.status !== 0) return null;
@@ -140,7 +141,8 @@ function gitChanged(root) {
   for (const rec of st.stdout.split('\0')) {
     if (rec.length < 4 || !rec.slice(3).startsWith(prefix)) continue;
     const xy = rec.slice(0, 2);
-    out.set(rec.slice(3 + prefix.length), xy[1] === 'D' ? 'deleted' : xy === '??' || xy.includes('A') ? 'created' : xy.includes('D') ? 'deleted' : 'modified'); // F8 (LD223): the work tree first, so AD is deleted
+    const rel = rec.slice(3 + prefix.length);
+    out.set(ci ? rel.toLowerCase() : rel, xy[1] === 'D' ? 'deleted' : xy === '??' || xy.includes('A') ? 'created' : xy.includes('D') ? 'deleted' : 'modified'); // F8 (LD223): the work tree first, so AD is deleted
   }
   return out;
 }
@@ -295,7 +297,7 @@ function createRouter(o) {
       }
       try {
         // K3 (LD217; step 3): git, the last witness, only for a path it lists and the rescan marked.
-        const changed = rescanned.length ? gitChanged(s.root) : null;
+        const changed = rescanned.length ? gitChanged(s.root, s.ci) : null;
         if (changed) for (const p of rescanned) if (changed.has(p)) engine.receive(mark({ kind: 'file', path: p }, changed.get(p), {}, 'git'), {});
       } catch (e) {
         error(`git at the closeout of session ${id} failed: ${e.message}; the sweep ends without it`, { session_id: id });

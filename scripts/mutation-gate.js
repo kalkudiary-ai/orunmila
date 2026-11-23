@@ -2189,7 +2189,7 @@ const MUTANTS = [
     from: 'if (changed) for (const p of rescanned) if (changed.has(p))', to: 'if (changed) for (const p of changed.keys()) if (changed.has(p))',
     fails: ['K3 step 3 live'] },
   { id: 'K3-8 the intake never runs git', file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
-    from: 'const changed = rescanned.length ? gitChanged(s.root) : null;', to: 'const changed = null;',
+    from: 'const changed = rescanned.length ? gitChanged(s.root, s.ci) : null;', to: 'const changed = null;',
     fails: ['K3 step 3 live'] },
   // Slice K6: the agent's closeout feedback from the odù log (LD218).
   { id: 'K6-1 a silent change is not an undisclosed change', file: 'src/opon/feedback/from-odu.js', test: 'test/closeout.js',
@@ -2225,6 +2225,10 @@ const MUTANTS = [
   { id: "F8-1 git's index column read before the work tree's (AD reads created)", file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
     from: "xy[1] === 'D' ? 'deleted' : xy === '??'", to: "xy === '??'",
     fails: ['F8 (LD223'] },
+  // F2 (LD224). The sweep's own `s.ci` argument has no mutant: dropping it is seen only on a case-insensitive disk.
+  { id: "F2-1 git's paths left in their own case on a root that ignores case", file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
+    from: 'out.set(ci ? rel.toLowerCase() : rel,', to: 'out.set(rel,',
+    fails: ['F2 (LD224'] },
 ];
 
 function copyRepo(root) {

@@ -871,4 +871,43 @@ it(
   }),
 );
 
+it(
+  "F2 (LD224; Q24 checklist row P-k3-git-case): on a root whose file system ignores case, git's paths are folded as the rescan folds its own, so a hand change of src/B.js the rescan marked as src/b.js gets its git mark and reads high; gitChanged folds when told the root ignores case, on any file system",
+  withBase((base) => {
+    const { gitChanged } = require('../src/opon/intake/router');
+    const { isCaseInsensitive } = require('../src/opon/intake/paths');
+    const project = path.join(base, 'project');
+    fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(project, 'src', 'B.js'), 'b\n');
+    const git = gitIn(project);
+    git('init', '-q');
+    git('add', '-A');
+    git('commit', '-q', '--no-verify', '-m', 'base');
+    fs.writeFileSync(path.join(project, 'src', 'B.js'), 'by hand\n');
+    assert.deepStrictEqual([[...gitChanged(project, true)], [...gitChanged(project, false)]], [[['src/b.js', 'modified']], [['src/B.js', 'modified']]]);
+    // The closeout: on this machine's file system as it is (case-insensitive on a default macOS disk; on a case-sensitive one both sides keep src/B.js).
+    fs.writeFileSync(path.join(project, 'src', 'B.js'), 'b\n');
+    const home = path.join(base, 'home');
+    const clock = fakeClock();
+    const router = createRouter({ home, clock, checkSender: () => true, codeRoot: SRC, orunmilaVersion: '0.0.0-test', installKey: KEY, hookSettingsFor: () => [], baseline: true });
+    const p = cc(project, 'ses_f2');
+    const send = (x) => assert.strictEqual(router.payload(x, { channel: 'command' }).ok, true, x.hook_event_name);
+    send(p.prompt('go'));
+    send(p.stop('Nothing to do.'));
+    fs.writeFileSync(path.join(project, 'src', 'B.js'), 'by hand\n'); // no hook, no Sentinel here
+    send({ session_id: 'ses_f2', transcript_path: '/tmp/t.jsonl', cwd: project, hook_event_name: 'SessionEnd', reason: 'clear' });
+    for (let i = 0; i < 10; i++) {
+      clock.advance(600);
+      router.poll();
+    }
+    const dir = path.join(home, 'sessions', 'ses_f2');
+    const want = isCaseInsensitive(project) ? 'src/b.js' : 'src/B.js';
+    assert.deepStrictEqual(rawRecords(dir).filter((m) => m.source === 'git').map((m) => [m.target.path, m.says]), [[want, 'modified']]);
+    const live = fs.readFileSync(path.join(dir, 'odu.jsonl'), 'utf8');
+    assert.strictEqual(live, replayFolder(dir).odu, 'live equals replay');
+    const b = live.split('\n').slice(1, -1).map((l) => JSON.parse(l)).find((o) => o.target && o.target.path === want);
+    assert.deepStrictEqual([b.witness_status.glove.status, b.witness_status.sentinel.status, b.witness_status.git.status, b.confidence, b.conflicts.map((c) => c.kind)], ['saw_nothing', 'saw_nothing', 'saw', 'high', ['missed_live']]);
+  }),
+);
+
 runAll('opon-live');

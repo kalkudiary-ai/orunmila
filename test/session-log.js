@@ -335,6 +335,47 @@ const plainMod = () => {
   return m;
 };
 
+// F12 (LD247): redaction lengthens text ([REDACTED:<kind>] is longer than a short secret), so an excerpt the adapter cut
+// at the schema's 2,000 characters could leave it longer and the whole mark, a command's result, was quarantined.
+const exitedWith = (excerpt) => ({ ...mark('hook_exited_known_code'), detail: { ...mark('hook_exited_known_code').detail, output_excerpt: excerpt } });
+const codePoints = (s) => [...s].length;
+
+it(
+  'F12 (LD247): an output excerpt that redaction makes longer than 2,000 characters is cut back to them, and the mark is written, never quarantined; with no full output kept, the whole redacted excerpt is kept as its output_ref',
+  withEnvLog((log, dir) => {
+    const made = 'API_TOKEN=s3cr3tv4lue'; // made up; secrets.js's secret_assignment makes its 21 characters 38
+    const excerpt = 'x'.repeat(2000 - made.length - 1) + ' ' + made; // 2,000 characters, the assignment at the end
+    const r = log.append(exitedWith(excerpt));
+    assert.strictEqual(r.ok, true, JSON.stringify(r));
+    const line = readLines(path.join(dir, 'raw.jsonl'))[1];
+    assert.strictEqual(codePoints(line.detail.output_excerpt), 2000);
+    const kept = fs.readFileSync(path.join(dir, 'files', line.detail.output_ref.slice(7)), 'utf8');
+    assert.ok(codePoints(kept) > 2000 && kept.startsWith(line.detail.output_excerpt) && !kept.includes('s3cr3tv4lue'), 'the whole excerpt, redacted, kept');
+    assert.ok(!line.detail.output_excerpt.includes('s3cr3tv4lue'), 'redacted before it is cut');
+    assert.deepStrictEqual(line.detail.redactions, ['secret_assignment']);
+    assert.strictEqual(verifySessionLog(dir).ok, true);
+    assert.deepStrictEqual(readLines(path.join(dir, 'quarantine.jsonl')).map((q) => q.record), ['quarantine_header'], 'nothing quarantined');
+  }),
+);
+
+it(
+  'F12 (LD247): a mark whose full output is already kept is cut back and keeps that one output_ref; the cut counts characters as the schema does, so a character outside the BMP is one',
+  withEnvLog((log, dir) => {
+    const full = 'y'.repeat(3000);
+    const excerpt = '\u{1F600}'.repeat(1990) + ' ' + SECRET.slice(0, 9); // 2,000 characters, 3,990 UTF-16 units; no secret
+    const r1 = log.append(exitedWith(full.slice(0, 1990) + SECRET), [{ slot: 'output_ref', text: full + SECRET }]);
+    assert.strictEqual(r1.ok, true, JSON.stringify(r1));
+    const r2 = log.append(exitedWith(excerpt));
+    assert.strictEqual(r2.ok, true, JSON.stringify(r2));
+    const [, one, two] = readLines(path.join(dir, 'raw.jsonl'));
+    assert.strictEqual(codePoints(one.detail.output_excerpt), 2000);
+    const kept = fs.readFileSync(path.join(dir, 'files', one.detail.output_ref.slice(7)), 'utf8');
+    assert.strictEqual(kept, full + '[REDACTED:env_value]', 'the adapter\'s kept output is the one output_ref');
+    assert.deepStrictEqual([two.detail.output_excerpt, 'output_ref' in two.detail], [excerpt, false], 'within the limit: untouched');
+    assert.strictEqual(fs.readdirSync(path.join(dir, 'files')).length, 1);
+  }),
+);
+
 it(
   'LD59: append(mark, keep) keeps each file redacted, names it in its slot and notes its redaction kinds, all in one call; keep() is not public',
   withEnvLog((log, dir) => {

@@ -51,7 +51,9 @@ const { scanBuffer } = require('../intake/leak-check');
 const { nowMono } = require('../intake/mono');
 
 const SPEC = path.join(__dirname, '..', '..', '..', 'spec');
-const checkMark = compile(JSON.parse(fs.readFileSync(path.join(SPEC, 'mark.schema.json'), 'utf8')));
+const MARK_SCHEMA = JSON.parse(fs.readFileSync(path.join(SPEC, 'mark.schema.json'), 'utf8'));
+const checkMark = compile(MARK_SCHEMA);
+const EXCERPT_MAX = MARK_SCHEMA.definitions.detail.properties.output_excerpt.maxLength; // F12 (LD247), in characters (code points)
 const checkHeader = compile(JSON.parse(fs.readFileSync(path.join(SPEC, 'session-header.schema.json'), 'utf8')));
 
 const INTAKE_FIELDS = ['seq', 'prev_hash', 'hash'];
@@ -265,6 +267,17 @@ function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended
     for (const k of INTAKE_FIELDS) if (k in m) reasons.push(`the source sets ${k}, which intake assigns`);
     if (m.session_id !== header.session_id) reasons.push(`session_id ${JSON.stringify(m.session_id)} is not this session's`);
     if (reasons.length) return reject(reasons);
+    if (isObject(m.detail) && typeof m.detail.output_excerpt === 'string' && [...m.detail.output_excerpt].length > EXCERPT_MAX) {
+      // F12 (LD247): redaction lengthens text, so an excerpt cut at the limit can come out over it: cut it back, after
+      // redaction, keeping the whole redacted excerpt as the output_ref when no full output was kept with the mark.
+      const whole = m.detail.output_excerpt;
+      if (!kept.some((k) => k.slot === 'output_ref')) {
+        const k = { slot: 'output_ref', ...keep(whole, found) };
+        kept.push(k);
+        refs.push(k.ref);
+      }
+      m.detail.output_excerpt = [...whole].slice(0, EXCERPT_MAX).join('');
+    }
     if (isObject(m.detail)) {
       for (const k of kept) {
         m.detail[k.slot] = k.ref;

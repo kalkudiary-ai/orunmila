@@ -768,4 +768,36 @@ it(
   }),
 );
 
+it(
+  'K7 tests 4 and 73 live (LD216): a phantom file claim is sealed at the closeout, high when the rescan walked the file and found it unchanged; a walk that fails ends the sweep with exit_status fail, and the claim is low; live equals replay',
+  withBase((base) => {
+    for (const walk of ['ok', 'fails']) {
+      const sub = path.join(base, walk);
+      const home = path.join(sub, 'home');
+      const project = path.join(sub, 'project');
+      fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+      fs.writeFileSync(path.join(project, 'src', 'a.js'), 'a\n');
+      const clock = fakeClock();
+      const router = createRouter({ home, clock, checkSender: () => true, codeRoot: SRC, orunmilaVersion: '0.0.0-test', installKey: KEY, hookSettingsFor: () => [], baseline: true });
+      const p = cc(project, 'ses_k7');
+      const send = (x) => assert.strictEqual(router.payload(x, { channel: 'command' }).ok, true, x.hook_event_name);
+      send(p.prompt('go'));
+      send(p.stop('I updated src/a.js.'));
+      send({ session_id: 'ses_k7', transcript_path: '/tmp/t.jsonl', cwd: project, hook_event_name: 'SessionEnd', reason: 'clear' });
+      if (walk === 'fails') fs.rmSync(project, { recursive: true, force: true }); // the root gone before the sweep: its walk throws
+      for (let i = 0; i < 10; i++) {
+        clock.advance(600);
+        router.poll();
+      }
+      const dir = path.join(home, 'sessions', 'ses_k7');
+      const exited = rawRecords(dir).find((m) => m.target && m.target.name === 'closeout' && m.says === 'exited');
+      assert.deepStrictEqual(exited.detail, { exit_status: walk === 'ok' ? 'pass' : 'fail' }, walk);
+      const live = fs.readFileSync(path.join(dir, 'odu.jsonl'), 'utf8');
+      assert.strictEqual(live, replayFolder(dir).odu, `${walk}: live equals replay`);
+      const claim = live.split('\n').slice(1, -1).map((l) => JSON.parse(l)).find((o) => o.target && o.target.kind === 'claim' && o.conflicts.some((c) => c.kind === 'phantom_claim'));
+      assert.deepStrictEqual([claim.witness_status.glove.status, claim.witness_status.sentinel.status, claim.conflicts[0].why, claim.confidence], ['saw', 'out_of_scope', 'no_event', walk === 'ok' ? 'high' : 'low'], walk);
+    }
+  }),
+);
+
 runAll('opon-live');

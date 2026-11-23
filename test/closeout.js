@@ -222,4 +222,51 @@ it('Q22 A7 (LD213; checklist row alias-renamed-rescan-oldpath): a file put back 
   }
 });
 
+// K7 (Q21 (a), LD216; line 441; tests 4 and 73): a phantom file claim waits for the closeout's rescan.
+const said = (ms, text, turn = 't1') => ({ ...M.claimed(ms, turn), detail: { text } });
+
+it('K7 tests 4 and 73 (LD216): a phantom file claim is sealed at the closeout, high when the rescan walked its path and found it unchanged, low for an excluded path, a path the rescan found changed, or a walk that failed; with no closeout it is never sealed and reads low', () => {
+  for (const end of ['pass', 'fail', 'none']) {
+    const base = tmpDir();
+    try {
+      const log = makeLog(base, { exclusions: ['vendor'] }, { baseline: [['config', 'c'], ['u', 'd'], ['h', 'e']].map(([n, f]) => ({ path: `src/${n}.ts`, size: 4, fingerprint: FP(f) })) });
+      log.append(M.edited(0, 'e1', 'src/u.ts')); // edited, then back to its bytes: net change false
+      log.append(M.disk(50, 'src/u.ts'));
+      log.append(M.fingerprinted(1600, 'src/u.ts', FP('d')));
+      log.append(said(2000, 'I updated src/config.ts. I updated vendor/lib.ts. I updated src/u.ts. I updated src/h.ts.'));
+      log.append(M.turnEnded(2000));
+      log.append(M.tick(9000));
+      if (end !== 'none') {
+        log.append(sweep(10000, 'started'));
+        log.append(rescan(10010, 'src/h.ts', FP('9'))); // h.ts changed by a hand no witness saw
+        log.append({ ...sweep(10100, 'exited'), detail: { exit_status: end } });
+      }
+      const r = replayFolder(log.dir);
+      assert.strictEqual(r.ok, true, r.words);
+      const odus = r.odu.split('\n').slice(1, -1).map((l) => JSON.parse(l));
+      for (const o of odus) assert.deepStrictEqual(checkOdu(o), [], JSON.stringify(o));
+      const claimsIn = (list) => Object.fromEntries(list.filter((o) => o.target && o.target.kind === 'claim' && o.conflicts && o.conflicts.some((c) => c.kind === 'phantom_claim')).map((o) => [o.conflicts[0].path, o]));
+      const sealed = claimsIn(odus);
+      if (end === 'none') {
+        assert.deepStrictEqual(Object.keys(sealed), [], 'no closeout: no phantom file claim sealed');
+        const rest = claimsIn(r.lines.slice(1).map((l) => JSON.parse(l)).filter((g) => g.state !== 'sealed'));
+        assert.deepStrictEqual(Object.keys(rest).sort(), ['src/config.ts', 'src/h.ts', 'src/u.ts', 'vendor/lib.ts']);
+        for (const o of Object.values(rest)) assert.deepStrictEqual([o.state, o.confidence, o.sealed_at_ns], ['settled', 'low', null]);
+        continue;
+      }
+      const want = { 'src/config.ts': ['no_event', 'high', 'out_of_scope'], 'vendor/lib.ts': ['no_event', 'low', 'out_of_scope'], 'src/u.ts': ['unchanged', 'high', 'saw'], 'src/h.ts': ['no_event', 'low', 'out_of_scope'] };
+      const exited = odus.find((o) => o.target && o.target.kind === 'process' && o.action === 'exited');
+      for (const [p, [why, conf, sentinel]] of Object.entries(want)) {
+        const o = sealed[p];
+        assert.ok(o, `${end}: ${p} sealed`);
+        assert.deepStrictEqual([witnesses(o), o.conflicts[0].kind, o.conflicts[0].why, o.confidence, o.seq > exited.seq], [['saw', sentinel], 'phantom_claim', why, end === 'pass' ? conf : 'low', true], `${end}: ${p}, sealed after the closeout's end`);
+      }
+      const h = at(odus, 'src/h.ts');
+      assert.deepStrictEqual(h.conflicts.map((c) => c.kind), ['missed_live']);
+    } finally {
+      rmrf(base);
+    }
+  }
+});
+
 runAll('closeout');

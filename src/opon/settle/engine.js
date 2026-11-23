@@ -282,6 +282,9 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
   const exclusions = Array.isArray(config.exclusions) ? config.exclusions : [];
   const due = []; // L1b: the paths of settled file changes due a fingerprint, in the order they settled
   let sweepKey = null; // K2: the key of the closeout sweep's own group, once it has begun
+  const awaiting = []; // K7 (LD216): phantom file claims waiting for the closeout's rescan, each { make, path }
+  const rescannedPaths = new Set(); // K7: the paths the sweep's rescan marks name
+  let sweepPassed = false; // K7: the sweep's exited mark said pass (its walk ran)
   const all = [];
   let now = null;
   let made = 0;
@@ -499,10 +502,11 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
         for (const w of c.files) {
           const f = fileVerdict(at.turn, w);
           if (!f) continue;
-          // Line 441: high only when git or the closeout rescan saw the target unchanged (Phase 4); a change that is not this session's: medium (test 38).
-          const confidence = f.why === 'not_credited' ? 'medium' : 'low';
           const targets = [...new Set(f.cited.map((ch) => ch.path))].sort();
-          out.push(claimRecord(g, at, c, f.cited.flatMap((ch) => ch.rows), confidence, (cg) => [conflictOf(cg, 'phantom_claim', cg.sources, { claim: 'file', path: w, hedged: c.hedged, why: f.why, targets }), ...(f.sessions.length ? [conflictOf(cg, 'concurrent_sessions', cg.sources, { sessions: f.sessions })] : [])]));
+          const make = (confidence) => claimRecord(g, at, c, f.cited.flatMap((ch) => ch.rows), confidence, (cg) => [conflictOf(cg, 'phantom_claim', cg.sources, { claim: 'file', path: w, hedged: c.hedged, why: f.why, targets }), ...(f.sessions.length ? [conflictOf(cg, 'concurrent_sessions', cg.sources, { sessions: f.sessions })] : [])]);
+          // Line 441 (K7, LD216): a change that is not this session's is medium at once (test 38); any other waits for the closeout's rescan.
+          if (f.why === 'not_credited') out.push(make('medium'));
+          else awaiting.push({ make, path: w });
         }
       }
     }
@@ -867,6 +871,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     if (fingerprint) {
       real = false;
       g.fp = { seq: m.seq, state: fingerprintedState(m) };
+      if (rescanned && typeof m.target.path === 'string') rescannedPaths.add(m.target.path); // K7
     } else g.lastOther = m.seq;
     g.seqs.push(m.seq);
     g.says.push(m.says);
@@ -946,7 +951,10 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       if (p) p.childIds = p.childIds.filter((c) => c !== g.id);
       g.parentId = null;
     }
-    if (m.says === 'exited' && m.source === 'process' && m.target && m.target.kind === 'process' && m.target.name === 'closeout') out.push(...closeoutNow()); // K1 (LD204)
+    if (m.says === 'exited' && m.source === 'process' && m.target && m.target.kind === 'process' && m.target.name === 'closeout') {
+      sweepPassed = Boolean(m.detail) && m.detail.exit_status === 'pass'; // K7 (LD216): the walk ran
+      out.push(...closeoutNow()); // K1 (LD204)
+    }
     return out;
   }
 
@@ -974,10 +982,20 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     const sealing = [...waiting.splice(0, waiting.length), ...rest].sort((a, b) => a.n - b.n);
     for (const g of sealing) g.sealedAt = now;
     due.length = 0; // K1b (LD210 (3)): every group is sealed with what it has; no fingerprint is asked after the closeout
-    return sealing.flatMap(emit);
+    const out = sealing.flatMap(emit);
+    // K7 (LD216; line 441): each waiting phantom file claim, high when the rescan walked its path and found it unchanged.
+    for (const a of awaiting.splice(0, awaiting.length)) out.push({ ...a.make(walkedUnchanged(a.path) ? 'high' : 'low'), sealed_at_ns: String(now) });
+    return out;
   }
 
-  const end = () => all.filter((g) => g.state !== 'sealed').map(record);
+  /** K7 (LD216): the closeout's rescan walked the path written as `w` and wrote no mark for it: a baseline, a walk that passed, inside the root, not excluded. */
+  function walkedUnchanged(w) {
+    const p = asWritten(w);
+    return baseline !== null && sweepPassed && !p.startsWith('/') && !p.startsWith('../') && !isIgnored(p, exclusions) && ![...rescannedPaths].some((t) => named(t, p));
+  }
+
+  /** The groups not yet sealed, as they stand, then each phantom file claim still waiting for its rescan, low (K7, LD216). */
+  const end = () => [...all.filter((g) => g.state !== 'sealed').map(record), ...awaiting.map((a) => ({ ...a.make('low'), state: 'settled', sealed_at_ns: null }))];
   /** L1b: the paths due a fingerprint since the last call, each given once; the live intake writes them, replay reads them from the log. */
   const fingerprintsDue = () => due.splice(0, due.length);
   /** K5c (LD210 (2)): each file's state as the session last knew it (its last sealed group's after, or absent after a rename), by path. */

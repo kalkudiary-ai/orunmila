@@ -247,6 +247,7 @@ function createRouter(o) {
     };
     const who = { kind: 'process', name: 'closeout' };
     engine.receive(mark(who, 'started', {}), {});
+    let walked = 'pass'; // K7 (LD216): fail when the walk threw, so no claim is rated on a walk that did not run
     if (s.baseMap) {
       try {
         const snap = snapshot(s.root, { exclusions: s.exclusions, key: o.installKey, envValues: readEnvEntries(s.root).entries.map((e) => e.value) });
@@ -262,10 +263,11 @@ function createRouter(o) {
         const gone = [...new Set([...s.baseMap.keys(), ...known.keys()])].sort();
         for (const p of gone) if (!now.has(p) && typeof last(p) === 'string' && last(p) !== 'absent') engine.receive(mark({ kind: 'file', path: p }, 'fingerprinted', { exists: false, rescan: true }), {});
       } catch (e) {
+        walked = 'fail';
         error(`the closeout's rescan of session ${id} failed: ${e.message}; the sweep ends without it`, { session_id: id });
       }
     }
-    engine.receive(mark(who, 'exited', { exit_status: 'pass' }), {});
+    engine.receive(mark(who, 'exited', { exit_status: walked }), {});
   }
 
   /** Reopen a session folder that exists (after a restart or a release), with its turns. */

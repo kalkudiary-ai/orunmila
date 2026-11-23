@@ -2265,6 +2265,16 @@ const MUTANTS = [
   { id: 'MG2-3 the command not given a group of its own', file: 'scripts/mutation-gate.js', test: 'test/mutation-gate.js',
     from: "].join(',');\nconst c = spawn(cmd, args, { detached: true,", to: "].join(',');\nconst c = spawn(cmd, args, {",
     fails: ["MG2: a suite's own child", 'MG2: a gate that overruns'] },
+  // IR1 (LD240): the intake restarted only while it holds no session.
+  { id: 'IR1-1 a held session does not hold the restart back', file: 'scripts/intake-restart-idle.js', test: 'test/intake-restart.js',
+    from: 'quiet = held.length === 0 ? quiet + 1 : 0;', to: 'quiet = quiet + 1;',
+    fails: ['IR1: a restart waits while any session is held', 'IR1: past its limit'] },
+  { id: 'IR1-2 the old intake answering counts as restarted', file: 'scripts/intake-restart-idle.js', test: 'test/intake-restart.js',
+    from: 'if (s && s.pid !== before) return', to: 'if (s) return',
+    fails: ['IR1: a restart that fails'] },
+  { id: 'IR1-3 a failed restart is not reported', file: 'scripts/intake-restart-idle.js', test: 'test/intake-restart.js',
+    from: 'return { ok: false, reason: `the restart failed: ${e.message}` };', to: 'void e;',
+    fails: ['IR1: a restart that fails'] },
   // MG3 (LD239): a process that leaves the suite's group is found by its environment.
   { id: 'MG3-1 nothing is swept when the command ends', file: 'scripts/mutation-gate.js', test: 'test/mutation-gate.js',
     from: "  group('SIGKILL');\n  sweep();\n  if (timedOut)", to: "  group('SIGKILL');\n  if (timedOut)",

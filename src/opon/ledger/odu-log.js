@@ -61,7 +61,7 @@ function oduRecord(g, sourceOf) {
     action: g.action,
     window: { ...g.window },
     witnesses,
-    witness_status: { glove: witnessEntry(g.witness_status.glove), sentinel: witnessEntry(g.witness_status.sentinel) },
+    witness_status: { glove: witnessEntry(g.witness_status.glove), sentinel: witnessEntry(g.witness_status.sentinel), ...(g.witness_status.git ? { git: witnessEntry(g.witness_status.git) } : {}) }, // K3 (LD217)
     ...(g.net_change ? { net_change: { ...g.net_change } } : {}),
     cause: g.cause === null ? null : { ...g.cause, ...(g.cause.also ? { also: [...g.cause.also] } : {}) },
     attribution: g.attribution,

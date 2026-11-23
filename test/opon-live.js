@@ -800,4 +800,44 @@ it(
   }),
 );
 
+it(
+  'K3 step 3 live (LD217): at the closeout the intake runs git status and writes a git mark only for a path git lists and the rescan marked: a hand change no live witness saw is high with git in its witness_status; a file dirty before the session gets none; no git work tree, no git marks; live equals replay',
+  withBase((base) => {
+    const { spawnSync } = require('child_process');
+    for (const repo of [true, false]) {
+      const sub = path.join(base, repo ? 'repo' : 'plain');
+      const home = path.join(sub, 'home');
+      const project = path.join(sub, 'project');
+      fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+      for (const n of ['a', 'b']) fs.writeFileSync(path.join(project, 'src', `${n}.js`), `${n}\n`);
+      if (repo) {
+        const git = (...args) => assert.strictEqual(spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', '-c', 'commit.gpgsign=false', ...args], { cwd: project, env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }, encoding: 'utf8' }).status, 0, args.join(' '));
+        git('init', '-q');
+        git('add', '-A');
+        git('commit', '-q', '--no-verify', '-m', 'base');
+        fs.writeFileSync(path.join(project, 'src', 'a.js'), 'dirty before the session\n');
+      }
+      const clock = fakeClock();
+      const router = createRouter({ home, clock, checkSender: () => true, codeRoot: SRC, orunmilaVersion: '0.0.0-test', installKey: KEY, hookSettingsFor: () => [], baseline: true });
+      const p = cc(project, 'ses_k3');
+      const send = (x) => assert.strictEqual(router.payload(x, { channel: 'command' }).ok, true, x.hook_event_name);
+      send(p.prompt('go'));
+      send(p.stop('Nothing to do.'));
+      fs.writeFileSync(path.join(project, 'src', 'b.js'), 'by hand\n'); // no hook, no Sentinel here
+      send({ session_id: 'ses_k3', transcript_path: '/tmp/t.jsonl', cwd: project, hook_event_name: 'SessionEnd', reason: 'clear' });
+      for (let i = 0; i < 10; i++) {
+        clock.advance(600);
+        router.poll();
+      }
+      const dir = path.join(home, 'sessions', 'ses_k3');
+      const gitMarks = rawRecords(dir).filter((m) => m.source === 'git').map((m) => [m.target.path, m.says]);
+      assert.deepStrictEqual(gitMarks, repo ? [['src/b.js', 'modified']] : [], `${repo}: git marks`);
+      const live = fs.readFileSync(path.join(dir, 'odu.jsonl'), 'utf8');
+      assert.strictEqual(live, replayFolder(dir).odu, `${repo}: live equals replay`);
+      const b = live.split('\n').slice(1, -1).map((l) => JSON.parse(l)).find((o) => o.target && o.target.path === 'src/b.js');
+      assert.deepStrictEqual([b.witness_status.glove.status, b.witness_status.sentinel.status, b.witness_status.git ? b.witness_status.git.status : null, b.confidence, b.conflicts.map((c) => c.kind)], ['saw_nothing', 'saw_nothing', repo ? 'saw' : null, repo ? 'high' : 'medium', ['missed_live']], `${repo}`);
+    }
+  }),
+);
+
 runAll('opon-live');

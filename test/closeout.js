@@ -222,6 +222,37 @@ it('Q22 A7 (LD213; checklist row alias-renamed-rescan-oldpath): a file put back 
   }
 });
 
+// K3 (LD217; step 3, lines 331, 423): git as the closeout's last witness, corroborating the rescan.
+const gitSaw = (ms, file, says = 'modified') => ({ schema_version: 1, session_id: 'ses_replay_test', source: 'git', agent: null, turn: null, sub_agent: null, observed_at: wall(ms), mono_ns: ns(ms), cause_hint: null, target: { kind: 'file', path: file }, says, detail: {} });
+
+it('K3 step 3 (LD217): a missed change git also saw is high and names git in its witness_status; a git mark with no group of its path, or of a temp file, is the sweep\'s receipt and never an odù of its own', () => {
+  const base = tmpDir();
+  try {
+    const log = makeLog(base, {}, { baseline: [{ path: 'src/a.ts', size: 4, fingerprint: FP('a') }, { path: 'src/b.ts', size: 4, fingerprint: FP('b') }, { path: 'src/c.ts', size: 4, fingerprint: FP('c') }] });
+    const s = {};
+    log.append(sweep(1000, 'started'));
+    s.b = log.append(rescan(1010, 'src/b.ts', FP('9'))); // missed, and git saw it
+    s.c = log.append(rescan(1020, 'src/c.ts', FP('8'))); // missed, git did not list it
+    s.gb = log.append(gitSaw(1030, 'src/b.ts'));
+    s.ga = log.append(gitSaw(1040, 'src/a.ts')); // dirty against HEAD, unchanged in the session: no rescan mark, no odù
+    s.gt = log.append(gitSaw(1050, 'src/b.ts~', 'created')); // a temp file git lists: its own path, a receipt
+    log.append(sweep(1100, 'exited'));
+    const r = replayFolder(log.dir);
+    assert.strictEqual(r.ok, true, r.words);
+    const odus = r.odu.split('\n').slice(1, -1).map((l) => JSON.parse(l));
+    for (const o of odus) assert.deepStrictEqual(checkOdu(o), [], JSON.stringify(o));
+    const b = at(odus, 'src/b.ts');
+    assert.deepStrictEqual([witnesses(b), b.witness_status.git, b.confidence, b.conflicts.map((c) => [c.kind, c.marks]), b.mark_seqs], [['saw_nothing', 'saw_nothing'], { status: 'saw', mark_seqs: [s.gb], says: ['modified'], slots: [{ seq: s.gb }] }, 'high', [['missed_live', [s.b]]], [s.b, s.gb]]);
+    const c = at(odus, 'src/c.ts');
+    assert.deepStrictEqual([witnesses(c), 'git' in c.witness_status, c.confidence], [['saw_nothing', 'saw_nothing'], false, 'medium']);
+    assert.deepStrictEqual(odus.filter((o) => o.target && ['src/a.ts', 'src/b.ts~'].includes(o.target.path)), [], 'no odù of their own');
+    const sweepOdu = odus.find((o) => o.target && o.target.kind === 'process' && o.action === 'started');
+    assert.deepStrictEqual([s.ga, s.gt].map((q) => sweepOdu.mark_seqs.includes(q)), [true, true], 'receipts');
+  } finally {
+    rmrf(base);
+  }
+});
+
 // K7 (Q21 (a), LD216; line 441; tests 4 and 73): a phantom file claim waits for the closeout's rescan.
 const said = (ms, text, turn = 't1') => ({ ...M.claimed(ms, turn), detail: { text } });
 

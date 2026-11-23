@@ -78,6 +78,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { spawnSync } = require('child_process');
 const { createIntake } = require('./engine');
 const { createSessionLog, openSessionLog } = require('../ledger/session-log');
 const { checkLog } = require('../../verify/session');
@@ -122,6 +123,26 @@ function turnsFrom(dir) {
   const ended = recs.some((r) => r.says === 'ended' && isObject(r.target) && r.target.kind === 'session');
   const swept = recs.some((r) => r.says === 'exited' && r.source === 'process' && isObject(r.target) && r.target.kind === 'process' && r.target.name === 'closeout');
   return { header: recs[0], n, open, tampered, ended, swept };
+}
+
+/**
+ * K3 (LD217): what git lists as changed under `root`, as path (relative to the root) -> verb, or null when the
+ * root is not in a git work tree. fsmonitor off and GIT_OPTIONAL_LOCKS=0, so status writes no index lock.
+ */
+function gitChanged(root) {
+  const run = (args) => spawnSync('git', ['-C', root, '-c', 'core.fsmonitor=false', ...args], { encoding: 'utf8', env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' }, timeout: 10000, maxBuffer: 64 * 1024 * 1024 });
+  const top = run(['rev-parse', '--show-prefix']);
+  if (top.error || top.status !== 0) return null;
+  const prefix = top.stdout.trim();
+  const st = run(['status', '--porcelain=v1', '-z', '--untracked-files=all', '--no-renames', '--', '.']);
+  if (st.error || st.status !== 0) throw new Error(`git status ${st.error ? st.error.message : `exited ${st.status}`}`);
+  const out = new Map();
+  for (const rec of st.stdout.split('\0')) {
+    if (rec.length < 4 || !rec.slice(3).startsWith(prefix)) continue;
+    const xy = rec.slice(0, 2);
+    out.set(rec.slice(3 + prefix.length), xy === '??' || xy.includes('A') ? 'created' : xy.includes('D') ? 'deleted' : 'modified');
+  }
+  return out;
 }
 
 /** A file's state at hook time: exists, and, for a regular file, its bytes, size and fingerprint. */
@@ -241,10 +262,11 @@ function createRouter(o) {
    * group (K1). A walk that fails is in the error log; the sweep still ends.
    */
   function sweep(id, s) {
-    const mark = (target, says, detail) => {
+    const mark = (target, says, detail, source = 'process') => {
       const now = clock();
-      return { schema_version: 1, session_id: id, source: 'process', agent: null, turn: null, sub_agent: null, observed_at: now.wall, mono_ns: now.mono, target, says, detail, cause_hint: null };
+      return { schema_version: 1, session_id: id, source, agent: null, turn: null, sub_agent: null, observed_at: now.wall, mono_ns: now.mono, target, says, detail, cause_hint: null };
     };
+    const rescanned = []; // K3: the paths the rescan marked, for git to corroborate
     const who = { kind: 'process', name: 'closeout' };
     engine.receive(mark(who, 'started', {}), {});
     let walked = 'pass'; // K7 (LD216): fail when the walk threw, so no claim is rated on a walk that did not run
@@ -259,12 +281,24 @@ function createRouter(o) {
           now.add(e.path);
           if (typeof e.fingerprint !== 'string' || (s.baseMap.get(e.path) === e.fingerprint && last(e.path) === e.fingerprint)) continue;
           engine.receive(mark({ kind: 'file', path: e.path }, 'fingerprinted', { exists: true, size: e.size, fingerprint: e.fingerprint, rescan: true }), {});
+          rescanned.push(e.path);
         }
         const gone = [...new Set([...s.baseMap.keys(), ...known.keys()])].sort();
-        for (const p of gone) if (!now.has(p) && typeof last(p) === 'string' && last(p) !== 'absent') engine.receive(mark({ kind: 'file', path: p }, 'fingerprinted', { exists: false, rescan: true }), {});
+        for (const p of gone) {
+          if (now.has(p) || typeof last(p) !== 'string' || last(p) === 'absent') continue;
+          engine.receive(mark({ kind: 'file', path: p }, 'fingerprinted', { exists: false, rescan: true }), {});
+          rescanned.push(p);
+        }
       } catch (e) {
         walked = 'fail';
         error(`the closeout's rescan of session ${id} failed: ${e.message}; the sweep ends without it`, { session_id: id });
+      }
+      try {
+        // K3 (LD217; step 3): git, the last witness, only for a path it lists and the rescan marked.
+        const changed = rescanned.length ? gitChanged(s.root) : null;
+        if (changed) for (const p of rescanned) if (changed.has(p)) engine.receive(mark({ kind: 'file', path: p }, changed.get(p), {}, 'git'), {});
+      } catch (e) {
+        error(`git at the closeout of session ${id} failed: ${e.message}; the sweep ends without it`, { session_id: id });
       }
     }
     engine.receive(mark(who, 'exited', { exit_status: walked }), {});

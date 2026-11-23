@@ -331,7 +331,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
   }
 
   function witness(g, name) {
-    const mine = g.sources.map((s, i) => (name === 'glove' ? GLOVE.has(s) : s === 'sentinel') ? i : -1).filter((i) => i >= 0);
+    const mine = g.sources.map((s, i) => (name === 'glove' ? GLOVE.has(s) : s === name) ? i : -1).filter((i) => i >= 0);
     if (mine.length) return { status: 'saw', mark_seqs: mine.map((i) => g.seqs[i]), says: mine.map((i) => g.says[i]), slots: mine.map((i) => g.slots[i]) };
     const disk = ((g.key.startsWith('file:') || g.key.startsWith('dirchange:')) && g.says.some((v) => DISK.has(v))) || Boolean(g.missed);
     if (name === 'sentinel') {
@@ -551,7 +551,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
    * only `started`: line 423, "medium at most"), else high (Orunmila's own record: a gap, a note).
    */
   function confidenceOf(g, attr) {
-    if (g.missed) return 'medium'; // K2 (LD207): Orunmila's own rescan saw it, neither the Sentinel nor git
+    if (g.missed) return g.sources.includes('git') ? 'high' : 'medium'; // K2 (LD207), K3 (LD217): the rescan's alone, or git saw it too (line 423)
     if (g.sources.every((s) => s === 'agent_claim')) return 'low';
     const kind = attr.cause && attr.cause.kind;
     if (kind === 'time_match' || kind === 'agent_command') return 'medium';
@@ -600,7 +600,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       settled_at_ns: g.settledAt === null ? null : String(g.settledAt),
       sealed_at_ns: g.sealedAt === null ? null : String(g.sealedAt),
       ceiling: g.forced,
-      witness_status: { glove: witness(g, 'glove'), sentinel: witness(g, 'sentinel') },
+      witness_status: { glove: witness(g, 'glove'), sentinel: witness(g, 'sentinel'), ...(g.sources.includes('git') ? { git: witness(g, 'git') } : {}) }, // K3 (LD217): git when it ran for this target
       parent_id: g.parentId,
       children: [...g.childIds],
       amends: g.amends,
@@ -790,7 +790,8 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     let real = true;
     const fingerprint = m.says === 'fingerprinted'; // N2: joins its group and never moves its clock, so it settles when it would have
     const rescanned = fingerprint && Boolean(m.detail) && m.detail.rescan === true; // K2r2 (LD214): a rescan mark keeps its own path, never aliased
-    if (m.target && m.target.kind === 'file' && typeof m.target.path === 'string' && !rescanned) {
+    const fromGit = m.source === 'git'; // K3 (LD217): git's mark keeps its own path, as a rescan's
+    if (m.target && m.target.kind === 'file' && typeof m.target.path === 'string' && !rescanned && !fromGit) {
       const p = m.target.path;
       if (path.posix.basename(p) === '4913') {
         const host = latestOpenIn(path.posix.dirname(p));
@@ -823,6 +824,11 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
         key = sweepKey; // nothing missed: the mark is the sweep's receipt
         target = live.get(sweepKey).target;
       }
+    }
+    if (fromGit && key.startsWith('file:') && !live.get(key) && sweepKey !== null && live.get(sweepKey)) {
+      key = sweepKey; // K3 (LD217): git corroborates a group still taking marks, else it is the sweep's receipt
+      target = live.get(sweepKey).target;
+      real = false; // a receipt never makes the sweep's action
     }
     let g = live.get(key);
     if (!g && fingerprint) {
@@ -879,7 +885,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     g.sources.push(m.source);
     g.slots.push(slotsOf(m));
     g.hints.push(m.cause_hint || null);
-    if (DISK.has(m.says) && !GLOVE.has(m.source) && m.target && (m.target.kind === 'file' || m.target.kind === 'dir')) {
+    if (DISK.has(m.says) && !GLOVE.has(m.source) && !fromGit && m.target && (m.target.kind === 'file' || m.target.kind === 'dir')) {
       // A1b: when the change was seen, for steps 2 (a file's own marks) and 3 (the commands running at its first).
       const seen = BigInt(m.mono_ns);
       if (m.target.kind === 'file') g.changeSeen.push(seen);

@@ -2124,6 +2124,10 @@ const MUTANTS = [
   { id: 'K5c-1 the rescan reads the baseline only', file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
     from: 'const known = s.lv && s.lv.on ? s.lv.opon.lastStates() : new Map();', to: 'const known = new Map();',
     fails: ['K5c'] },
+  // Slice K2r2: a rescan mark keeps its own path (LD211 (1), (6); LD214).
+  { id: 'K2r2-1 a rescan of a temp or swap file is read as the file it stands for', file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
+    from: "typeof m.target.path === 'string' && !rescanned) {", to: "typeof m.target.path === 'string') {",
+    fails: ['K2r2'] },
   // Slice C3d3: a mention read in any sentence (LD203).
   { id: 'C3d3-1 only a sentence the reader takes as a claim mentions a path', file: 'src/opon/corroborate/claims.js', test: 'test/conflicts.js',
     from: "return text === null ? [] : [...new Set(extractTargets(text)", to: "return text === null ? [] : [...new Set(extractClaims(text).flatMap((c) => c.targets)",

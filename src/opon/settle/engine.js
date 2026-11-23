@@ -785,7 +785,8 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     let target = m.target;
     let real = true;
     const fingerprint = m.says === 'fingerprinted'; // N2: joins its group and never moves its clock, so it settles when it would have
-    if (m.target && m.target.kind === 'file' && typeof m.target.path === 'string') {
+    const rescanned = fingerprint && Boolean(m.detail) && m.detail.rescan === true; // K2r2 (LD214): a rescan mark keeps its own path, never aliased
+    if (m.target && m.target.kind === 'file' && typeof m.target.path === 'string' && !rescanned) {
       const p = m.target.path;
       if (path.posix.basename(p) === '4913') {
         const host = latestOpenIn(path.posix.dirname(p));
@@ -810,7 +811,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       }
     }
     let missed = null; // K2 (LD207): the rescan's reading of a change the session has no odù of
-    if (fingerprint && m.detail && m.detail.rescan === true && key.startsWith('file:') && !live.get(key) && !(forcedLast.get(key) && unsealed.has(forcedLast.get(key).id))) {
+    if (rescanned && key.startsWith('file:') && !live.get(key) && !(forcedLast.get(key) && unsealed.has(forcedLast.get(key).id))) {
       const before = stateBefore({ key, target });
       const after = fingerprintedState(m);
       if (before !== null && after !== null && before !== after) missed = { before, after };

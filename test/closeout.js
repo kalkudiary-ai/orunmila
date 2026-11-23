@@ -150,4 +150,33 @@ it('K2r (LD210 (6), named K2b there): two rescans of one path: the missed change
   }
 });
 
+it('K2r2 (LD210/LD211 (1), (6); Q22 checklist rows alias-*-rescan): a rescan mark keeps its own path: an editor\'s leftover temp or swap file is never read as the file it stands for, before or after that file\'s own rescan', () => {
+  const base = tmpDir();
+  try {
+    const log = makeLog(base, {}, { baseline: [{ path: 'src/a.ts', size: 4, fingerprint: FP('a') }, { path: 'src/b.ts', size: 4, fingerprint: FP('b') }, { path: 'src/c.ts', size: 4, fingerprint: FP('c') }] });
+    const s = {};
+    log.append(sweep(1000, 'started'));
+    s.swp = log.append(rescan(1010, 'src/.a.ts.swp', FP('7'))); // sorts before src/a.ts in the walk
+    s.a = log.append(rescan(1020, 'src/a.ts', FP('a'))); // a.ts as the baseline: nothing missed
+    s.tilde = log.append(rescan(1030, 'src/b.ts~', FP('9'))); // a leftover backup of b.ts, b.ts itself unchanged (no rescan mark)
+    s.v = log.append(rescan(1040, 'src/4913', FP('6'))); // vim's probe file, left behind
+    s.tmp = log.append(rescan(1050, 'src/c.ts.tmp', FP('5'))); // and the other three temp forms of c.ts, c.ts itself unchanged
+    s.lock = log.append(rescan(1060, 'src/.#c.ts', FP('4')));
+    s.swp2 = log.append(rescan(1070, 'src/c.ts.swp', FP('3')));
+    log.append(sweep(1100, 'exited'));
+    const r = replayFolder(log.dir);
+    assert.strictEqual(r.ok, true, r.words);
+    const odus = r.odu.split('\n').slice(1, -1).map((l) => JSON.parse(l));
+    assert.deepStrictEqual(odus.filter((o) => o.target && ['src/a.ts', 'src/b.ts', 'src/c.ts'].includes(o.target.path)), [], 'a.ts, b.ts and c.ts: no odù, the temp files are not them');
+    for (const [p, seq, fp] of [['src/.a.ts.swp', s.swp, FP('7')], ['src/b.ts~', s.tilde, FP('9')], ['src/4913', s.v, FP('6')], ['src/c.ts.tmp', s.tmp, FP('5')], ['src/.#c.ts', s.lock, FP('4')], ['src/c.ts.swp', s.swp2, FP('3')]]) {
+      const o = at(odus, p);
+      assert.deepStrictEqual([witnesses(o), o.action, o.net_change, o.mark_seqs, o.conflicts.map((c) => c.kind)], [['saw_nothing', 'saw_nothing'], 'created', { before: 'absent', after: fp, changed: true }, [seq], ['missed_live']], p);
+    }
+    const sweepOdu = odus.find((o) => o.target && o.target.kind === 'process' && o.action === 'started');
+    assert.ok(sweepOdu.mark_seqs.includes(s.a), "a.ts's rescan is the sweep's receipt");
+  } finally {
+    rmrf(base);
+  }
+});
+
 runAll('closeout');

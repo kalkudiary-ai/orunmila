@@ -2210,6 +2210,10 @@ const MUTANTS = [
   { id: 'K6-6 the flag off still reads the odù log', file: 'bin/orunmila.js', test: 'test/closeout.js',
     from: "const fromOdu = process.env.ORUNMILA_FEEDBACK_FROM_ODU === '1';", to: 'const fromOdu = true;',
     fails: ['K6 line 614'] },
+  // Slice LA2: the launch agent keeps the live flag (Q7, LD219).
+  { id: 'LA2-1 the launch agent drops the live flag', file: 'src/opon/intake/launch-agent.js', test: 'test/launch-agent.js',
+    from: ", 'ORUNMILA_OPON_LIVE']; // LA2", to: ']; // LA2',
+    fails: ['LA2'] },
   // Slice C3d3c: wrapper text and a code block's bare names (LD211 (2), LD215).
   { id: 'C3d3c-1 harness wrapper text counts as a mention', file: 'src/opon/corroborate/claims.js', test: 'test/conflicts.js',
     from: 'const own = stripWrapperTags(text);', to: 'const own = text;',

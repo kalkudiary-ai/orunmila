@@ -51,6 +51,12 @@ it('LA: the plist carries ORUNMILA_HOME and ORUNMILA_INTAKE_PORT only when set, 
   assert.ok(!x.includes('PATH') && !x.includes('SECRET_TOKEN'), 'no other variable is copied');
 });
 
+it('LA2 (Q7, LD219): the plist carries ORUNMILA_OPON_LIVE when set, so an agent installed with the live flag keeps it across restarts and logins; unset, none', () => {
+  const on = plistFor({ ...BASE, env: { ORUNMILA_OPON_LIVE: '1' } });
+  assert.ok(on.includes('<key>EnvironmentVariables</key>\n  <dict>\n    <key>ORUNMILA_OPON_LIVE</key>\n    <string>1</string>\n  </dict>'), on);
+  assert.ok(!plistFor({ ...BASE, env: { ORUNMILA_OPON_LIVE: '' } }).includes('ORUNMILA_OPON_LIVE'));
+});
+
 it(
   'LA: install writes the plist 0644 and bootstraps it after booting out any earlier one',
   withDir((dir) => {

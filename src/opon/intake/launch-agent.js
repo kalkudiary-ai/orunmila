@@ -21,16 +21,16 @@
  * only after a failed exit (KeepAlive SuccessfulExit false): a crash or an
  * uncaught error, never a signal stop, which exits 0 (LD132), so `orunmila
  * intake stop` stays a stop; a refused start (another intake runs: exit 3) is
- * retried every ThrottleInterval seconds. Only ORUNMILA_HOME and
- * ORUNMILA_INTAKE_PORT are copied from the installing environment, and only
- * when set.
+ * retried every ThrottleInterval seconds. Only ORUNMILA_HOME,
+ * ORUNMILA_INTAKE_PORT and ORUNMILA_OPON_LIVE (LA2, LD219) are copied from the
+ * installing environment, and only when set.
  */
 
 const fs = require('fs');
 const path = require('path');
 
 const LABEL = 'dev.orunmila.intake';
-const ENV_KEYS = ['ORUNMILA_HOME', 'ORUNMILA_INTAKE_PORT'];
+const ENV_KEYS = ['ORUNMILA_HOME', 'ORUNMILA_INTAKE_PORT', 'ORUNMILA_OPON_LIVE']; // LA2 (LD219): the live flag kept across restarts
 const THROTTLE_S = 10;
 
 const xml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

@@ -2158,7 +2158,7 @@ const MUTANTS = [
     from: "!p.startsWith('../') && !isIgnored(p, exclusions) && ", to: "!p.startsWith('../') && ",
     fails: ['K7 tests 4 and 73'] },
   { id: 'K7-4 a path the rescan found changed is rated high', file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
-    from: ' && ![...rescannedPaths].some((t) => named(t, p));', to: ';',
+    from: ' && ![...rescannedPaths].some((t) => named(t.toLowerCase(), p.toLowerCase()));', to: ';',
     fails: ['K7 tests 4 and 73'] },
   { id: 'K7-5 a phantom file claim seals at its turn, not the closeout', file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
     from: 'else awaiting.push({ make, path: w });', to: "else out.push(make('low'));",
@@ -2240,6 +2240,13 @@ const MUTANTS = [
   { id: 'F1-2 a bare name rates high though a folder is excluded', file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
     from: 'return bare && exclusions.length > 0;', to: 'return false;',
     fails: ['F1 (LD226'] },
+  // F4a (LD227).
+  { id: "F4a-1 a rescan mark is matched in the claim's case only", file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
+    from: 'named(t.toLowerCase(), p.toLowerCase())', to: 'named(t, p)',
+    fails: ['F4a (LD227'] },
+  { id: 'F4a-2 a baseline entry that differs only in case reads as no entry', file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
+    from: '      if (named(lk, lp) && !named(k, p)) return true;', to: '      if (false) return true;',
+    fails: ['F4a (LD227'] },
 ];
 
 function copyRepo(root) {

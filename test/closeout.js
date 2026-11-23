@@ -374,6 +374,33 @@ it("F1 (LD226; Q24 checklist rows P-k7-*, W-*-baseline): a phantom file claim is
   }
 });
 
+it("F4a (LD227; Q24 checklist rows P-k7-rescan-case, P-k7-baseline-case): K7 compares a claim's path ignoring case, so on a root that folds case (marks and baseline lower-cased) a claim written src/B.ts is low when the rescan marked src/b.ts, and src/Config.ts is low beside a baseline src/config.ts (one file or two: the engine cannot tell); exact spellings rate as before", () => {
+  const base = tmpDir();
+  try {
+    const log = makeLog(base, {}, { baseline: [{ path: 'src/config.ts', size: 4, fingerprint: FP('1') }, { path: 'src/b.ts', size: 4, fingerprint: FP('2') }, { path: 'src/l.ts', kind: 'link' }, { path: 'src/linkdir', kind: 'link' }] });
+    const written = ['src/config.ts', 'src/Config.ts', 'src/B.ts', 'src/N.ts', 'src/L.ts', 'src/LinkDir/new.ts', 'src/New.ts'];
+    log.append(said(2000, written.map((w) => `I updated ${w}.`).join(' ')));
+    log.append(M.turnEnded(2000));
+    log.append(M.tick(9000));
+    log.append(sweep(10000, 'started'));
+    log.append(rescan(10010, 'src/b.ts', FP('9'))); // b.ts changed by a hand no witness saw, named as the walk names it
+    log.append(rescan(10020, 'src/n.ts', FP('8'))); // n.ts created by a hand: no baseline entry, only the rescan's mark
+    log.append(sweep(10100, 'exited'));
+    const r = replayFolder(log.dir);
+    assert.strictEqual(r.ok, true, r.words);
+    const odus = r.odu.split('\n').slice(1, -1).map((l) => JSON.parse(l));
+    for (const o of odus) assert.deepStrictEqual(checkOdu(o), [], JSON.stringify(o));
+    const sealed = fileClaims(odus);
+    const want = { 'src/config.ts': 'high', 'src/Config.ts': 'low', 'src/B.ts': 'low', 'src/N.ts': 'low', 'src/L.ts': 'low', 'src/LinkDir/new.ts': 'low', 'src/New.ts': 'high' };
+    for (const [w, conf] of Object.entries(want)) {
+      const o = sealed[w];
+      assert.deepStrictEqual([o.witness_status.glove.status, o.witness_status.sentinel.status, o.conflicts[0].why, o.confidence], ['saw', 'out_of_scope', 'no_event', conf], w);
+    }
+  } finally {
+    rmrf(base);
+  }
+});
+
 // K6 (LD218; lines 614, 644, 691): the agent's closeout feedback read from the odù log, side by side with the old path.
 it('K6 line 614 (LD218): the agent\'s JSON feedback from the odù log: phantom claims by turn, silent changes as undisclosed, the other conflicts as findings; side by side with the old path; the CLI reads it only with ORUNMILA_FEEDBACK_FROM_ODU=1', () => {
   const { feedbackFromOdu, sideBySide } = require('../src/opon/feedback/from-odu');

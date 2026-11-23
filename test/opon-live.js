@@ -840,4 +840,35 @@ it(
   }),
 );
 
+/** A throwaway git repository's runner (K3, F8, F2): no user or system config, no signing. */
+const gitIn = (project) => (...args) => {
+  const { spawnSync } = require('child_process');
+  const r = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', '-c', 'commit.gpgsign=false', ...args], { cwd: project, env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }, encoding: 'utf8' });
+  assert.strictEqual(r.status, 0, `${args.join(' ')}: ${r.stderr}`);
+};
+
+it(
+  "F8 (LD223; Q24): git's status codes are read work tree first: a file added to the index and then deleted from disk (AD) is deleted, as a tracked file deleted ( D) is; one added and still there (A ) and an untracked one (??) are created; a tracked one changed is modified",
+  withBase((base) => {
+    const { gitChanged } = require('../src/opon/intake/router');
+    const project = path.join(base, 'project');
+    fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+    const git = gitIn(project);
+    const put = (n, text = `${n}\n`) => fs.writeFileSync(path.join(project, 'src', n), text);
+    put('kept.js');
+    put('gone.js');
+    git('init', '-q');
+    git('add', '-A');
+    git('commit', '-q', '--no-verify', '-m', 'base');
+    put('added.js');
+    put('addgone.js');
+    git('add', 'src/added.js', 'src/addgone.js');
+    fs.rmSync(path.join(project, 'src', 'addgone.js'));
+    fs.rmSync(path.join(project, 'src', 'gone.js'));
+    put('kept.js', 'changed\n');
+    put('new.js');
+    assert.deepStrictEqual(Object.fromEntries([...gitChanged(project)].sort()), { 'src/added.js': 'created', 'src/addgone.js': 'deleted', 'src/gone.js': 'deleted', 'src/kept.js': 'modified', 'src/new.js': 'created' });
+  }),
+);
+
 runAll('opon-live');

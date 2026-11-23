@@ -2221,6 +2221,10 @@ const MUTANTS = [
   { id: "C3d3c-2 a code block's bare name counts as a mention", file: 'src/opon/corroborate/claims.js', test: 'test/conflicts.js',
     from: ".filter((p) => p.replace(/^\\.\\//, '').includes('/'));", to: ';',
     fails: ['C3d3c'] },
+  // Q24's slices (LD220, LD221): F8.
+  { id: "F8-1 git's index column read before the work tree's (AD reads created)", file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
+    from: "xy[1] === 'D' ? 'deleted' : xy === '??'", to: "xy === '??'",
+    fails: ['F8 (LD223'] },
 ];
 
 function copyRepo(root) {

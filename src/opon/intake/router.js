@@ -140,7 +140,7 @@ function gitChanged(root) {
   for (const rec of st.stdout.split('\0')) {
     if (rec.length < 4 || !rec.slice(3).startsWith(prefix)) continue;
     const xy = rec.slice(0, 2);
-    out.set(rec.slice(3 + prefix.length), xy === '??' || xy.includes('A') ? 'created' : xy.includes('D') ? 'deleted' : 'modified');
+    out.set(rec.slice(3 + prefix.length), xy[1] === 'D' ? 'deleted' : xy === '??' || xy.includes('A') ? 'created' : xy.includes('D') ? 'deleted' : 'modified'); // F8 (LD223): the work tree first, so AD is deleted
   }
   return out;
 }
@@ -520,4 +520,4 @@ function createRouter(o) {
   return { payload, poll, resume, stop, error, gap, held: engine.held, watching };
 }
 
-module.exports = { createRouter, RELEASE_MS };
+module.exports = { createRouter, RELEASE_MS, gitChanged };

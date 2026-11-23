@@ -24,9 +24,9 @@
  *   mentionsOf(mark) -> [path as written]
  *
  * For a silent change (line 434: a change "the agent never mentioned in its
- * claims"; slice C3d2, LD194; C3d3, LD203): every path target the reader's
- * target finder sees in the text, cleaned as the reader cleans it (table rows,
- * code blocks), in any sentence, a claim or not: the reader takes no claim from
+ * claims"; slice C3d2, LD194; C3d3, LD203; C3d3b, LD210 (4)): every path
+ * target the reader's target finder sees anywhere in the text (a table row and
+ * a code block included), in any sentence, a claim or not: the reader takes no claim from
  * "I edited src/a.ts." (its verbs have no `edited`), and that sentence still
  * mentions the file. None for a claim that could not be confirmed.
  */
@@ -34,7 +34,6 @@
 const { extractClaims } = require('../../reconcile/claim-extractor');
 const { findExecutionClaims } = require('../../reconcile/verification-claim');
 const { extractTargets } = require('../../reconcile/task-extractor');
-const { sanitize } = require('../../reconcile/sanitize');
 
 /** A `claimed` mark's text, or null for one that could not be confirmed (N10) or is not a claim. */
 function confirmedText(mark) {
@@ -61,9 +60,9 @@ function claimsOf(mark, { strictProof = false } = {}) {
 }
 
 function mentionsOf(mark) {
-  // C3d3 (LD203): every path in the confirmed text, cleaned as the reader cleans it, in a sentence it takes as a claim or not.
+  // C3d3, C3d3b (LD203, LD210 (4)): every path anywhere in the confirmed text, a table row and a code block included.
   const text = confirmedText(mark);
-  return text === null ? [] : [...new Set(extractTargets(sanitize(text)).filter((t) => t.kind === 'path').map((t) => t.raw))];
+  return text === null ? [] : [...new Set(extractTargets(text).filter((t) => t.kind === 'path').map((t) => t.raw))];
 }
 
 module.exports = { claimsOf, mentionsOf };

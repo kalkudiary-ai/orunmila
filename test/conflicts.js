@@ -562,6 +562,22 @@ it('C3d3 line 434 (LD203): a path named in a sentence the claim reader does not 
   assert.deepStrictEqual([witnesses(c), c.conflicts.map((x) => [x.kind, x.claim_seqs])], [['saw', 'saw'], [['silent_change', [s.claim]]]]);
 });
 
+it('C3d3b (LD210 (4)): a path named only in a table row or only in a code block of the closing text is mentioned too: no silent change', () => {
+  const odus = replay((append) => {
+    append(M.edited(0, 'e1', 'src/w.ts'));
+    append(M.disk(50, 'src/w.ts'));
+    append(M.edited(10, 'e2', 'src/v.ts'));
+    append(M.disk(60, 'src/v.ts'));
+    append(claimed(1000, 't1', 'Done.\n\n| file | change |\n|---|---|\n| src/w.ts | fixed |\n\n```\nsrc/v.ts\n```'));
+    append(M.turnEnded(1000));
+    append(M.tick(20000));
+  });
+  for (const f of ['src/w.ts', 'src/v.ts']) {
+    const o = of(odus, file(f));
+    assert.deepStrictEqual([f, witnesses(o), o.conflicts], [f, ['saw', 'saw'], []]);
+  }
+});
+
 // C3e (LD199; line 435): the witnesses disagree on what happened to a file, rather than follow one another.
 const contradiction = (said) => ({ kind: 'contradiction', sources: ['hook', 'sentinel'], said });
 

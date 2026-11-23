@@ -1939,7 +1939,7 @@ const MUTANTS = [
     from: 'g.after = [g.amends, g.continues].filter((x) => x !== null && waiting.some((w) => w.id === x));', to: 'g.after = [];',
     fails: ['C3d2: an odù that amends'] },
   { id: 'C3d2-10 only a claim with an action verb mentions a path', file: 'src/opon/corroborate/claims.js', test: 'test/conflicts.js',
-    from: "return text === null ? [] : [...new Set(extractTargets(sanitize(text)).filter((t) => t.kind === 'path').map((t) => t.raw))];", to: 'return [...new Set(claimsOf(mark).flatMap((c) => c.files))];',
+    from: "return text === null ? [] : [...new Set(extractTargets(text).filter((t) => t.kind === 'path').map((t) => t.raw))];", to: "return [...new Set(claimsOf(mark).flatMap((c) => c.files))];",
     fails: ['C3d2: a change its turn'] },
   { id: 'C3d2-11 the schema does not ask a silent_change for its turns', file: 'spec/odu.schema.json', test: 'test/conflicts.js',
     from: '"turns",\n                "claim_seqs"', to: '"claim_seqs"',
@@ -2098,6 +2098,10 @@ const MUTANTS = [
   { id: 'K5b-2 a restart inside the lag grace never sweeps', file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
     from: 'else if (t.ended && lv) facts.closeoutAt = BigInt(clock().mono) + facts.graceNs;', to: 'else if (false) void 0;',
     fails: ['K5b'] },
+  // Slice C3d3b: a mention in a table row or a code block (LD210 (4)).
+  { id: 'C3d3b-1 the text is cleaned before mentions are read', file: 'src/opon/corroborate/claims.js', test: 'test/conflicts.js',
+    from: 'extractTargets(text).filter(', to: "extractTargets(require('../../reconcile/sanitize').sanitize(text)).filter(",
+    fails: ['C3d3b'] },
   // Slice K1b: no fingerprint after the closeout (LD210 (3)).
   { id: 'K1b-1 a fingerprint is asked after the closeout', file: 'src/opon/settle/engine.js', test: 'test/opon-live.js',
     from: '    due.length = 0; // K1b', to: '    void 0; // K1b',
@@ -2108,7 +2112,7 @@ const MUTANTS = [
     fails: ['K5c'] },
   // Slice C3d3: a mention read in any sentence (LD203).
   { id: 'C3d3-1 only a sentence the reader takes as a claim mentions a path', file: 'src/opon/corroborate/claims.js', test: 'test/conflicts.js',
-    from: "return text === null ? [] : [...new Set(extractTargets(sanitize(text))", to: "return text === null ? [] : [...new Set(extractClaims(text).flatMap((c) => c.targets)",
+    from: "return text === null ? [] : [...new Set(extractTargets(text)", to: "return text === null ? [] : [...new Set(extractClaims(text).flatMap((c) => c.targets)",
     fails: ['C3d3'] },
 ];
 

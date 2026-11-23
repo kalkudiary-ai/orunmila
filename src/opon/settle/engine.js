@@ -184,7 +184,8 @@
  * whose net change is not false and whose cause is the agent's (steps 1-3),
  * naming calls of a turn, is judged against that turn's claims, so its seal
  * waits, settled, until each such turn is over (its `ended`, the session's
- * `ended`, or the intake's downtime from after the turn began, as C3b). It is
+ * `ended`, or the closeout; Q29, LD245: the intake's downtime no longer ends a
+ * turn, and a verdict reached across it names the gaps in `downtime`). It is
  * closed when it would have sealed: decided, its record fixed, a later mark of
  * its target a new group, as after a seal; only the seal waits. A group whose
  * `amends` or `continues` names a waiting one waits for it, so those still name
@@ -274,7 +275,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
   const callTurn = new Map(); // tool call id -> the turn its Glove marks name (C3d1)
   const turnStart = new Map(); // turn -> when its first Glove mark came (C3d1)
   let hooksChanged = false; // the agent's hook settings changed: the Glove down from then (line 352)
-  const turnOver = new Map(); // turn -> when it was over: its `ended`, or the intake's downtime (C3d2)
+  const turnOver = new Map(); // turn -> when it was over: its `ended` (C3d2; not the intake's downtime since Q29, LD245)
   let sessionOver = null; // when the session's `ended` came: every turn over from then (C3d2)
   const heard = new Map(); // turn -> [{ seq, paths }]: its confirmed claimed marks and the paths they mention (C3d2)
   const waiting = []; // closed groups whose seal waits for their turns or a group they name, in the order they closed (C3d2)
@@ -354,12 +355,10 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     const from = d.since && d.since.mono_ns ? BigInt(d.since.mono_ns) : seen;
     const to = d.until && d.until.mono_ns ? BigInt(d.until.mono_ns) : seen;
     const who = d.since ? 'both' : d.root ? 'sentinel' : 'glove';
-    gaps.push({ from, to, who });
-    if (who === 'both') {
-      // G3, C3b: a call started before the intake's downtime with no outcome yet may have lost it; a command's exit so (endCalls; G3b, LD205).
-      endCalls((t) => t.start <= from, from);
-      for (const [t, at] of turnStart) if (at <= from && !turnOver.has(t)) turnOver.set(t, from); // C3d2: and any turn's end
-    }
+    gaps.push({ from, to, who, seq: m.seq });
+    // G3, C3b: a call started before the intake's downtime with no outcome yet may have lost it; a command's exit so (endCalls; G3b, LD205).
+    // Q29 (LD245): the downtime no longer ends a turn (C3d2): the closeout seals whatever still waits (K1), and the verdict names the gap.
+    if (who === 'both') endCalls((t) => t.start <= from, from);
   }
 
   /** The target's state before a group (N2): its last sealed group's after, else the baseline's. */
@@ -465,11 +464,17 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     if (!g.key.startsWith('file:') || g.net === undefined || g.net.changed === false || !c || !AGENT_CAUSES.has(c.kind)) return [];
     return [...new Set([c.ref, ...(c.also || [])].map((h) => callTurn.get(h)).filter(Boolean))].sort();
   }
-  /** C3d2 (LD194; line 434): a silent_change when its turns' confirmed claims were read and none mentions its path; else null. */
+  /**
+   * C3d2 (LD194; line 434): a silent_change when its turns' confirmed claims were read and none mentions its path; else null.
+   * Q29 (LD245): with `downtime`, the seqs of the intake's downtime gaps inside its turns (from a turn's first Glove mark to its end):
+   * the verdict was reached across a time nothing recorded, and says so.
+   */
   function silentOf(g) {
     const read = g.judged.flatMap((t) => heard.get(t) || []);
     if (!read.length || read.some((c) => c.paths.some((w) => named(g.target.path, asWritten(w))))) return null;
-    return conflictOf(g, 'silent_change', [...g.sources, 'agent_claim'], { turns: [...g.judged], claim_seqs: read.map((c) => c.seq).sort((a, b) => a - b) });
+    const inside = (x) => g.judged.some((t) => turnStart.has(t) && x.to >= turnStart.get(t) && (overAt(t) === null || x.from <= overAt(t)));
+    const downtime = gaps.filter((x) => x.who === 'both' && inside(x)).map((x) => x.seq);
+    return conflictOf(g, 'silent_change', [...g.sources, 'agent_claim'], { turns: [...g.judged], claim_seqs: read.map((c) => c.seq).sort((a, b) => a - b), ...(downtime.length ? { downtime } : {}) });
   }
 
   /**

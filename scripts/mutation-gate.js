@@ -1929,9 +1929,28 @@ const MUTANTS = [
   { id: "C3d2-6 the session's end does not end a turn", file: 'src/opon/settle/engine.js', test: 'test/conflicts.js',
     from: "if (m.says === 'ended' && m.target && m.target.kind === 'session' && sessionOver === null) sessionOver = now; // C3d2", to: '',
     fails: ['C3d2: no verdict'] },
-  { id: "C3d2-7 the intake's downtime does not end a turn", file: 'src/opon/settle/engine.js', test: 'test/conflicts.js',
-    from: 'for (const [t, at] of turnStart) if (at <= from && !turnOver.has(t)) turnOver.set(t, from);', to: '',
-    fails: ['C3d2: no verdict'] },
+  // C3d2-7 retired by Q29 (LD245): it guarded the rule Q29 reverses (the intake's downtime ended a turn). Q29-1 guards the reverse.
+  { id: "Q29-1 the intake's downtime ends a turn again", file: 'src/opon/settle/engine.js', test: 'test/conflicts.js',
+    from: "    if (who === 'both') endCalls((t) => t.start <= from, from);", to: "    if (who === 'both') { endCalls((t) => t.start <= from, from); for (const [t, at] of turnStart) if (at <= from && !turnOver.has(t)) turnOver.set(t, from); }",
+    fails: ['C3d2 Q29'] },
+  { id: 'Q29-2 the verdict names no downtime', file: 'src/opon/settle/engine.js', test: 'test/conflicts.js',
+    from: ', ...(downtime.length ? { downtime } : {}) });', to: ' });',
+    fails: ['C3d2 Q29'] },
+  { id: "Q29-3 a downtime outside the turn is named", file: 'src/opon/settle/engine.js', test: 'test/conflicts.js',
+    from: "gaps.filter((x) => x.who === 'both' && inside(x))", to: "gaps.filter((x) => x.who === 'both')",
+    fails: ['C3d2 Q29'] },
+  { id: 'Q29-4 the schema takes any downtime', file: 'spec/odu.schema.json', test: 'test/conflicts.js',
+    from: '"downtime": {\n                  "type": "array",\n                  "items": {\n                    "type": "integer",', to: '"downtime": {\n                  "type": "array",\n                  "items": {',
+    fails: ['C3d2: the schema asks a silent_change'] },
+  { id: 'Q29-5 the feedback drops the downtime', file: 'src/opon/feedback/from-odu.js', test: 'test/closeout.js',
+    from: ', ...(c.downtime ? { downtime: [...c.downtime] } : {}) });', to: ' });',
+    fails: ['Q30 (LD246)'] },
+  { id: 'Q30-1 a change outside the project is counted as undisclosed', file: 'src/opon/feedback/from-odu.js', test: 'test/closeout.js',
+    from: "o.target.outside === true ? 'undisclosed_outside' : 'undisclosed_changes'", to: "'undisclosed_changes'",
+    fails: ['Q30 (LD246)'] },
+  { id: 'Q30-2 the summary does not count the changes outside', file: 'src/opon/feedback/from-odu.js', test: 'test/closeout.js',
+    from: '    t.summary.undisclosed_outside = t.undisclosed_outside.length;\n', to: '',
+    fails: ['Q30 (LD246)'] },
   { id: 'C3d2-8 a change shown unchanged is judged, and waits', file: 'src/opon/settle/engine.js', test: 'test/conflicts.js',
     from: "if (!g.key.startsWith('file:') || g.net === undefined || g.net.changed === false ||", to: "if (!g.key.startsWith('file:') || g.net === undefined ||",
     fails: ['C3d2: grouping is unchanged'] },
@@ -2256,14 +2275,15 @@ const MUTANTS = [
     fails: ['F6 (LD228'] },
   // MG2 (LD230): the gate's own launcher. Each test kills what it recorded, so these mutants leak nothing.
   // Every snippet spans a line break, written \n here, so it matches LAUNCHER and never this list.
+  // MG4: each test runs only the layer it proves, so each layer's mutants are caught by that layer's test alone.
   { id: 'MG2-1 the group left running when the command ends', file: 'scripts/mutation-gate.js', test: 'test/mutation-gate.js',
-    from: "  clearTimeout(hard);\n  group('SIGKILL');", to: '  clearTimeout(hard);',
+    from: "  look();\n  group('SIGKILL');\n  sweep();", to: '  look();\n  sweep();',
     fails: ["MG2: a suite's own child"] },
   { id: "MG2-2 the launcher's own SIGTERM leaves its group running", file: 'scripts/mutation-gate.js', test: 'test/mutation-gate.js',
-    from: "Number(ms));\nfor (const s of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(s, () => { group('SIGKILL'); sweep(); process.exit(1); });", to: 'Number(ms));',
+    from: "}, Number(ms));\nfor (const s of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(s, () => { end(); process.exit(1); });", to: '}, Number(ms));',
     fails: ['MG2: a gate that overruns'] },
   { id: 'MG2-3 the command not given a group of its own', file: 'scripts/mutation-gate.js', test: 'test/mutation-gate.js',
-    from: "].join(',');\nconst c = spawn(cmd, args, { detached: true,", to: "].join(',');\nconst c = spawn(cmd, args, {",
+    from: "if (pre) env.ORUNMILA_MG_TREE = treeFile;\nconst c = spawn(cmd, argv, { detached: true,", to: "if (pre) env.ORUNMILA_MG_TREE = treeFile;\nconst c = spawn(cmd, argv, {",
     fails: ["MG2: a suite's own child", 'MG2: a gate that overruns'] },
   // IR1 (LD240): the intake restarted only while it holds no session.
   { id: 'IR1-1 a held session does not hold the restart back', file: 'scripts/intake-restart-idle.js', test: 'test/intake-restart.js',
@@ -2277,11 +2297,54 @@ const MUTANTS = [
     fails: ['IR1: a restart that fails'] },
   // MG3 (LD239): a process that leaves the suite's group is found by its environment.
   { id: 'MG3-1 nothing is swept when the command ends', file: 'scripts/mutation-gate.js', test: 'test/mutation-gate.js',
-    from: "  group('SIGKILL');\n  sweep();\n  if (timedOut)", to: "  group('SIGKILL');\n  if (timedOut)",
+    from: "  group('SIGKILL');\n  sweep();\n  reap();", to: "  group('SIGKILL');\n  reap();",
     fails: ['MG3 (LD239)'] },
   { id: "MG3-2 the command runs without the launcher's tag", file: 'scripts/mutation-gate.js', test: 'test/mutation-gate.js',
-    from: "env: { ...process.env, [KEY]: tags } });\nconst group", to: "});\nconst group",
+    from: 'const env = { ...process.env, [KEY]: tags };\nif (pre)', to: 'const env = { ...process.env };\nif (pre)',
     fails: ['MG3 (LD239)'] },
+  // MG4 (LD244): a process that leaves the suite's group and clears its environment, found by its place in the tree.
+  { id: 'MG4-1 nothing tracked is killed', file: 'scripts/mutation-gate.js', test: 'test/mutation-gate.js',
+    from: '  sweep();\n  reap();\n};', to: '  sweep();\n};',
+    fails: ['MG4 exit:', 'MG4 poll:'] },
+  { id: 'MG4-2 the node suite runs without the preload', file: 'scripts/mutation-gate.js', test: 'test/mutation-gate.js',
+    from: "const argv = pre ? ['--require', path.join(lib, 'mg-preload.js'), ...args] : args;\nconst env", to: 'const argv = args;\nconst env',
+    fails: ['MG4 exit:'] },
+  { id: "MG4-3 the preload's list is never read", file: 'scripts/mutation-gate.js', test: 'test/mutation-gate.js',
+    from: '  fromPreload();\n  look();', to: '  look();',
+    fails: ['MG4 exit:'] },
+  { id: 'MG4-4 no poll', file: 'scripts/mutation-gate.js', test: 'test/mutation-gate.js',
+    from: "const poll = on.has('poll') ? setInterval(look, 200) : null;\nconst reap", to: 'const poll = null;\nconst reap',
+    fails: ['MG4 poll:'] },
+  { id: 'MG4-5 no look at the tree before a timeout kills the suite', file: 'scripts/mutation-gate.js', test: 'test/mutation-gate.js',
+    from: "  timedOut = true;\n  look();\n  group('SIGTERM');", to: "  timedOut = true;\n  group('SIGTERM');",
+    fails: ['MG4 exit:'] },
+  { id: 'MG4-6 the preload writes nothing', file: 'scripts/mg-preload.js', test: 'test/mutation-gate.js',
+    from: "require('fs').appendFileSync(file, tree.formatTracked(", to: 'void (file, tree.formatTracked(',
+    fails: ['MG4 exit:'] },
+  { id: 'MG4-7 the gate declares nothing', file: 'scripts/mutation-gate.js', test: 'test/mutation-gate.js',
+    from: "  log(reach());\n  return ok ? 0 : 1;", to: '  return ok ? 0 : 1;',
+    fails: ['MG4: the gate declares'] },
+  { id: 'MG4-8 a reused pid is killed', file: 'scripts/mg-tree.js', test: 'test/mg-tree.js',
+    from: '.filter(([pid, start]) => t.has(pid) && t.get(pid).start === start)', to: '.filter(([pid]) => t.has(pid))',
+    fails: ['live: a reused pid'] },
+  { id: 'MG4-9 an orphan stops being followed', file: 'scripts/mg-tree.js', test: 'test/mg-tree.js',
+    from: '  for (const [pid, start] of tracked) if (t.has(pid) && t.get(pid).start === start) from.add(pid);\n', to: '',
+    fails: ['track: an orphan'] },
+  { id: "MG4-10 a reused pid's children are followed", file: 'scripts/mg-tree.js', test: 'test/mg-tree.js',
+    from: 'if (t.has(pid) && t.get(pid).start === start) from.add(pid)', to: 'if (t.has(pid)) from.add(pid)',
+    fails: ['track: a reused pid'] },
+  { id: 'MG4-11 the start time is one word of five', file: 'scripts/mg-tree.js', test: 'test/mg-tree.js',
+    from: "start: w.slice(2, 7).join(' ')", to: 'start: w[2]',
+    fails: ['parsePs:'] },
+  { id: 'MG4-12 a command name with ") " is cut at its first paren', file: 'scripts/mg-tree.js', test: 'test/mg-tree.js',
+    from: "text.slice(text.lastIndexOf(')') + 2)", to: "text.slice(text.indexOf(')') + 2)",
+    fails: ['parseStat:'] },
+  { id: "MG4-13 ps's own pid is in the table", file: 'scripts/mg-tree.js', test: 'test/mg-tree.js',
+    from: '    t.delete(r.pid);\n', to: '',
+    fails: ['table: '] },
+  { id: 'MG4-14 the list is one line', file: 'scripts/mg-tree.js', test: 'test/mg-tree.js',
+    from: '`${pid} ${start}\\n`', to: '`${pid} ${start} `',
+    fails: ['formatTracked and readTracked'] },
   // Q25 (LD233): the header records whether the root folds case, and claims are matched by it.
   { id: 'Q25-1 a claim keeps its own case on a root that folds case', file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
     from: "    if (ci === true && !p.startsWith('/')) p = p.toLowerCase();\n", to: '',
@@ -2333,17 +2396,39 @@ const SUITE_TIMEOUT_MS = 300000; // MG1: one suite run's limit; a mutant that ha
 // SIGTERM, SIGINT or SIGHUP, the whole group is killed: no process the command started outlives it. MG3 (LD239):
 // a process that leaves the group (spawned detached, or setsid) is reached by its environment: the command runs
 // with ORUNMILA_MG_RUN holding every enclosing launcher's tag and this one's, and after each group kill every
-// process whose ORUNMILA_MG_RUN names this tag is killed too (macOS: ps -E; Linux: /proc/<pid>/environ). A process
-// that clears its environment, or runs as another user, is not reached. A timeout is reported on fd 3.
+// process whose ORUNMILA_MG_RUN names this tag is killed too (macOS: ps -E; Linux: /proc/<pid>/environ). MG4: a
+// process that leaves the group and clears its environment is reached by its place in the process tree
+// (scripts/mg-tree.js): the launcher tracks its descendants, by pid and start time, every 200 ms, before each kill, and
+// (a node suite) from scripts/mg-preload.js at the suite's exit, while its children are still its own; on Linux the
+// launcher is a subreaper when python3 can make it one, so every orphan comes back to it. Not reached, and declared by
+// the gate's last line (reach()): a process run as another user. A timeout is reported on fd 3.
+// Each way of reaching a process is a layer (LAYERS); the gate runs them all, and each test runs only the one it proves,
+// so no layer's test passes on another layer's work.
+const LAYERS = ['group', 'tag', 'exit', 'poll', 'reaper'];
 const LAUNCHER = `'use strict';
 const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { spawn, execFileSync } = require('child_process');
-const [ms, cmd, ...args] = process.argv.slice(1);
+const [ms, lib, layers, cmd, ...args] = process.argv.slice(1);
+const on = new Set(layers.split(','));
+const tree = require(path.join(lib, 'mg-tree.js'));
 const TAG = process.pid + '-' + Date.now();
 const KEY = 'ORUNMILA_MG_RUN';
 const tags = [...(process.env[KEY] ? process.env[KEY].split(',') : []), TAG].join(',');
-const c = spawn(cmd, args, { detached: true, stdio: ['ignore', 'inherit', 'inherit'], env: { ...process.env, [KEY]: tags } });
-const group = (sig) => { try { process.kill(-c.pid, sig); } catch (e) { void e; } };
+const treeFile = path.join(os.tmpdir(), 'orunmila-mg-' + TAG + '.tree');
+const pre = on.has('exit') && (cmd === process.execPath || path.basename(cmd) === 'node');
+const argv = pre ? ['--require', path.join(lib, 'mg-preload.js'), ...args] : args;
+const env = { ...process.env, [KEY]: tags };
+if (pre) env.ORUNMILA_MG_TREE = treeFile;
+const c = spawn(cmd, argv, { detached: true, stdio: ['ignore', 'inherit', 'inherit'], env });
+const group = (sig) => { try { process.kill(on.has('group') ? -c.pid : c.pid, sig); } catch (e) { void e; } };
+const treeOn = on.has('exit') || on.has('poll') || on.has('reaper');
+const tracked = new Map();
+const look = () => { if (!treeOn) return; try { tree.track(tree.table(), [process.pid], tracked); } catch (e) { void e; } };
+const poll = on.has('poll') ? setInterval(look, 200) : null;
+const reap = () => { if (!treeOn) return; for (let i = 0; i < 5; i++) { let t; try { t = tree.table(); } catch (e) { return; } tree.track(t, [process.pid], tracked); const left = tree.live(t, tracked).filter((p) => p !== process.pid); if (!left.length) return; for (const p of left) { try { process.kill(p, 'SIGKILL'); } catch (e) { void e; } } } };
+const fromPreload = () => { if (!pre) return; try { tree.readTracked(fs.readFileSync(treeFile, 'utf8'), tracked); } catch (e) { void e; } try { fs.rmSync(treeFile, { force: true }); } catch (e) { void e; } };
 const mine = (v) => v.startsWith(KEY + '=') && v.slice(KEY.length + 1).split(',').includes(TAG);
 function tagged() {
   const out = [];
@@ -2360,27 +2445,68 @@ function tagged() {
   }
   return out.filter((p) => p !== process.pid);
 }
-const sweep = () => { for (let i = 0; i < 5; i++) { let left = []; try { left = tagged(); } catch (e) { return; } if (!left.length) return; for (const p of left) { try { process.kill(p, 'SIGKILL'); } catch (e) { void e; } } } };
+const sweep = () => { if (!on.has('tag')) return; for (let i = 0; i < 5; i++) { let left = []; try { left = tagged(); } catch (e) { return; } if (!left.length) return; for (const p of left) { try { process.kill(p, 'SIGKILL'); } catch (e) { void e; } } } };
+const end = () => {
+  clearInterval(poll);
+  fromPreload();
+  look();
+  group('SIGKILL');
+  sweep();
+  reap();
+};
 let timedOut = false;
 let hard = null;
-const t = setTimeout(() => { timedOut = true; group('SIGTERM'); hard = setTimeout(() => group('SIGKILL'), 1000); }, Number(ms));
-for (const s of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(s, () => { group('SIGKILL'); sweep(); process.exit(1); });
+const t = setTimeout(() => {
+  timedOut = true;
+  look();
+  group('SIGTERM');
+  hard = setTimeout(() => { look(); group('SIGKILL'); }, 1000);
+}, Number(ms));
+for (const s of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(s, () => { end(); process.exit(1); });
 c.on('error', (e) => { process.stderr.write(String(e) + '\\n'); process.exit(127); });
 c.on('exit', (code, sig) => {
   clearTimeout(t);
   clearTimeout(hard);
-  group('SIGKILL');
-  sweep();
+  end();
   if (timedOut) fs.writeSync(3, 'timeout');
   process.exit(code === null ? 128 + (require('os').constants.signals[sig] || 0) : code);
 });`;
 
+// MG4, Linux: python3 makes the launcher a subreaper (prctl PR_SET_CHILD_SUBREAPER, 36, kept across exec), then
+// runs it, so a process whose parent ends is reparented to the launcher, not to pid 1, and is found as its descendant.
+const SUBREAPER_PY = 'import ctypes, os, sys\nctypes.CDLL(None).prctl(36, 1, 0, 0, 0)\nos.execv(sys.argv[1], sys.argv[1:])';
+let subreaperOk;
+/** True on Linux when python3 can make a process a subreaper (probed once). */
+function subreaper() {
+  if (process.platform !== 'linux') return false;
+  if (subreaperOk === undefined) {
+    const r = spawnSync('python3', ['-c', 'import ctypes, sys\nsys.exit(0 if ctypes.CDLL(None).prctl(36, 1, 0, 0, 0) == 0 else 1)'], { stdio: 'ignore' });
+    subreaperOk = r.status === 0;
+  }
+  return subreaperOk;
+}
+
+/** MG4: what the launcher cannot reach on this machine, printed as the gate's last line. */
+function reach() {
+  const user = 'not reached: a process run as another user (the gate kills only as the user it runs as)';
+  if (process.platform === 'linux' && subreaper()) {
+    return `reach: every process the suites start, by its group, its environment tag or its place in the process tree (the launcher is a subreaper, so orphans come back to it); ${user}.`;
+  }
+  if (process.platform === 'darwin' || process.platform === 'linux') {
+    return `reach: every process the suites start, by its group, its environment tag or its place in the process tree (read at a node suite's exit, before each kill and every 200 ms); ${user}; nor one that leaves its group and clears its environment and whose parent, other than a node suite, ends less than 200 ms after starting it.`;
+  }
+  return `reach: the suites' process groups only (no process table is read on ${process.platform}); ${user}; nor one that leaves its suite's group.`;
+}
+
 /**
- * Run `cmd args` under LAUNCHER (MG2); returns { status, signal, stdout, stderr, error, timedOut }.
- * A command killed by a signal exits 128 plus its number. test/mutation-gate.js runs the gate itself this way.
+ * Run `cmd args` under LAUNCHER (MG2) with the reach `layers` (MG4; all of them by default); returns
+ * { status, signal, stdout, stderr, error, timedOut }. A command killed by a signal exits 128 plus its number.
+ * test/mutation-gate.js runs the gate itself this way.
  */
-function spawnGroupSync(cmd, args, { cwd, env = process.env, timeoutMs = SUITE_TIMEOUT_MS, maxBuffer = 64 * 1024 * 1024 } = {}) {
-  const r = spawnSync(process.execPath, ['-e', LAUNCHER, String(timeoutMs), cmd, ...args], {
+function spawnGroupSync(cmd, args, { cwd, env = process.env, timeoutMs = SUITE_TIMEOUT_MS, maxBuffer = 64 * 1024 * 1024, layers = LAYERS } = {}) {
+  const launch = ['-e', LAUNCHER, String(timeoutMs), __dirname, layers.join(','), cmd, ...args];
+  const [exe, argv] = layers.includes('reaper') && subreaper() ? ['python3', ['-c', SUBREAPER_PY, process.execPath, ...launch]] : [process.execPath, launch];
+  const r = spawnSync(exe, argv, {
     cwd,
     env,
     encoding: 'utf8',
@@ -2394,9 +2520,9 @@ function spawnGroupSync(cmd, args, { cwd, env = process.env, timeoutMs = SUITE_T
 }
 
 /** Run one suite in `dir`; returns its exit status, the titles that passed and failed, and whether it timed out. */
-function runSuite(dir, suite, timeoutMs = SUITE_TIMEOUT_MS) {
+function runSuite(dir, suite, timeoutMs = SUITE_TIMEOUT_MS, layers = LAYERS) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'orunmila-mutant-home-'));
-  const r = spawnGroupSync('node', [path.join(dir, suite)], { cwd: dir, env: { ...process.env, ORUNMILA_HOME: home }, timeoutMs });
+  const r = spawnGroupSync('node', [path.join(dir, suite)], { cwd: dir, env: { ...process.env, ORUNMILA_HOME: home }, timeoutMs, layers });
   fs.rmSync(home, { recursive: true, force: true });
   if (r.timedOut) return { status: r.status, passed: [], failed: [], timedOut: true };
   // The runner prints one line per test: a coloured PASS or FAIL, two spaces, the title.
@@ -2415,7 +2541,7 @@ function runSuite(dir, suite, timeoutMs = SUITE_TIMEOUT_MS) {
  * killed: unmutated, it fails the baseline; mutated, the mutant broke the suite,
  * so it is killed, and the line says it timed out.
  */
-function runGate({ root = ROOT, mutants = MUTANTS, log = console.log, suiteTimeoutMs = SUITE_TIMEOUT_MS } = {}) {
+function runGate({ root = ROOT, mutants = MUTANTS, log = console.log, suiteTimeoutMs = SUITE_TIMEOUT_MS, layers = LAYERS } = {}) {
   const dir = copyRepo(root);
   let ok = true;
   try {
@@ -2424,7 +2550,7 @@ function runGate({ root = ROOT, mutants = MUTANTS, log = console.log, suiteTimeo
     const suites = [...new Set(mutants.map(suiteOf))];
     const secs = `${Math.round(suiteTimeoutMs / 1000)} s`;
     for (const suite of suites) {
-      const base = runSuite(dir, suite, suiteTimeoutMs);
+      const base = runSuite(dir, suite, suiteTimeoutMs, layers);
       if (base.timedOut) {
         log(`baseline: FAIL (${suite}, unmutated: timed out after ${secs})`);
         return 1;
@@ -2445,7 +2571,7 @@ function runGate({ root = ROOT, mutants = MUTANTS, log = console.log, suiteTimeo
         continue;
       }
       fs.writeFileSync(p, orig.replace(m.from, () => m.to));
-      const run = runSuite(dir, suiteOf(m), suiteTimeoutMs);
+      const run = runSuite(dir, suiteOf(m), suiteTimeoutMs, layers);
       fs.writeFileSync(p, orig);
       if (run.timedOut) {
         log(`killed  ${m.id} (timed out after ${secs}: the suite never ended)`);
@@ -2464,9 +2590,10 @@ function runGate({ root = ROOT, mutants = MUTANTS, log = console.log, suiteTimeo
     fs.rmSync(dir, { recursive: true, force: true });
   }
   log(ok ? `\nmutation gate: PASS (${mutants.length} mutants, all killed as predicted)` : '\nmutation gate: FAIL');
+  log(reach());
   return ok ? 0 : 1;
 }
 
-module.exports = { runGate, spawnGroupSync, MUTANTS };
+module.exports = { runGate, spawnGroupSync, reach, MUTANTS };
 
 if (require.main === module) process.exit(runGate());

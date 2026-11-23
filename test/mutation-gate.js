@@ -18,10 +18,11 @@ const COVERED_DIRS = ['src/verify', 'src/opon/intake', 'src/opon/intake/adapters
 
 /**
  * Run `node -e code` from ROOT in a process group of its own (MG2, LD230): past `timeout` the gate, its
- * suites and their children are all killed, so a gate that hangs leaves nothing running.
+ * suites and their children are all killed, so a gate that hangs leaves nothing running. MG4: this outer
+ * launcher uses the group layer only, so it never does the work of the layer a test proves on the gate inside.
  */
-function runNode(code, timeout) {
-  return spawnGroupSync('node', ['-e', code], { cwd: ROOT, timeoutMs: timeout });
+function runNode(code, timeout, layers = ['group']) {
+  return spawnGroupSync('node', ['-e', code], { cwd: ROOT, timeoutMs: timeout, layers });
 }
 
 function node(code, timeout = 30000) {
@@ -147,12 +148,14 @@ const HANG = { ...KILL, id: 'H add never returns', to: '(() => { for (;;); })()'
 /**
  * test/kid.js: starts a child that never ends, records its own pid and the child's in `pidFile`, then tests add. The
  * child stays in the suite's group with its environment cleared, so only the group kill reaches it (MG2); with
- * `detached`, it leaves for a session and group of its own with its environment kept, so only the sweep does (MG3).
+ * `detached`, it leaves for a session and group of its own with its environment kept, so only the sweep does (MG3);
+ * with `escaped`, it leaves the group and clears its environment, so only the process tree does (MG4).
  */
-function addKidSuite(root, pidFile, detached = false) {
+const KID_OPTS = { group: 'env: {}', detached: 'detached: true', escaped: 'detached: true, env: {}' };
+function addKidSuite(root, pidFile, mode = 'group') {
   fs.writeFileSync(
     path.join(root, 'test', 'kid.js'),
-    `const k = require('child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1e6)'], { stdio: 'ignore', ${detached ? 'detached: true' : 'env: {}'} });
+    `const k = require('child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1e6)'], { stdio: 'ignore', ${KID_OPTS[mode]} });
 require('fs').appendFileSync(${JSON.stringify(pidFile)}, process.pid + ' ' + k.pid + '\\n');
 const ok = require('../src/add')(2, 3) === 5;
 ${line('ok', 'add works')}
@@ -198,7 +201,7 @@ it(
     const pidFile = path.join(pidDir, 'pids');
     addKidSuite(root, pidFile);
     try {
-      const r = gate(root, [{ ...HANG, test: 'test/kid.js' }], { suiteTimeoutMs: 2000 });
+      const r = gate(root, [{ ...HANG, test: 'test/kid.js' }], { suiteTimeoutMs: 2000, layers: ['group'] });
       assert.strictEqual(r.code, 0, r.lines.join('\n'));
       const pids = pidsIn(pidFile);
       assert.strictEqual(pids.length, 4, `baseline and mutant runs, suite and child each: ${pids.join(' ')}`);
@@ -219,7 +222,7 @@ it(
     try {
       const mutants = [{ ...HANG, test: 'test/kid.js' }];
       const r = runNode(
-        `require(${JSON.stringify(GATE)}).runGate({ root: ${JSON.stringify(root)}, mutants: ${JSON.stringify(mutants)}, log: () => {}, suiteTimeoutMs: 600000 });`,
+        `require(${JSON.stringify(GATE)}).runGate({ root: ${JSON.stringify(root)}, mutants: ${JSON.stringify(mutants)}, log: () => {}, suiteTimeoutMs: 600000, layers: ['group'] });`,
         4000,
       );
       assert.ok(r.timedOut, `the gate ended by itself: exit ${r.status}`);
@@ -238,9 +241,9 @@ it(
   withRepo((root) => {
     const pidDir = tmpDir();
     const pidFile = path.join(pidDir, 'pids');
-    addKidSuite(root, pidFile, true);
+    addKidSuite(root, pidFile, 'detached');
     try {
-      const r = gate(root, [{ ...HANG, test: 'test/kid.js' }], { suiteTimeoutMs: 2000 });
+      const r = gate(root, [{ ...HANG, test: 'test/kid.js' }], { suiteTimeoutMs: 2000, layers: ['tag'] });
       assert.strictEqual(r.code, 0, r.lines.join('\n'));
       const pids = pidsIn(pidFile);
       assert.strictEqual(pids.length, 4, `baseline and mutant runs, suite and child each: ${pids.join(' ')}`);
@@ -249,6 +252,89 @@ it(
       reap(pidFile);
       rmrf(pidDir);
     }
+  }),
+);
+
+/**
+ * test/kid.js, MG4's deeper case: the suite records its pid and runs a middle process to its end; the middle one starts
+ * a child that leaves the group and clears its environment, records both pids, and ends after `holdMs`, orphaning it.
+ */
+function addGrandkidSuite(root, pidFile, holdMs) {
+  const mid =
+    "const k = require('child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1e6)'], { stdio: 'ignore', detached: true, env: {} });\n" +
+    `require('fs').appendFileSync(${JSON.stringify(pidFile)}, process.pid + ' ' + k.pid + '\\n');\n` +
+    `setTimeout(() => process.exit(0), ${holdMs});\n`;
+  fs.writeFileSync(
+    path.join(root, 'test', 'kid.js'),
+    `require('fs').appendFileSync(${JSON.stringify(pidFile)}, process.pid + '\\n');
+require('child_process').spawnSync(process.execPath, ['-e', ${JSON.stringify(mid)}], { stdio: 'ignore' });
+const ok = require('../src/add')(2, 3) === 5;
+${line('ok', 'add works')}
+process.exit(ok ? 0 : 1);
+`,
+  );
+}
+
+const TABLE_READ = process.platform === 'darwin' || process.platform === 'linux'; // elsewhere no table is read: the reach line says so
+
+/** Run the gate with only `layers` over a kid suite, both runs (baseline and a mutant that times out); nothing it recorded may live. */
+function noSurvivors(root, write, layers, expected, suiteTimeoutMs) {
+  const pidDir = tmpDir();
+  const pidFile = path.join(pidDir, 'pids');
+  write(pidFile);
+  try {
+    const r = gate(root, [{ ...HANG, test: 'test/kid.js' }], { suiteTimeoutMs, layers });
+    assert.strictEqual(r.code, 0, r.lines.join('\n'));
+    const pids = pidsIn(pidFile);
+    assert.strictEqual(pids.length, expected, `pids recorded: ${pids.join(' ')}`);
+    assert.deepStrictEqual(survivors(pids), []);
+  } finally {
+    reap(pidFile);
+    rmrf(pidDir);
+  }
+}
+
+it(
+  "MG4: a suite's child that leaves the suite's group and clears its environment is killed too, with every layer on, as the gate runs, when the suite ends and when it times out",
+  withRepo((root) => {
+    if (!TABLE_READ) return;
+    noSurvivors(root, (f) => addKidSuite(root, f, 'escaped'), undefined, 4, 2000);
+  }),
+);
+
+it(
+  "MG4 exit: the node suite's preload lists that child at the suite's exit, and the launcher looks before a timeout kills the suite",
+  withRepo((root) => {
+    if (!TABLE_READ) return;
+    noSurvivors(root, (f) => addKidSuite(root, f, 'escaped'), ['exit'], 4, 2000);
+  }),
+);
+
+it(
+  "MG4 poll: such a child of the suite's child, orphaned before the suite ends, is followed from the poll",
+  withRepo((root) => {
+    if (!TABLE_READ) return;
+    noSurvivors(root, (f) => addGrandkidSuite(root, f, 1000), ['poll'], 6, 4000);
+  }),
+);
+
+it(
+  'MG4 reaper (Linux with python3): such a child orphaned at once comes back to the launcher, a subreaper',
+  withRepo((root) => {
+    const probe = node(`process.stdout.write(JSON.stringify({ reach: require(${JSON.stringify(GATE)}).reach() }))`);
+    if (!probe.reach.includes('subreaper')) return; // macOS has none: the reach line names the race instead
+    noSurvivors(root, (f) => addGrandkidSuite(root, f, 0), ['reaper'], 6, 4000);
+  }),
+);
+
+it(
+  'MG4: the gate declares what it cannot reach, last: a process run as another user, always',
+  withRepo((root) => {
+    const r = gate(root, [KILL]);
+    assert.strictEqual(r.code, 0, r.lines.join('\n'));
+    const last = r.lines[r.lines.length - 1];
+    assert.ok(last.startsWith('reach: '), `the last line is not the reach line: ${last}`);
+    assert.ok(last.includes('not reached: a process run as another user'), last);
   }),
 );
 

@@ -356,7 +356,7 @@
     },
     "conflicts": {
       "description": "A list of disagreements, each naming the sources and what each said. Never dropped: on every odù, empty when there is none.",
-      "$comment": "brief v4 lines 314, 328, 405, 411, 429-439; station 6 (slices C3a-C3e). `sources` and `said` are the agent's names for line 328's \"naming the sources and what each said\" (LD188, Q13); concurrent_sessions's `sessions` (LD180, Q11 (1), approved LD184); outcome_missing's `ref` and `why` (LD189, Q14); silent_change's `turns` and `claim_seqs` (LD194, Q16); unfingerprinted's `entry` and `marks` (LD234, Q26)",
+      "$comment": "brief v4 lines 314, 328, 405, 411, 429-439; station 6 (slices C3a-C3e). `sources` and `said` are the agent's names for line 328's \"naming the sources and what each said\" (LD188, Q13); concurrent_sessions's `sessions` (LD180, Q11 (1), approved LD184); outcome_missing's `ref` and `why` (LD189, Q14); silent_change's `turns` and `claim_seqs` (LD194, Q16) and `downtime` (LD245, Q29); unfingerprinted's `entry` and `marks` (LD234, Q26)",
       "type": "array",
       "items": {
         "type": "object",
@@ -453,7 +453,7 @@
             }
           },
           {
-            "$comment": "brief v4 line 434; test 5; the fields are the agent's proposal (LD194, Q16)",
+            "$comment": "brief v4 line 434; test 5; the fields are the agent's proposal (LD194, Q16); `downtime` (Q29, LD245): the intake's downtime gaps inside its turns, by mark seq",
             "if": {
               "properties": {
                 "kind": {
@@ -468,7 +468,17 @@
               "required": [
                 "turns",
                 "claim_seqs"
-              ]
+              ],
+              "properties": {
+                "downtime": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "minItems": 1
+                }
+              }
             }
           },
           {

@@ -9,7 +9,9 @@
  *     a `phantom_claim` odù is a claim entry of its turn (`phantom` for a file claim,
  *     `phantom_verification` for a command claim), its `verdict_confidence` the odù's confidence and its
  *     evidence the odù's id, mark_seqs and `why`; a `silent_change` is an undisclosed change of each turn
- *     it names. Added: `source: "odu_log"`, and `findings`, the conflicts the old path has no word for
+ *     it names, with the intake's `downtime` gaps its verdict was reached across (Q29, LD245); one of a
+ *     file outside the project is listed apart, in `undisclosed_outside`, and counted apart in the summaries
+ *     (Q30, LD246). Added: `source: "odu_log"`, and `findings`, the conflicts the old path has no word for
  *     (missed_live, unfingerprinted, unconfirmed_by_filesystem, outcome_missing, contradiction,
  *     concurrent_sessions), each with its odù's id, target, confidence and mark_seqs; an unfingerprinted
  *     finding also names the entry the closeout's walk found (F9, LD234: link, other or unreadable). The odù log records no backed claim and no
@@ -31,7 +33,7 @@ function feedbackFromOdu({ sessionId, agent = null, oduText, turn = null, redact
   const odus = oduText.split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((r) => r.record === 'odu');
   const turns = new Map();
   const of = (t) => {
-    if (!turns.has(t)) turns.set(t, { session_id: sessionId, turn: t, claims: [], undisclosed_changes: [], silently_dropped: [] });
+    if (!turns.has(t)) turns.set(t, { session_id: sessionId, turn: t, claims: [], undisclosed_changes: [], undisclosed_outside: [], silently_dropped: [] });
     return turns.get(t);
   };
   const findings = [];
@@ -41,19 +43,22 @@ function feedbackFromOdu({ sessionId, agent = null, oduText, turn = null, redact
       if (c.kind === 'phantom_claim' && o.target && o.target.turn) {
         of(o.target.turn).claims.push({ id: o.odu_id, outcome: c.claim === 'file' ? 'phantom' : 'phantom_verification', verdict_confidence: o.confidence, evidence: { odu_id: o.odu_id, mark_seqs: [...o.mark_seqs], why: c.why, ...(c.claim === 'file' ? { path: R.path(c.path) } : { phrases: [...c.phrases] }) } });
       } else if (c.kind === 'silent_change') {
-        for (const t of c.turns) of(t).undisclosed_changes.push({ ref: R.path(o.target.path), odu_id: o.odu_id });
+        // Q30 (LD246): a change outside the project is listed apart; Q29 (LD245): a verdict reached across the intake's downtime names it.
+        const list = o.target.outside === true ? 'undisclosed_outside' : 'undisclosed_changes';
+        for (const t of c.turns) of(t)[list].push({ ref: R.path(o.target.path), odu_id: o.odu_id, ...(c.downtime ? { downtime: [...c.downtime] } : {}) });
       } else if (FINDINGS.has(c.kind)) {
         findings.push({ kind: c.kind, odu_id: o.odu_id, target: where(o), ...(c.kind === 'unfingerprinted' ? { entry: c.entry } : {}), confidence: o.confidence, mark_seqs: [...o.mark_seqs] }); // F9 (LD234): what the walk found
       }
     }
   }
   const list = [...turns.values()].filter((t) => turn === null || t.turn === turn).sort((a, b) => byTurn(a.turn, b.turn));
-  const summary = Object.fromEntries(OUTCOMES.map((k) => [k, 0]));
+  const summary = { ...Object.fromEntries(OUTCOMES.map((k) => [k, 0])), undisclosed_outside: 0 };
   for (const t of list) {
-    t.summary = Object.fromEntries(OUTCOMES.map((k) => [k, 0]));
+    t.summary = { ...Object.fromEntries(OUTCOMES.map((k) => [k, 0])), undisclosed_outside: 0 };
     for (const c of t.claims) t.summary[c.outcome]++;
     t.summary.undisclosed = t.undisclosed_changes.length;
-    for (const k of OUTCOMES) summary[k] += t.summary[k];
+    t.summary.undisclosed_outside = t.undisclosed_outside.length;
+    for (const k of [...OUTCOMES, 'undisclosed_outside']) summary[k] += t.summary[k];
   }
   return { schema_version: '1.0', source: 'odu_log', session_id: sessionId, agent, generated_at: null, included_fields: [], turns: list, summary, findings };
 }

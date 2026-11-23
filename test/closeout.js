@@ -483,6 +483,37 @@ it('K6 line 614 (LD218): the agent\'s JSON feedback from the odù log: phantom c
   }
 });
 
+it('Q30 (LD246), Q29 (LD245): in the agent\'s feedback a silent change outside the project is listed apart (undisclosed_outside), never counted as undisclosed; one judged across the intake\'s downtime names the gap', () => {
+  const { feedbackFromOdu } = require('../src/opon/feedback/from-odu');
+  const base = tmpDir();
+  try {
+    const log = makeLog(base);
+    const outside = '/private/tmp/orunmila-made-up/notes.md'; // a made-up path outside the root, as the agent's scratchpad is
+    log.append(M.prompted(0));
+    log.append(M.edited(10, 'e1', 'src/in.ts'));
+    log.append(M.disk(60, 'src/in.ts'));
+    log.append({ ...M.edited(100, 'e2', outside), target: { kind: 'file', path: outside, outside: true } });
+    const gap = log.append({ ...M.gap(1500, 'every mark sent to intake while it was not running'), detail: { lost: 'every mark sent to intake while it was not running', since: { mono_ns: ns(1000), observed_at: wall(1000) }, until: { mono_ns: ns(1500), observed_at: wall(1500) }, sessions: ['ses_replay_test'] } });
+    log.append(said(9000, 'All done.'));
+    log.append(M.turnEnded(9000));
+    log.append(M.tick(20000));
+    const r = replayFolder(log.dir);
+    assert.strictEqual(r.ok, true, r.words);
+    const odus = r.odu.split('\n').slice(1, -1).map((l) => JSON.parse(l));
+    for (const o of odus) assert.deepStrictEqual(checkOdu(o), [], JSON.stringify(o));
+    const [inside, out] = [at(odus, 'src/in.ts'), at(odus, outside)];
+    assert.deepStrictEqual([witnesses(inside), witnesses(out), out.target.outside], [['saw', 'saw'], ['saw', 'out_of_scope'], true]);
+    const t1 = feedbackFromOdu({ sessionId: 'ses_replay_test', agent: 'claude-code', oduText: r.odu }).turns[0];
+    const fb = feedbackFromOdu({ sessionId: 'ses_replay_test', agent: 'claude-code', oduText: r.odu });
+    assert.deepStrictEqual(
+      [t1.undisclosed_changes, t1.undisclosed_outside, t1.summary.undisclosed, t1.summary.undisclosed_outside, fb.summary.undisclosed, fb.summary.undisclosed_outside],
+      [[{ ref: 'src/in.ts', odu_id: inside.odu_id, downtime: [gap] }], [{ ref: outside, odu_id: out.odu_id, downtime: [gap] }], 1, 1, 1, 1],
+    );
+  } finally {
+    rmrf(base);
+  }
+});
+
 it("Q25 (LD233): with the header's config.case_insensitive, a claim's path is matched as the root names files: on a root that folds case, a claim written src/Config.ts backs the agent's edit of src/config.ts (no phantom, no silent change) and K7 reads src/R.ts as the baseline's src/r.ts (high), src/B.ts as the rescanned src/b.ts (low); on one that does not, they are other files", () => {
   for (const ci of [true, false]) {
     const base = tmpDir();

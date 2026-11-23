@@ -447,7 +447,7 @@ it('C3d2: a change its turn\'s claims mention is not silent: the repo path, a ba
   for (const o of files) assert.deepStrictEqual([o.target.path, witnesses(o), o.attribution, o.conflicts], [o.target.path, ['saw', 'saw'], 'explained', []]);
 });
 
-it('C3d2: no verdict without a claim to read: a claim that could not be confirmed (N10), a turn with no claim, a turn cut by the session\'s end or the intake\'s downtime; a turn still running keeps its change unsealed', () => {
+it('C3d2: no verdict without a claim to read: a claim that could not be confirmed (N10), a turn with no claim, a turn cut by the session\'s end; a turn still running keeps its change unsealed', () => {
   const unread = replay((append) => {
     append(M.edited(0, 'e1', 'src/f.ts'));
     append(M.disk(50, 'src/f.ts'));
@@ -463,19 +463,51 @@ it('C3d2: no verdict without a claim to read: a claim that could not be confirme
   });
   const files = filesIn(unread);
   assert.deepStrictEqual(files.map((o) => [o.target.path, witnesses(o), o.attribution, o.conflicts]), ['src/f.ts', 'src/g.ts', 'src/h.ts'].map((p) => [p, ['saw', 'saw'], 'explained', []]));
-  const down = replay((append) => {
-    append(M.edited(0, 'e1', 'src/i.ts'));
-    append(M.disk(50, 'src/i.ts'));
-    append(DOWN(10000, 20000));
-    append(M.tick(40000));
-  });
-  assert.deepStrictEqual(filesIn(down).map((o) => [o.target.path, witnesses(o), o.conflicts]), [['src/i.ts', ['saw', 'saw'], []]]);
   const running = replay((append) => {
     append(M.edited(0, 'e1', 'src/j.ts'));
     append(M.disk(50, 'src/j.ts'));
     append(M.tick(60000));
   });
   assert.strictEqual(filesIn(running).length, 0, 'not sealed before its turn is over');
+});
+
+it('C3d2 Q29 (LD245): the intake\'s downtime no longer ends a turn\'s wait: its change waits for the turn\'s end, or the closeout, and its silent_change names the downtime gaps inside its turns', () => {
+  const s = {};
+  const said = { agent_claim: [], hook: ['modified'], sentinel: ['modified'] };
+  const ended = replay((append) => {
+    append(M.edited(0, 'e1', 'src/i.ts'));
+    append(M.disk(50, 'src/i.ts'));
+    s.gap = append(DOWN(10000, 20000));
+    append(M.tick(40000));
+    s.claim = append(claimed(41000, 't1', 'All done.'));
+    append(M.turnEnded(41000));
+    append(M.tick(60000));
+  });
+  assert.deepStrictEqual(filesIn(ended).map((o) => [o.target.path, witnesses(o), o.conflicts]), [['src/i.ts', ['saw', 'saw'], [{ ...silent(said, ['t1'], [s.claim]), downtime: [s.gap] }]]]);
+  const waits = replay((append) => {
+    append(M.edited(0, 'e1', 'src/j.ts'));
+    append(M.disk(50, 'src/j.ts'));
+    append(DOWN(10000, 20000));
+    append(M.tick(60000));
+  });
+  assert.strictEqual(filesIn(waits).length, 0, 'the downtime does not end its turn');
+  const closed = replay((append) => {
+    append(M.edited(0, 'e1', 'src/k.ts'));
+    append(M.disk(50, 'src/k.ts'));
+    s.gap2 = append(DOWN(10000, 20000));
+    s.claim2 = append(claimed(30000, 't1', 'All done.'));
+    closeout(append, 50000);
+  });
+  assert.deepStrictEqual(filesIn(closed).map((o) => [o.target.path, witnesses(o), o.conflicts]), [['src/k.ts', ['saw', 'saw'], [{ ...silent(said, ['t1'], [s.claim2]), downtime: [s.gap2] }]]]);
+  const before = replay((append) => {
+    s.gap3 = append(DOWN(0, 500)); // over before the turn began: not inside it
+    append(M.edited(1000, 'e1', 'src/l.ts'));
+    append(M.disk(1050, 'src/l.ts'));
+    s.claim3 = append(claimed(3000, 't1', 'All done.'));
+    append(M.turnEnded(3000));
+    append(M.tick(20000));
+  });
+  assert.deepStrictEqual(filesIn(before).map((o) => o.conflicts), [[silent(said, ['t1'], [s.claim3])]], 'no downtime inside the turn: none named');
 });
 
 it('C3d2: grouping is unchanged while a change waits: a second edit of the file later in its turn is its own odù, each judged; a change with a net change of false is never silent and does not wait', () => {
@@ -550,6 +582,9 @@ it('C3d2: the schema asks a silent_change for its turns and the claims it read',
     const { [k]: _gone, ...less } = c;
     assert.ok(keys({ ...o, conflicts: [less] }).length > 0, `a silent_change with no ${k}`);
   }
+  // Q29 (LD245): `downtime`, when there is one, holds the gap marks' seqs.
+  assert.deepStrictEqual(keys({ ...o, conflicts: [{ ...c, downtime: [7] }] }), []);
+  assert.ok(keys({ ...o, conflicts: [{ ...c, downtime: ['seven'] }] }).length > 0, 'a downtime that is not mark seqs');
 });
 
 it('C3d3 line 434 (LD203): a path named in a sentence the claim reader does not take as a claim ("I edited src/a.ts.", "Edited src/b.ts again.") is still mentioned: no silent change; a change named nowhere still is', () => {

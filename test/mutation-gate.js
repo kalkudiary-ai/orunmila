@@ -10,15 +10,22 @@
  */
 
 const { assert, fs, path, ROOT, tmpDir, rmrf, it, runAll } = require('./helpers');
-const { spawnSync } = require('child_process');
-
 const GATE = path.join(ROOT, 'scripts', 'mutation-gate.js');
+const { spawnGroupSync } = require(GATE);
 
 // Folders whose every .js file must be the target of at least one mutant (NF72).
 const COVERED_DIRS = ['src/verify', 'src/opon/intake', 'src/opon/intake/adapters', 'src/opon/ledger', 'src/opon/fixtures'];
 
+/**
+ * Run `node -e code` from ROOT in a process group of its own (MG2, LD230): past `timeout` the gate, its
+ * suites and their children are all killed, so a gate that hangs leaves nothing running.
+ */
+function runNode(code, timeout) {
+  return spawnGroupSync('node', ['-e', code], { cwd: ROOT, timeoutMs: timeout });
+}
+
 function node(code, timeout = 30000) {
-  const r = spawnSync('node', ['-e', code], { cwd: ROOT, encoding: 'utf8', timeout });
+  const r = runNode(code, timeout);
   assert.strictEqual(r.status, 0, `child exit ${r.status} signal ${r.signal}: ${(r.stderr || '').slice(0, 400)}`);
   return JSON.parse(r.stdout);
 }
@@ -33,6 +40,8 @@ function gate(root, mutants, more = {}) {
   );
 }
 
+const line = (ok, title) => `console.log((${ok} ? '\\x1b[32mPASS' : '\\x1b[31mFAIL') + '\\x1b[0m  ${title}');`;
+
 /** A tiny repo: src/add.js and src/neg.js; test/add.js covers add only; test/red.js always fails. */
 function fakeRepo() {
   const root = tmpDir();
@@ -40,7 +49,6 @@ function fakeRepo() {
   fs.mkdirSync(path.join(root, 'test'));
   fs.writeFileSync(path.join(root, 'src', 'add.js'), 'module.exports = (a, b) => a + b;\n');
   fs.writeFileSync(path.join(root, 'src', 'neg.js'), 'module.exports = (a) => -a;\n');
-  const line = (ok, title) => `console.log((${ok} ? '\\x1b[32mPASS' : '\\x1b[31mFAIL') + '\\x1b[0m  ${title}');`;
   fs.writeFileSync(
     path.join(root, 'test', 'add.js'),
     `const ok = require('../src/add')(2, 3) === 5;\n${line('ok', 'add works')}\nprocess.exit(ok ? 0 : 1);\n`,
@@ -130,6 +138,94 @@ it(
     const r = gate(root, [{ ...KILL, id: 'T', test: 'test/slow.js' }], { suiteTimeoutMs: 1000 });
     assert.strictEqual(r.code, 1);
     assert.deepStrictEqual(r.lines, ['baseline: FAIL (test/slow.js, unmutated: timed out after 1 s)']);
+  }),
+);
+
+// MG2 (LD230): no process a suite starts outlives the gate, and none the gate starts outlives this test.
+const HANG = { ...KILL, id: 'H add never returns', to: '(() => { for (;;); })()' };
+
+/** test/kid.js: starts a child that never ends, records its own pid and the child's in `pidFile`, then tests add. */
+function addKidSuite(root, pidFile) {
+  fs.writeFileSync(
+    path.join(root, 'test', 'kid.js'),
+    `const k = require('child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1e6)'], { stdio: 'ignore' });
+require('fs').appendFileSync(${JSON.stringify(pidFile)}, process.pid + ' ' + k.pid + '\\n');
+const ok = require('../src/add')(2, 3) === 5;
+${line('ok', 'add works')}
+process.exit(ok ? 0 : 1);
+`,
+  );
+}
+
+const pidsIn = (f) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8').split(/\s+/).filter(Boolean).map(Number) : []);
+function alive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return e.code === 'EPERM';
+  }
+}
+/** The pids still alive after up to `ms`. */
+function survivors(pids, ms = 5000) {
+  const end = Date.now() + ms;
+  let left = pids.filter(alive);
+  while (left.length && Date.now() < end) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+    left = left.filter(alive);
+  }
+  return left;
+}
+/** Kill whatever the test recorded and is still alive, so a red run leaks nothing. */
+function reap(pidFile) {
+  for (const p of pidsIn(pidFile).filter(alive)) {
+    try {
+      process.kill(p, 'SIGKILL');
+    } catch (e) {
+      void e;
+    }
+  }
+}
+
+it(
+  "MG2: a suite's own child is killed with the suite, when the suite ends and when it times out",
+  withRepo((root) => {
+    const pidDir = tmpDir();
+    const pidFile = path.join(pidDir, 'pids');
+    addKidSuite(root, pidFile);
+    try {
+      const r = gate(root, [{ ...HANG, test: 'test/kid.js' }], { suiteTimeoutMs: 2000 });
+      assert.strictEqual(r.code, 0, r.lines.join('\n'));
+      const pids = pidsIn(pidFile);
+      assert.strictEqual(pids.length, 4, `baseline and mutant runs, suite and child each: ${pids.join(' ')}`);
+      assert.deepStrictEqual(survivors(pids), []);
+    } finally {
+      reap(pidFile);
+      rmrf(pidDir);
+    }
+  }),
+);
+
+it(
+  "MG2: a gate that overruns this test's limit is killed with its suite and the suite's child",
+  withRepo((root) => {
+    const pidDir = tmpDir();
+    const pidFile = path.join(pidDir, 'pids');
+    addKidSuite(root, pidFile);
+    try {
+      const mutants = [{ ...HANG, test: 'test/kid.js' }];
+      const r = runNode(
+        `require(${JSON.stringify(GATE)}).runGate({ root: ${JSON.stringify(root)}, mutants: ${JSON.stringify(mutants)}, log: () => {}, suiteTimeoutMs: 600000 });`,
+        4000,
+      );
+      assert.ok(r.timedOut, `the gate ended by itself: exit ${r.status}`);
+      const pids = pidsIn(pidFile);
+      assert.strictEqual(pids.length, 4, `baseline and mutant runs, suite and child each: ${pids.join(' ')}`);
+      assert.deepStrictEqual(survivors(pids), []);
+    } finally {
+      reap(pidFile);
+      rmrf(pidDir);
+    }
   }),
 );
 

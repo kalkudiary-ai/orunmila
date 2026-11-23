@@ -2254,6 +2254,17 @@ const MUTANTS = [
   { id: 'F6-2 the closeout counts as over while it still seals', file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
     from: '    if (sessionOver === null) sessionOver = now;\n    endCalls(() => true, now);', to: '    closedOut = true;\n    if (sessionOver === null) sessionOver = now;\n    endCalls(() => true, now);',
     fails: ['F6 (LD228'] },
+  // MG2 (LD230): the gate's own launcher. Each test kills what it recorded, so these mutants leak nothing.
+  // Every snippet spans a line break, written \n here, so it matches LAUNCHER and never this list.
+  { id: 'MG2-1 the group left running when the command ends', file: 'scripts/mutation-gate.js', test: 'test/mutation-gate.js',
+    from: "  clearTimeout(hard);\n  group('SIGKILL');", to: '  clearTimeout(hard);',
+    fails: ["MG2: a suite's own child"] },
+  { id: "MG2-2 the launcher's own SIGTERM leaves its group running", file: 'scripts/mutation-gate.js', test: 'test/mutation-gate.js',
+    from: "Number(ms));\nfor (const s of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(s, () => { group('SIGKILL'); process.exit(1); });", to: 'Number(ms));',
+    fails: ['MG2: a gate that overruns'] },
+  { id: 'MG2-3 the command not given a group of its own', file: 'scripts/mutation-gate.js', test: 'test/mutation-gate.js',
+    from: 'process.argv.slice(1);\nconst c = spawn(cmd, args, { detached: true,', to: 'process.argv.slice(1);\nconst c = spawn(cmd, args, {',
+    fails: ["MG2: a suite's own child", 'MG2: a gate that overruns'] },
 ];
 
 function copyRepo(root) {
@@ -2267,19 +2278,53 @@ const suiteOf = (m) => m.test || DEFAULT_SUITE;
 
 const SUITE_TIMEOUT_MS = 300000; // MG1: one suite run's limit; a mutant that hangs its suite is caught, never waited on
 
+// MG2 (LD230): the command runs in a process group of its own under this launcher. When the command ends,
+// when it times out (SIGTERM to the group, SIGKILL a second later), and when the launcher itself gets
+// SIGTERM, SIGINT or SIGHUP, the whole group is killed: no process the command started outlives it. A
+// process that leaves the group (spawned detached, or setsid) is not reached. A timeout is reported on fd 3.
+const LAUNCHER = `'use strict';
+const fs = require('fs');
+const { spawn } = require('child_process');
+const [ms, cmd, ...args] = process.argv.slice(1);
+const c = spawn(cmd, args, { detached: true, stdio: ['ignore', 'inherit', 'inherit'] });
+const group = (sig) => { try { process.kill(-c.pid, sig); } catch (e) { void e; } };
+let timedOut = false;
+let hard = null;
+const t = setTimeout(() => { timedOut = true; group('SIGTERM'); hard = setTimeout(() => group('SIGKILL'), 1000); }, Number(ms));
+for (const s of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(s, () => { group('SIGKILL'); process.exit(1); });
+c.on('error', (e) => { process.stderr.write(String(e) + '\\n'); process.exit(127); });
+c.on('exit', (code, sig) => {
+  clearTimeout(t);
+  clearTimeout(hard);
+  group('SIGKILL');
+  if (timedOut) fs.writeSync(3, 'timeout');
+  process.exit(code === null ? 128 + (require('os').constants.signals[sig] || 0) : code);
+});`;
+
+/**
+ * Run `cmd args` under LAUNCHER (MG2); returns { status, signal, stdout, stderr, error, timedOut }.
+ * A command killed by a signal exits 128 plus its number. test/mutation-gate.js runs the gate itself this way.
+ */
+function spawnGroupSync(cmd, args, { cwd, env = process.env, timeoutMs = SUITE_TIMEOUT_MS, maxBuffer = 64 * 1024 * 1024 } = {}) {
+  const r = spawnSync(process.execPath, ['-e', LAUNCHER, String(timeoutMs), cmd, ...args], {
+    cwd,
+    env,
+    encoding: 'utf8',
+    maxBuffer,
+    stdio: ['ignore', 'pipe', 'pipe', 'pipe'],
+    timeout: timeoutMs + 30000, // a backstop for the launcher; its SIGTERM still kills the group
+    killSignal: 'SIGTERM',
+  });
+  const timedOut = (r.output && r.output[3]) === 'timeout' || Boolean(r.error && r.error.code === 'ETIMEDOUT');
+  return { status: r.status, signal: r.signal, stdout: r.stdout || '', stderr: r.stderr || '', error: r.error, timedOut };
+}
+
 /** Run one suite in `dir`; returns its exit status, the titles that passed and failed, and whether it timed out. */
 function runSuite(dir, suite, timeoutMs = SUITE_TIMEOUT_MS) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'orunmila-mutant-home-'));
-  const r = spawnSync('node', [path.join(dir, suite)], {
-    cwd: dir,
-    encoding: 'utf8',
-    env: { ...process.env, ORUNMILA_HOME: home },
-    maxBuffer: 64 * 1024 * 1024,
-    timeout: timeoutMs,
-    killSignal: 'SIGKILL',
-  });
+  const r = spawnGroupSync('node', [path.join(dir, suite)], { cwd: dir, env: { ...process.env, ORUNMILA_HOME: home }, timeoutMs });
   fs.rmSync(home, { recursive: true, force: true });
-  if (r.error && r.error.code === 'ETIMEDOUT') return { status: r.status, passed: [], failed: [], timedOut: true };
+  if (r.timedOut) return { status: r.status, passed: [], failed: [], timedOut: true };
   // The runner prints one line per test: a coloured PASS or FAIL, two spaces, the title.
   const lines = (r.stdout || '')
     .split('\n')
@@ -2348,6 +2393,6 @@ function runGate({ root = ROOT, mutants = MUTANTS, log = console.log, suiteTimeo
   return ok ? 0 : 1;
 }
 
-module.exports = { runGate, MUTANTS };
+module.exports = { runGate, spawnGroupSync, MUTANTS };
 
 if (require.main === module) process.exit(runGate());

@@ -2035,6 +2035,16 @@ const MUTANTS = [
   { id: 'L1e-2 a missing odù log is not written at a reopen', file: 'src/opon/intake/live.js', test: 'test/opon-live.js',
     from: "if (disk === null) fs.writeFileSync(st.file, text, { flag: 'wx', mode: 0o600 });", to: 'if (disk === null) void 0;',
     fails: ['L1e'] },
+  // Slice K1: the closeout's force-seal (LD204; provisional, Q17).
+  { id: "K1-1 the closeout's end mark seals nothing", file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
+    from: 'out.push(...closeoutNow()); // K1 (LD204)', to: 'void 0; // K1 (LD204)',
+    fails: ['K1 lines 451-452', 'K1 test 13'] },
+  { id: 'K1-2 a change waiting for its turn is left unsealed', file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
+    from: 'const sealing = [...waiting.splice(0, waiting.length), ...rest]', to: 'const sealing = [...rest]',
+    fails: ['K1 lines 451-452'] },
+  { id: "K1-3 a call's wait does not end at the closeout", file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
+    from: '    endCalls(() => true, now);\n    const rest = [...unsealed.values()];', to: '    const rest = [...unsealed.values()];',
+    fails: ['K1 lines 451-452'] },
   // Slice C3d3: a mention read in any sentence (LD203).
   { id: 'C3d3-1 only a sentence the reader takes as a claim mentions a path', file: 'src/opon/corroborate/claims.js', test: 'test/conflicts.js',
     from: "return text === null ? [] : [...new Set(extractTargets(sanitize(text))", to: "return text === null ? [] : [...new Set(extractClaims(text).flatMap((c) => c.targets)",

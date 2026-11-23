@@ -924,7 +924,34 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       if (p) p.childIds = p.childIds.filter((c) => c !== g.id);
       g.parentId = null;
     }
+    if (m.says === 'exited' && m.source === 'process' && m.target && m.target.kind === 'process' && m.target.name === 'closeout') out.push(...closeoutNow()); // K1 (LD204)
     return out;
+  }
+
+  /**
+   * K1 (LD204; lines 451-452): the closeout's end. The session is over and every call's wait ends
+   * (a call, or a command, with no outcome is outcome_missing); every group not yet sealed (open,
+   * settled, or waiting for its turn) is closed through stations 4-6 and sealed now, in the order
+   * they opened.
+   */
+  function closeoutNow() {
+    if (sessionOver === null) sessionOver = now;
+    endCalls(() => true, now);
+    const rest = [...unsealed.values()];
+    for (const g of rest) {
+      if (g.state === 'open') {
+        g.state = 'settled';
+        g.settledAt = now;
+      }
+    }
+    for (const g of rest) {
+      close(g);
+      g.judged = turnsOf(g);
+      g.after = [];
+    }
+    const sealing = [...waiting.splice(0, waiting.length), ...rest].sort((a, b) => a.n - b.n);
+    for (const g of sealing) g.sealedAt = now;
+    return sealing.flatMap(emit);
   }
 
   const end = () => all.filter((g) => g.state !== 'sealed').map(record);

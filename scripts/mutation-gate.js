@@ -1263,7 +1263,7 @@ const MUTANTS = [
     fails: ['--pending (LC3): a write to other bytes'] },
   // Slice G3: a command whose exit the intake's downtime lost (LD160).
   { id: 'G3-1 a command whose exit was lost runs forever', file: 'src/opon/settle/engine.js', test: 'test/group.js',
-    from: "          c.lost = true;\n          c.exitAt = from;\n", to: "",
+    from: "          c.lost = true;\n          c.exitAt = at;\n", to: "",
     fails: ['G3 (found replaying a real session)'] },
   { id: "G3-2 the hold ignores a lost exit", file: 'src/opon/settle/engine.js', test: 'test/group.js',
     from: "=== 'ended') && !g.lost) return 'process';", to: "=== 'ended')) return 'process';",

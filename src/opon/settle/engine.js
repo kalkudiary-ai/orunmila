@@ -347,14 +347,8 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     const who = d.since ? 'both' : d.root ? 'sentinel' : 'glove';
     gaps.push({ from, to, who });
     if (who === 'both') {
-      // G3: a command started before the intake's downtime, with no exit yet: its exit may be lost.
-      for (const c of unsealed.values()) {
-        if (c.isCommand && c.startAt !== null && c.exitAt === null && c.startAt <= from) {
-          c.lost = true;
-          c.exitAt = from;
-        }
-      }
-      endCalls((t) => t.start <= from, from); // C3b: so may any call's outcome
+      // G3, C3b: a call started before the intake's downtime with no outcome yet may have lost it; a command's exit so (endCalls; G3b, LD205).
+      endCalls((t) => t.start <= from, from);
       for (const [t, at] of turnStart) if (at <= from && !turnOver.has(t)) turnOver.set(t, from); // C3d2: and any turn's end
     }
   }

@@ -110,6 +110,9 @@ const { createSentinels } = require('./sentinel');
 const { createTamperWatch } = require('./tamper');
 const { snapshot, baselineMap } = require('../net/baseline');
 const { createLive } = require('./live');
+const { prepareOffThread } = require('./start-worker');
+const { canonicalize } = require('../../verify/canonical');
+const crypto = require('crypto');
 
 const CC = getAdapter('claude-code');
 const RELEASE_MS = 30 * 60 * 1000;
@@ -255,10 +258,10 @@ function createRouter(o) {
         },
       })
     : null;
-  function watchFor(s) {
+  function watchFor(s, initial = null) {
     if (!sentinels || s.watched) return;
     s.watched = true;
-    sentinels.watch(s.root, s.limit);
+    sentinels.watch(s.root, s.limit, initial); // SN1: `initial`, the Sentinel's first read made off the intake's thread
     s.extras = extrasFor(s.root); // Q12 (a)
     for (const x of s.extras) sentinels.watch(x, s.limit);
   }
@@ -404,13 +407,12 @@ function createRouter(o) {
     return { log, root, ci: isCaseInsensitive(root), n: t.n, open: t.open, pre: new Map(), last: BigInt(clock().mono), limit: t.header.config.diff_size_limit_bytes, tamper, lv, ...facts };
   }
 
-  function start(id, p) {
-    const dir = path.join(sessionsDir, sessionFolderName(id));
-    if (fs.existsSync(path.join(dir, 'raw.jsonl'))) return reopen(id, dir);
+  /** A new session's header, as its first payload arrives (`at`): its root, its `.env` entries and whether it folds case. */
+  function freshHeader(id, p, at = clock()) {
     if (typeof p.cwd !== 'string' || !p.cwd) throw new Error('the payload names no working folder, so the session has no project root');
     const root = fs.realpathSync(p.cwd);
     const entries = readEnvEntries(root).entries;
-    const now = clock();
+    const now = at;
     const ci = isCaseInsensitive(root);
     const header = buildHeader({
       sessionId: id,
@@ -428,10 +430,21 @@ function createRouter(o) {
       byproducts: Boolean(o.baseline), // the live path's flag (LD166): the byproducts list in the header (A1a, LD175)
       rules: Boolean(o.judge), // the judge's flag (BB6): the rules file's text in the header (Q34)
     });
+    return { root, entries, ci, header, at };
+  }
+
+  /**
+   * A new session's log. `prepared` (SN1, LD294): its header built when its first payload arrived and, when the start
+   * worker gave one, its baseline; without them both are made here, in the intake's thread, as before.
+   */
+  function start(id, p, prepared = null) {
+    const dir = path.join(sessionsDir, sessionFolderName(id));
+    if (!prepared && fs.existsSync(path.join(dir, 'raw.jsonl'))) return reopen(id, dir);
+    const { root, entries, ci, header, at: now } = prepared || freshHeader(id, p);
     let baseline = null;
     if (o.baseline) {
       // Station 4's baseline, at session start (brief v4 lines 385, 387): the same exclusions the header records.
-      const b = snapshot(root, { exclusions: header.config.exclusions, key: o.installKey, envValues: entries.map((e) => e.value) });
+      const b = prepared && prepared.baseline ? prepared.baseline : snapshot(root, { exclusions: header.config.exclusions, key: o.installKey, envValues: entries.map((e) => e.value) });
       header.baseline = { fingerprint: b.fingerprint };
       baseline = b.text;
     }
@@ -453,7 +466,124 @@ function createRouter(o) {
     return { ...m, target };
   }
 
+  /**
+   * SN1 (LD294), with `asyncStart` (ORUNMILA_ASYNC_START=1, off by default): a new session that needs a baseline starts
+   * off the intake's thread (start-worker.js), and its payloads wait in a queue meanwhile, each with the time it
+   * arrived and the file facts measured then; once its log exists they are written in order. Without it, or for a
+   * session whose log exists, everything happens at once, as before.
+   */
+  const starting = new Map(); // session id -> { f: its header etc., queue: [{ p, from, at, snap }] }
   function payload(p, from = {}) {
+    const id = p && p.session_id;
+    if (o.asyncStart && typeof id === 'string' && id && !states.has(id)) {
+      const q = starting.get(id);
+      if (q) return enqueue(q, p, from);
+      let fresh = false;
+      try {
+        fresh = Boolean(o.baseline) && !fs.existsSync(path.join(sessionsDir, sessionFolderName(id), 'raw.jsonl'));
+      } catch {
+        /* an id unsafe as a folder name: apply() refuses it */
+      }
+      if (fresh) {
+        const b = begin(id, p, from);
+        if (b) return b;
+      }
+    }
+    return apply(p, from, null);
+  }
+
+  /** The file a write's or read's payload names, and its state now (a queued payload's facts are its arrival's). */
+  function factsNow(root, p) {
+    const toolName = CC.fields.toolName(p);
+    const input = CC.fields.toolInput(p) || {};
+    const kind = toolName ? CC.classifyTool(toolName, input) : null;
+    const filePath = kind === 'write' || kind === 'read' ? CC.fields.filePath(input) : null;
+    if (!filePath) return null;
+    const ev = p.hook_event_name;
+    const measured = (kind === 'write' && (ev === 'PreToolUse' || ev === 'PostToolUse')) || (kind === 'read' && ev === 'PostToolUse');
+    return measured ? snap(path.resolve(root, String(filePath)), o.installKey) : null;
+  }
+
+  function enqueue(q, p, from) {
+    q.queue.push({ p, from, at: clock(), snap: factsNow(q.f.root, p) });
+    return { ok: true, queued: true, results: [] };
+  }
+
+  function begin(id, p, from) {
+    let f;
+    try {
+      f = freshHeader(id, p);
+    } catch {
+      return null; // apply() writes why to the error log
+    }
+    const q = { f, queue: [] };
+    starting.set(id, q);
+    enqueue(q, p, from);
+    const job = { root: f.root, exclusions: f.header.config.exclusions, key: o.installKey, envValues: f.entries.map((e) => e.value), sentinel: sentinels ? { ignore: sentinels.ignoreFor(f.root), limit: f.header.config.diff_size_limit_bytes } : null };
+    (o.prepare || prepareOffThread)(job).then(
+      (r) => finish(id, q, r),
+      (e) => {
+        error(`the start of session ${id} could not run off the intake's thread (${e.message}); it ran in it`, { session_id: id });
+        finish(id, q, null);
+      },
+    );
+    return { ok: true, queued: true, results: [] };
+  }
+
+  /**
+   * SN1: the earliest observation of a file wins. The worker reads the tree after the session's first payload, so an
+   * agent's write answered at once may land before the worker reads that file; a queued PreToolUse measured it before
+   * the write, so its state replaces the worker's entry (the session's start state). Returns the corrected baseline,
+   * or null when nothing changed. Stated limit: a person's edit in that same window is read as the start state.
+   */
+  function earliestWins(base, f, queue) {
+    const envValues = f.entries.map((e) => e.value);
+    const firsts = new Map();
+    for (const item of queue) {
+      if (item.p.hook_event_name !== 'PreToolUse' || !item.snap) continue;
+      const fp = CC.fields.filePath(CC.fields.toolInput(item.p) || {});
+      if (!fp) continue;
+      const n = normalisePath(path.resolve(f.root, String(fp)), { root: f.root, caseInsensitive: f.ci });
+      if (n.outside) continue;
+      const r = redactText(n.path, envValues);
+      if (!firsts.has(r.text)) firsts.set(r.text, { snap: item.snap, kinds: r.kinds });
+    }
+    if (!firsts.size) return null;
+    const entries = new Map(base.text.split('\n').filter(Boolean).map((l) => [JSON.parse(l).path, JSON.parse(l)]));
+    let changed = false;
+    for (const [rel, { snap: sn, kinds }] of firsts) {
+      const was = entries.get(rel);
+      if (!sn.exists) {
+        if (was) changed = entries.delete(rel);
+        continue;
+      }
+      if (!sn.regular || (was && was.fingerprint === sn.fingerprint && was.size === sn.size)) continue;
+      entries.set(rel, { path: rel, size: sn.size, fingerprint: sn.fingerprint, ...(kinds.length ? { redactions: kinds } : {}) });
+      changed = true;
+    }
+    if (!changed) return null;
+    const text = [...entries.values()].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)).map((e) => canonicalize(e) + '\n').join('');
+    return { text, fingerprint: 'sha256:' + crypto.createHash('sha256').update(text, 'utf8').digest('hex') };
+  }
+
+  function finish(id, q, r) {
+    starting.delete(id);
+    let s;
+    try {
+      const base = r ? r.baseline : null;
+      s = start(id, q.queue[0].p, { ...q.f, baseline: (base && earliestWins(base, q.f, q.queue)) || base });
+    } catch (e) {
+      for (const item of q.queue) error(`the session's log could not be opened: ${e.message}`, item.p);
+      return;
+    }
+    states.set(id, s);
+    if (s.lv) live.pair(s.lv);
+    watchFor(s, r && r.store ? new Map(r.store) : null);
+    for (const item of q.queue) apply(item.p, item.from, item);
+  }
+
+  /** One payload into its session's log; `item`, a queued payload with its arrival time and file facts (SN1). */
+  function apply(p, from = {}, item = null) {
     const id = p && p.session_id;
     if (typeof id !== 'string' || !id) return error('the payload names no session, so it has no log to go to', p);
     let s = states.get(id);
@@ -499,19 +629,20 @@ function createRouter(o) {
     const filePath = kind === 'write' || kind === 'read' ? CC.fields.filePath(input) : null;
     const abs = filePath ? path.resolve(s.root, String(filePath)) : null;
     let file;
+    const measured = () => (item ? item.snap : snap(abs, o.installKey)); // SN1: a queued payload's file as it was when it arrived
     if (abs && kind === 'write') {
-      if (ev === 'PreToolUse') s.pre.set(callId, snap(abs, o.installKey));
+      if (ev === 'PreToolUse') s.pre.set(callId, measured());
       else if (ev === 'PostToolUse') {
-        file = writeFacts(s.pre.get(callId), snap(abs, o.installKey), abs, String(filePath), s.limit, diffOf);
+        file = writeFacts(s.pre.get(callId), measured(), abs, String(filePath), s.limit, diffOf);
         s.pre.delete(callId);
       } else if (ev === 'PostToolUseFailure') s.pre.delete(callId);
     } else if (abs && kind === 'read' && ev === 'PostToolUse') {
-      const n = snap(abs, o.installKey);
+      const n = measured();
       if (n.regular) file = { size: n.size, fingerprint: n.fingerprint };
     }
 
-    const now = clock();
-    const t = translatePayload(p, { turn, observedAt: now.wall, monoNs: from.monoNs, file });
+    const now = item ? item.at : clock(); // SN1: a queued payload keeps the time it arrived
+    const t = translatePayload(p, { turn, observedAt: now.wall, monoNs: from.monoNs !== undefined ? from.monoNs : item ? item.at.mono : undefined, file });
     const results = [];
     for (const { mark, keep } of t.marks) results.push(engine.receive(normalise(s, mark), from, keep));
     for (const r of t.rejects) results.push(engine.receive({ session_id: id, adapter_reject: r.reason, payload: p }, from));

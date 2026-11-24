@@ -1483,6 +1483,7 @@ async function cmdIntake() {
       judge: process.env.ORUNMILA_JUDGE_LIVE === '1', // the judge at each closeout, only with ORUNMILA_JUDGE_LIVE=1 too (BB6; on live only on O's word, Q38)
       // Q12 (a) (LD289): extra folders the Sentinel watches, absolute paths joined by the path delimiter (none by default)
       watchExtra: (process.env.ORUNMILA_WATCH_EXTRA || '').split(path.delimiter).filter((x) => x && path.isAbsolute(x)),
+      asyncStart: process.env.ORUNMILA_ASYNC_START === '1', // SN1 (LD294): a session's start off the intake's thread (F16)
     });
     // TE2 (LD283): a stop asked for comes over the socket (`orunmila intake stop`) and exits 0; a signal with no ask is
     // a tampered mark in every held session, kept in last-stop.json for the next start's gap, and exits 1, so the

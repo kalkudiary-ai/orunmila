@@ -2044,7 +2044,7 @@ const MUTANTS = [
     from: 'if (!st.others.some((s) => s.id === t.span.id)) receive(overlapMark(st, t));', to: 'void 0;',
     fails: ['L2 Q11 (2) (a)', 'L2 through the router'] },
   { id: 'L2-6 the router never pairs', file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
-    from: 'if (s.lv) live.pair(s.lv);', to: 'void 0;',
+    from: 'if (s.lv) live.pair(s.lv); // L2 (LD202)', to: 'void 0; // L2 (LD202)', // SN1's finish pairs too, without the comment
     fails: ['L2 through the router'] },
   { id: 'L2-7 an ended session may be named without its end', file: 'spec/mark.schema.json', test: 'test/opon-live.js',
     from: '"then": { "required": ["to"] },\n            "else": { "not": { "required": ["to"] } }', to: '"then": {},\n            "else": { "not": { "required": ["to"] } }',
@@ -2720,9 +2720,28 @@ const MUTANTS = [
   { id: "PM3-3 a quoted script path keeps its quotes", file: 'bin/orunmila.js', test: 'test/status-hooks.js',
     from: 'words.push(m[1] !== undefined ? m[1] : m[2] !== undefined ? m[2] : m[3]);', to: 'words.push(m[0]);',
     fails: ['PM3 (LD291)'] },
+  // SN1 (LD294): a session's start off the intake's thread.
+  { id: 'SN1-1 the start never leaves the thread', file: 'src/opon/intake/router.js', test: 'test/start-thread.js',
+    from: "if (o.asyncStart && typeof id === 'string' && id && !states.has(id)) {", to: "if (false && typeof id === 'string' && id && !states.has(id)) {",
+    fails: ['SN1 (LD294)', 'SN1: the real worker thread'] },
+  { id: "SN1-2 a queued payload's file is measured when it is written, not when it arrived", file: 'src/opon/intake/router.js', test: 'test/start-thread.js',
+    from: 'const measured = () => (item ? item.snap : snap(abs, o.installKey));', to: 'const measured = () => snap(abs, o.installKey);',
+    fails: ['SN1 (LD294)'] },
+  { id: 'SN1-3 a queued payload is stamped when it is written', file: 'src/opon/intake/router.js', test: 'test/start-thread.js',
+    from: 'const now = item ? item.at : clock(); // SN1', to: 'const now = clock(); // SN1',
+    fails: ['SN1 (LD294)'] },
+  { id: "SN1-4 the worker's later read of a file the agent wrote stands as its start state", file: 'src/opon/intake/router.js', test: 'test/start-thread.js',
+    from: 'baseline: (base && earliestWins(base, q.f, q.queue)) || base', to: 'baseline: base',
+    fails: ['SN1 (LD294)'] },
+  { id: "SN1-6 the worker's baseline loses its entries", file: 'src/opon/intake/start-worker.js', test: 'test/start-thread.js',
+    from: 'return { baseline: { text: b.text, fingerprint: b.fingerprint }, store };', to: "return { baseline: { text: '', fingerprint: b.fingerprint }, store };",
+    fails: ['SN1: the real worker thread'] }, // the first test's earliest-wins rule rebuilds its one entry, so only this one reads the worker's
+  { id: "SN1-5 the queued payloads are dropped", file: 'src/opon/intake/router.js', test: 'test/start-thread.js',
+    from: '    for (const item of q.queue) apply(item.p, item.from, item);\n', to: '',
+    fails: ['SN1 (LD294)', 'SN1: the real worker thread'] },
   // LA3 (LD290): the launch agent keeps every flag the intake reads.
   { id: "LA3-1 the plist drops the judge's, the guard's and the extra folders' flags", file: 'src/opon/intake/launch-agent.js', test: 'test/launch-agent.js',
-    from: ", 'ORUNMILA_JUDGE_LIVE', 'ORUNMILA_LOG_GUARD', 'ORUNMILA_WATCH_EXTRA'];", to: '];',
+    from: ", 'ORUNMILA_JUDGE_LIVE', 'ORUNMILA_LOG_GUARD', 'ORUNMILA_WATCH_EXTRA', 'ORUNMILA_ASYNC_START'];", to: '];', // SN1 added a key
     fails: ['LA3 (LD290)'] },
   // Q12 (a) (LD289): extra folders the Sentinel watches.
   { id: 'Q12-1 the extra folders are not watched', file: 'src/opon/intake/router.js', test: 'test/intake-sentinel.js',

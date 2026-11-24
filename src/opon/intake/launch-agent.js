@@ -33,7 +33,7 @@ const path = require('path');
 
 const LABEL = 'dev.orunmila.intake';
 // LA2 (LD219): the live flag kept across restarts; LA3 (LD290): every other flag the intake reads, too.
-const ENV_KEYS = ['ORUNMILA_HOME', 'ORUNMILA_INTAKE_PORT', 'ORUNMILA_OPON_LIVE', 'ORUNMILA_JUDGE_LIVE', 'ORUNMILA_LOG_GUARD', 'ORUNMILA_WATCH_EXTRA'];
+const ENV_KEYS = ['ORUNMILA_HOME', 'ORUNMILA_INTAKE_PORT', 'ORUNMILA_OPON_LIVE', 'ORUNMILA_JUDGE_LIVE', 'ORUNMILA_LOG_GUARD', 'ORUNMILA_WATCH_EXTRA', 'ORUNMILA_ASYNC_START'];
 const THROTTLE_S = 10;
 
 const xml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

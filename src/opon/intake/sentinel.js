@@ -54,26 +54,28 @@ function countLines(diff) {
   return { added, removed };
 }
 
+/** A file's state: { size, fingerprint, buf (text within the limit, else null), binary, big }, or null when it is no regular file. */
+function snapFile(abs, limit, key) {
+  let st;
+  try {
+    st = fs.statSync(abs);
+  } catch {
+    return null;
+  }
+  if (!st.isFile()) return null;
+  const buf = readRegular(abs);
+  if (buf === null) return null;
+  const binary = looksBinary(buf);
+  const big = buf.length > limit;
+  return { size: buf.length, fingerprint: fingerprint(abs, buf, key), buf: binary || big ? null : buf, binary, big };
+}
+
+const ignoreFor = (root) => effectiveIgnore(root).filter((e) => String(e).replace(/\/+$/, '') !== WATCHED_ANYWAY);
+
 function createSentinels({ clock, key, diffOf, emit, debounceMs = DEBOUNCE_MS }) {
   const watched = new Map(); // root -> { users, walker, store, pending, limit, ignore }
 
-  const ignoreFor = (root) => effectiveIgnore(root).filter((e) => String(e).replace(/\/+$/, '') !== WATCHED_ANYWAY);
-
-  /** A file's state: { size, fingerprint, buf (text within the limit, else null), binary, big }, or null when it is no regular file. */
-  function snap(abs, limit) {
-    let st;
-    try {
-      st = fs.statSync(abs);
-    } catch {
-      return null;
-    }
-    if (!st.isFile()) return null;
-    const buf = readRegular(abs);
-    if (buf === null) return null;
-    const binary = looksBinary(buf);
-    const big = buf.length > limit;
-    return { size: buf.length, fingerprint: fingerprint(abs, buf, key), buf: binary || big ? null : buf, binary, big };
-  }
+  const snap = (abs, limit) => snapFile(abs, limit, key);
 
   function gap(root, lost, at) {
     const now = at || clock();
@@ -116,7 +118,8 @@ function createSentinels({ clock, key, diffOf, emit, debounceMs = DEBOUNCE_MS })
     if (lost) gap(root, `the diff of a change to ${rel}: it came back empty from a changed text file, so no diff program ran (NF30)`, at);
   }
 
-  function watch(root, limit) {
+  /** `initial` (SN1, LD294): abs -> state, read off the intake's thread; a file it does not hold is read here. */
+  function watch(root, limit, initial = null) {
     const have = watched.get(root);
     if (have) {
       have.users++;
@@ -142,7 +145,7 @@ function createSentinels({ clock, key, diffOf, emit, debounceMs = DEBOUNCE_MS })
       onError: (err) => gap(root, `the Sentinel's watch of part of ${root}: ${err.message}; changes there are not recorded live`),
     });
     for (const f of w.walker.start()) {
-      const s = snap(f, limit);
+      const s = initial && initial.has(f) ? initial.get(f) : snap(f, limit);
       if (s) w.store.set(f, s);
     }
   }
@@ -169,4 +172,4 @@ function createSentinels({ clock, key, diffOf, emit, debounceMs = DEBOUNCE_MS })
   return { watch, unwatch, roots, stop, ignoreFor };
 }
 
-module.exports = { createSentinels, DEBOUNCE_MS };
+module.exports = { createSentinels, snapFile, ignoreFor, DEBOUNCE_MS };

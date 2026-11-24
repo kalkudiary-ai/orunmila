@@ -545,7 +545,67 @@ function loadReportsForRead(sessionId) {
   return { reports: listSessionReports(sessionId), fromArchive: null };
 }
 
+/**
+ * `orunmila report --verdicts [--session ID] [--html FILE] [--json]` (Phase 6 slice BB8, LD272; brief v4 lines 688-693):
+ * the session report from the session's logs in <home>/sessions/<id>/: top line first, each finding one sentence naming
+ * both witnesses, the law gate's counts. With no verdict log (the judge was off at its closeout) the odù log is judged
+ * for this report only, and the report says so. Exit 0 reported, 1 no session or its logs do not verify, 2 usage.
+ */
+function cmdReportVerdicts() {
+  const { checkLog } = require('../src/verify/session');
+  const { sessionFolderName } = require('../src/opon/intake/paths');
+  const { verifyText } = require('../src/verify/chain');
+  const babalawo = require('../src/babalawo');
+  const { buildReport, renderText, renderHtml, renderJson } = require('../src/babalawo/report');
+  const home = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
+  const id = flag('session', null);
+  let dir;
+  try {
+    dir = id ? path.join(home, 'sessions', sessionFolderName(id)) : null;
+  } catch {
+    dir = null; // an id unsafe as a folder name has no session log
+  }
+  if (!dir) {
+    console.error('Usage: orunmila report --verdicts --session ID [--html FILE] [--json]');
+    process.exitCode = 2;
+    return;
+  }
+  const refuse = (words) => {
+    console.log(`orunmila report: ${words}`);
+    process.exitCode = 1;
+  };
+  const raw = checkLog(dir, 'raw');
+  if (!raw.ok) return refuse(`session ${id} has no raw log here, or it does not verify (orunmila verify ${dir})`);
+  const recs = raw.records.filter((r) => !(r.part > 1 && r.line === 1)).map((r) => r.rec);
+  const oduFile = path.join(dir, 'odu.jsonl');
+  if (!fs.existsSync(oduFile)) return refuse(`session ${id} has no odù log (the intake writes one only with ORUNMILA_OPON_LIVE=1)`);
+  const oduText = fs.readFileSync(oduFile, 'utf8');
+  if (!verifyText(oduText).ok) return refuse(`the odù log of ${id} does not verify (orunmila verify ${dir})`);
+  const vFile = path.join(dir, 'verdict.jsonl');
+  let vText;
+  const judgedNow = !fs.existsSync(vFile);
+  if (judgedNow) {
+    const j = babalawo.judge({ header: recs[0], oduText });
+    if (!j.ok) return refuse(j.words);
+    vText = j.text;
+  } else {
+    vText = fs.readFileSync(vFile, 'utf8');
+    if (!verifyText(vText).ok) return refuse(`the verdict log of ${id} does not verify (orunmila verify ${dir})`);
+  }
+  const parse = (t) => t.split('\n').slice(0, -1).map((l) => JSON.parse(l));
+  const q = checkLog(dir, 'quarantine');
+  const quarantined = q.records.filter((r) => !(r.part === 1 && r.line === 1) && !(r.part > 1 && r.line === 1)).length;
+  const rep = buildReport({ header: recs[0], marks: recs.slice(1), odus: parse(oduText), verdicts: parse(vText), quarantined, judgedNow });
+  const html = flag('html', null);
+  if (html) {
+    fs.writeFileSync(html, renderHtml(rep));
+    console.log(`Wrote ${html}: ${rep.top_line}`);
+  } else if (args.includes('--json')) process.stdout.write(renderJson(rep) + '\n');
+  else process.stdout.write(renderText(rep));
+}
+
 function cmdReport() {
+  if (args.includes('--verdicts')) return cmdReportVerdicts();
   const sessionId = flag('session', eventlog.latestSessionId());
   if (!sessionId) return console.log('No sessions captured yet.');
   const turn = flag('turn', null);
@@ -1651,6 +1711,8 @@ Both lenses
   orunmila intake agent install|uninstall|status  keep the intake running at login with a launch agent (macOS)
   orunmila replay <session-folder> [--expect file]  the Opon's settled groups for a session log, replayed (Phase 2)
   orunmila judge --session ID [--rules file]      judge a session's odù log again; new verdicts supersede, old ones stay
+  orunmila report --verdicts --session ID [--html FILE] [--json]
+                                                  the session report: top line, each finding naming both witnesses
 
 Docs: README.md · known issues with status: review/ISSUES.md
 `);

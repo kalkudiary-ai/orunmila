@@ -2539,6 +2539,28 @@ const MUTANTS = [
   { id: "BB7-4 the footer's verdict line is not checked", file: 'src/verify/session.js', test: 'test/verify-verdict.js',
     from: '  if (f.verdict) {\n', to: '  if (false) {\n',
     fails: ["BB7: the footer's verdict line"] },
+  // BB8: the session report.
+  { id: 'BB8-1 a finding does not name the witnesses', file: 'src/babalawo/report/index.js', test: 'test/report.js',
+    from: 'sentence: `${ruleWords(v, o, bySeq)}. ${witnessWords(v.witness_status, bySeq)}`', to: 'sentence: `${ruleWords(v, o, bySeq)}.`',
+    fails: ['tests 67 and 74'] },
+  { id: 'BB8-2 silent changes are not grouped', file: 'src/babalawo/report/index.js', test: 'test/report.js',
+    from: "    if (v.rule === 'R2') {", to: '    if (false) {',
+    fails: ['line 434'] },
+  { id: 'BB8-3 a law-gate block is no finding', file: 'src/babalawo/report/index.js', test: 'test/report.js',
+    from: "    if (m.detail.result === 'blocked') {", to: '    if (false) {',
+    fails: ['line 692, test 51'] },
+  { id: 'BB8-4 the 2% skip ceiling moved', file: 'src/babalawo/report/index.js', test: 'test/report.js',
+    from: 'if (law_gate.skip_rate > 2)', to: 'if (law_gate.skip_rate > 100)',
+    fails: ['line 686'] },
+  { id: "BB8-5 the session verdict is ignored, so Incomplete is never said", file: 'src/babalawo/report/index.js', test: 'test/report.js',
+    from: "  const base = session ? session.verdict : 'clean';", to: "  const base = 'clean';",
+    fails: ["tests 12, 18, 21 and 84's report half"] },
+  { id: "BB8-6 the agent's text is not escaped in the HTML", file: 'src/babalawo/report/index.js', test: 'test/report.js',
+    from: "const esc = (s) => String(s).replace(/[&<>\"']/g,", to: "const esc = (s) => String(s).replace(/[]/g,",
+    fails: ['test 46'] },
+  { id: "BB8-7 a gap's length is not said", file: 'src/babalawo/report/index.js', test: 'test/report.js',
+    from: '(${span(d.since.mono_ns, d.until.mono_ns)})', to: '(some time)',
+    fails: ["tests 12, 18, 21 and 84's report half"] },
 ];
 
 function copyRepo(root) {

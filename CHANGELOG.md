@@ -191,6 +191,53 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 - **SECURITY.md says how fast a report is answered:** an acknowledgement within
   7 days, whether the issue is confirmed within 30, and a released fix, or a
   published advisory with a workaround, within 90.
+- **Session verdicts, off by default (`ORUNMILA_JUDGE_LIVE=1`).** At each
+  session's closeout the intake judges every event of its record with fixed
+  rules, no model: **Clean**, **Look at this** or **Violation**, each citing its
+  rule and the marks behind it, and the session as a whole, **Incomplete**
+  whenever evidence was lost. They go to a third hash-chained log,
+  `verdict.jsonl`, which `orunmila verify` checks. The rules are
+  `.orunmila/rules`, copied into the session's header at its start; the rules
+  that guard the record cannot be switched off. `orunmila report --verdicts
+  --session ID [--html FILE] [--json]` gives the session report (one offline
+  page with `--html`); `orunmila judge --session ID [--rules FILE]` judges again,
+  the new verdicts superseding the old, none edited. The law gate's results are
+  part of the record: each turn it blocked is a finding, and the session's skip
+  rate over 2% another. A session that goes quiet for 30 minutes without ending
+  is closed out before the intake lets it go. `ORUNMILA_FEEDBACK_FROM_VERDICTS=1`
+  gives the agent the same findings through `orunmila json`.
+- **A tamper-evident log, off by default (`ORUNMILA_LOG_GUARD=1`).** Every log of
+  a session (raw, quarantine, odù, verdict) is watched against Orunmila's own
+  copy: a change it did not make (an append, a cut, an edit, a delete or move) is
+  recorded with the text removed and added, the log is put back, and `verify`
+  names each one.
+- **A stop no one asked for is recorded.** `orunmila intake stop` now asks over
+  the intake's own socket; a stop signal without that ask is recorded in every
+  open session (judged Look at this: a logout sends the same signal) and the
+  intake exits so its launch agent starts it again, naming the stop in its gap.
+- **Large projects, off by default (`ORUNMILA_ASYNC_START=1`).** A new session's
+  baseline and the closeout's rescan run off the intake's thread; on a project of
+  100,000 files each took about 4 s on it, longer than the agent's hooks wait.
+- **Extra folders for the Sentinel, off by default (`ORUNMILA_WATCH_EXTRA`).**
+- **`orunmila status` names any hook whose script is missing** (a package
+  cache that was cleared) and exits 1.
+- **Edit verbs for the claim reader, off by default (`ORUNMILA_EDIT_VERBS=1`):**
+  "I edited X", "modified", "rewrote" and "patched" are read as claims of
+  changed work.
+
+### Changed
+
+- **Nothing Orunmila ships calls the internet or an AI service.** The trail
+  page's 3D graph, which loaded a library from a CDN, is gone (its 2D graph and
+  the other tabs need no network); the model benchmark runner left the package
+  (it stays in the repository as `scripts/bench.js`), and the dashboard's
+  benchmark section with it. A test reads every shipped file and fails on an
+  outgoing network call, a CDN or an AI service.
+- **`orunmila html` says that `orunmila report --verdicts --html` replaces it.**
+  It still works for this release.
+- **The launch agent keeps every intake switch** that was set when it was
+  installed (the judge's, the guard's, the extra folders, the off-thread start),
+  not only the live flag.
 
 ## [0.2.2] — 2026-11-10 (security patch)
 

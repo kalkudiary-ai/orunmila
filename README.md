@@ -757,7 +757,32 @@ orunmila verify ~/.orunmila/sessions/<id>               # checks the verdict log
 
 `ORUNMILA_FEEDBACK_FROM_VERDICTS=1` gives the agent the same findings through
 `orunmila json`, in its usual shape. If the agent reads Orunmila's own record,
-the report says so in one line.
+the report says so in one line. The law gate's results are part of the record:
+each turn it blocked is its own **Look at this**, and the session verdict counts
+the turns it checked, passed, warned, blocked and skipped (a skip rate over 2% is
+its own **Look at this**, never Incomplete).
+
+### Switches for the intake (each off unless set to `1`)
+
+Set them where the intake starts (`orunmila intake agent install` copies each one
+that is set into the launch agent, so it survives restarts and logins).
+
+| Variable | What it does when on |
+|---|---|
+| `ORUNMILA_JUDGE_LIVE` | Judges each session at its closeout (above). A session that goes quiet for 30 minutes without ending (its agent's process died) is closed out before the intake lets it go, so nothing it holds waits for ever. |
+| `ORUNMILA_LOG_GUARD` | Watches every log of a session (raw, quarantine, odù, verdict) for a change Orunmila did not make: the change is recorded, with the text removed and added, and the log is put back from Orunmila's own copy. `verify` names each one. |
+| `ORUNMILA_ASYNC_START` | Takes a new session's baseline snapshot, and the closeout's full rescan, off the intake's thread, so a project of 100,000 files does not stall every other session for seconds; the session's own payloads wait, with the time they arrived, until its log is ready. |
+| `ORUNMILA_WATCH_EXTRA` | Folders outside the project for the Sentinel to watch too (absolute paths, joined by `:` on macOS and Linux, `;` on Windows): a change there is recorded with its full path, outside the project. |
+| `ORUNMILA_EDIT_VERBS` | Reads "I edited X", "modified", "rewrote" and "patched" as claims of changed work, for the Closeout Gate and the judge (today's verbs: added, created, updated, fixed and others). |
+
+Always on, no switch: `orunmila intake stop` asks the intake to stop over its own
+socket; a stop signal that comes without that ask (`kill`, a logout or shutdown)
+is recorded in every open session as one no one asked for, and the intake exits
+so its launch agent starts it again. `orunmila status` names any hook whose
+script is missing (a package cache that was cleared) and exits 1. `orunmila
+judge` will not re-judge a session the intake still holds (it is free 30 minutes
+after its last payload). `orunmila html` still works for this release; `orunmila
+report --verdicts --html` replaces it.
 
 ## Cross-agent comparison
 

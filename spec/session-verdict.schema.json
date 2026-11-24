@@ -106,6 +106,21 @@
         }
       }
     },
+    "law_gate": {
+      "description": "The law gate's checks over the session, from each odù's law_gate witness: how many turns it checked, how many passed, warned, were blocked and were skipped, the skip rate (skipped over checked, a whole percent), and whether that rate is over the 2% ceiling. Skips are a count, never Incomplete. Absent in a judgement from before the law gate's results were in the odù record.",
+      "$comment": "brief v4 lines 686, 692; approved by O as Q40 (2026-11-24, LD267, LD284)",
+      "type": "object",
+      "required": ["checked", "passed", "warned", "blocked", "skipped", "skip_rate", "over_ceiling"],
+      "properties": {
+        "checked": { "description": "Turns the law gate checked.", "$comment": "brief v4 line 692", "$ref": "#/definitions/count" },
+        "passed": { "description": "Checks that passed.", "$comment": "brief v3 line 242", "$ref": "#/definitions/count" },
+        "warned": { "description": "Checks that warned.", "$comment": "brief v3 line 242", "$ref": "#/definitions/count" },
+        "blocked": { "description": "Checks that blocked the turn; each is its own finding (R21).", "$comment": "brief v4 line 692", "$ref": "#/definitions/count" },
+        "skipped": { "description": "Checks skipped.", "$comment": "brief v4 line 692", "$ref": "#/definitions/count" },
+        "skip_rate": { "description": "Skipped over checked, as a whole percent, 0 when none was checked.", "$comment": "brief v4 line 686", "$ref": "#/definitions/count" },
+        "over_ceiling": { "description": "True when the skip rate is over 2%: its own Look at this (R22).", "$comment": "brief v4 line 686", "type": "boolean" }
+      }
+    },
     "judged": {
       "description": "The odù log's last line this judgement read, by seq and hash.",
       "$comment": "agent's choice, Q34",

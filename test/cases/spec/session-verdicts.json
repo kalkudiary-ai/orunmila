@@ -61,6 +61,51 @@
       "supersedes": null,
       "prev_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       "hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    "session_law_gate": {
+      "schema_version": 1,
+      "record": "session_verdict",
+      "seq": 9,
+      "session_id": "ses_test_0001",
+      "verdict_id": "v_0009",
+      "verdict": "incomplete",
+      "reasons": [
+        {
+          "reason": "gap",
+          "rule": "R9",
+          "odu_ids": [
+            "odu_0004"
+          ]
+        }
+      ],
+      "counts": {
+        "clean": 5,
+        "look_at_this": 2,
+        "violation": 1,
+        "hidden": 3
+      },
+      "judged": {
+        "seq": 8,
+        "hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "judge": {
+        "name": "babalawo",
+        "version": "1.0.0"
+      },
+      "rules": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "rules_source": "default",
+      "supersedes": "v_0003",
+      "prev_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "law_gate": {
+        "checked": 10,
+        "passed": 7,
+        "warned": 1,
+        "blocked": 1,
+        "skipped": 1,
+        "skip_rate": 10,
+        "over_ceiling": true
+      }
     }
   },
   "bad": [
@@ -814,6 +859,186 @@
       "error": {
         "path": "/supersedes",
         "keyword": "anyOf"
+      }
+    },
+    {
+      "name": "law_gate that is not an object (Q40)",
+      "from": "session_law_gate",
+      "set": {
+        "/law_gate": []
+      },
+      "unset": [],
+      "error": {
+        "path": "/law_gate",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "law_gate with no checked (Q40)",
+      "from": "session_law_gate",
+      "set": {},
+      "unset": [
+        "/law_gate/checked"
+      ],
+      "error": {
+        "path": "/law_gate/checked",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "law_gate with no passed (Q40)",
+      "from": "session_law_gate",
+      "set": {},
+      "unset": [
+        "/law_gate/passed"
+      ],
+      "error": {
+        "path": "/law_gate/passed",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "law_gate with no warned (Q40)",
+      "from": "session_law_gate",
+      "set": {},
+      "unset": [
+        "/law_gate/warned"
+      ],
+      "error": {
+        "path": "/law_gate/warned",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "law_gate with no blocked (Q40)",
+      "from": "session_law_gate",
+      "set": {},
+      "unset": [
+        "/law_gate/blocked"
+      ],
+      "error": {
+        "path": "/law_gate/blocked",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "law_gate with no skipped (Q40)",
+      "from": "session_law_gate",
+      "set": {},
+      "unset": [
+        "/law_gate/skipped"
+      ],
+      "error": {
+        "path": "/law_gate/skipped",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "law_gate with no skip_rate (Q40)",
+      "from": "session_law_gate",
+      "set": {},
+      "unset": [
+        "/law_gate/skip_rate"
+      ],
+      "error": {
+        "path": "/law_gate/skip_rate",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "law_gate with no over_ceiling (Q40)",
+      "from": "session_law_gate",
+      "set": {},
+      "unset": [
+        "/law_gate/over_ceiling"
+      ],
+      "error": {
+        "path": "/law_gate/over_ceiling",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "law_gate checked below zero (Q40)",
+      "from": "session_law_gate",
+      "set": {
+        "/law_gate/checked": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/law_gate/checked",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "law_gate passed below zero (Q40)",
+      "from": "session_law_gate",
+      "set": {
+        "/law_gate/passed": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/law_gate/passed",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "law_gate warned below zero (Q40)",
+      "from": "session_law_gate",
+      "set": {
+        "/law_gate/warned": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/law_gate/warned",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "law_gate blocked below zero (Q40)",
+      "from": "session_law_gate",
+      "set": {
+        "/law_gate/blocked": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/law_gate/blocked",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "law_gate skipped below zero (Q40)",
+      "from": "session_law_gate",
+      "set": {
+        "/law_gate/skipped": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/law_gate/skipped",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "law_gate skip_rate below zero (Q40)",
+      "from": "session_law_gate",
+      "set": {
+        "/law_gate/skip_rate": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/law_gate/skip_rate",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "law_gate over_ceiling that is not a boolean (Q40)",
+      "from": "session_law_gate",
+      "set": {
+        "/law_gate/over_ceiling": "yes"
+      },
+      "unset": [],
+      "error": {
+        "path": "/law_gate/over_ceiling",
+        "keyword": "type"
       }
     }
   ]

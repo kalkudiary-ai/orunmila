@@ -327,8 +327,8 @@
       }
     },
     "witness_status": {
-      "description": "One entry for each witness, glove and sentinel, always present, plus git when Orunmila ran git for that target. A status is set only from recorded facts; Orunmila never guesses why a witness recorded nothing.",
-      "$comment": "brief v4 lines 309-312, 331 (the G2b amendment)",
+      "description": "One entry for each witness, glove and sentinel, always present, plus git when Orunmila ran git for that target, and law_gate when the law gate checked the turn (its slots hold each check's result). A status is set only from recorded facts; Orunmila never guesses why a witness recorded nothing.",
+      "$comment": "brief v4 lines 309-312, 331 (the G2b amendment); law_gate approved by O as Q40 (2026-11-24, LD267, LD284), so the verdict log alone carries the law gate's results",
       "type": "object",
       "required": [
         "glove",
@@ -342,6 +342,9 @@
           "$ref": "#/definitions/witness"
         },
         "git": {
+          "$ref": "#/definitions/witness"
+        },
+        "law_gate": {
           "$ref": "#/definitions/witness"
         }
       }

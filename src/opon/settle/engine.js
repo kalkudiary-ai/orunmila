@@ -623,7 +623,8 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
       settled_at_ns: g.settledAt === null ? null : String(g.settledAt),
       sealed_at_ns: g.sealedAt === null ? null : String(g.sealedAt),
       ceiling: g.forced,
-      witness_status: { glove: witness(g, 'glove'), sentinel: witness(g, 'sentinel'), ...(g.sources.includes('git') ? { git: witness(g, 'git') } : {}) }, // K3 (LD217): git when it ran for this target
+      // K3 (LD217): git when it ran for this target. Q40 (LD284): the law gate when it checked this turn, its slots holding each result.
+      witness_status: { glove: witness(g, 'glove'), sentinel: witness(g, 'sentinel'), ...(g.sources.includes('git') ? { git: witness(g, 'git') } : {}), ...(g.sources.includes('law_gate') ? { law_gate: witness(g, 'law_gate') } : {}) },
       parent_id: g.parentId,
       children: [...g.childIds],
       amends: g.amends,

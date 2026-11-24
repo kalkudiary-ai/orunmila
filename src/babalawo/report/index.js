@@ -6,8 +6,9 @@
  * Sentences come from fixed templates: plain code, no model (guarantee 8).
  *
  *   buildReport({ header, marks, odus, verdicts, quarantined, judgedNow }) -> the report's model
- *     header, marks   the raw log (the verdicts do not carry a gap's times, the law gate's results (LD267), or what a
- *                     tampering mark says changed; the report reads them from the marks the verdicts cite)
+ *     header, marks   the raw log (the verdicts do not carry a gap's times or what a tampering mark says changed; the
+ *                     report reads them from the marks the verdicts cite; the law gate's results come from the verdict
+ *                     log since Q40, LD284, and from the marks for a judgement made before it, LD267)
  *     odus            the odù log's records; verdicts, the verdict log's (the latest verdict of each odù counts)
  *     quarantined     how many inputs the quarantine log holds (test 28)
  *     judgedNow       true when the session has no verdict log and was judged for this report only
@@ -150,6 +151,8 @@ function buildReport({ header, marks, odus, verdicts, quarantined = 0, judgedNow
       looks.push({ v, o });
       continue;
     }
+    if (v.rule === 'R21') continue; // Q40: a block is the law gate's own finding, below
+    if (v.rule === 'R22') continue;
     findings.push({ kind: 'verdict', verdict: v.verdict, rule: v.rule, odu_id: v.odu_id, target: targetOf(o), mark_seqs: v.mark_seqs, sentence: `${ruleWords(v, o, bySeq)}. ${witnessWords(v.witness_status, bySeq)}` });
   }
   if (silent.length) {
@@ -171,19 +174,34 @@ function buildReport({ header, marks, odus, verdicts, quarantined = 0, judgedNow
     if (r.reason === 'glove_silent') findings.push({ kind: 'incomplete', verdict: 'incomplete', rule: r.rule, target: 'the Glove', odu_ids: r.odu_ids, sentence: `The Sentinel saw ${plural(r.odu_ids.length, 'change', 'changes')} inside the project and the Glove recorded no mark at all: the Glove was silent, so the record is incomplete.` });
   }
 
-  // The law gate, from the raw log's checked marks (LD267; line 692).
+  // The law gate (line 692). Q40 (LD284): from the verdict log, when its session verdict carries the counts (each block an
+  // R21 verdict on its odù); from the raw log's checked marks for a judgement made before that (LD267).
   const law_gate = { checked: 0, passed: 0, warned: 0, blocked: 0, skipped: 0, skip_rate: 0 };
-  for (const m of marks) {
-    if (m.source !== 'law_gate' || m.says !== 'checked' || !m.detail) continue;
-    law_gate.checked++;
-    if (law_gate[m.detail.result] !== undefined) law_gate[m.detail.result]++;
-    if (m.detail.result === 'blocked') {
-      const laws = (m.detail.findings || []).filter((f) => f.severity === 'block').map((f) => f.law);
-      findings.push({ kind: 'law_gate_block', verdict: 'look_at_this', target: `turn ${m.turn}`, mark_seqs: [m.seq], sentence: `The law gate blocked turn ${m.turn}: ${laws.join(', ') || 'a blocking law'}.` });
+  const blockWords = (m) => {
+    const laws = ((m.detail && m.detail.findings) || []).filter((f) => f.severity === 'block').map((f) => f.law);
+    return `The law gate blocked turn ${m.turn}: ${laws.join(', ') || 'a blocking law'}.`;
+  };
+  if (session && session.law_gate) {
+    for (const k of Object.keys(law_gate)) law_gate[k] = session.law_gate[k];
+    for (const o of odus.filter((x) => x.record === 'odu')) {
+      const v = latest.get(o.odu_id);
+      if (!v || !(v.rule === 'R21' || v.also.includes('R21'))) continue;
+      const lg = o.witness_status.law_gate || { slots: [] };
+      for (const s of lg.slots.filter((x) => x.result === 'blocked')) {
+        const m = bySeq.get(s.seq) || { seq: s.seq, turn: o.target && o.target.id, detail: {} };
+        findings.push({ kind: 'law_gate_block', verdict: 'look_at_this', rule: 'R21', odu_id: o.odu_id, target: `turn ${m.turn}`, mark_seqs: [s.seq], sentence: blockWords(m) });
+      }
     }
+  } else {
+    for (const m of marks) {
+      if (m.source !== 'law_gate' || m.says !== 'checked' || !m.detail) continue;
+      law_gate.checked++;
+      if (law_gate[m.detail.result] !== undefined) law_gate[m.detail.result]++;
+      if (m.detail.result === 'blocked') findings.push({ kind: 'law_gate_block', verdict: 'look_at_this', target: `turn ${m.turn}`, mark_seqs: [m.seq], sentence: blockWords(m) });
+    }
+    if (law_gate.checked) law_gate.skip_rate = Math.round((law_gate.skipped * 100) / law_gate.checked);
   }
-  if (law_gate.checked) law_gate.skip_rate = Math.round((law_gate.skipped * 100) / law_gate.checked);
-  if (law_gate.skip_rate > 2) findings.push({ kind: 'law_gate_skips', verdict: 'look_at_this', target: 'the law gate', sentence: `The law gate skipped ${law_gate.skipped} of ${law_gate.checked} turns, ${law_gate.skip_rate}% of the turns it checked, over the 2% ceiling.` });
+  if (law_gate.skip_rate > 2) findings.push({ kind: 'law_gate_skips', verdict: 'look_at_this', rule: session && session.law_gate ? 'R22' : undefined, target: 'the law gate', sentence: `The law gate skipped ${law_gate.skipped} of ${law_gate.checked} turns, ${law_gate.skip_rate}% of the turns it checked, over the 2% ceiling.` });
 
   findings.sort((a, b) => RANK[b.verdict] - RANK[a.verdict]);
   const base = session ? session.verdict : 'clean';

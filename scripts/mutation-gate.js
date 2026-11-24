@@ -2546,9 +2546,9 @@ const MUTANTS = [
   { id: 'BB8-2 silent changes are not grouped', file: 'src/babalawo/report/index.js', test: 'test/report.js',
     from: "    if (v.rule === 'R2') {", to: '    if (false) {',
     fails: ['line 434'] },
-  { id: 'BB8-3 a law-gate block is no finding', file: 'src/babalawo/report/index.js', test: 'test/report.js',
-    from: "    if (m.detail.result === 'blocked') {", to: '    if (false) {',
-    fails: ['line 692, test 51'] },
+  { id: 'BB8-3 a law-gate block is no finding (a judgement from before Q40)', file: 'src/babalawo/report/index.js', test: 'test/law-gate-odu.js',
+    from: "      if (m.detail.result === 'blocked') findings.push(", to: '      if (false) findings.push(', // Q40 (LD284): the raw marks' path is the fallback now
+    fails: ["Q40: for a judgement made before the law gate's results"] },
   { id: 'BB8-4 the 2% skip ceiling moved', file: 'src/babalawo/report/index.js', test: 'test/report.js',
     from: 'if (law_gate.skip_rate > 2)', to: 'if (law_gate.skip_rate > 100)',
     fails: ['line 686'] },
@@ -2674,6 +2674,25 @@ const MUTANTS = [
   { id: 'TE2-9 the report gives no sentence for the stop', file: 'src/babalawo/report/index.js', test: 'test/intake-stop.js',
     from: "    case 'R26': {", to: "    case 'R26_unused': {",
     fails: ['TE2: the judge reads a stop'] },
+  // Q40 (LD284): the law gate's results in the odù record, judged and counted.
+  { id: 'Q40-1 the settle engine leaves the law gate out of witness_status', file: 'src/opon/settle/engine.js', test: 'test/law-gate-odu.js',
+    from: "...(g.sources.includes('law_gate') ? { law_gate: witness(g, 'law_gate') } : {})", to: '',
+    fails: ['Q40: an odù with a law-gate check', 'Q40: the judge counts the checks'] },
+  { id: 'Q40-2 the odù log drops the law gate witness', file: 'src/opon/ledger/odu-log.js', test: 'test/law-gate-odu.js',
+    from: '...(g.witness_status.law_gate ? { law_gate: witnessEntry(g.witness_status.law_gate) } : {})', to: '',
+    fails: ['Q40: an odù with a law-gate check', 'Q40: the judge counts the checks'] },
+  { id: 'Q40-3 a block is no verdict of its own', file: 'src/babalawo/verdict/index.js', test: 'test/law-gate-odu.js',
+    from: "(lg.slots || []).some((s) => s.result === 'blocked')) give('R21', set.R21);", to: "(lg.slots || []).some((s) => s.result === 'never')) give('R21', set.R21);",
+    fails: ['Q40: the judge counts the checks'] },
+  { id: 'Q40-4 a skip rate over 2% does not raise the session', file: 'src/babalawo/verdict/index.js', test: 'test/law-gate-odu.js',
+    from: "const skips = law_gate.over_ceiling && rules.verdict.R22 !== 'off' ? rules.verdict.R22 : 'clean';", to: "const skips = 'clean';",
+    fails: ['Q40: a skip rate over 2%'] },
+  { id: 'Q40-5 the report ignores the verdict log for the law gate', file: 'src/babalawo/report/index.js', test: 'test/law-gate-odu.js',
+    from: '  if (session && session.law_gate) {', to: '  if (false) {',
+    fails: ["Q40: the report reads the law gate's counts"] },
+  { id: 'Q40-6 the session verdict does not carry the counts', file: 'src/babalawo/index.js', test: 'test/law-gate-odu.js',
+    from: 'counts: session.counts, law_gate: session.law_gate, judged:', to: 'counts: session.counts, judged:',
+    fails: ['Q40: the judge counts the checks', 'Q40: a skip rate over 2%', "Q40: the report reads the law gate's counts"] },
 ];
 
 function copyRepo(root) {

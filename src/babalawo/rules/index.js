@@ -48,6 +48,8 @@ const RULES = {
   R18: { line: 436, says: 'a change only the closeout rescan found (missed live)', verdict: 'look_at_this' },
   R19: { line: 450, says: 'an entry the closeout rescan could not fingerprint', verdict: 'look_at_this' },
   R20: { line: 651, says: 'low confidence', verdict: 'look_at_this' },
+  R21: { line: 692, says: 'a turn the law gate blocked (Q40)', verdict: 'look_at_this', never: ['violation'] },
+  R22: { line: 686, says: "the law gate's skip rate over 2% (Q40)", verdict: 'look_at_this', never: ['violation'] },
   R24: { line: 662, says: 'a conflict this judge does not know', verdict: 'look_at_this' },
   R25: { line: 76, says: "the agent looked at Orunmila's record (LD262)", verdict: 'look_at_this', never: ['violation'] },
   R26: { line: 245, says: 'the intake stopped by a signal no one asked for (TE2, LD283)', verdict: 'look_at_this', never: ['off'] },

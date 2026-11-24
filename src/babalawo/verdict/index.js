@@ -19,8 +19,8 @@
  * The session (line 686): Incomplete when evidence was lost (a gap, R9 and R5's heartbeat gap, which BB5a writes as a
  * gap), the law gate was silent (R13: hooks recorded and no law-gate mark at all, line 678), or the Glove was silent
  * (R14: the Sentinel saw changes inside the project and the Glove recorded no mark at all, line 679); otherwise the
- * most serious verdict among its events. Law-gate results are not in the odù record (LD267): their counts are the
- * report's.
+ * most serious verdict among its events. The law gate's results are in the odù record since Q40 (LD284; LD267
+ * reversed): each block is R21, and the session's counts and its skip rate (R22 over 2%) are the session verdict's.
  */
 
 const path = require('path');
@@ -118,7 +118,27 @@ function fired(o, rules, header) {
   }
   if (o.confidence === 'low') give('R20', set.R20);
   if (looksAtRecord(o)) give('R25', set.R25);
+  // Q40 (LD284; line 692): a turn the law gate blocked is its own finding, from the law_gate witness's result slots.
+  const lg = o.witness_status && o.witness_status.law_gate;
+  if (lg && lg.status === 'saw' && (lg.slots || []).some((s) => s.result === 'blocked')) give('R21', set.R21);
   return out;
+}
+
+/** Q40 (LD284; lines 686, 692): the law gate's checks over the session, from each odù's law_gate witness. */
+function lawGateCounts(sealed) {
+  const c = { checked: 0, passed: 0, warned: 0, blocked: 0, skipped: 0 };
+  for (const o of sealed) {
+    const lg = o.witness_status && o.witness_status.law_gate;
+    if (!lg || lg.status !== 'saw') continue;
+    for (const s of lg.slots || []) {
+      if (typeof s.result !== 'string') continue;
+      c.checked++;
+      if (c[s.result] !== undefined && s.result !== 'checked') c[s.result]++;
+    }
+  }
+  c.skip_rate = c.checked ? Math.round((c.skipped * 100) / c.checked) : 0;
+  c.over_ceiling = c.skip_rate > 2; // line 686: a skip rate over 2% is its own Look at this (R22), never Incomplete (test 51)
+  return c;
 }
 
 /** The most serious of the given findings: the highest verdict, then the lowest rule number. */
@@ -165,8 +185,10 @@ function judgeOdus({ header, odus, rules }) {
     counts[v.verdict]++;
     if (v.hidden) counts.hidden++;
   }
-  const most = verdicts.reduce((a, v) => (RANK[v.verdict] > RANK[a] ? v.verdict : a), 'clean');
-  return { verdicts, session: { verdict: reasons.length ? 'incomplete' : most, reasons, counts } };
+  const law_gate = lawGateCounts(sealed);
+  const skips = law_gate.over_ceiling && rules.verdict.R22 !== 'off' ? rules.verdict.R22 : 'clean';
+  const most = verdicts.reduce((a, v) => (RANK[v.verdict] > RANK[a] ? v.verdict : a), skips);
+  return { verdicts, session: { verdict: reasons.length ? 'incomplete' : most, reasons, counts, law_gate } };
 }
 
 module.exports = { judgeOdus, tamperRule, looksAtRecord, TAMPER_RULES, CONFLICT_RULE };

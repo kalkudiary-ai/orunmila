@@ -27,7 +27,7 @@ const { loadRules, DEFAULT_RULES } = require('./rules');
 const { judgeOdus } = require('./verdict');
 
 const NAME = 'babalawo';
-const VERSION = '1.0.0';
+const VERSION = '1.1.0'; // 1.1.0 (Q40, LD284): the law gate's results judged (R21, R22) and counted in the session verdict; R26 (TE2)
 const vid = (n) => `v_${String(n).padStart(4, '0')}`;
 const same = (a, b) => canonicalize(a) === canonicalize(b);
 
@@ -73,8 +73,8 @@ function judge({ header, oduText, rulesText, prior = [] }) {
     put({ schema_version: 1, record: 'verdict', session_id: header.session_id, verdict_id: vid(++n), ...v, supersedes: was ? was.verdict_id : null, rules: loaded.fingerprint });
   }
   const last = odus[odus.length - 1];
-  const s = { verdict: session.verdict, reasons: session.reasons, counts: session.counts, judged: { seq: last.seq, hash: last.hash }, judge: { name: NAME, version: VERSION }, rules: loaded.fingerprint, rules_source: source };
-  const sKey = (r) => ({ verdict: r.verdict, reasons: r.reasons, counts: r.counts, judged: r.judged, judge: r.judge, rules: r.rules, rules_source: r.rules_source });
+  const s = { verdict: session.verdict, reasons: session.reasons, counts: session.counts, law_gate: session.law_gate, judged: { seq: last.seq, hash: last.hash }, judge: { name: NAME, version: VERSION }, rules: loaded.fingerprint, rules_source: source };
+  const sKey = (r) => ({ verdict: r.verdict, reasons: r.reasons, counts: r.counts, law_gate: r.law_gate, judged: r.judged, judge: r.judge, rules: r.rules, rules_source: r.rules_source });
   if (!lastSession || added.some((r) => r.record === 'verdict') || !same(sKey(lastSession), s)) {
     put({ schema_version: 1, record: 'session_verdict', session_id: header.session_id, verdict_id: vid(n + 1), ...s, supersedes: lastSession ? lastSession.verdict_id : null });
   }

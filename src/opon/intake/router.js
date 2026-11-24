@@ -324,7 +324,31 @@ function createRouter(o) {
         error(`git at the closeout of session ${id} failed: ${e.message}; the sweep ends without it`, { session_id: id });
       }
     }
+    if (o.judge) heartbeatGaps(id, s, mark); // BB5a, with the judge's flag only (Leopard rule 2)
     engine.receive(mark(who, 'exited', { exit_status: walked }), {});
+  }
+
+  /**
+   * BB5a (LD277; brief v4 lines 670, 686): at the closeout, one gap mark for each hole in the session's raw log longer
+   * than its lag grace while the intake held it: no record and no tick, after neither an intake closing note (a release
+   * or a planned stop), the session's end, nor a gap already recorded. Its since and until are the records either
+   * side, so the judge marks the record Incomplete and verify names the window. A hole a gap names is not marked again.
+   */
+  function heartbeatGaps(id, s, mark) {
+    const recs = checkLog(path.join(sessionsDir, sessionFolderName(id)), 'raw').records.filter((r) => !(r.part > 1 && r.line === 1)).map((r) => r.rec).slice(1);
+    const named = new Set(recs.filter((r) => r.says === 'gap' && isObject(r.detail) && isObject(r.detail.since)).map((r) => r.detail.since.mono_ns));
+    let ended = false;
+    for (let i = 0; i + 1 < recs.length; i++) {
+      const [a, b] = [recs[i], recs[i + 1]];
+      if (a.says === 'ended' && isObject(a.target) && a.target.kind === 'session') ended = true;
+      if (a.says === 'prompted') ended = false;
+      if (ended || b.says === 'gap' || named.has(a.mono_ns)) continue;
+      if (a.says === 'exited' && isObject(a.target) && a.target.kind === 'process' && a.target.name === 'intake') continue;
+      const ns = BigInt(b.mono_ns) - BigInt(a.mono_ns);
+      if (ns <= s.graceNs) continue;
+      const lost = `no record for ${ns / NS_PER_MS} ms while the intake held this session: no tick was written, so marks sent meanwhile may have been lost (a hang, or the intake busy)`;
+      engine.receive(mark(null, 'gap', { lost, since: { mono_ns: a.mono_ns, observed_at: a.observed_at }, until: { mono_ns: b.mono_ns, observed_at: b.observed_at } }), {});
+    }
   }
 
   /** Reopen a session folder that exists (after a restart or a release), with its turns. */

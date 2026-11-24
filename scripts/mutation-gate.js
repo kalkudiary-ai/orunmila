@@ -2595,6 +2595,16 @@ const MUTANTS = [
   { id: 'BB12-4 the looks are not one line for the session', file: 'src/babalawo/report/index.js', test: 'test/agent-look.js',
     from: "    if (v.rule === 'R25') {", to: '    if (false) {',
     fails: ['BB12: the report gives the looks'] },
+  // BB5a: a hole in the heartbeat becomes a gap at the closeout.
+  { id: 'BB5a-1 no heartbeat gap is written', file: 'src/opon/intake/router.js', test: 'test/judge-live.js',
+    from: 'if (o.judge) heartbeatGaps(id, s, mark);', to: 'if (false) heartbeatGaps(id, s, mark);',
+    fails: ['BB5a (lines 670, 686)'] },
+  { id: "BB5a-2 the quiet after the session's end is a hole", file: 'src/opon/intake/router.js', test: 'test/judge-live.js',
+    from: "if (ended || b.says === 'gap' || named.has(a.mono_ns)) continue;", to: "if (b.says === 'gap' || named.has(a.mono_ns)) continue;",
+    fails: ['BB5a (lines 670, 686)'] },
+  { id: 'BB5a-3 every pause is a hole', file: 'src/opon/intake/router.js', test: 'test/judge-live.js',
+    from: '      if (ns <= s.graceNs) continue;', to: '      if (ns <= 0n) continue;',
+    fails: ['BB5a (lines 670, 686)'] },
   // BB5b: the gate's marks by an argument; install --intake turns them on where the gate is installed.
   { id: 'BB5b-1 the --marks argument is ignored', file: 'src/capture/claude-code/law-gate.js', test: 'test/gate-marks.js',
     from: "process.env.ORUNMILA_GATE_MARKS === '1' || process.argv.includes('--marks');", to: "process.env.ORUNMILA_GATE_MARKS === '1';",

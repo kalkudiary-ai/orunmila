@@ -31,7 +31,7 @@ function fakeClock() {
 const lines = (f) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8').split('\n').slice(0, -1).map((l) => JSON.parse(l)) : []);
 
 /** A session through a live router to its closeout: a prompt, a Write, a hand edit, a Stop, a SessionEnd, then polls past the lag grace. */
-function closedSession(base, { judge, rules = null, sid = 'ses_judge_live' }) {
+function closedSession(base, { judge, rules = null, sid = 'ses_judge_live', hole = 0, idle = 0, step = 500 }) {
   const home = path.join(base, 'home');
   const project = path.join(base, 'project');
   fs.mkdirSync(path.join(project, 'src'), { recursive: true });
@@ -49,11 +49,16 @@ function closedSession(base, { judge, rules = null, sid = 'ses_judge_live' }) {
   send({ hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: fresh, content: 'a\n' }, tool_use_id: 'w1' });
   fs.writeFileSync(fresh, 'a\n');
   send({ hook_event_name: 'PostToolUse', tool_name: 'Write', tool_input: { file_path: fresh, content: 'a\n' }, tool_response: {}, tool_use_id: 'w1' });
+  if (hole) clock.advance(hole); // BB5a: time passes with no poll, so no tick: a hole in the heartbeat while the session is held
+  for (let t = 0; t < idle; t += 500) {
+    clock.advance(500); // BB5a: idle and polled: a tick each 500 ms, pauses under the lag grace
+    router.poll();
+  }
   fs.writeFileSync(path.join(project, 'src', 'hand.js'), 'by hand\n'); // nobody's tool call: the closeout's rescan finds it
   send({ hook_event_name: 'Stop', last_assistant_message: 'I wrote src/new.js.' });
   send({ hook_event_name: 'SessionEnd', reason: 'exit' });
   for (let i = 0; i < 20; i++) {
-    clock.advance(500);
+    clock.advance(step);
     router.poll();
   }
   return { dir: path.join(home, 'sessions', sid), project, home };
@@ -131,6 +136,34 @@ it('BB6, line 684: `orunmila judge` re-judges with a rules file named, appending
     assert.strictEqual(bad.status, 1, 'a rules file that cannot be read is refused');
     const v = run('bin/orunmila.js', { args: ['verify', dir], env });
     assert.strictEqual(v.status, 0, v.stdout + v.stderr);
+  } finally {
+    rmrf(base);
+  }
+});
+
+it("BB5a (lines 670, 686): a hole in the heartbeat while the session was held becomes a gap at the closeout, so the record is Incomplete; with the judge's flag off nothing is added", () => {
+  const base = tmpDir();
+  try {
+    const { dir } = closedSession(path.join(base, 'on'), { judge: true, hole: 5000 });
+    const raw = lines(path.join(dir, 'raw.jsonl'));
+    const gaps = raw.filter((m) => m.says === 'gap');
+    assert.strictEqual(gaps.length, 1, JSON.stringify(gaps));
+    const g = gaps[0];
+    const before = raw.find((m) => m.mono_ns === g.detail.since.mono_ns);
+    const after = raw.find((m) => m.mono_ns === g.detail.until.mono_ns && m.seq > before.seq);
+    assert.ok(before && after && BigInt(after.mono_ns) - BigInt(before.mono_ns) === 5000n * 1000000n, JSON.stringify(g.detail));
+    assert.ok(/no record for 5000 ms while the intake held this session/.test(g.detail.lost), g.detail.lost);
+    const session = lines(path.join(dir, 'verdict.jsonl')).pop();
+    assert.strictEqual(session.verdict, 'incomplete');
+    assert.ok(session.reasons.some((r) => r.reason === 'gap' && r.rule === 'R9'), JSON.stringify(session.reasons));
+    assert.strictEqual(replayFolder(dir).verdict, fs.readFileSync(path.join(dir, 'verdict.jsonl'), 'utf8'), 'live equals replay');
+    const off = closedSession(path.join(base, 'off'), { judge: false, hole: 5000 });
+    assert.deepStrictEqual(lines(path.join(off.dir, 'raw.jsonl')).filter((m) => m.says === 'gap'), [], 'flag off: no heartbeat gap');
+    // Ticks every 500 ms while idle, and the closeout 3.5 s after the end (polls 700 ms apart): neither is a hole.
+    const none = closedSession(path.join(base, 'none'), { judge: true, idle: 2000, step: 700 });
+    const noneRaw = lines(path.join(none.dir, 'raw.jsonl'));
+    assert.ok(noneRaw.filter((m) => m.says === 'tick').length >= 3, 'ticks while idle');
+    assert.deepStrictEqual(noneRaw.filter((m) => m.says === 'gap'), [], 'no hole, no gap; the quiet after the end is no hole');
   } finally {
     rmrf(base);
   }

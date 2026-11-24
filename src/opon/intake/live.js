@@ -201,7 +201,14 @@ function createLive({ key, clock, receive, error, judge = false }) {
         }
         prior = text.split('\n').slice(0, -1).map((l) => JSON.parse(l));
       }
-      const r = require('../../babalawo').judge({ header: st.header, oduText: fs.readFileSync(st.file, 'utf8'), prior });
+      const iface = require('../../babalawo/interface'); // BB11: the judge's one interface, by name (line 682)
+      const name = judge === true ? iface.DEFAULT : judge;
+      const chosen = iface.get(name);
+      if (!chosen) {
+        error(`no judge named "${name}" is registered: no verdicts were written for session ${id}`, { session_id: id });
+        return null;
+      }
+      const r = chosen.judge({ header: st.header, oduText: fs.readFileSync(st.file, 'utf8'), prior });
       if (!r.ok) {
         error(`the judge did not judge session ${id}: ${r.words}`, { session_id: id });
         return null;

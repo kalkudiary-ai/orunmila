@@ -10,7 +10,8 @@
  *                  installKey, hookSettingsFor?, lawPacksFor?, config?,
  *                  diff?, tickMs?, releaseMs?, sentinel?, baseline?, judge? })
  *       judge (BB6, with baseline): the rules file's text in each new
- *       session's header, and the verdict log written at its closeout
+ *       session's header, and the verdict log written at its closeout;
+ *       true for the default judge, or a judge's name (BB11)
  *   router.payload(payload, { channel, pid, monoNs } = {})
  *       -> { ok, results: [the log's answer per mark], reason? }
  *       In order: the session's log is made at first contact, with its header
@@ -213,7 +214,7 @@ function createRouter(o) {
   const engine = createIntake({ openLog: (id) => states.get(id).log, clock, checkSender: o.checkSender, tickMs: o.tickMs });
   // The Ọpọ́n live (slice L1c, LD200), with the live path's flag only: one engine per session it starts.
   // BB6 (plan section 5): with `judge` too (ORUNMILA_JUDGE_LIVE=1, off by default), the closeout writes the verdict log.
-  const live = o.baseline ? createLive({ key: o.installKey, clock, judge: Boolean(o.judge), receive: (m) => engine.receive(m, {}), error: (reason, payload) => error(reason, payload) }) : null;
+  const live = o.baseline ? createLive({ key: o.installKey, clock, judge: o.judge || false, receive: (m) => engine.receive(m, {}), error: (reason, payload) => error(reason, payload) }) : null;
   let heldText = null;
   // The Sentinel inside the intake (B4): its marks go to every watching session of the root.
   const sentinels = o.sentinel

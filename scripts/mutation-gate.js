@@ -2521,7 +2521,7 @@ const MUTANTS = [
     from: "  if (o.rules && rules !== null) config.rules = rules.toString('utf8');\n", to: '',
     fails: ['Q34, lines 283 and 669'] },
   { id: 'BB6-3 the judge is on by default', file: 'src/opon/intake/router.js', test: 'test/judge-live.js',
-    from: 'createLive({ key: o.installKey, clock, judge: Boolean(o.judge),', to: 'createLive({ key: o.installKey, clock, judge: true,',
+    from: 'createLive({ key: o.installKey, clock, judge: o.judge || false,', to: 'createLive({ key: o.installKey, clock, judge: true,',
     fails: ['BB6: with the judge off'] },
   { id: 'BB6-4 replay does not judge', file: 'src/opon/replay/index.js', test: 'test/judge-live.js',
     from: 'verdict: j.ok ? j.text : null,', to: 'verdict: null,',
@@ -2571,6 +2571,16 @@ const MUTANTS = [
   { id: 'BB9-3 a session judged now is not said to be', file: 'src/babalawo/report/feedback.js', test: 'test/feedback-verdicts.js',
     from: '    judged_now: judgedNow,\n', to: '    judged_now: false,\n',
     fails: ['BB9: with no verdict log'] },
+  // BB11: the swappable judge.
+  { id: 'BB11-1 the judge named is ignored', file: 'src/opon/intake/live.js', test: 'test/judge-swap.js',
+    from: 'const name = judge === true ? iface.DEFAULT : judge;', to: 'const name = iface.DEFAULT;',
+    fails: ['BB11: a stricter judge', 'BB11: a judge named but not registered'] },
+  { id: 'BB11-2 the default judge can be replaced under its own name', file: 'src/babalawo/interface.js', test: 'test/judge-swap.js',
+    from: '  if (j.name === babalawo.name) throw', to: '  if (false) throw',
+    fails: ['BB11: the interface refuses'] },
+  { id: 'BB11-3 a judge without judge() is taken', file: 'src/babalawo/interface.js', test: 'test/judge-swap.js',
+    from: "if (!j || typeof j.judge !== 'function' || typeof j.loadRules !== 'function') throw", to: 'if (!j) throw',
+    fails: ['BB11: the interface refuses'] },
 ];
 
 function copyRepo(root) {

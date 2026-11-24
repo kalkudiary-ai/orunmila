@@ -2706,6 +2706,13 @@ const MUTANTS = [
   { id: 'LD286-3 a resumed session never ticks again', file: 'src/opon/intake/engine.js', test: 'test/judge-live.js',
     from: "    if (r.ok && resumes && s.ended && glove && m.says === 'prompted') s.ended = false;\n", to: '',
     fails: ["LD286 (LD249's open point)"] },
+  // The verb list (LD203 (b), LD288): the edit verbs, behind ORUNMILA_EDIT_VERBS=1.
+  { id: 'VL-1 the edit verbs never read', file: 'src/reconcile/claim-extractor.js', test: 'test/claims.js',
+    from: "  ...(process.env.ORUNMILA_EDIT_VERBS === '1' ? EDIT_VERBS : []),\n", to: '',
+    fails: ['the verb list (LD203 (b), LD288)'] },
+  { id: 'VL-2 the edit verbs on without the flag', file: 'src/reconcile/claim-extractor.js', test: 'test/claims.js',
+    from: "process.env.ORUNMILA_EDIT_VERBS === '1' ? EDIT_VERBS : []", to: 'EDIT_VERBS',
+    fails: ['the verb list (LD203 (b), LD288)'] },
   // F15 and the one-string odù log (LD287).
   { id: "F15-1 the raw log's latest observed_at is not read", file: 'src/verify/session.js', test: 'test/scale.js',
     from: '  return at;\n}\n\nmodule.exports = { verifySession', to: '  return null;\n}\n\nmodule.exports = { verifySession',

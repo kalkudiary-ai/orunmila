@@ -28,6 +28,22 @@ function throughLog(texts, detail = {}) {
 }
 const shape = (cs) => cs.map((c) => [c.files, c.commands]);
 
+it('the verb list (LD203 (b), LD288): with ORUNMILA_EDIT_VERBS=1 "I edited src/b.js." and its kin are file claims the gate and the Ọpọ́n check; without it, none (off by default, a change to the live gate)', () => {
+  const { execFileSync } = require('child_process');
+  const probe = (on) =>
+    JSON.parse(
+      execFileSync(process.execPath, ['-e', "const { extractClaims } = require('./src/reconcile/claim-extractor'); console.log(JSON.stringify(['I edited src/b.js.', 'We modified src/c.ts.', 'I rewrote lib/d.js.', 'Patched src/e.js.', 'Nothing was edited.'].map((t) => extractClaims(t).map((c) => c.targets.map((x) => x.value)))))"], {
+        cwd: path.join(__dirname, '..'),
+        env: { ...process.env, ORUNMILA_EDIT_VERBS: on ? '1' : '' },
+        encoding: 'utf8',
+      }),
+    );
+  // The reader names a target by its file name, and a claim with no target ("Nothing was edited.", as "Nothing was
+  // updated." today) has nothing to check.
+  assert.deepStrictEqual(probe(true), [[['b.js']], [['c.ts']], [['d.js']], [['e.js']], [[]]]);
+  assert.deepStrictEqual(probe(false), [[], [], [], [], []]);
+});
+
 it('C2 the corpus through marks: every sentence labelled fire gives a command claim, every one labelled silent gives no claim of either kind', () => {
   const corpus = loadCorpus(DEFAULT_CORPUS);
   const marks = throughLog(corpus.cases.map((c) => c.text));

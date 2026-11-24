@@ -366,7 +366,7 @@ function createRouter(o) {
     const baseMap = live && header.baseline ? baselineMap(fs.readFileSync(path.join(dir, 'baseline.jsonl'), 'utf8')) : null;
     if (live) {
       const marks = checkLog(dir, 'raw').records.filter((r) => !(r.part > 1 && r.line === 1)).map((r) => r.rec).slice(1);
-      lv = live.resume(dir, header, baseMap, marks);
+      lv = live.resume(dir, header, baseMap, marks, log); // TE1's rest (LD285): the session log guards the odù and verdict logs too
     }
     const tamper = createTamperWatch({ header: t.header, codeRoot: o.codeRoot, lawPacks: lawPacksFor(root), prior: t.tampered, clock });
     const facts = closeoutFacts(header, baseMap);
@@ -411,7 +411,7 @@ function createRouter(o) {
     let lv = null; // the session's live Ọpọ́n (L1c): fed each mark its log writes
     const log = createSessionLog(dir, header, { envEntries: entries, baseline, onRecord: live ? (rec) => lv && live.feed(lv, rec) : null, guard: guardFor(id) });
     const baseMap = baseline === null ? null : baselineMap(baseline);
-    if (live) lv = live.open(dir, log.header(), baseMap);
+    if (live) lv = live.open(dir, log.header(), baseMap, log); // TE1's rest (LD285)
     const tamper = createTamperWatch({ header: { ...header, project_root: root }, codeRoot: o.codeRoot, lawPacks: lawPacksFor(root), clock });
     return { log, root, ci, n: 0, open: false, pre: new Map(), last: BigInt(now.mono), limit: header.config.diff_size_limit_bytes, tamper, lv, ...closeoutFacts(header, baseMap) };
   }

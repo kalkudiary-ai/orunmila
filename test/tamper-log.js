@@ -151,4 +151,115 @@ it('TE1 in the intake: with the guard asked for, a change to a held session\'s r
   }
 });
 
+/** TE1's rest (LD285): a session through a live router with the guard, the live Ọpọ́n and the judge, to its closeout. */
+function guardedSession() {
+  const { createRouter } = require('../src/opon/intake/router');
+  const base = tmpDir();
+  const home = path.join(base, 'home');
+  const project = path.join(base, 'project');
+  fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+  let mono = 5000n * 1000000n;
+  const clock = () => ({ mono: mono.toString(), wall: new Date(Date.UTC(2026, 10, 24) + Number(mono / 1000000n)).toISOString() });
+  const advance = (ms) => (mono += BigInt(ms) * 1000000n);
+  const router = createRouter({ home, clock, checkSender: () => true, codeRoot: path.join(__dirname, '..', 'src'), orunmilaVersion: '0.0.0-test', installKey: Buffer.alloc(32, 7), hookSettingsFor: () => [], baseline: true, judge: true, guard: true });
+  const b = { session_id: 'ses_guard_all', transcript_path: '/tmp/t.jsonl', cwd: project };
+  const send = (x) => router.payload({ ...b, ...x }, { channel: 'command' });
+  const fresh = path.join(project, 'src', 'new.js');
+  send({ hook_event_name: 'UserPromptSubmit', prompt: 'make it' });
+  send({ hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: fresh, content: 'a\n' }, tool_use_id: 'w1' });
+  fs.writeFileSync(fresh, 'a\n');
+  send({ hook_event_name: 'PostToolUse', tool_name: 'Write', tool_input: { file_path: fresh, content: 'a\n' }, tool_response: {}, tool_use_id: 'w1' });
+  send({ hook_event_name: 'Stop', last_assistant_message: 'I wrote src/new.js.' });
+  send({ hook_event_name: 'SessionEnd', reason: 'exit' });
+  const polls = (n) => {
+    for (let i = 0; i < n; i++) {
+      advance(500);
+      router.poll();
+    }
+  };
+  polls(20);
+  const dir = path.join(home, 'sessions', 'ses_guard_all');
+  return { base, dir, router, polls };
+}
+const tampers = (dir) => lines(dir).filter((m) => m.says === 'tampered' && m.detail.what === 'log_location');
+
+it("TE1's rest (LD285): with the guard, the live Ọpọ́n and the judge, Orunmila's own writes to the odù and verdict logs are never taken for tampering, and the odù log equals replay's", () => {
+  const t = guardedSession();
+  try {
+    assert.ok(fs.existsSync(path.join(t.dir, 'verdict.jsonl')), 'the closeout wrote a verdict log');
+    assert.deepStrictEqual(tampers(t.dir), []);
+    assert.strictEqual(fs.readFileSync(path.join(t.dir, 'odu.jsonl'), 'utf8'), replayFolder(t.dir).odu, 'nothing put back over its own lines');
+    t.router.stop('over');
+  } finally {
+    rmrf(t.base);
+  }
+});
+
+for (const [log, change] of [
+  ['odu', (f) => fs.appendFileSync(f, '{"forged":"an odù the agent wrote"}\n')],
+  ['verdict', (f) => fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('"violation"', '"clean"').replace('"look_at_this"', '"clean"'))],
+]) {
+  it(`TE1's rest (LD285): the ${log} log changed by something other than Orunmila is recorded and put back at the next heartbeat`, () => {
+    const t = guardedSession();
+    try {
+      const file = path.join(t.dir, `${log}.jsonl`);
+      const before = fs.readFileSync(file, 'utf8');
+      change(file);
+      assert.notStrictEqual(fs.readFileSync(file, 'utf8'), before, 'the test changed it');
+      t.polls(2);
+      assert.ok(fs.readFileSync(file, 'utf8').startsWith(before), 'put back: every line Orunmila wrote, unchanged');
+      const found = tampers(t.dir).filter((m) => m.target.path === file);
+      assert.strictEqual(found.length, 1, JSON.stringify(tampers(t.dir)));
+      assert.strictEqual(found[0].detail.restored, true);
+      t.router.stop('over');
+    } finally {
+      rmrf(t.base);
+    }
+  });
+}
+
+it("TE1's rest (LD285): a session resumed after its closeout (a new prompt) is swept and judged again: Orunmila's second write to its verdict log is its own", () => {
+  const t = guardedSession();
+  try {
+    const before = fs.readFileSync(path.join(t.dir, 'verdict.jsonl'), 'utf8');
+    const b = { session_id: 'ses_guard_all', transcript_path: '/tmp/t.jsonl', cwd: lines(t.dir)[0].project_root };
+    t.router.payload({ ...b, hook_event_name: 'UserPromptSubmit', prompt: 'and again' }, { channel: 'command' });
+    t.router.payload({ ...b, hook_event_name: 'Stop', last_assistant_message: 'Nothing more.' }, { channel: 'command' });
+    t.router.payload({ ...b, hook_event_name: 'SessionEnd', reason: 'exit' }, { channel: 'command' });
+    t.polls(20);
+    const after = fs.readFileSync(path.join(t.dir, 'verdict.jsonl'), 'utf8');
+    assert.ok(after.length > before.length && after.startsWith(before), 'the second closeout appended to the verdict log');
+    assert.deepStrictEqual(tampers(t.dir), []);
+    t.router.stop('over');
+  } finally {
+    rmrf(t.base);
+  }
+});
+
+it("TE1's rest (LD285): after a restart the reopened session's odù log is guarded too", () => {
+  const { createRouter } = require('../src/opon/intake/router');
+  const t = guardedSession();
+  try {
+    t.router.stop('restart');
+    const home = path.dirname(path.dirname(t.dir));
+    let mono = 9000n * 1000000n;
+    const clock = () => ({ mono: mono.toString(), wall: new Date(Date.UTC(2026, 10, 24) + Number(mono / 1000000n)).toISOString() });
+    const r2 = createRouter({ home, clock, checkSender: () => true, codeRoot: path.join(__dirname, '..', 'src'), orunmilaVersion: '0.0.0-test', installKey: Buffer.alloc(32, 7), hookSettingsFor: () => [], baseline: true, judge: true, guard: true });
+    r2.resume();
+    mono += 500n * 1000000n;
+    r2.poll();
+    assert.deepStrictEqual(tampers(t.dir), [], 'its own resume is no tampering');
+    const file = path.join(t.dir, 'odu.jsonl');
+    const before = fs.readFileSync(file, 'utf8');
+    fs.appendFileSync(file, '{"forged":true}\n');
+    mono += 500n * 1000000n;
+    r2.poll();
+    assert.ok(fs.readFileSync(file, 'utf8').startsWith(before) && !fs.readFileSync(file, 'utf8').includes('"forged":true}\n'), 'put back');
+    assert.strictEqual(tampers(t.dir).filter((m) => m.target.path === file).length, 1);
+    r2.stop('over');
+  } finally {
+    rmrf(t.base);
+  }
+});
+
 runAll('tamper-log');

@@ -1635,11 +1635,12 @@ function cmdReplay() {
  * `orunmila judge --session <id> [--rules <file>]` (Phase 6 slice BB6; brief v4 line 684): judge a session's sealed odù
  * log again and append to its verdict log (verdict.jsonl beside the other two): each verdict that changed supersedes
  * the old one, which is never edited. The rules are the header's (the rules file as it was at session start), or the
- * file named. Nothing else in the folder is written. Exit 0 judged, 1 refused (a log that does not verify, a rules file
- * that cannot be read), 2 usage.
+ * file named. Nothing else in the folder is written. Exit 0 judged, 1 refused (a session the intake still holds, TE1's
+ * rest; a log that does not verify, a rules file that cannot be read), 2 usage.
  */
-function cmdJudge() {
+async function cmdJudge() {
   const { checkLog } = require('../src/verify/session');
+  const { statusOf, intakePaths } = require('../src/opon/intake/server');
   const { sessionFolderName } = require('../src/opon/intake/paths');
   const { verifyText } = require('../src/verify/chain');
   const { canonicalize } = require('../src/verify/canonical');
@@ -1661,6 +1662,12 @@ function cmdJudge() {
     console.log(`orunmila judge: ${words}`);
     process.exitCode = 1;
   };
+  // TE1's rest (LD285): one writer per verdict log. While the intake holds the session it may write the verdict log at
+  // a closeout, and with ORUNMILA_LOG_GUARD=1 it takes any other write for tampering and puts the log back.
+  const st = await statusOf(intakePaths(home).sock, 1000);
+  if (st && Array.isArray(st.held) && st.held.includes(id)) {
+    return refuse(`not judged: the intake still holds session ${id} (it releases a session 30 minutes after its last payload), and only one process writes a session's verdict log; judge it after that`);
+  }
   const raw = checkLog(dir, 'raw');
   if (!raw.ok) return refuse(`not judged: the raw log of ${id} is missing or does not verify (orunmila verify ${dir})`);
   const oduFile = path.join(dir, 'odu.jsonl');

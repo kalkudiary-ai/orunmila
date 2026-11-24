@@ -34,7 +34,9 @@
  * verifies, for an intake that restarted (slice B1c, test 84). ended() says
  * whether the raw log holds the session's end mark (LD55); pin() is the
  * process the session is pinned to, from the record (LD58), or null;
- * header() is the sealed session header. `onRecord(record)`, given to either,
+ * header() is the sealed session header. With `guard`, watch(log, file) and
+ * wrote(log, text) put another log of the session under the guard (TE1's rest,
+ * LD285: the odù and verdict logs, which the live Ọpọ́n writes). `onRecord(record)`, given to either,
  * is called with each mark as written to the raw log, after the log's own
  * state has moved on, so it may append again (the live Ọpọ́n, slice L1c).
  */
@@ -197,6 +199,16 @@ function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended
   const guards = guard ? [['raw', rawFile], ['quarantine', qFile]].map(([log, file]) => ({ log, g: createGuard(file, path.join(guard.shadowDir, path.basename(file))) })) : [];
   const guardOf = (log) => (guards.find((x) => x.log === log) || {}).g;
   let guarding = false;
+  // TE1's rest (LD285): the session's other logs, which the live Ọpọ́n writes (odu.jsonl, verdict.jsonl). watch() starts
+  // from the file as it stands, right after Orunmila wrote it; wrote() follows each of Orunmila's own appends. Every
+  // append the live Ọpọ́n makes comes from a raw append (onRecord), which looks for tampering first.
+  function watch(log, file) {
+    if (!guard || guardOf(log)) return;
+    guards.push({ log, g: createGuard(file, path.join(guard.shadowDir, path.basename(file))) });
+  }
+  function wrote(log, text) {
+    if (guardOf(log)) guardOf(log).wrote(text);
+  }
 
   /** TE1: look at each guarded log; record each change found (when its log was put back) and return them all. */
   function lookForTamper() {
@@ -346,7 +358,7 @@ function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended
   /** The raw log's last record: where an intake that restarts finds when it last wrote (test 84). */
   const lastRecord = () => ({ seq: timed.seq, mono_ns: timed.mono_ns, observed_at: timed.observed_at });
 
-  return { append, counts: () => ({ ...counts }), last: lastRecord, ended: () => ended, pin: () => pin, leaks: () => leaks.map(copy), header: () => header, guard: lookForTamper };
+  return { append, counts: () => ({ ...counts }), last: lastRecord, ended: () => ended, pin: () => pin, leaks: () => leaks.map(copy), header: () => header, guard: lookForTamper, watch, wrote };
 }
 
 /** Check a session folder: the ledger uses src/verify for checking (brief v3 line 618). */

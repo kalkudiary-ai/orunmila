@@ -134,4 +134,32 @@ it('TE2: the judge reads a stop no one asked for as R26, Look at this, and the r
   }
 });
 
+it("TE1's rest (LD285): `orunmila judge` refuses a session the intake still holds, so only one process ever writes its verdict log, and the guard never takes a re-judgement for tampering", async () => {
+  const base = tmpDir();
+  const home = path.join(base, 'h');
+  const project = path.join(base, 'p');
+  fs.mkdirSync(project, { recursive: true });
+  const env = { ORUNMILA_HOME: home, ORUNMILA_INTAKE_PORT: '0' };
+  const paths = intakePaths(home);
+  const sid = 'ses_held_judge';
+  let live = null;
+  try {
+    live = runIntake(env);
+    assert.ok(await until(async () => (await statusOf(paths.sock, 300)) !== null), 'the intake answers');
+    const p = { session_id: sid, transcript_path: '/tmp/t.jsonl', cwd: project };
+    await send(paths.sock, req({ ...p, hook_event_name: 'UserPromptSubmit', prompt: 'go' }));
+    assert.ok(await until(async () => ((await statusOf(paths.sock, 300)) || { held: [] }).held.includes(sid)), 'held');
+    const r = run('bin/orunmila.js', { args: ['judge', '--session', sid], env });
+    assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+    assert.ok(r.stdout.includes(`the intake still holds session ${sid}`), r.stdout);
+    assert.ok(!fs.existsSync(path.join(home, 'sessions', sid, 'verdict.jsonl')), 'nothing written');
+  } finally {
+    if (live) {
+      live.child.kill('SIGKILL');
+      await live.exited;
+    }
+    rmrf(base);
+  }
+});
+
 runAll('intake-stop');

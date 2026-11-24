@@ -61,12 +61,17 @@ function createLive({ key, clock, receive, error, judge = false }) {
     error(`the live Ọpọ́n stopped for session ${st.header.session_id}: ${why}; its raw log goes on, and replay gives its odù log`, { session_id: st.header.session_id });
   }
 
-  /** A session's live state: its own span, and the others its log's overlapped marks name (L2). */
-  function make(dir, header, baseline) {
+  /**
+   * A session's live state: its own span, and the others its log's overlapped marks name (L2). `sink` (TE1's rest,
+   * LD285): the session log's watch(log, file) and wrote(log, text), so the guard follows every write to the odù and
+   * verdict logs; null when there is none.
+   */
+  function make(dir, header, baseline, sink) {
     const config = configFromHeader(header);
     const id = header.session_id;
     const others = [];
     const st = {
+      sink: sink && typeof sink.watch === 'function' ? sink : { watch: () => {}, wrote: () => {} },
       header,
       span: { id, root: header.project_root, from: header.mono_ns, ended: false, to: null },
       root: header.project_root,
@@ -115,11 +120,12 @@ function createLive({ key, clock, receive, error, judge = false }) {
     }
   }
 
-  function open(dir, header, baseline) {
-    const st = make(dir, header, baseline);
+  function open(dir, header, baseline, sink = null) {
+    const st = make(dir, header, baseline, sink);
     st.oduLast = st.odu.head;
     try {
       fs.writeFileSync(st.file, canonicalize(st.odu.head) + '\n', { flag: 'wx', mode: 0o600 });
+      st.sink.watch('odu', st.file);
     } catch (e) {
       stop(st, `its odù log could not be begun (${e.code || e.message})`);
     }
@@ -133,8 +139,8 @@ function createLive({ key, clock, receive, error, judge = false }) {
    * replayed one (the rest appended, as after a crash between a mark and its odù); a missing one is
    * written whole; any other is never edited, and the session's live engine stops.
    */
-  function resume(dir, header, baseline, marks) {
-    const st = make(dir, header, baseline);
+  function resume(dir, header, baseline, marks, sink = null) {
+    const st = make(dir, header, baseline, sink);
     st.oduLast = st.odu.head;
     try {
       let text = canonicalize(st.odu.head) + '\n';
@@ -152,6 +158,9 @@ function createLive({ key, clock, receive, error, judge = false }) {
       if (disk === null) fs.writeFileSync(st.file, text, { flag: 'wx', mode: 0o600 });
       else if (!text.startsWith(disk)) stop(st, "its odù log on disk is not the start of replay's, and it is never edited");
       else if (text.length > disk.length) fs.appendFileSync(st.file, text.slice(disk.length));
+      if (st.on) st.sink.watch('odu', st.file); // TE1's rest: from the log as it now stands, the start of replay's
+      const verdicts = path.join(dir, 'verdict.jsonl');
+      if (fs.existsSync(verdicts) && verifyText(fs.readFileSync(verdicts, 'utf8')).ok) st.sink.watch('verdict', verdicts);
     } catch (e) {
       stop(st, `it could not be resumed (${e.code || e.message})`);
     }
@@ -213,7 +222,13 @@ function createLive({ key, clock, receive, error, judge = false }) {
         error(`the judge did not judge session ${id}: ${r.words}`, { session_id: id });
         return null;
       }
-      if (r.added.length) fs.appendFileSync(file, r.added.map((x) => canonicalize(x) + '\n').join(''), { mode: 0o600 });
+      if (r.added.length) {
+        const existed = fs.existsSync(file);
+        const text = r.added.map((x) => canonicalize(x) + '\n').join('');
+        fs.appendFileSync(file, text, { mode: 0o600 });
+        if (existed) st.sink.wrote('verdict', text); // TE1's rest (LD285): the guard follows Orunmila's own append
+        else st.sink.watch('verdict', file);
+      }
       const last = r.records[r.records.length - 1];
       return { seq: last.seq, hash: last.hash };
     } catch (e) {
@@ -257,7 +272,11 @@ function createLive({ key, clock, receive, error, judge = false }) {
     const ended = closes(st, rec); // kept even when this session's engine has stopped: the others' records depend on it
     if (st.on) {
       try {
-        for (const r of step(st, rec)) fs.appendFileSync(st.file, canonicalize(r) + '\n');
+        for (const r of step(st, rec)) {
+          const text = canonicalize(r) + '\n';
+          fs.appendFileSync(st.file, text);
+          st.sink.wrote('odu', text); // TE1's rest (LD285)
+        }
         st.due.push(...st.opon.fingerprintsDue());
       } catch (e) {
         stop(st, e.message);

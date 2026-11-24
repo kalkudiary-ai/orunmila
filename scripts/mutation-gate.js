@@ -909,7 +909,7 @@ const MUTANTS = [
     from: 'for (const x of Object.values(o.definitions || {})) visit(x);', to: 'void 0;',
     fails: ['LD85: a mark naming a field the spec does not declare stays intact'] },
   { id: 'U3 undeclared fields left out of the answer', file: 'src/verify/session.js', test: 'test/verify.js',
-    from: 'unbroken${[...cuts, ...gapAt, ...other, ...fields, ...base, ...foot]', to: 'unbroken${[...cuts, ...gapAt, ...other, ...base, ...foot]', // moved with CR1 (LD250)
+    from: 'unbroken${[...cuts, ...gapAt, ...other, ...fields, ...base, ...judged, ...foot]', to: 'unbroken${[...cuts, ...gapAt, ...other, ...base, ...judged, ...foot]', // moved with CR1 (LD250)
     fails: ['LD85: a mark naming a field the spec does not declare stays intact'] },
   { id: 'U4 a continuation record checked as a mark for undeclared fields', file: 'src/verify/session.js', test: 'test/verify.js',
     from: 'if (isContinuation({ part, line })) continue;\n      for (const e of', to: 'for (const e of',
@@ -2363,7 +2363,7 @@ const MUTANTS = [
     from: '  function writeFooter(st, rec) {\n    const dir', to: '  function writeFooter(st, rec) {\n    if (st.footed) return;\n    st.footed = true;\n    const dir',
     fails: ['LD211 (5) (7) (LD249)'] },
   { id: "LD249-6 verify says nothing of what follows the footer", file: 'src/verify/session.js', test: 'test/opon-live.js',
-    from: ", ...after(footer.after.raw, 'raw log'), ...after(footer.after.odu, 'odù log')]", to: ']',
+    from: ", ...after(footer.after.raw, 'raw log'), ...after(footer.after.odu, 'odù log'), ...after(footer.after.verdict, 'verdict log')]", to: ']',
     fails: ['LD211 (5) (7) (LD249)'] },
   // F7 (LD248): the odù feedback's generated_at and included_fields, as the old path's.
   { id: 'F7-1 no generated_at', file: 'src/opon/feedback/from-odu.js', test: 'test/closeout.js',
@@ -2526,6 +2526,19 @@ const MUTANTS = [
   { id: 'BB6-4 replay does not judge', file: 'src/opon/replay/index.js', test: 'test/judge-live.js',
     from: 'verdict: j.ok ? j.text : null,', to: 'verdict: null,',
     fails: ['BB6: with the judge on', 'Q34, lines 283 and 669'] },
+  // BB7: verify reads the verdict log.
+  { id: 'BB7-1 the verdict log is not checked', file: 'src/verify/session.js', test: 'test/verify-verdict.js',
+    from: '  const verdicts = verdictsOf(dir);\n', to: '  const verdicts = { present: false, ok: true, verdicts: 0 };\n',
+    fails: ['BB7 test 24', 'BB7 test 25'] },
+  { id: 'BB7-2 a verdict may point to an odù that does not exist', file: 'src/verify/session.js', test: 'test/verify-verdict.js',
+    from: 'if (!odus.has(r.odu_id)) return broken(', to: 'if (false) return broken(',
+    fails: ["BB7 test 29's form"] },
+  { id: 'BB7-3 a verdict line is not checked against its schema', file: 'src/verify/session.js', test: 'test/verify-verdict.js',
+    from: '    if (errs.length) return broken(i + 1, `it is not a valid ${kind[1]}', to: '    if (false) return broken(i + 1, `it is not a valid ${kind[1]}',
+    fails: ['BB7: a verdict line that is not a valid record'] },
+  { id: "BB7-4 the footer's verdict line is not checked", file: 'src/verify/session.js', test: 'test/verify-verdict.js',
+    from: '  if (f.verdict) {\n', to: '  if (false) {\n',
+    fails: ["BB7: the footer's verdict line"] },
 ];
 
 function copyRepo(root) {

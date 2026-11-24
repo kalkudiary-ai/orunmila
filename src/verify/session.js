@@ -9,7 +9,10 @@
  * quarantine log's chain; every file kept beside the log that a mark names
  * (missing, or changed since its fingerprint was taken), and the baseline
  * snapshot when the header names one (`baseline.jsonl`, against the header's
- * baseline.fingerprint; slice N1b, LD170). It loads nothing
+ * baseline.fingerprint; slice N1b, LD170); the verdict log when there is one
+ * (`verdict.jsonl`, Phase 6 slice BB7: its chain, each line by its kind, every
+ * verdict pointing to an odù the odù log holds with that hash, and the footer's
+ * verdict line). It loads nothing
  * outside src/verify and spec/, so it can be read in one sitting. A field the
  * spec does not declare leaves a record intact (a reader ignores what it does
  * not know, brief v3 line 209), and the answer names each one (LD85).
@@ -45,6 +48,49 @@ const closedHeader = compile(closed(read('session-header.schema.json')));
 const closedMark = compile(closed(read('mark.schema.json')));
 const checkContinuation = load('continuation.schema.json');
 const checkFooter = load('session-footer.schema.json');
+// BB7 (brief v4 lines 714-715): each line of the verdict log, by its kind.
+const VERDICT_KINDS = {
+  verdict_header: [load('verdict-header.schema.json'), 'verdict log header'],
+  verdict: [load('verdict.schema.json'), 'verdict'],
+  session_verdict: [load('session-verdict.schema.json'), 'session verdict'],
+};
+
+/**
+ * BB7 (tests 24, 25, 29's form): the verdict log beside the session's logs, when there is one. Its chain; each line a
+ * valid record of its kind (the first the header, naming the odù log's header); every verdict pointing to an odù the odù
+ * log holds, with the hash it names. Returns { present, ok, words?, verdicts }.
+ */
+function verdictsOf(dir) {
+  const file = path.join(dir, 'verdict.jsonl');
+  if (!fs.existsSync(file)) return { present: false, ok: true, verdicts: 0 };
+  const text = fs.readFileSync(file, 'utf8');
+  const broken = (line, words) => ({ present: true, ok: false, verdicts: 0, words: `Record broken at line ${line} of the verdict log: ${words}.` });
+  const chain = verifyText(text);
+  if (!chain.ok) return broken(chain.line, chainWords(chain.reason, chain.line, 'verdict log', 1));
+  const odus = new Map();
+  let oduHead = null;
+  if (fs.existsSync(path.join(dir, 'odu.jsonl'))) {
+    for (const o of records(fs.readFileSync(path.join(dir, 'odu.jsonl'), 'utf8'))) {
+      if (o && o.record === 'odu_header') oduHead = o.hash;
+      if (o && o.record === 'odu') odus.set(o.odu_id, o.hash);
+    }
+  }
+  const recs = records(text, chain.lines);
+  let verdicts = 0;
+  for (let i = 0; i < recs.length; i++) {
+    const r = recs[i];
+    const kind = VERDICT_KINDS[r.record];
+    if (!kind || (i === 0) !== (r.record === 'verdict_header')) return broken(i + 1, i === 0 ? 'the verdict log does not begin with its header' : 'it is not a record the verdict log holds');
+    const errs = kind[0](r);
+    if (errs.length) return broken(i + 1, `it is not a valid ${kind[1]} (${errs[0].path} ${errs[0].keyword})`);
+    if (i === 0 && r.odu_header !== oduHead) return broken(1, "it names an odù log header this session's odù log does not have");
+    if (r.record !== 'verdict') continue;
+    verdicts++;
+    if (!odus.has(r.odu_id)) return broken(i + 1, `this verdict points to an odù that does not exist (${r.odu_id})`);
+    if (odus.get(r.odu_id) !== r.odu_hash) return broken(i + 1, `this verdict names its odù with a hash the odù log does not hold (${r.odu_id})`);
+  }
+  return { present: true, ok: true, verdicts };
+}
 
 /**
  * K4 (LD209): the session footer, when one was written: each line it names must be in its log with that
@@ -85,10 +131,21 @@ function footerOf(dir, raw) {
     if (oduProblem) return { ok: false, words: oduProblem };
     oduAfter = odu.filter((x) => x && Number.isInteger(x.seq) && x.seq > f.odu.seq).length;
   }
+  let verdictAfter = 0;
+  if (f.verdict) {
+    // BB7: the verdict log the footer names must verify as a chain and hold that line; a crash cut is excused only after it.
+    const text = fs.existsSync(path.join(dir, 'verdict.jsonl')) ? fs.readFileSync(path.join(dir, 'verdict.jsonl'), 'utf8') : '';
+    const chain = verifyText(text);
+    if (!chain.ok && (!chain.cut || chain.line <= f.verdict.seq + 1)) return { ok: false, words: `Record broken at ${where('verdict log', 1, chain.line)}: ${chainWords(chain.reason, chain.line, 'verdict log', 1)}.` };
+    const vr = records(text);
+    const problem = named(vr, f.verdict, 'verdict log');
+    if (problem) return { ok: false, words: problem };
+    verdictAfter = vr.filter((x) => x && Number.isInteger(x.seq) && x.seq > f.verdict.seq).length;
+  }
   // LD249 (LD211 (5)): what follows the footer's lines is said, not hidden: a session resumed after its closeout, or a late
   // delivery. Each record is chained (intact); the footer only no longer names the log's end.
   const rawAfter = raw.records.filter((r) => !isContinuation(r) && r.rec && Number.isInteger(r.rec.seq) && r.rec.seq > f.raw.seq).length;
-  return { ok: true, odu: Boolean(f.odu), after: { raw: rawAfter, odu: oduAfter } };
+  return { ok: true, odu: Boolean(f.odu), verdict: Boolean(f.verdict), after: { raw: rawAfter, odu: oduAfter, verdict: verdictAfter } };
 }
 const REF_SLOTS = ['diff_ref', 'output_ref'];
 const REF = /^sha256:[0-9a-f]{64}$/;
@@ -260,6 +317,7 @@ function verifySession(dir) {
   }
 
   const footer = footerOf(dir, raw);
+  const verdicts = verdictsOf(dir);
 
   // CR1 (LD250; test 18, "verifier reports it"): the gaps the log records. The intake's downtime (a gap with `since`)
   // is named with its times and line; every other capture gap (a Sentinel watch gap, a Glove gap) is counted.
@@ -278,6 +336,7 @@ function verifySession(dir) {
     marks: marks.length,
     quarantined: quarantine.records.filter((r) => !(r.part === 1 && r.line === 1) && !isContinuation(r)).length,
     kept_files: files.checked,
+    ...(verdicts.present ? { verdicts: verdicts.verdicts } : {}), // BB7: only with a verdict log, so other answers keep their shape (Ship item 5)
   };
 
   let words;
@@ -291,6 +350,8 @@ function verifySession(dir) {
     words = failWords(quarantine, 'quarantine');
   } else if (files.bad.length) {
     words = fileWords(files.bad[0]);
+  } else if (!verdicts.ok) {
+    words = verdicts.words;
   } else if (footer && !footer.ok) {
     words = footer.words;
   } else {
@@ -303,13 +364,16 @@ function verifySession(dir) {
       : [];
     const base = baseline ? [`the baseline snapshot of ${plural(baseline.entries, 'entry', 'entries')} matches the header`] : [];
     const after = (n, log) => (n ? [`${plural(n, 'record', 'records')} after the footer's line in the ${log} (written after its closeout)`] : []);
-    const foot = footer ? [`the session footer matches the raw log${footer.odu ? ' and the odù log' : ''}`, ...after(footer.after.raw, 'raw log'), ...after(footer.after.odu, 'odù log')] : [];
+    const logs = ['the raw log', ...(footer && footer.odu ? ['the odù log'] : []), ...(footer && footer.verdict ? ['the verdict log'] : [])];
+    const matched = logs.length > 1 ? `${logs.slice(0, -1).join(', ')} and ${logs[logs.length - 1]}` : logs[0];
+    const foot = footer ? [`the session footer matches ${matched}`, ...after(footer.after.raw, 'raw log'), ...after(footer.after.odu, 'odù log'), ...after(footer.after.verdict, 'verdict log')] : [];
+    const judged = verdicts.present ? [`${plural(verdicts.verdicts, 'verdict', 'verdicts')} in the verdict log, each pointing to its odù`] : [];
     const other = gaps.other ? [`${plural(gaps.other, 'other capture gap', 'other capture gaps')} recorded`] : [];
     words =
       `Record intact: ${plural(counts.marks, 'mark', 'marks')}, ${plural(counts.quarantined, 'quarantined input', 'quarantined inputs')}, ` +
-      `${plural(counts.kept_files, 'kept file', 'kept files')}, unbroken${[...cuts, ...gapAt, ...other, ...fields, ...base, ...foot].map((c) => `; ${c}`).join('')}.`;
+      `${plural(counts.kept_files, 'kept file', 'kept files')}, unbroken${[...cuts, ...gapAt, ...other, ...fields, ...base, ...judged, ...foot].map((c) => `; ${c}`).join('')}.`;
   }
-  return { ok: raw.ok && schema.ok && quarantine.ok && files.bad.length === 0 && (!footer || footer.ok), words, counts, raw: summary(raw), schema, quarantine: summary(quarantine), files, undeclared, gaps };
+  return { ok: raw.ok && schema.ok && quarantine.ok && files.bad.length === 0 && verdicts.ok && (!footer || footer.ok), words, counts, raw: summary(raw), schema, quarantine: summary(quarantine), files, undeclared, gaps };
 }
 
 module.exports = { verifySession, checkLog, fileWords };

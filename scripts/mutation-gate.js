@@ -2022,10 +2022,10 @@ const MUTANTS = [
     from: 'lv = live.resume(dir, header,', to: 'lv = null && live.resume(dir, header,',
     fails: ['L1d guarantee 3'] },
   { id: "L1d-2 an odù log that is not replay's start is appended to", file: 'src/opon/intake/live.js', test: 'test/opon-live.js',
-    from: 'else if (!text.startsWith(disk)) stop(st,', to: 'else if (false) stop(st,',
+    from: 'if (!start) stop(st,', to: 'if (false) stop(st,', // LD287: the resume compares a line at a time
     fails: ['L1d: an odù log on disk'] },
   { id: 'L1d-3 an odù log a crash cut short is not caught up', file: 'src/opon/intake/live.js', test: 'test/opon-live.js',
-    from: 'else if (text.length > disk.length) fs.appendFileSync(st.file, text.slice(disk.length));', to: 'else if (false) void 0;',
+    from: '          for (; i < lines.length; i++) fs.writeSync(fd, lines[i]);\n', to: '', // LD287
     fails: ['L1d guarantee 3'] },
   // Slice L2: overlap from the session's own log (Q11 (2) (a), LD202).
   { id: 'L2-1 replay reads the folders though the log names its peers', file: 'src/opon/replay/index.js', test: 'test/opon-live.js',
@@ -2054,7 +2054,7 @@ const MUTANTS = [
     from: '      st.opon.fingerprintsDue();\n', to: '      st.due.push(...st.opon.fingerprintsDue());\n',
     fails: ['L1e'] },
   { id: 'L1e-2 a missing odù log is not written at a reopen', file: 'src/opon/intake/live.js', test: 'test/opon-live.js',
-    from: "if (disk === null) fs.writeFileSync(st.file, text, { flag: 'wx', mode: 0o600 });", to: 'if (disk === null) void 0;',
+    from: '      else {\n        const fd = fs.openSync(st.file,', to: '      else if (disk !== null) {\n        const fd = fs.openSync(st.file,', // LD287
     fails: ['L1e'] },
   // Slice K1: the closeout's force-seal (LD204; provisional, Q17).
   { id: "K1-1 the closeout's end mark seals nothing", file: 'src/opon/settle/engine.js', test: 'test/closeout.js',
@@ -2706,6 +2706,19 @@ const MUTANTS = [
   { id: 'LD286-3 a resumed session never ticks again', file: 'src/opon/intake/engine.js', test: 'test/judge-live.js',
     from: "    if (r.ok && resumes && s.ended && glove && m.says === 'prompted') s.ended = false;\n", to: '',
     fails: ["LD286 (LD249's open point)"] },
+  // F15 and the one-string odù log (LD287).
+  { id: "F15-1 the raw log's latest observed_at is not read", file: 'src/verify/session.js', test: 'test/scale.js',
+    from: '  return at;\n}\n\nmodule.exports = { verifySession', to: '  return null;\n}\n\nmodule.exports = { verifySession',
+    fails: ['F15 (LD287)'] },
+  { id: "F15-2 orunmila json's generated_at is null", file: 'bin/orunmila.js', test: 'test/closeout.js',
+    from: "require('../src/verify/session').latestObservedAt(path.dirname(file))", to: 'null',
+    fails: ['F7 (LD248)'] },
+  { id: 'OS1-1 the resume reads the odù log as one string', file: 'src/opon/intake/live.js', test: 'test/scale.js',
+    from: 'disk = fs.readFileSync(st.file);', to: "disk = Buffer.from(fs.readFileSync(st.file, 'utf8'));",
+    fails: ['the one-string odù log (LD287)'] },
+  { id: 'OS1-2 a cut line is not completed at the resume', file: 'src/opon/intake/live.js', test: 'test/scale.js',
+    from: '          if (disk !== null && at < disk.length) fs.writeSync(fd, lines[i++].subarray(disk.length - at)); // the cut line, completed\n', to: '',
+    fails: ['the one-string odù log (LD287)'] },
   // Q40 (LD284): the law gate's results in the odù record, judged and counted.
   { id: 'Q40-1 the settle engine leaves the law gate out of witness_status', file: 'src/opon/settle/engine.js', test: 'test/law-gate-odu.js',
     from: "...(g.sources.includes('law_gate') ? { law_gate: witness(g, 'law_gate') } : {})", to: '',

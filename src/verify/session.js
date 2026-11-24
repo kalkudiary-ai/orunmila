@@ -388,4 +388,15 @@ function verifySession(dir) {
   return { ok: raw.ok && schema.ok && quarantine.ok && files.bad.length === 0 && verdicts.ok && (!footer || footer.ok), words, counts, raw: summary(raw), schema, quarantine: summary(quarantine), files, undeclared, gaps };
 }
 
-module.exports = { verifySession, checkLog, fileWords };
+/**
+ * F15 (LD287): the latest observed_at among the raw log's records (its header and marks, across its parts), read a line
+ * at a time as checkLog reads it, never as one string; null when there is none. A log that does not verify gives its
+ * records up to the line that broke.
+ */
+function latestObservedAt(dir) {
+  let at = null;
+  for (const { rec } of checkLog(dir, 'raw').records) if (rec && typeof rec.observed_at === 'string' && (at === null || rec.observed_at > at)) at = rec.observed_at;
+  return at;
+}
+
+module.exports = { verifySession, checkLog, fileWords, latestObservedAt };

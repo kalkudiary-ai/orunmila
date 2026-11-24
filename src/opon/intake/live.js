@@ -47,7 +47,7 @@ const { createOpon } = require('../settle/engine');
 const { createOduWriter } = require('../ledger/odu-log');
 const { configFromHeader } = require('./header');
 const { canonicalize } = require('../../verify/canonical');
-const { verifyText } = require('../../verify/chain');
+const { verifyText, verifyBuffer } = require('../../verify/chain');
 const { fingerprintNow } = require('../net/baseline');
 const { applyOverlapped, sharesFiles } = require('./overlap');
 
@@ -143,24 +143,41 @@ function createLive({ key, clock, receive, error, judge = false }) {
     const st = make(dir, header, baseline, sink);
     st.oduLast = st.odu.head;
     try {
-      let text = canonicalize(st.odu.head) + '\n';
+      // The one-string odù log (LD287): the replayed log is kept a line at a time and compared with the one on disk as
+      // bytes, a line at a time, so no string of the whole log is made (V8's longest is about 512 MB).
+      const lines = [Buffer.from(canonicalize(st.odu.head) + '\n', 'utf8')];
       for (const rec of marks) {
         closes(st, rec);
-        for (const r of step(st, rec)) text += canonicalize(r) + '\n';
+        for (const r of step(st, rec)) lines.push(Buffer.from(canonicalize(r) + '\n', 'utf8'));
       }
       st.opon.fingerprintsDue();
       let disk = null;
       try {
-        disk = fs.readFileSync(st.file, 'utf8');
+        disk = fs.readFileSync(st.file);
       } catch (e) {
         if (e.code !== 'ENOENT') throw e;
       }
-      if (disk === null) fs.writeFileSync(st.file, text, { flag: 'wx', mode: 0o600 });
-      else if (!text.startsWith(disk)) stop(st, "its odù log on disk is not the start of replay's, and it is never edited");
-      else if (text.length > disk.length) fs.appendFileSync(st.file, text.slice(disk.length));
+      // How far the log on disk is the start of the replayed one: whole lines, then at most part of the next (a crash cut).
+      let i = 0;
+      let at = 0;
+      let start = true;
+      if (disk !== null) {
+        while (i < lines.length && at + lines[i].length <= disk.length && disk.subarray(at, at + lines[i].length).equals(lines[i])) at += lines[i++].length;
+        if (at < disk.length) start = i < lines.length && lines[i].subarray(0, disk.length - at).equals(disk.subarray(at));
+      }
+      if (!start) stop(st, "its odù log on disk is not the start of replay's, and it is never edited");
+      else {
+        const fd = fs.openSync(st.file, disk === null ? 'wx' : 'a', 0o600);
+        try {
+          if (disk !== null && at < disk.length) fs.writeSync(fd, lines[i++].subarray(disk.length - at)); // the cut line, completed
+          for (; i < lines.length; i++) fs.writeSync(fd, lines[i]);
+        } finally {
+          fs.closeSync(fd);
+        }
+      }
       if (st.on) st.sink.watch('odu', st.file); // TE1's rest: from the log as it now stands, the start of replay's
       const verdicts = path.join(dir, 'verdict.jsonl');
-      if (fs.existsSync(verdicts) && verifyText(fs.readFileSync(verdicts, 'utf8')).ok) st.sink.watch('verdict', verdicts);
+      if (fs.existsSync(verdicts) && verifyBuffer(fs.readFileSync(verdicts)).ok) st.sink.watch('verdict', verdicts);
     } catch (e) {
       stop(st, `it could not be resumed (${e.code || e.message})`);
     }

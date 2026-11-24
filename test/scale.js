@@ -135,4 +135,98 @@ it('LR2c (LD253): the baseline snapshot allocates its read buffer once, not once
   }
 });
 
+/**
+ * F15 and the one-string odù log (LD287): with any string over 1 MB made from a Buffer, or from a whole file read as
+ * text, throwing, `orunmila json`'s generated_at (the raw log's latest observed_at) is still read, and the live Ọpọ́n
+ * still resumes a session after a restart: its odù log written whole when none is on disk, and completed when a crash
+ * cut it mid-line. Hand-built marks sealed into a valid chain in a throwaway home.
+ */
+function noLongStrings(fn) {
+  const fs = require('fs');
+  const toString = Buffer.prototype.toString;
+  const readFileSync = fs.readFileSync;
+  Buffer.prototype.toString = function guarded(enc, start, end) {
+    const s = start === undefined ? 0 : start;
+    const e = end === undefined ? this.length : end;
+    if (e - s > 1024 * 1024) throw new Error(`a string of ${e - s} bytes was made from a Buffer`);
+    return toString.call(this, enc, start, end);
+  };
+  fs.readFileSync = function guardedRead(file, opts) {
+    const enc = typeof opts === 'string' ? opts : opts && opts.encoding;
+    if (enc && typeof file === 'string' && fs.statSync(file).size > 1024 * 1024) throw new Error(`${file} was read whole as one string`);
+    return readFileSync.call(fs, file, opts);
+  };
+  try {
+    return fn();
+  } finally {
+    Buffer.prototype.toString = toString;
+    fs.readFileSync = readFileSync;
+  }
+}
+
+function bigSession(home, T) {
+  const fs = require('fs');
+  const path = require('path');
+  const { makeLog } = require('./helpers-opon');
+  const { seal } = require('../src/verify/chain');
+  const { canonicalize } = require('../src/verify/canonical');
+  const log = makeLog(path.join(home, 'sessions'));
+  const file = path.join(log.dir, 'raw.jsonl');
+  let last = JSON.parse(fs.readFileSync(file, 'utf8').split('\n')[0]);
+  const lines = [];
+  for (const m of marks(T)) {
+    const { seq, ...rest } = m;
+    void seq;
+    last = seal({ ...rest, seq: last.seq + 1 }, last.hash);
+    lines.push(canonicalize(last));
+  }
+  fs.appendFileSync(file, lines.join('\n') + '\n');
+  return { dir: log.dir, last };
+}
+
+it("F15 (LD287): orunmila json's generated_at, the raw log's latest observed_at, is read a line at a time", () => {
+  const { tmpDir, rmrf } = require('./helpers');
+  const fs = require('fs');
+  const path = require('path');
+  const { latestObservedAt } = require('../src/verify/session');
+  const home = tmpDir();
+  try {
+    const { dir, last } = bigSession(home, 300);
+    assert.ok(fs.statSync(path.join(dir, 'raw.jsonl')).size > 1024 * 1024);
+    assert.strictEqual(noLongStrings(() => latestObservedAt(dir)), last.observed_at);
+  } finally {
+    rmrf(home);
+  }
+});
+
+it('the one-string odù log (LD287): after a restart the live Ọpọ́n resumes a long session with no string of its odù log: written whole when none is on disk, completed when a crash cut it mid-line', () => {
+  const { tmpDir, rmrf } = require('./helpers');
+  const fs = require('fs');
+  const path = require('path');
+  const { replayFolder } = require('../src/opon/replay');
+  const { createRouter } = require('../src/opon/intake/router');
+  for (const cut of [false, true]) {
+    const home = tmpDir();
+    try {
+      const { dir } = bigSession(home, 900);
+      const want = replayFolder(dir).odu;
+      assert.ok(Buffer.byteLength(want) > 2.2 * 1024 * 1024, `the odù log is ${Buffer.byteLength(want)} bytes, so its cut half is over the 1 MB guard`);
+      const oduFile = path.join(dir, 'odu.jsonl');
+      if (cut) fs.writeFileSync(oduFile, want.slice(0, Math.floor(want.length / 2))); // a crash mid-line
+      fs.mkdirSync(path.join(home, 'intake'), { recursive: true });
+      fs.writeFileSync(path.join(home, 'intake', 'held.json'), JSON.stringify(['ses_replay_test']));
+      let mono = 10n ** 15n;
+      const clock = () => ({ mono: mono.toString(), wall: '2026-11-24T12:00:00.000Z' });
+      const router = createRouter({ home, clock, checkSender: () => true, codeRoot: path.join(__dirname, '..', 'src'), orunmilaVersion: '0.0.0-test', installKey: Buffer.alloc(32, 7), hookSettingsFor: () => [], baseline: true });
+      noLongStrings(() => router.resume());
+      mono += 1n;
+      const got = fs.readFileSync(oduFile);
+      assert.ok(got.subarray(0, Buffer.byteLength(want)).equals(Buffer.from(want)), `${cut ? 'completed' : 'written'}: the start of replay's, byte for byte`);
+      router.stop('over');
+    } finally {
+      rmrf(home);
+    }
+  }
+});
+
 runAll('scale');

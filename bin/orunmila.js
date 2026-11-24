@@ -1219,20 +1219,9 @@ function cmdJson() {
       console.error(`No odù log for session ${sessionId} (${file}): the intake writes one only with ORUNMILA_OPON_LIVE=1.`);
       process.exit(1);
     }
-    // F7 (LD248): the old path's generated_at is its latest event's time; here, the latest observed_at of the raw log beside the odù log.
-    const raw = path.join(path.dirname(file), 'raw.jsonl');
-    let generatedAt = null;
-    if (fs.existsSync(raw)) {
-      for (const l of fs.readFileSync(raw, 'utf8').split('\n')) {
-        let r;
-        try {
-          r = l ? JSON.parse(l) : null;
-        } catch {
-          r = null; // a line a crash cut: not a record
-        }
-        if (r && typeof r.observed_at === 'string' && (generatedAt === null || r.observed_at > generatedAt)) generatedAt = r.observed_at;
-      }
-    }
+    // F7 (LD248): the old path's generated_at is its latest event's time; here, the latest observed_at of the raw log beside
+    // the odù log. F15 (LD287): read a line at a time, never as one string (a raw log can pass V8's longest, about 512 MB).
+    const generatedAt = fs.existsSync(path.join(path.dirname(file), 'raw.jsonl')) ? require('../src/verify/session').latestObservedAt(path.dirname(file)) : null;
     return feedbackFromOdu({ sessionId, agent: detectAgent(), oduText: fs.readFileSync(file, 'utf8'), turn, include, generatedAt, redactOpts: { home, root: process.cwd() } });
   };
   // BB9 (LD273): the verdicts' feedback with ORUNMILA_FEEDBACK_FROM_VERDICTS=1, in the same 1.0 shape; with --side-by-side, beside the old path's.

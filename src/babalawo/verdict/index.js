@@ -57,6 +57,36 @@ function tamperRule(o, header) {
   return 'R8'; // the rules, byproducts or ignore list, or a law pack
 }
 
+// BB12 (LD261, LD262): Orunmila's commands that read its record, and what marks a path as Orunmila's home.
+const READERS = new Set(['trail', 'glove', 'json', 'report', 'html', 'verify', 'laws', 'replay', 'status', 'stats', 'archives', 'feedback', 'judge']);
+const homeLike = (p) => /^(~|\/|[A-Za-z]:\/)/.test(posix(p)) && posix(p).split('/').includes('.orunmila');
+const unquote = (w) => w.replace(/^['"]+|['"]+$/g, '');
+
+/**
+ * BB12: an agent tool call that reads Orunmila's home (a path outside the project with a `.orunmila` folder in it; the
+ * project's own `.orunmila/` settings are not it), or runs one of Orunmila's reading commands (Orunmila itself the
+ * program, alone or through node or npx), or names such a path in a command. A read hidden inside a program the agent
+ * runs cannot be seen (a disk watcher sees changes, never reads, nor who): a stated limit.
+ */
+function looksAtRecord(o) {
+  const t = o.target;
+  if (!t) return false;
+  if (o.action === 'read' && (t.kind === 'file' || t.kind === 'dir') && t.outside && homeLike(t.path)) return true;
+  if (t.kind !== 'command' || typeof t.text !== 'string') return false;
+  for (const segment of t.text.split(/[;|&()\n]+/)) {
+    const words = segment.trim().split(/\s+/).filter(Boolean).map(unquote);
+    if (words.some(homeLike)) return true;
+    let i = 0;
+    while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) i++; // VAR=value before the program
+    if (['node', 'npx'].includes(path.posix.basename(posix(words[i] || '')))) {
+      i++;
+      while (i < words.length && words[i].startsWith('-')) i++;
+    }
+    if (['orunmila', 'orunmila.js'].includes(path.posix.basename(posix(words[i] || ''))) && READERS.has(words[i + 1])) return true;
+  }
+  return false;
+}
+
 /** Every rule that fires on one odù, as [{ rule, verdict }]. */
 function fired(o, rules, header) {
   const out = [];
@@ -80,6 +110,7 @@ function fired(o, rules, header) {
     give('R7', set.R7 === 'violation' && !(o.attribution === 'explained' && o.confidence === 'high') ? 'look_at_this' : set.R7);
   }
   if (o.confidence === 'low') give('R20', set.R20);
+  if (looksAtRecord(o)) give('R25', set.R25);
   return out;
 }
 
@@ -131,4 +162,4 @@ function judgeOdus({ header, odus, rules }) {
   return { verdicts, session: { verdict: reasons.length ? 'incomplete' : most, reasons, counts } };
 }
 
-module.exports = { judgeOdus, tamperRule, TAMPER_RULES, CONFLICT_RULE };
+module.exports = { judgeOdus, tamperRule, looksAtRecord, TAMPER_RULES, CONFLICT_RULE };

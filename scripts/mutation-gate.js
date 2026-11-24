@@ -2581,6 +2581,20 @@ const MUTANTS = [
   { id: 'BB11-3 a judge without judge() is taken', file: 'src/babalawo/interface.js', test: 'test/judge-swap.js',
     from: "if (!j || typeof j.judge !== 'function' || typeof j.loadRules !== 'function') throw", to: 'if (!j) throw',
     fails: ['BB11: the interface refuses'] },
+  // BB12: the agent's look at Orunmila's record.
+  { id: "BB12-1 a look at Orunmila's record is not judged", file: 'src/babalawo/verdict/index.js', test: 'test/agent-look.js',
+    from: "  if (looksAtRecord(o)) give('R25', set.R25);\n", to: '',
+    fails: ["BB12: the agent's Read"] },
+  { id: "BB12-2 the project's own .orunmila/ counts as Orunmila's home", file: 'src/babalawo/verdict/index.js', test: 'test/agent-look.js',
+    from: 'const homeLike = (p) => /^(~|\\/|[A-Za-z]:\\/)/.test(posix(p)) && ', to: 'const homeLike = (p) => ',
+    fails: ["BB12: the project's own"] },
+  { id: 'BB12-3 a command that only names orunmila counts as running it', file: 'src/babalawo/verdict/index.js', test: 'test/agent-look.js',
+    from: "    if (['orunmila', 'orunmila.js'].includes(path.posix.basename(posix(words[i] || ''))) && READERS.has(words[i + 1])) return true;",
+    to: "    if (words.some((w, k) => ['orunmila', 'orunmila.js'].includes(path.posix.basename(posix(w))) && READERS.has(words[k + 1]))) return true;",
+    fails: ["BB12: the project's own"] },
+  { id: 'BB12-4 the looks are not one line for the session', file: 'src/babalawo/report/index.js', test: 'test/agent-look.js',
+    from: "    if (v.rule === 'R25') {", to: '    if (false) {',
+    fails: ['BB12: the report gives the looks'] },
 ];
 
 function copyRepo(root) {

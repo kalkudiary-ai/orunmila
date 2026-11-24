@@ -49,6 +49,7 @@ const RULES = {
   R19: { line: 450, says: 'an entry the closeout rescan could not fingerprint', verdict: 'look_at_this' },
   R20: { line: 651, says: 'low confidence', verdict: 'look_at_this' },
   R24: { line: 662, says: 'a conflict this judge does not know', verdict: 'look_at_this' },
+  R25: { line: 76, says: "the agent looked at Orunmila's record (LD262)", verdict: 'look_at_this', never: ['violation'] },
 };
 const VERDICTS = ['violation', 'look_at_this', 'off'];
 

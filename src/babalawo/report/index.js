@@ -131,6 +131,7 @@ function buildReport({ header, marks, odus, verdicts, quarantined = 0, judgedNow
   }
   const findings = [];
   const silent = [];
+  const looks = []; // BB12: the agent's looks at Orunmila's record, one calm line for the session (LD262)
   for (const o of odus.filter((x) => x.record === 'odu')) {
     const v = latest.get(o.odu_id);
     if (!v || v.verdict === 'clean') continue;
@@ -140,6 +141,10 @@ function buildReport({ header, marks, odus, verdicts, quarantined = 0, judgedNow
       silent.push({ v, o });
       continue;
     }
+    if (v.rule === 'R25') {
+      looks.push({ v, o });
+      continue;
+    }
     findings.push({ kind: 'verdict', verdict: v.verdict, rule: v.rule, odu_id: v.odu_id, target: targetOf(o), mark_seqs: v.mark_seqs, sentence: `${ruleWords(v, o, bySeq)}. ${witnessWords(v.witness_status, bySeq)}` });
   }
   if (silent.length) {
@@ -147,6 +152,14 @@ function buildReport({ header, marks, odus, verdicts, quarantined = 0, judgedNow
     const paths = silent.map((x) => targetOf(x.o));
     const each = silent.map((x) => `${targetOf(x.o)} (${witnessWords(x.v.witness_status, bySeq).slice(0, -1)})`);
     findings.push({ kind: 'verdict', verdict: 'look_at_this', rule: 'R2', odu_id: silent[0].v.odu_id, odu_ids: silent.map((x) => x.v.odu_id), target: paths.join(', '), mark_seqs: silent.flatMap((x) => x.v.mark_seqs), sentence: `The agent changed ${plural(paths.length, 'file', 'files')} its turns' claims never mention: ${each.join('; ')}.` });
+  }
+  if (looks.length) {
+    const each = looks.map(({ v, o }) => {
+      const call = v.mark_seqs.map((n) => bySeq.get(n)).find((m) => m && m.cause_hint);
+      if (o.target.kind === 'command') return `it ran \`${o.target.text}\`${call ? ` (tool call ${call.cause_hint})` : ''}`;
+      return `it read ${o.target.path}${call ? ` (${call.detail && call.detail.tool ? `${call.detail.tool}, ` : ''}tool call ${call.cause_hint})` : ''}`;
+    });
+    findings.push({ kind: 'verdict', verdict: 'look_at_this', rule: 'R25', odu_id: looks[0].v.odu_id, odu_ids: looks.map((x) => x.v.odu_id), target: "Orunmila's record", mark_seqs: looks.flatMap((x) => x.v.mark_seqs), sentence: `The agent looked at Orunmila's record of its work ${plural(looks.length, 'time', 'times')}: ${each.join('; ')}.` });
   }
   for (const r of (session && session.reasons) || []) {
     if (r.reason === 'law_gate_silent') findings.push({ kind: 'incomplete', verdict: 'incomplete', rule: r.rule, target: 'the law gate', sentence: "No law-gate check was recorded, though the agent's hooks were: the law gate was silent, so the record is incomplete." });

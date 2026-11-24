@@ -21,6 +21,9 @@
  * ORUNMILA_GATE_MARKS=1 (off by default; slice B5, LD146): the gate's decision
  * is also sent to the intake as one payload, for a `law_gate` mark (test 61).
  * The sender is loaded only then, so the flag off loads what it always did.
+ * `--marks` on the hook's command line does the same (BB5b, LD276): `install
+ * --intake` writes it, since an environment prefix on a hook command does not
+ * work in every shell a hook runs in (cmd.exe on Windows).
  */
 
 const { runGate } = require('../../laws/gate');
@@ -35,7 +38,7 @@ process.stdin.on('end', () => {
   try {
     const payload = JSON.parse(raw || '{}');
     let check = null;
-    const marks = process.env.ORUNMILA_GATE_MARKS === '1';
+    const marks = process.env.ORUNMILA_GATE_MARKS === '1' || process.argv.includes('--marks');
     const out = runGate(payload, getAdapter('claude-code'), { root: process.cwd(), onCheck: marks ? (c) => (check = c) : undefined });
     if (out) process.stdout.write(JSON.stringify(out));
     if (check) {

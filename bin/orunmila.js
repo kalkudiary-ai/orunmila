@@ -282,10 +282,22 @@ function cmdInstall() {
     }
     for (const ev of INTAKE_COMMAND_EVENTS) mergeClaudeHook(settings, ev, '*', sender);
     for (const ev of INTAKE_HTTP_EVENTS) (settings.hooks[ev] = settings.hooks[ev] || []).push({ matcher: '*', hooks: [{ type: 'http', url, timeout: 2 }] });
+    // BB5b (LD276; brief v4 line 678): an installed Closeout Gate sends its checks to the intake too, by an argument,
+    // never an environment prefix (not every shell a hook runs in reads one). The gate is never installed from here.
+    let gates = 0;
+    for (const e of settings.hooks.Stop || []) {
+      for (const h of e.hooks || []) {
+        if (h.type !== 'command' || !String(h.command || '').includes(GATE_HOOK_BASENAME)) continue;
+        gates++;
+        if (!/\s--marks$/.test(h.command)) h.command = `${h.command} --marks`;
+      }
+    }
     fs.writeFileSync(p, JSON.stringify(settings, null, 2));
     console.log(`The intake is registered in ${p}, beside any hooks already there:`);
     console.log(`  HTTP hooks to ${url} for ${INTAKE_HTTP_EVENTS.join(', ')} (every tool; each session pinned to the claude process)`);
     console.log(`  the command sender for ${INTAKE_COMMAND_EVENTS.join(', ')}`);
+    if (gates) console.log("  the Closeout Gate's checks go to the intake too (--marks), so each session's record shows the law gate");
+    else console.log('The Closeout Gate is not installed here: with no law-gate checks, every session\'s record will be Incomplete (law gate silent). Add it with: orunmila install --gate-only');
     console.log("Nothing is recorded while no intake runs: start it with");
     console.log('  orunmila intake start');
     console.log(`\nRestart ${adapter.label} (or start a new session) for this to take effect.`);

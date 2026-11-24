@@ -1642,7 +1642,7 @@ const MUTANTS = [
     from: "if (Array.isArray(check.lawErrors) && check.lawErrors.length) detail.law_errors = check.lawErrors.map(String);", to: "void check.lawErrors;",
     fails: ['B5 (NF6)'] },
   { id: 'B5-5 the gate sends with the flag off', file: 'src/capture/claude-code/law-gate.js', test: 'test/gate-marks.js',
-    from: "const marks = process.env.ORUNMILA_GATE_MARKS === '1';", to: "const marks = true;",
+    from: "const marks = process.env.ORUNMILA_GATE_MARKS === '1' || process.argv.includes('--marks');", to: "const marks = true;",
     fails: ['B5 hook: with ORUNMILA_GATE_MARKS=1'] },
   // Slice B4: the Sentinel inside the intake (LD145).
   { id: 'B4-1 .orunmila/ not watched (N3)', file: 'src/opon/intake/sentinel.js', test: 'test/intake-sentinel.js',
@@ -2595,6 +2595,16 @@ const MUTANTS = [
   { id: 'BB12-4 the looks are not one line for the session', file: 'src/babalawo/report/index.js', test: 'test/agent-look.js',
     from: "    if (v.rule === 'R25') {", to: '    if (false) {',
     fails: ['BB12: the report gives the looks'] },
+  // BB5b: the gate's marks by an argument; install --intake turns them on where the gate is installed.
+  { id: 'BB5b-1 the --marks argument is ignored', file: 'src/capture/claude-code/law-gate.js', test: 'test/gate-marks.js',
+    from: "process.env.ORUNMILA_GATE_MARKS === '1' || process.argv.includes('--marks');", to: "process.env.ORUNMILA_GATE_MARKS === '1';",
+    fails: ['BB5b: `--marks`'] },
+  { id: "BB5b-2 install --intake leaves the gate's marks off", file: 'bin/orunmila.js', test: 'test/gate-marks.js',
+    from: '        if (!/\\s--marks$/.test(h.command)) h.command = `${h.command} --marks`;\n', to: '',
+    fails: ['BB5b, line 678'] },
+  { id: 'BB5b-3 install --intake adds --marks every time', file: 'bin/orunmila.js', test: 'test/gate-marks.js',
+    from: 'if (!/\\s--marks$/.test(h.command)) h.command', to: 'if (true) h.command',
+    fails: ['BB5b, line 678'] },
 ];
 
 function copyRepo(root) {

@@ -70,7 +70,7 @@ it('B5 (NF6): a check made over a malformed law file records the loader\'s words
 });
 
 /** Run the gate hook with a fake intake listening; returns { stdout, lines }. */
-async function runHook({ flag, payload, home, cwd }) {
+async function runHook({ flag, payload, home, cwd, args = [] }) {
   fs.mkdirSync(path.join(home, 'intake'), { recursive: true });
   const sock = path.join(home, 'intake', 'intake.sock');
   const lines = [];
@@ -84,7 +84,7 @@ async function runHook({ flag, payload, home, cwd }) {
   delete env.ORUNMILA_LAWS;
   if (flag) env.ORUNMILA_GATE_MARKS = '1';
   else delete env.ORUNMILA_GATE_MARKS;
-  const child = spawn(process.execPath, [HOOK], { env, cwd });
+  const child = spawn(process.execPath, [HOOK, ...args], { env, cwd });
   let stdout = '';
   child.stdout.on('data', (d) => (stdout += d));
   child.stdin.end(JSON.stringify(payload));
@@ -154,6 +154,50 @@ it('B5 hook: with no intake running the gate still answers and exits 0 at once',
   } finally {
     rmrf(home);
     rmrf(cwd);
+  }
+});
+
+it('BB5b: `--marks` on the hook\'s command line sends the decision as ORUNMILA_GATE_MARKS=1 does, on every system (no environment prefix)', async () => {
+  const home = fs.realpathSync(tmpDir());
+  const cwd = fs.realpathSync(tmpDir());
+  try {
+    const on = await runHook({ flag: false, args: ['--marks'], payload: { session_id: 'h4', hook_event_name: 'Stop', last_assistant_message: 'Done.' }, home, cwd });
+    assert.strictEqual(on.code, 0);
+    assert.strictEqual(on.lines.length, 1, 'sent with the argument alone');
+    assert.strictEqual(JSON.parse(on.lines[0]).payload.hook_event_name, 'OrunmilaLawCheck');
+  } finally {
+    rmrf(home);
+    rmrf(cwd);
+  }
+});
+
+it("BB5b, line 678: install --intake turns on the gate's marks where the gate is installed, once; with no gate it says the record will be incomplete and installs none", () => {
+  const { run } = require('./helpers');
+  const project = fs.realpathSync(tmpDir());
+  const bare = fs.realpathSync(tmpDir());
+  const home = fs.realpathSync(tmpDir());
+  const env = { HOME: home, ORUNMILA_HOME: path.join(home, '.orunmila'), ORUNMILA_INTAKE_PORT: '0' };
+  const gates = (dir) => {
+    const s = JSON.parse(fs.readFileSync(path.join(dir, '.claude', 'settings.json'), 'utf8'));
+    return (s.hooks.Stop || []).flatMap((e) => e.hooks || []).map((h) => h.command || '').filter((c) => c.includes('law-gate.js'));
+  };
+  try {
+    assert.strictEqual(run('bin/orunmila.js', { args: ['install', '--with-gate'], env, cwd: project }).status, 0);
+    assert.ok(gates(project).every((c) => !c.includes('--marks')), 'the gate alone sends no marks');
+    const r = run('bin/orunmila.js', { args: ['install', '--intake'], env, cwd: project });
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    assert.deepStrictEqual(gates(project).map((c) => c.endsWith(' --marks')), [true]);
+    assert.ok(r.stdout.includes("the Closeout Gate's checks go to the intake too"), r.stdout);
+    run('bin/orunmila.js', { args: ['install', '--intake'], env, cwd: project });
+    assert.deepStrictEqual(gates(project).map((c) => c.split(' --marks').length - 1), [1], 'never twice');
+    const b = run('bin/orunmila.js', { args: ['install', '--intake'], env, cwd: bare });
+    assert.strictEqual(b.status, 0, b.stdout + b.stderr);
+    assert.deepStrictEqual(gates(bare), [], 'the gate is never installed by --intake');
+    assert.ok(b.stdout.includes('law gate silent'), b.stdout);
+  } finally {
+    rmrf(project);
+    rmrf(bare);
+    rmrf(home);
   }
 });
 

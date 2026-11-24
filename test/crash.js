@@ -43,6 +43,7 @@ function cc(project, sid) {
     pre: (id, command) => ({ ...base, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command }, tool_use_id: id }),
     post: (id, command) => ({ ...base, hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_input: { command }, tool_response: { stdout: 'ok', stderr: '', interrupted: false }, tool_use_id: id }),
     stop: (text) => ({ ...base, hook_event_name: 'Stop', last_assistant_message: text }),
+    end: () => ({ ...base, hook_event_name: 'SessionEnd', reason: 'exit' }),
   };
 }
 
@@ -61,14 +62,17 @@ async function cutSession(base, sid, cut) {
   const paths = intakePaths(home);
   const dir = path.join(home, 'sessions', sid);
   const p = cc(project, sid);
+  const done = cc(project, `${sid}_done`); // test 84: a session that ended before the cut is not active at the intake's last tick
   const start = () => {
     const r = run('bin/orunmila.js', { args: ['intake', 'start'], env });
     assert.strictEqual(r.status, 0, r.stdout + r.stderr);
   };
   try {
     start();
-    await send(paths.sock, req(p.start()) + turn(p, 1) + turn(p, 2));
+    await send(paths.sock, req(p.start()) + turn(p, 1) + turn(p, 2) + req(done.start()) + turn(done, 1) + req(done.end()));
     assert.ok(await until(() => lines(path.join(dir, 'raw.jsonl')).filter((m) => m.says === 'ended').length === 2), 'two turns written');
+    const doneDir = path.join(home, 'sessions', `${sid}_done`);
+    assert.ok(await until(() => lines(path.join(doneDir, 'raw.jsonl')).some((m) => m.says === 'ended' && m.target && m.target.kind === 'session')), 'the other session ended');
     const pid = Number(fs.readFileSync(paths.lock, 'utf8').trim());
     assert.ok(Number.isInteger(pid) && pid > 0, `the lock names the intake's pid: ${pid}`);
     const cutAt = new Date().toISOString();
@@ -78,7 +82,7 @@ async function cutSession(base, sid, cut) {
     start();
     await send(paths.sock, turn(p, 3) + turn(p, 4));
     assert.ok(await until(() => lines(path.join(dir, 'raw.jsonl')).filter((m) => m.says === 'ended').length === 4), 'four turns written');
-    return { dir, raw: lines(path.join(dir, 'raw.jsonl')), cutAt };
+    return { dir, raw: lines(path.join(dir, 'raw.jsonl')), doneRaw: lines(path.join(doneDir, 'raw.jsonl')), sid, cutAt };
   } finally {
     run('bin/orunmila.js', { args: ['intake', 'stop'], env });
   }
@@ -94,10 +98,13 @@ for (const [name, test, cut, planned] of [
   it(`CR1 ${name} (LD250): the intake ${test} mid-session and started again: one gap covering the downtime, the live odù log equal to replay of the raw log, and verify reports the gap`, async () => {
     const base = tmpDir();
     try {
-      const { dir, raw, cutAt } = await cutSession(base, `ses_${name.replace(' ', '')}`, cut);
+      const { dir, raw, doneRaw, sid, cutAt } = await cutSession(base, `ses_${name.replace(' ', '')}`, cut);
       const gaps = downtime(raw);
       assert.strictEqual(gaps.length, 1, JSON.stringify(gaps));
       const g = gaps[0];
+      // Test 84 (line 851): the gap names the sessions active at the intake's last tick: this one, never one that had ended.
+      assert.deepStrictEqual(g.detail.sessions, [sid], JSON.stringify(g.detail));
+      assert.deepStrictEqual(downtime(doneRaw), [], 'a session that ended before the cut gets no downtime gap');
       const before = raw.filter((m) => m.seq < g.seq && m.says !== 'gap');
       const last = before[before.length - 1];
       // A kill leaves no note: the gap runs from the last record before the cut. A planned stop writes its closing note at

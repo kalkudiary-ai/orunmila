@@ -5,7 +5,7 @@
  * bench.js — multi-agent benchmark runner with full Orunmila reconciliation.
  *
  * Usage:
- *   node bin/bench.js --agent claude-code [--model sonnet] [--corpus corpus/] [--task <id>]
+ *   node scripts/bench.js --agent claude-code [--model sonnet] [--corpus corpus/] [--task <id>]
  *
  * For each task: scaffolds files into a temp dir, installs orunmila hooks,
  * runs the agent, then reads back the reconciliation report to extract

@@ -225,10 +225,6 @@ function renderTrailVisual(vizData) {
   .gv-edge-label { font-size:8px; fill:#6f7b88; pointer-events:none; opacity:0; transition:opacity .1s; }
   .gv-edge.hot + .gv-edge-label, .gv-svg:hover .gv-edge-label { opacity:1; }
 
-  /* 3D container */
-  .gv-3d-wrap { width:100%; height:520px; border-radius:10px; overflow:hidden; position:relative; background:#070809; }
-  .gv-3d-wrap canvas { display:block; width:100%!important; height:100%!important; }
-
   /* detail panel */
   .gv-detail { background:#0e1219; border:1px solid #1f2630; border-radius:10px; padding:14px 18px; margin:12px 0 0; animation:gv-slide .15s ease-out; }
   @keyframes gv-slide { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:none; } }
@@ -322,7 +318,6 @@ function renderTrailVisual(vizData) {
     <button class="gv-tab on" data-view="timeline">Timeline</button>
     <button class="gv-tab" data-view="tree">Tree</button>
     <button class="gv-tab" data-view="graph">Graph</button>
-    <button class="gv-tab" data-view="graph3d">3D Graph</button>
     <button class="gv-tab" data-view="dashboard">Dashboard</button>
     <button class="gv-tab" data-view="report">Report</button>
     <button class="gv-tab" data-view="glossary">Glossary</button>
@@ -332,7 +327,6 @@ function renderTrailVisual(vizData) {
     <div class="gv-view on" data-view="timeline" id="gv-timeline"></div>
     <div class="gv-view" data-view="tree" id="gv-tree"></div>
     <div class="gv-view" data-view="graph" id="gv-graph"></div>
-    <div class="gv-view" data-view="graph3d" id="gv-graph3d"></div>
     <div class="gv-view" data-view="dashboard" id="gv-dashboard"></div>
     <div class="gv-view" data-view="report" id="gv-report"></div>
     <div class="gv-view" data-view="glossary" id="gv-glossary"></div>
@@ -397,7 +391,6 @@ function renderTrailVisual(vizData) {
 
   var HINTS = {
     graph: 'Each dot is something the agent touched. Hover to light up connections, click for details. Scroll to zoom, drag to pan. Filter by channel or outcome above.',
-    graph3d: 'Drag to rotate, scroll to zoom, click a node for details. Loads a small 3D library from a CDN — needs internet.',
     glossary: 'What every color, label, and metric means.',
     tree: 'Your project as folders. Each bar glows by how the agent touched that file. Click a file for details.',
     timeline: 'The session left to right, one column per turn. Click any pip for details.',
@@ -596,166 +589,7 @@ function renderTrailVisual(vizData) {
     bindFilters(el, function(){ rendered.graph=false; renderGraph(); });
   }
 
-  // ---- 3D GRAPH ----
-  // Lessons from the previous broken version:
-  //  - Three.js dropped examples/js in v0.148+; loading OrbitControls that way
-  //    404'd and the chain stalled.
-  //  - Loading three.js separately AND letting 3d-force-graph bundle its own
-  //    created two competing WebGL contexts -> the intermittent black screen.
-  //  - Custom nodeThreeObject referenced a global THREE that didn't reliably
-  //    exist; we now use the library's built-in spheres which need no THREE.
-  // Single-file UMD bundles three internally. We try unpkg, fall back to jsdelivr.
-  var fg3dLoaded = 0; // 0 not started, 1 loading, 2 ready, -1 failed
-  var fg3dInstance = null; // disposed on re-render so WebGL contexts don't leak
-  function load3DLib(done){
-    if (fg3dLoaded === 2) return done(null);
-    if (fg3dLoaded === -1) return done(new Error('previous load failed'));
-    fg3dLoaded = 1;
-    var urls = [
-      'https://unpkg.com/3d-force-graph@1.73.4/dist/3d-force-graph.min.js',
-      'https://cdn.jsdelivr.net/npm/3d-force-graph@1.73.4/dist/3d-force-graph.min.js',
-    ];
-    var i = 0;
-    function tryNext(){
-      if (i >= urls.length) { fg3dLoaded = -1; return done(new Error('all CDNs failed')); }
-      var s = document.createElement('script');
-      s.src = urls[i++];
-      s.onload = function(){
-        if (typeof ForceGraph3D === 'function') { fg3dLoaded = 2; done(null); }
-        else tryNext();
-      };
-      s.onerror = tryNext;
-      document.head.appendChild(s);
-    }
-    tryNext();
-  }
-
-  function render3DGraph(){
-    var el = document.getElementById('gv-graph3d');
-    el.innerHTML = renderFilterBar('graph3d')
-      + '<div class="gv-3d-wrap" id="gv-3d-container">'
-      + '<div id="gv-3d-status" style="text-align:center;color:#7d8694;padding:80px 20px;">Loading 3D engine\\u2026<br><span style="font-size:.72rem;color:#484f58;">Needs internet for 3d-force-graph (~150KB)</span></div>'
-      + '</div>';
-    bindFilters(el, function(){ rendered.graph3d=false; render3DGraph(); });
-
-    // Dispose any previous instance so we don't stack WebGL contexts (browsers
-    // cap them; stacking caused the "blacked out" symptom).
-    if (fg3dInstance) {
-      try { fg3dInstance._destructor && fg3dInstance._destructor(); } catch (e) {}
-      fg3dInstance = null;
-    }
-
-    load3DLib(function(err){
-      var container = document.getElementById('gv-3d-container');
-      if (!container) return;
-      if (err) {
-        container.innerHTML = '<div style="text-align:center;color:#ff5252;padding:60px 20px;">'
-          + 'Could not load the 3D library.<br>'
-          + '<span style="color:#7d8694;font-size:.78rem">Check your internet connection, then click the 3D Graph tab again.</span></div>';
-        return;
-      }
-      init3D(container);
-    });
-  }
-
-  function init3D(container){
-    container.innerHTML = '';
-    var W = container.clientWidth || 800, H = 520;
-
-    var filtered = DATA.nodes.filter(nodePassesFilter);
-    var filteredIds = {};
-    filtered.forEach(function(n){ filteredIds[n.id] = true; });
-    var gNodes = filtered.map(function(nd){
-      return {
-        id: nd.id, label: nd.label, path: nd.path,
-        stain: nd.stain, channel: nd.primaryChannel, channels: nd.channels,
-        touches: nd.touches, tainted_by: nd.tainted_by,
-        color: colorOf(nd.stain, nd.primaryChannel),
-        _nd: nd,
-      };
-    });
-    var gLinks = DATA.edges.filter(function(e){
-      return filteredIds[e.from] && filteredIds[e.to];
-    }).map(function(e){
-      return {
-        source: e.from, target: e.to, kind: e.kind,
-        color: colorOf(DATA.nodes[e.to].stain, DATA.nodes[e.to].channels[0]),
-      };
-    });
-
-    if (!gNodes.length) {
-      container.innerHTML = '<div style="text-align:center;color:#7d8694;padding:80px 20px;">No nodes match the current filters.</div>';
-      return;
-    }
-
-    var graph;
-    try {
-      // rendererConfig is merged with {antialias:true, alpha:true} inside
-      // 3d-force-graph (confirmed by reading dist/3d-force-graph.min.js@1.73.4).
-      // Lenient options for restrictive Chrome states:
-      //   powerPreference 'low-power' -> integrated GPU, avoids discrete-GPU
-      //     handoff issues common on macOS dual-GPU Macs.
-      //   failIfMajorPerformanceCaveat false -> accept software fallback
-      //     instead of refusing the context outright.
-      //   antialias false -> fewer GPU requirements; quality cost is minor.
-      graph = ForceGraph3D({ rendererConfig: {
-        antialias: false,
-        powerPreference: 'low-power',
-        failIfMajorPerformanceCaveat: false,
-        preserveDrawingBuffer: false,
-      } })(container)
-        .width(W).height(H)
-        .backgroundColor('#070809')
-        .graphData({ nodes: gNodes, links: gLinks })
-        .nodeRelSize(4)
-        .nodeVal(function(n){ return 1 + Math.min(20, n.touches * 1.2); })
-        .nodeColor(function(n){ return n.color; })
-        .nodeOpacity(0.92)
-        .nodeLabel(function(n){
-          var outcome = n.stain ? n.stain.replace(/_/g, ' ') : 'clean';
-          var explain = (n.stain && P.explain[n.stain]) || '';
-          return '<div style="background:#0b0e13;border:1px solid #2a3340;border-radius:8px;padding:8px 11px;font-size:13px;color:#e7edf3;max-width:280px;font-family:-apple-system,sans-serif">'
-            + '<b>' + escjs(n.label) + '</b><br>'
-            + '<span style="color:' + n.color + '">' + escjs(outcome) + '</span> &middot; ' + n.touches + ' touches'
-            + (n.channels.length ? '<br><span style="color:#7d8694">' + escjs(n.channels.join(', ')) + '</span>' : '')
-            + (explain ? '<br><span style="color:#9abbe0;font-size:12px">' + escjs(explain) + '</span>' : '')
-            + '</div>';
-        })
-        .onNodeClick(function(n){ if (n && n._nd) showDetail(n._nd); })
-        .linkColor(function(l){ return l.color; })
-        .linkOpacity(0.35)
-        .linkWidth(0.6)
-        .linkDirectionalParticles(2)
-        .linkDirectionalParticleWidth(1.4)
-        .linkDirectionalParticleSpeed(0.006)
-        .linkDirectionalParticleColor(function(l){ return l.color; })
-        .linkLabel(function(l){ return l.kind; })
-        .enableNodeDrag(true)
-        .enableNavigationControls(true)
-        .showNavInfo(false);
-      // Tune forces for nicer layout; wrap in try since older builds may not expose d3Force.
-      try {
-        if (graph.d3Force) {
-          var charge = graph.d3Force('charge'); if (charge && charge.strength) charge.strength(-50);
-          var link = graph.d3Force('link'); if (link && link.distance) link.distance(34);
-        }
-      } catch (e) {}
-      graph.onNodeHover(function(node){ container.style.cursor = node ? 'pointer' : 'grab'; });
-      fg3dInstance = graph;
-
-      // Keep the canvas sized to its container on resize / tab re-show.
-      var resizeObs = null;
-      try {
-        resizeObs = new ResizeObserver(function(){
-          var w = container.clientWidth || W;
-          graph.width(w);
-        });
-        resizeObs.observe(container);
-      } catch (e) {}
-    } catch (e) {
-      container.innerHTML = '<div style="text-align:center;color:#ff5252;padding:60px 20px;">3D engine failed to initialize.<br><span style="color:#7d8694;font-size:.78rem">' + escjs(String(e && e.message || e)) + '</span></div>';
-    }
-  }
+  // NI1 (LD264): the 3D graph is gone: it loaded a library from a CDN, and the free version makes no internet call.
 
   // ---- GLOSSARY ----
   function renderGlossary(){
@@ -1090,7 +924,7 @@ function renderTrailVisual(vizData) {
   function trunc(s,n){ s=String(s||''); return s.length>n ? s.slice(0,n-1)+'\\u2026' : s; }
   function escjs(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 
-  var RENDERERS = { graph:renderGraph, tree:renderTree, timeline:renderTimeline, dashboard:renderDashboard, graph3d:render3DGraph, report:renderReport, glossary:renderGlossary };
+  var RENDERERS = { graph:renderGraph, tree:renderTree, timeline:renderTimeline, dashboard:renderDashboard, report:renderReport, glossary:renderGlossary };
   var rendered = {};
   function show(view){
     document.querySelectorAll('.gv-tab').forEach(function(t){ t.classList.toggle('on', t.dataset.view===view); });

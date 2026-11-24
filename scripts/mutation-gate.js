@@ -2637,6 +2637,10 @@ const MUTANTS = [
   { id: 'BB5b-3 install --intake adds --marks every time', file: 'bin/orunmila.js', test: 'test/gate-marks.js',
     from: 'if (!/\\s--marks$/.test(h.command)) h.command', to: 'if (true) h.command',
     fails: ['BB5b, line 678'] },
+  // Q39 (LD281): the overlapped verb in the odù schema.
+  { id: 'Q39-1 the odù schema refuses the overlapped verb', file: 'spec/odu.schema.json', test: 'test/odu.js',
+    from: '        "tampered",\n        "overlapped"\n', to: '        "tampered"\n',
+    fails: ['Q39 (LD265, O 2026-11-24)', 'Q39: an overlapped mark replays'] },
 ];
 
 function copyRepo(root) {

@@ -125,4 +125,25 @@ it(
   }),
 );
 
+it('Q39 (LD265, O 2026-11-24): every mark verb but tick is an odù action, so no odù the Ọpọ́n writes is one its own schema refuses', () => {
+  const read = (f) => JSON.parse(fs.readFileSync(path.join(ROOT, 'spec', f), 'utf8'));
+  const verbs = read('mark.schema.json').properties.says.enum.filter((v) => v !== 'tick');
+  const actions = read('odu.schema.json').properties.action.enum;
+  assert.deepStrictEqual(verbs.filter((v) => !actions.includes(v)), []);
+});
+
+it(
+  'Q39: an overlapped mark replays to an odù with action overlapped, valid by spec/odu.schema.json',
+  withBase((base) => {
+    const s = makeLog(base);
+    const mark = { schema_version: 1, session_id: s.header.session_id, source: 'process', agent: null, turn: null, sub_agent: null, observed_at: s.header.observed_at, mono_ns: String(BigInt(s.header.mono_ns) + 1000000n), target: { kind: 'process', name: 'intake' }, says: 'overlapped', detail: { session: 'ses_other', root: s.root, from: '1', ended: false }, cause_hint: null };
+    s.append(mark);
+    s.append(M.tick(10000));
+    const odus = records(replayFolder(s.dir).odu).slice(1);
+    const o = odus.find((x) => x.action === 'overlapped');
+    assert.ok(o, 'an odù for the overlapped mark');
+    assert.deepStrictEqual(schemaOf('odu.schema.json')(o), []);
+  }),
+);
+
 runAll('odu');

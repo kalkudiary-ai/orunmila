@@ -128,8 +128,8 @@
       }
     },
     "action": {
-      "description": "What happened to the target. `action` takes the mark verbs.",
-      "$comment": "brief v4 lines 299, 377",
+      "description": "What happened to the target. `action` takes the mark verbs, every one but tick (a heartbeat is never an event).",
+      "$comment": "brief v4 lines 299, 377; overlapped, the mark verb of Q11 (2) (a) (LD184, LD202), added by O's approval of Q39 (2026-11-24, LD265, LD281)",
       "enum": [
         "created",
         "modified",
@@ -146,7 +146,8 @@
         "checked",
         "fingerprinted",
         "gap",
-        "tampered"
+        "tampered",
+        "overlapped"
       ]
     },
     "window": {

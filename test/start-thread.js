@@ -41,7 +41,8 @@ function setup({ held }) {
     rmrf(project);
   };
   const monoNow = () => mono;
-  return { home, project, router, send, dir, jobs, done, monoNow };
+  const advance = (ms) => (mono += BigInt(ms) * 1000000n);
+  return { home, project, router, send, dir, jobs, done, monoNow, advance };
 }
 
 it("SN1 (LD294): a new session's payloads are queued at once while its start runs off the thread, then written in order, each with the time it arrived and the file facts measured then", async () => {
@@ -76,6 +77,38 @@ it("SN1 (LD294): a new session's payloads are queued at once while its start run
     const again = t.send({ hook_event_name: 'Stop', last_assistant_message: 'I wrote a.txt.' });
     assert.strictEqual(again.queued, undefined, 'once the log exists, payloads are written at once');
     assert.strictEqual(lines(path.join(t.dir, 'raw.jsonl')).length, raw.length + 2);
+  } finally {
+    t.done();
+  }
+});
+
+it("SN2 (LD295): the closeout's rescan runs off the thread: its started mark at once, the session's own payloads queued meanwhile, then the rescan's marks and exited, then the queued payloads", async () => {
+  const t = setup({ held: true });
+  try {
+    const hand = path.join(t.project, 'hand.txt');
+    fs.writeFileSync(hand, 'old\n');
+    t.send({ hook_event_name: 'UserPromptSubmit', prompt: 'go' });
+    t.jobs[0]();
+    for (let i = 0; i < 50 && !fs.existsSync(path.join(t.dir, 'raw.jsonl')); i++) await sleep(10);
+    t.send({ hook_event_name: 'Stop', last_assistant_message: 'Nothing changed.' });
+    t.send({ hook_event_name: 'SessionEnd', reason: 'exit' });
+    fs.writeFileSync(hand, 'by hand\n'); // the rescan must find it
+    t.advance(4000);
+    t.router.poll(); // the lag grace has passed: the closeout begins
+    const says = () => lines(path.join(t.dir, 'raw.jsonl')).slice(1).map((m) => `${m.says}${m.target && m.target.name ? ':' + m.target.name : ''}`);
+    assert.deepStrictEqual(says().slice(-1), ['started:closeout'], 'its started mark at once');
+    assert.strictEqual(t.jobs.length, 2, 'the rescan went to the worker');
+    const late = t.send({ hook_event_name: 'PostToolUseFailure', tool_name: 'Bash', tool_input: { command: 'true' }, tool_use_id: 'late1', error: 'x' });
+    assert.strictEqual(late.queued, true, "the session's own payload waits for its sweep");
+    t.jobs[1]();
+    for (let i = 0; i < 50 && !says().includes('exited:closeout'); i++) await sleep(10);
+    const after = says();
+    const start = after.lastIndexOf('started:closeout');
+    const end = after.indexOf('exited:closeout');
+    assert.ok(start >= 0 && end > start, after.join(' '));
+    assert.ok(after.slice(start + 1, end).includes('fingerprinted'), "the rescan's mark for the hand edit, inside the sweep");
+    assert.ok(end < after.length - 1 && after[after.length - 1] === 'exited', `the queued payload (a failed command: exited) after the sweep's exited: ${after.join(' ')}`);
+    assert.ok(fs.existsSync(path.join(t.dir, 'footer.json')), 'the footer at the closeout');
   } finally {
     t.done();
   }

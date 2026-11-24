@@ -2088,7 +2088,7 @@ const MUTANTS = [
     fails: ['K2 line 450'] },
   // Slice K5: the live intake runs the closeout (LD208; provisional, Q17).
   { id: 'K5-1 the intake never runs the closeout', file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
-    from: '        s.closeoutAt = true; // once per session\n        sweep(id, s);\n', to: '        s.closeoutAt = true; // once per session\n', // LD286: the release's closeout calls sweep too
+    from: '        s.closeoutAt = true; // once per session\n        (o.asyncStart ? sweepOffThread : sweep)(id, s);', to: '        s.closeoutAt = true; // once per session\n        void 0;', // LD286, SN2: the closeout's call names both paths
     fails: ['K5'] },
   { id: 'K5-2 an unchanged file is rescanned', file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
     from: "          if (s.baseMap.get(e.path) === e.fingerprint && last(e.path) === e.fingerprint) continue;\n", to: '',
@@ -2737,8 +2737,18 @@ const MUTANTS = [
     from: 'return { baseline: { text: b.text, fingerprint: b.fingerprint }, store };', to: "return { baseline: { text: '', fingerprint: b.fingerprint }, store };",
     fails: ['SN1: the real worker thread'] }, // the first test's earliest-wins rule rebuilds its one entry, so only this one reads the worker's
   { id: "SN1-5 the queued payloads are dropped", file: 'src/opon/intake/router.js', test: 'test/start-thread.js',
-    from: '    for (const item of q.queue) apply(item.p, item.from, item);\n', to: '',
+    from: '    for (const item of q.queue) apply(item.p, item.from, item);\n  }', to: '  }', // SN2's own loop sits deeper
     fails: ['SN1 (LD294)', 'SN1: the real worker thread'] },
+  // SN2 (LD295): the closeout's rescan off the intake's thread.
+  { id: 'SN2-1 the closeout always walks in the thread', file: 'src/opon/intake/router.js', test: 'test/start-thread.js',
+    from: '(o.asyncStart ? sweepOffThread : sweep)(id, s);', to: 'sweep(id, s);',
+    fails: ['SN2 (LD295)'] },
+  { id: "SN2-2 the session's payloads are written inside its sweep", file: 'src/opon/intake/router.js', test: 'test/start-thread.js',
+    from: 'if (sweeping) return enqueue(sweeping, p, from);', to: 'if (false) return enqueue(sweeping, p, from);',
+    fails: ['SN2 (LD295)'] },
+  { id: 'SN2-3 the payloads queued during a sweep are dropped', file: 'src/opon/intake/router.js', test: 'test/start-thread.js',
+    from: '      for (const item of q.queue) apply(item.p, item.from, item);\n    };', to: '    };',
+    fails: ['SN2 (LD295)'] },
   // LA3 (LD290): the launch agent keeps every flag the intake reads.
   { id: "LA3-1 the plist drops the judge's, the guard's and the extra folders' flags", file: 'src/opon/intake/launch-agent.js', test: 'test/launch-agent.js',
     from: ", 'ORUNMILA_JUDGE_LIVE', 'ORUNMILA_LOG_GUARD', 'ORUNMILA_WATCH_EXTRA', 'ORUNMILA_ASYNC_START'];", to: '];', // SN1 added a key

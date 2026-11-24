@@ -310,17 +310,50 @@ function createRouter(o) {
    * group (K1). A walk that fails is in the error log; the sweep still ends.
    */
   function sweep(id, s) {
+    sweepClose(id, s, sweepOpen(id), undefined);
+  }
+
+  /** The sweep's started mark, and the mark maker its other marks use. */
+  function sweepOpen(id) {
     const mark = (target, says, detail, source = 'process') => {
       const now = clock();
       return { schema_version: 1, session_id: id, source, agent: null, turn: null, sub_agent: null, observed_at: now.wall, mono_ns: now.mono, target, says, detail, cause_hint: null };
     };
-    const rescanned = []; // K3: the paths the rescan marked, for git to corroborate
     const who = { kind: 'process', name: 'closeout' };
     engine.receive(mark(who, 'started', {}), {});
+    return { mark, who };
+  }
+
+  /**
+   * SN2 (LD295), with `asyncStart`: the closeout's rescan off the intake's thread. Its started mark is written at once;
+   * the walk runs in the start worker; the session's own payloads wait in a queue meanwhile, so the sweep's marks stay
+   * together, and are written after its exited mark; a walk that fails ends the sweep as one that threw (exit_status fail).
+   */
+  function sweepOffThread(id, s) {
+    const ctx = sweepOpen(id);
+    if (!s.baseMap) return sweepClose(id, s, ctx, undefined);
+    const q = { root: s.root, queue: [] };
+    s.sweeping = q;
+    const job = { root: s.root, exclusions: s.exclusions, key: o.installKey, envValues: readEnvEntries(s.root).entries.map((e) => e.value), sentinel: null };
+    const done = (given) => {
+      sweepClose(id, s, ctx, given);
+      s.sweeping = null;
+      for (const item of q.queue) apply(item.p, item.from, item);
+    };
+    (o.prepare || prepareOffThread)(job).then(
+      (r) => done({ entries: r.baseline.text.split('\n').filter(Boolean).map((l) => JSON.parse(l)) }),
+      (e) => done(e instanceof Error ? e : new Error(String(e))),
+    );
+  }
+
+  /** The sweep's rescan (`given`: a walk made off the thread, or the Error it ended with; undefined: walk here), git, and exited. */
+  function sweepClose(id, s, { mark, who }, given) {
+    const rescanned = []; // K3: the paths the rescan marked, for git to corroborate
     let walked = 'pass'; // K7 (LD216): fail when the walk threw, so no claim is rated on a walk that did not run
     if (s.baseMap) {
       try {
-        const snap = snapshot(s.root, { exclusions: s.exclusions, key: o.installKey, envValues: readEnvEntries(s.root).entries.map((e) => e.value) });
+        if (given instanceof Error) throw given;
+        const snap = given !== undefined ? given : snapshot(s.root, { exclusions: s.exclusions, key: o.installKey, envValues: readEnvEntries(s.root).entries.map((e) => e.value) });
         // K5c (LD210 (2)): against what the session last knew of each file, else the baseline, as the engine reads a rescan.
         const known = s.lv && s.lv.on ? s.lv.opon.lastStates() : new Map();
         const last = (p) => (known.has(p) ? known.get(p) : s.baseMap.has(p) ? s.baseMap.get(p) : 'absent');
@@ -475,6 +508,8 @@ function createRouter(o) {
   const starting = new Map(); // session id -> { f: its header etc., queue: [{ p, from, at, snap }] }
   function payload(p, from = {}) {
     const id = p && p.session_id;
+    const sweeping = o.asyncStart && typeof id === 'string' && states.has(id) ? states.get(id).sweeping : null;
+    if (sweeping) return enqueue(sweeping, p, from); // SN2: its sweep's marks stay together; this one follows them
     if (o.asyncStart && typeof id === 'string' && id && !states.has(id)) {
       const q = starting.get(id);
       if (q) return enqueue(q, p, from);
@@ -505,7 +540,7 @@ function createRouter(o) {
   }
 
   function enqueue(q, p, from) {
-    q.queue.push({ p, from, at: clock(), snap: factsNow(q.f.root, p) });
+    q.queue.push({ p, from, at: clock(), snap: factsNow(q.root || q.f.root, p) });
     return { ok: true, queued: true, results: [] };
   }
 
@@ -675,13 +710,14 @@ function createRouter(o) {
     for (const [id, s] of states) {
       if (s.closeoutAt !== null && s.closeoutAt !== true && now >= s.closeoutAt) {
         s.closeoutAt = true; // once per session
-        sweep(id, s);
+        (o.asyncStart ? sweepOffThread : sweep)(id, s); // SN2: off the thread with asyncStart
       }
     }
     const ms = releaseNs / NS_PER_MS;
     const quiet = ms % 60000n === 0n ? `${ms / 60000n} minutes` : `${ms} ms`;
     const held = new Set(engine.held());
     for (const [id, s] of states) {
+      if (s.sweeping) continue; // SN2: released only once its sweep has ended
       if (now - s.last < releaseNs) continue;
       if (held.has(id)) {
         // LD286 (LD249's open point), with the judge's flag (Leopard rule 2): a session not swept since its last prompt
@@ -689,7 +725,10 @@ function createRouter(o) {
         // nothing it holds waits for ever. A later prompt resumes it, as LD249 reads.
         if (o.judge && s.lv && s.closeoutAt === null) {
           s.closeoutAt = true;
-          sweep(id, s);
+          if (o.asyncStart) {
+            sweepOffThread(id, s); // SN2: the release waits for it, at a later poll
+            if (s.sweeping) continue;
+          } else sweep(id, s);
         }
         engine.release(id, `released: no payload for ${quiet}`);
       }

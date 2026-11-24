@@ -22,8 +22,15 @@
 const net = require('net');
 const os = require('os');
 const path = require('path');
+const crypto = require('crypto');
 
 const DEADLINE_MS = 1000;
+
+/** W2a (LD298): the intake's address, by server.js intakePaths's rule (this file loads no other repo file, LD122). */
+function sockPath(home, platform = process.platform) {
+  if (platform === 'win32') return `\\\\?\\pipe\\orunmila-intake-${crypto.createHash('sha256').update(path.resolve(home)).digest('hex').slice(0, 16)}`;
+  return path.join(home, 'intake', 'intake.sock');
+}
 
 function main() {
   const done = () => process.exit(0);
@@ -40,11 +47,12 @@ function main() {
       payload = text;
     }
     const home = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
-    const c = net.createConnection(path.join(home, 'intake', 'intake.sock'));
+    const c = net.createConnection(sockPath(home));
     c.on('error', done); // no intake: nothing to send to
     c.on('close', done);
     c.on('connect', () => c.end(JSON.stringify({ op: 'payload', payload }) + '\n'));
   });
 }
 
-main();
+if (require.main === module) main();
+module.exports = { sockPath };

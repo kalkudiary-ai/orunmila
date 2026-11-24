@@ -63,11 +63,20 @@ const MAX_LINE = 32 * 1024 * 1024;
 const SOCK_MAX = 103; // sun_path is 104 bytes on macOS, 108 on Linux, with its NUL
 const KEY_BYTES = 32;
 
-function intakePaths(home) {
+/**
+ * W2a (LD298): the intake's address. On Windows a named pipe, one per Orunmila home (named from the first 16 hex of the
+ * SHA-256 of its resolved path), since a Unix socket file is not how Windows processes meet; elsewhere the socket file.
+ * The command-hook sender (intake-send.js sockPath) names it by the same rule.
+ */
+const sockFor = (home, platform) =>
+  platform === 'win32' ? `\\\\?\\pipe\\orunmila-intake-${crypto.createHash('sha256').update(path.resolve(home)).digest('hex').slice(0, 16)}` : path.join(home, 'intake', 'intake.sock');
+
+function intakePaths(home, platform = process.platform) {
   const dir = path.join(home, 'intake');
   return {
     dir,
-    sock: path.join(dir, 'intake.sock'),
+    sock: sockFor(home, platform),
+    pipe: platform === 'win32', // W2a: a named pipe has no file to remove or protect by mode
     lock: path.join(dir, 'intake.lock'),
     takeover: path.join(dir, 'intake.lock.takeover'),
     key: path.join(dir, 'install.key'),
@@ -411,7 +420,7 @@ function createServer({ home, router, pollMs = 100, statusTimeoutMs = 1000, maxL
 
   async function start() {
     if (server) return { ok: false, code: 'running', reason: 'this server has already started' };
-    if (Buffer.byteLength(p.sock) > SOCK_MAX) return { ok: false, code: 'error', reason: `the socket path ${p.sock} is over ${SOCK_MAX} bytes, longer than a Unix socket's address allows` };
+    if (!p.pipe && Buffer.byteLength(p.sock) > SOCK_MAX) return { ok: false, code: 'error', reason: `the socket path ${p.sock} is over ${SOCK_MAX} bytes, longer than a Unix socket's address allows` };
     ensureDir(p.dir);
     const l = acquire();
     if (!l.ok) return l;
@@ -428,7 +437,7 @@ function createServer({ home, router, pollMs = 100, statusTimeoutMs = 1000, maxL
           null,
         );
       }
-      fs.rmSync(p.sock, { force: true });
+      if (!p.pipe) fs.rmSync(p.sock, { force: true }); // W2a: a named pipe leaves no file behind
       const also = [squat ? "another process was listening on the intake's socket when it started (its pid is not known), so marks sent before then may have gone to it" : null, resumeAlso].filter(Boolean);
       const resumed = router.resume(also.length ? { also: also.join('; ') } : {});
       const s = net.createServer(onConnection);
@@ -440,7 +449,7 @@ function createServer({ home, router, pollMs = 100, statusTimeoutMs = 1000, maxL
         });
       });
       s.on('error', (e) => router.error(`the intake's socket failed: ${e.code || e.message}`, null));
-      fs.chmodSync(p.sock, 0o600);
+      if (!p.pipe) fs.chmodSync(p.sock, 0o600); // W2a: a named pipe has its own access list, not a file mode
       server = s;
       startedAt = new Date().toISOString();
       timer = setInterval(() => {
@@ -477,7 +486,7 @@ function createServer({ home, router, pollMs = 100, statusTimeoutMs = 1000, maxL
       h.closeAllConnections();
       await new Promise((resolve) => h.close(resolve));
     }
-    fs.rmSync(p.sock, { force: true });
+    if (!p.pipe) fs.rmSync(p.sock, { force: true });
     releaseLock();
     return out;
   }

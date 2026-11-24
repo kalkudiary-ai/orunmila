@@ -1160,7 +1160,7 @@ const MUTANTS = [
     from: "router.payload(r.payload, { channel: 'command' });", to: 'router.payload(r.payload, {});',
     fails: ['B1e: payload lines over the socket reach the session log'] },
   { id: 'B1e-8 a socket path left by a crash blocks the start', file: 'src/opon/intake/server.js', test: 'test/intake-server.js',
-    from: 'fs.rmSync(p.sock, { force: true });\n      const also', to: 'const also', // TE2 (LD283): the resume's extra text comes first
+    from: '      if (!p.pipe) fs.rmSync(p.sock, { force: true }); // W2a: a named pipe leaves no file behind\n', to: '', // TE2, W2a: the line moved
     fails: ['B1e: a stale lock (a dead pid)', 'test 83 (socket form)'] },
   // Slice B1f: the lock race (LD136). The whole-file placement itself and the
   // takeover's same-pid recheck are timing races: only the silence tests (eight
@@ -2720,6 +2720,16 @@ const MUTANTS = [
   { id: "PM3-3 a quoted script path keeps its quotes", file: 'bin/orunmila.js', test: 'test/status-hooks.js',
     from: 'words.push(m[1] !== undefined ? m[1] : m[2] !== undefined ? m[2] : m[3]);', to: 'words.push(m[0]);',
     fails: ['PM3 (LD291)'] },
+  // W2a (LD298): the intake's address on Windows, a named pipe, named alike by the intake and both senders.
+  { id: 'W2a-1 the intake listens on a socket file on Windows too', file: 'src/opon/intake/server.js', test: 'test/intake-windows.js',
+    from: "const sockFor = (home, platform) =>\n  platform === 'win32'", to: "const sockFor = (home, platform) =>\n  platform === 'never'",
+    fails: ['W2a (LD298)', 'W2a: the command-hook sender'] },
+  { id: "W2a-2 the hooks' sender names another pipe", file: 'src/capture/claude-code/intake-send.js', test: 'test/intake-windows.js',
+    from: ".digest('hex').slice(0, 16)}`;", to: ".digest('hex').slice(0, 12)}`;",
+    fails: ['W2a: the command-hook sender'] },
+  { id: "W2a-3 the gate's sender names another pipe", file: 'src/capture/claude-code/gate-send.js', test: 'test/intake-windows.js',
+    from: ".digest('hex').slice(0, 16)}`;", to: ".digest('hex').slice(0, 12)}`;",
+    fails: ['W2a: the command-hook sender'] },
   // W1 (LD297): the hooks, installed into a path with a space and run as written.
   { id: 'W1-1 the hook command leaves its script path unquoted', file: 'bin/orunmila.js', test: 'test/smoke-hooks.js',
     from: "const s = (name) => `node \"${path.join(root, 'src/capture/claude-code', name)}\"`;", to: "const s = (name) => `node ${path.join(root, 'src/capture/claude-code', name)}`;",

@@ -169,4 +169,59 @@ it("BB5a (lines 670, 686): a hole in the heartbeat while the session was held be
   }
 });
 
+/** LD286: a session closed out, resumed with a new prompt and a file claim, then quiet until the intake releases it. */
+function resumedThenQuiet(base, { judge }) {
+  const home = path.join(base, 'home');
+  const project = path.join(base, 'project');
+  fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+  const clock = fakeClock();
+  const router = createRouter({ home, clock, checkSender: () => true, codeRoot: SRC, orunmilaVersion: '0.0.0-test', installKey: KEY, hookSettingsFor: () => [], baseline: true, judge, releaseMs: 10000 });
+  const b = { session_id: 'ses_quiet', transcript_path: '/tmp/t.jsonl', cwd: project };
+  const send = (x) => assert.strictEqual(router.payload({ ...b, ...x }, { channel: 'command' }).ok, true, x.hook_event_name);
+  const polls = (n) => {
+    for (let i = 0; i < n; i++) {
+      clock.advance(500);
+      router.poll();
+    }
+  };
+  send({ hook_event_name: 'UserPromptSubmit', prompt: 'first' });
+  send({ hook_event_name: 'Stop', last_assistant_message: 'Nothing changed.' });
+  send({ hook_event_name: 'SessionEnd', reason: 'exit' });
+  polls(10); // the first closeout, a lag grace after the end
+  send({ hook_event_name: 'UserPromptSubmit', prompt: 'resumed' }); // LD249: resumed after its closeout
+  send({ hook_event_name: 'Stop', last_assistant_message: 'I updated src/other.js.' }); // a file claim: it waits for the next closeout's rescan
+  polls(30); // no SessionEnd (the agent's process died): quiet past releaseMs, so the intake releases it
+  return { dir: path.join(home, 'sessions', 'ses_quiet'), router };
+}
+
+it("LD286 (LD249's open point): a resumed session that never ends again is closed out when the intake releases it, so its waiting claims are sealed and judged; with the judge's flag off, as before", () => {
+  const base = tmpDir();
+  try {
+    const { dir } = resumedThenQuiet(path.join(base, 'on'), { judge: true });
+    const raw = lines(path.join(dir, 'raw.jsonl'));
+    const closeouts = raw.filter((m) => m.says === 'exited' && m.target && m.target.name === 'closeout');
+    assert.strictEqual(closeouts.length, 2, 'a second closeout, at the release');
+    const release = raw.find((m) => m.says === 'exited' && m.target && m.target.name === 'intake');
+    assert.ok(release && release.seq > closeouts[1].seq, 'the closeout comes before the release note');
+    const resumedAt = raw.filter((m) => m.says === 'prompted').pop().seq;
+    assert.ok(raw.some((m) => m.says === 'tick' && m.seq > resumedAt && m.seq < closeouts[1].seq), 'the resumed session ticks again while held');
+    const claim = raw.filter((m) => m.says === 'claimed').pop();
+    const odus = lines(path.join(dir, 'odu.jsonl')).filter((o) => o.record === 'odu');
+    const held = odus.find((o) => o.target && o.target.kind === 'claim' && o.mark_seqs.includes(claim.seq)); // the claim's own odù (the turn's holds it too)
+    assert.ok(held, "the resumed turn's claim is in a sealed odù");
+    assert.ok(held.conflicts.some((c) => c.kind === 'phantom_claim'), JSON.stringify(held.conflicts));
+    const footer = JSON.parse(fs.readFileSync(path.join(dir, 'footer.json'), 'utf8'));
+    assert.strictEqual(footer.raw.seq, closeouts[1].seq, 'the footer names the latest closeout');
+    assert.ok(lines(path.join(dir, 'verdict.jsonl')).some((v) => v.record === 'verdict' && v.odu_id === held.odu_id), 'judged');
+    assert.strictEqual(replayFolder(dir).odu, fs.readFileSync(path.join(dir, 'odu.jsonl'), 'utf8'), 'live equals replay');
+    const off = resumedThenQuiet(path.join(base, 'off'), { judge: false });
+    const offRaw = lines(path.join(off.dir, 'raw.jsonl'));
+    assert.strictEqual(offRaw.filter((m) => m.says === 'exited' && m.target && m.target.name === 'closeout').length, 1, 'flag off: no closeout at the release');
+    const offClaim = offRaw.filter((m) => m.says === 'claimed').pop();
+    assert.ok(!lines(path.join(off.dir, 'odu.jsonl')).some((o) => o.record === 'odu' && o.target && o.target.kind === 'claim' && o.mark_seqs.includes(offClaim.seq)), "flag off: the claim still waits (LD249's open point)");
+  } finally {
+    rmrf(base);
+  }
+});
+
 runAll('judge-live');

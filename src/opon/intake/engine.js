@@ -7,7 +7,8 @@
  * log per session (src/opon/ledger/session-log.js), sends it marks that an
  * adapter has already translated, and calls poll() on a timer.
  *
- *   createIntake({ openLog, clock, checkSender, tickMs = 500 })
+ *   createIntake({ openLog, clock, checkSender, tickMs = 500, resumes = false })
+ *     resumes             LD286: a Glove prompt after the session's end resumes it (LD249): it ticks again
  *     checkSender(pid, mark)  required: whether a session's first HTTP sender
  *                         runs the agent's own program (LD58; the wiring reads it)
  *     openLog(sessionId)  the session's log ({ append }), opened on its first mark
@@ -67,7 +68,7 @@ const GLOVE_SOURCES = ['hook', 'agent_claim']; // the Glove's marks: the agent's
 const CHANNELS = ['http', 'command']; // detail.channel (decision I-3)
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
-function createIntake({ openLog, clock, checkSender, tickMs = TICK_MS }) {
+function createIntake({ openLog, clock, checkSender, tickMs = TICK_MS, resumes = false }) {
   if (typeof checkSender !== 'function') throw new Error("createIntake needs checkSender(pid, mark): whether a session's first HTTP sender runs the agent's own program (LD58)");
   const sessions = new Map(); // session id -> { log, last: bigint mono of the last mark written }
   const quiet = BigInt(tickMs) * NS_PER_MS;
@@ -155,6 +156,9 @@ function createIntake({ openLog, clock, checkSender, tickMs = TICK_MS }) {
     }
     const r = write(s, m, now, files);
     if (r.ok && m.says === 'ended' && isObject(m.target) && m.target.kind === 'session') s.ended = true;
+    // LD286, with `resumes` (the judge's flag): a new prompt from the Glove after the session's end resumes it (LD249), so
+    // it ticks again and gets its release note, like any held session.
+    if (r.ok && resumes && s.ended && glove && m.says === 'prompted') s.ended = false;
     return r;
   }
 

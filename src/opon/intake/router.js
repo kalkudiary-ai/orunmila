@@ -39,7 +39,9 @@
  *       <home>/intake/errors.jsonl (LD124). SessionStart opens the session and
  *       writes no mark.
  *   router.poll()       the engine's ticks (returned: how many), then releases
- *                       each session with no payload for releaseMs (LD123)
+ *                       each session with no payload for releaseMs (LD123); with
+ *                       `judge`, one not swept since its last prompt is closed out
+ *                       first (LD286)
  *   router.resume({ also }?)
  *                       after a restart, before any payload: reopens the
  *                       sessions held at the last write of held.json and gives
@@ -213,7 +215,7 @@ function createRouter(o) {
   const sessionsDir = path.join(home, 'sessions');
   const intakeDir = path.join(home, 'intake');
   const states = new Map(); // session id -> { log, root, ci, n, open, pre, last, limit }
-  const engine = createIntake({ openLog: (id) => states.get(id).log, clock, checkSender: o.checkSender, tickMs: o.tickMs });
+  const engine = createIntake({ openLog: (id) => states.get(id).log, clock, checkSender: o.checkSender, tickMs: o.tickMs, resumes: Boolean(o.judge) }); // LD286
   // The Ọpọ́n live (slice L1c, LD200), with the live path's flag only: one engine per session it starts.
   // BB6 (plan section 5): with `judge` too (ORUNMILA_JUDGE_LIVE=1, off by default), the closeout writes the verdict log.
   const live = o.baseline ? createLive({ key: o.installKey, clock, judge: o.judge || false, receive: (m) => engine.receive(m, {}), error: (reason, payload) => error(reason, payload) }) : null;
@@ -524,7 +526,16 @@ function createRouter(o) {
     const held = new Set(engine.held());
     for (const [id, s] of states) {
       if (now - s.last < releaseNs) continue;
-      if (held.has(id)) engine.release(id, `released: no payload for ${quiet}`);
+      if (held.has(id)) {
+        // LD286 (LD249's open point), with the judge's flag (Leopard rule 2): a session not swept since its last prompt
+        // (it never ended, or resumed after its closeout and never ended again) is closed out before it is released, so
+        // nothing it holds waits for ever. A later prompt resumes it, as LD249 reads.
+        if (o.judge && s.lv && s.closeoutAt === null) {
+          s.closeoutAt = true;
+          sweep(id, s);
+        }
+        engine.release(id, `released: no payload for ${quiet}`);
+      }
       unwatchFor(s);
     }
     writeHeld();

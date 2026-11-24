@@ -2088,7 +2088,7 @@ const MUTANTS = [
     fails: ['K2 line 450'] },
   // Slice K5: the live intake runs the closeout (LD208; provisional, Q17).
   { id: 'K5-1 the intake never runs the closeout', file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
-    from: '        sweep(id, s);\n', to: '',
+    from: '        s.closeoutAt = true; // once per session\n        sweep(id, s);\n', to: '        s.closeoutAt = true; // once per session\n', // LD286: the release's closeout calls sweep too
     fails: ['K5'] },
   { id: 'K5-2 an unchanged file is rescanned', file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
     from: "          if (s.baseMap.get(e.path) === e.fingerprint && last(e.path) === e.fingerprint) continue;\n", to: '',
@@ -2696,6 +2696,16 @@ const MUTANTS = [
   { id: 'TE1r-7 orunmila judge writes a held session', file: 'bin/orunmila.js', test: 'test/intake-stop.js',
     from: 'if (st && Array.isArray(st.held) && st.held.includes(id)) {', to: 'if (false) {',
     fails: ["TE1's rest (LD285): `orunmila judge` refuses"] },
+  // LD286 (LD249's open point): a session not swept since its last prompt is closed out at its release.
+  { id: 'LD286-1 no closeout at the release', file: 'src/opon/intake/router.js', test: 'test/judge-live.js',
+    from: 'if (o.judge && s.lv && s.closeoutAt === null) {', to: 'if (false) {',
+    fails: ["LD286 (LD249's open point)"] },
+  { id: "LD286-2 the release closeout ignores the judge's flag", file: 'src/opon/intake/router.js', test: 'test/judge-live.js',
+    from: 'if (o.judge && s.lv && s.closeoutAt === null) {', to: 'if (s.lv && s.closeoutAt === null) {',
+    fails: ["LD286 (LD249's open point)"] },
+  { id: 'LD286-3 a resumed session never ticks again', file: 'src/opon/intake/engine.js', test: 'test/judge-live.js',
+    from: "    if (r.ok && resumes && s.ended && glove && m.says === 'prompted') s.ended = false;\n", to: '',
+    fails: ["LD286 (LD249's open point)"] },
   // Q40 (LD284): the law gate's results in the odù record, judged and counted.
   { id: 'Q40-1 the settle engine leaves the law gate out of witness_status', file: 'src/opon/settle/engine.js', test: 'test/law-gate-odu.js',
     from: "...(g.sources.includes('law_gate') ? { law_gate: witness(g, 'law_gate') } : {})", to: '',

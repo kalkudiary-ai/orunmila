@@ -37,6 +37,17 @@ const closedTurn = (s, ms, result = 'passed', text = 'done') => {
   s.append(M.turnEnded(ms + 2));
 };
 
+it('Ship item 5 (LD292): `orunmila html` still works for this release and says that `orunmila report --verdicts --html` replaces it', () => {
+  const home = tmpDir();
+  try {
+    const r = run('bin/orunmila.js', { args: ['html'], env: { ORUNMILA_HOME: home } });
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    assert.ok(r.stdout.includes('orunmila html is replaced by orunmila report --verdicts --session ID --html FILE'), r.stdout);
+  } finally {
+    rmrf(home);
+  }
+});
+
 it('line 690: a clean session says "Clean session" on its top line, and how many Clean events are hidden', () => {
   const rep = reportOf((s) => {
     s.append(M.prompted(0));

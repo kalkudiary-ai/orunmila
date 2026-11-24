@@ -685,6 +685,8 @@ function applyRedaction(reports, trail) {
 }
 
 function cmdHtml() {
+  // Ship item 5 (LD292): kept for this release; the session report from the verdict log replaces it.
+  console.log('Note: orunmila html is replaced by orunmila report --verdicts --session ID --html FILE (one file, nothing loaded from the network); this command stays for this release.');
   const sessionId = flag('session', eventlog.latestSessionId());
   if (!sessionId) return console.log('No sessions captured yet.');
   const rawTrail = trailForSession(sessionId);

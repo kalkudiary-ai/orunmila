@@ -2706,6 +2706,10 @@ const MUTANTS = [
   { id: 'LD286-3 a resumed session never ticks again', file: 'src/opon/intake/engine.js', test: 'test/judge-live.js',
     from: "    if (r.ok && resumes && s.ended && glove && m.says === 'prompted') s.ended = false;\n", to: '',
     fails: ["LD286 (LD249's open point)"] },
+  // Ship item 5 (LD292): orunmila html says what replaces it.
+  { id: 'HN-1 orunmila html says nothing of its replacement', file: 'bin/orunmila.js', test: 'test/report.js',
+    from: "  console.log('Note: orunmila html is replaced by", to: "  void ('Note: orunmila html is replaced by",
+    fails: ['Ship item 5 (LD292)'] },
   // PM3 (LD291): status names a hook whose script is missing.
   { id: 'PM3-1 a missing script is taken as there', file: 'bin/orunmila.js', test: 'test/status-hooks.js',
     from: 'if (s && path.isAbsolute(s) && !fs.existsSync(s)) out.push({ event, script: s });', to: 'if (false) out.push({ event, script: s });',

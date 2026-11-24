@@ -247,6 +247,9 @@ function createRouter(o) {
   }
 
   const ensureDir = (d) => fs.mkdirSync(d, { recursive: true, mode: 0o700 });
+  // TE1 (LD279): with `guard` (ORUNMILA_LOG_GUARD=1, off by default), each session's raw and quarantine logs are watched
+  // against Orunmila's own copy in <home>/intake/keep/<session>/, at every write and every heartbeat.
+  const guardFor = (id) => (o.guard ? { shadowDir: path.join(intakeDir, 'keep', sessionFolderName(id)) } : null);
 
   function writeHeld() {
     const text = JSON.stringify(engine.held());
@@ -356,7 +359,7 @@ function createRouter(o) {
     const t = turnsFrom(dir);
     const root = t.header.project_root;
     let lv = null; // L1d: the reopened session's live Ọpọ́n, from a replay of its raw log so far
-    const log = openSessionLog(dir, { envEntries: readEnvEntries(root).entries, onRecord: live ? (rec) => lv && live.feed(lv, rec) : null });
+    const log = openSessionLog(dir, { envEntries: readEnvEntries(root).entries, onRecord: live ? (rec) => lv && live.feed(lv, rec) : null, guard: guardFor(id) });
     const header = log.header();
     const baseMap = live && header.baseline ? baselineMap(fs.readFileSync(path.join(dir, 'baseline.jsonl'), 'utf8')) : null;
     if (live) {
@@ -404,7 +407,7 @@ function createRouter(o) {
     }
     ensureDir(sessionsDir);
     let lv = null; // the session's live Ọpọ́n (L1c): fed each mark its log writes
-    const log = createSessionLog(dir, header, { envEntries: entries, baseline, onRecord: live ? (rec) => lv && live.feed(lv, rec) : null });
+    const log = createSessionLog(dir, header, { envEntries: entries, baseline, onRecord: live ? (rec) => lv && live.feed(lv, rec) : null, guard: guardFor(id) });
     const baseMap = baseline === null ? null : baselineMap(baseline);
     if (live) lv = live.open(dir, log.header(), baseMap);
     const tamper = createTamperWatch({ header: { ...header, project_root: root }, codeRoot: o.codeRoot, lawPacks: lawPacksFor(root), clock });
@@ -505,6 +508,7 @@ function createRouter(o) {
   }
 
   function poll() {
+    if (o.guard) for (const s of states.values()) s.log.guard(); // TE1: a change to a log is found by the next heartbeat at the latest
     const ticks = engine.poll();
     const now = BigInt(clock().mono);
     for (const [id, s] of states) {

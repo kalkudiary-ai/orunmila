@@ -41,7 +41,7 @@ function tinyCode() {
  * same or another project folder, and when its header was written. `onRecord` is the session log's
  * callback (L1c), so a test can feed a live engine; `sealedHeader` is the header as written.
  */
-function makeLog(base, config = {}, { baseline = null, byproducts = null, sessionId = SID, root: rootIn = null, startMs = 0, onRecord = null } = {}) {
+function makeLog(base, config = {}, { baseline = null, byproducts = null, sessionId = SID, root: rootIn = null, startMs = 0, onRecord = null, guard = null } = {}) {
   const root = rootIn || fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'orunmila-root-')));
   const dir = path.join(base, sessionId);
   if (byproducts) {
@@ -54,13 +54,13 @@ function makeLog(base, config = {}, { baseline = null, byproducts = null, sessio
     text = [...baseline].sort((a, b) => (a.path < b.path ? -1 : 1)).map((e) => canonicalize(e) + '\n').join('');
     header.baseline = { fingerprint: 'sha256:' + crypto.createHash('sha256').update(text, 'utf8').digest('hex') };
   }
-  const log = createSessionLog(dir, header, { baseline: text, onRecord });
+  const log = createSessionLog(dir, header, { baseline: text, onRecord, guard });
   const append = (m, files = []) => {
     const r = log.append(m, files);
     if (!r.ok) throw new Error(`the test's mark was refused: ${JSON.stringify(r)}`);
     return r.seq;
   };
-  return { dir, root, append, header, sealedHeader: log.header() };
+  return { dir, root, append, header, sealedHeader: log.header(), log };
 }
 
 const base = (ms, over) => ({ schema_version: 1, session_id: SID, agent: null, turn: null, sub_agent: null, observed_at: wall(ms), mono_ns: ns(ms), cause_hint: null, ...over });

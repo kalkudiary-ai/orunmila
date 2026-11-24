@@ -331,6 +331,14 @@ function verifySession(dir) {
       gapAt.push(`the intake was down from ${d.since.observed_at} to ${d.until.observed_at} (${where('raw log', part, line)})`);
     } else gaps.other++;
   }
+  // TE3 (LD279): every change to a log that something other than Orunmila made, and its putting back, named by its line.
+  const tampers = [];
+  for (const { rec, part, line } of marks) {
+    const d = rec && rec.says === 'tampered' && rec.detail && typeof rec.detail === 'object' ? rec.detail : null;
+    if (!d || d.what !== 'log_location' || typeof d.change !== 'string') continue;
+    const which = rec.target && typeof rec.target.path === 'string' ? path.basename(rec.target.path).replace(/(\.[0-9]+)?\.jsonl$/, '') : 'a';
+    tampers.push(`the ${which} log was ${d.change} by something other than Orunmila${d.restored === true ? ' and put back' : ', not put back'} (${where('raw log', part, line)})`);
+  }
 
   const counts = {
     marks: marks.length,
@@ -371,7 +379,7 @@ function verifySession(dir) {
     const other = gaps.other ? [`${plural(gaps.other, 'other capture gap', 'other capture gaps')} recorded`] : [];
     words =
       `Record intact: ${plural(counts.marks, 'mark', 'marks')}, ${plural(counts.quarantined, 'quarantined input', 'quarantined inputs')}, ` +
-      `${plural(counts.kept_files, 'kept file', 'kept files')}, unbroken${[...cuts, ...gapAt, ...other, ...fields, ...base, ...judged, ...foot].map((c) => `; ${c}`).join('')}.`;
+      `${plural(counts.kept_files, 'kept file', 'kept files')}, unbroken${[...cuts, ...gapAt, ...other, ...tampers, ...fields, ...base, ...judged, ...foot].map((c) => `; ${c}`).join('')}.`;
   }
   return { ok: raw.ok && schema.ok && quarantine.ok && files.bad.length === 0 && verdicts.ok && (!footer || footer.ok), words, counts, raw: summary(raw), schema, quarantine: summary(quarantine), files, undeclared, gaps };
 }

@@ -48,6 +48,7 @@ function tamperRule(o, header) {
   const t = o.target;
   if (!t || t.kind === 'process') return 'R17'; // foreign_sender: target { kind: process } (engine.js foreign)
   if (t.kind === 'dir') return 'R16'; // orunmila_code: the code folder (tamper.js)
+  if (/^(raw|quarantine|odu|verdict)(\.[0-9]+)?\.jsonl$/.test(path.posix.basename(posix(t.path)))) return 'R4'; // TE1: one of Orunmila's own logs (LD279)
   const root = posix(header.project_root || '');
   const abs = t.outside || path.posix.isAbsolute(posix(t.path)) || /^[A-Za-z]:\//.test(posix(t.path)) ? posix(t.path) : path.posix.join(root, posix(t.path));
   const hooks = Object.keys((header.frozen && header.frozen.hook_settings) || {}).map(posix);

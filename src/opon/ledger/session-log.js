@@ -49,6 +49,7 @@ const { verifySession, checkLog, fileWords } = require('../../verify/session');
 const { redactText, redactMark, usedValue } = require('../intake/redact');
 const { scanBuffer } = require('../intake/leak-check');
 const { nowMono } = require('../intake/mono');
+const { createGuard } = require('./guard');
 
 const SPEC = path.join(__dirname, '..', '..', '..', 'spec');
 const MARK_SCHEMA = JSON.parse(fs.readFileSync(path.join(SPEC, 'mark.schema.json'), 'utf8'));
@@ -92,7 +93,7 @@ function leakEntries(envValues, envEntries) {
   return [...byValue].map(([value, names]) => ({ names: [...names].sort(), value }));
 }
 
-function createSessionLog(dir, headerInput, { envValues = [], envEntries = [], baseline = null, onRecord = null } = {}) {
+function createSessionLog(dir, headerInput, { envValues = [], envEntries = [], baseline = null, onRecord = null, guard = null } = {}) {
   const entries = leakEntries(envValues, envEntries); // first: an entry with no names list refuses the log before any write
   const rawFile = path.join(dir, 'raw.jsonl');
   const qFile = path.join(dir, 'quarantine.jsonl');
@@ -122,7 +123,7 @@ function createSessionLog(dir, headerInput, { envValues = [], envEntries = [], b
   fs.writeFileSync(rawFile, line(header), { flag: 'wx', mode: 0o600 });
   const qHeader = seal({ schema_version: 1, record: 'quarantine_header', session_id: header.session_id, seq: 0 }, null);
   fs.writeFileSync(qFile, line(qHeader), { flag: 'wx', mode: 0o600 });
-  return writer(dir, { rawFile, qFile, header, last: header, timed: header, qLast: qHeader, counts: { marks: 0, quarantined: 0 }, ended: false, pin: null, envValues, envEntries, entries, headerLine: line(header), baselineText: named ? String(baseline) : null, onRecord });
+  return writer(dir, { rawFile, qFile, header, last: header, timed: header, qLast: qHeader, counts: { marks: 0, quarantined: 0 }, ended: false, pin: null, envValues, envEntries, entries, headerLine: line(header), baselineText: named ? String(baseline) : null, onRecord, guard });
 }
 
 /** Start the next part of a log a crash cut (LD57): its first line names the cut and follows the last whole line. */
@@ -147,7 +148,7 @@ function continueLog(dir, name, tail, sessionId) {
  * a broken chain is never extended, and nothing in a session is ever edited
  * (line 348). Known limit: a part whose own first line is cut is refused.
  */
-function openSessionLog(dir, { envValues = [], envEntries = [], onRecord = null } = {}) {
+function openSessionLog(dir, { envValues = [], envEntries = [], onRecord = null, guard = null } = {}) {
   const entries = leakEntries(envValues, envEntries); // first: an entry with no names list refuses the reopen before any write
   const v = verifySession(dir);
   const rawLog = checkLog(dir, 'raw');
@@ -180,6 +181,7 @@ function openSessionLog(dir, { envValues = [], envEntries = [], onRecord = null 
     pin: pinning ? pinOf(pinning) : null,
     envValues,
     onRecord,
+    guard,
   });
 }
 
@@ -188,8 +190,35 @@ function openSessionLog(dir, { envValues = [], envEntries = [], onRecord = null 
  * and `qLast` (quarantine, in qFile); `timed` is the raw log's last header or
  * mark, which last() reports (a continuation record has no times).
  */
-function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended, pin, envValues, envEntries = [], entries, headerLine = null, baselineText = null, onRecord = null }) {
+function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended, pin, envValues, envEntries = [], entries, headerLine = null, baselineText = null, onRecord = null, guard = null }) {
   const filesDir = path.join(dir, 'files');
+  // TE1 (LD279): with `guard` ({ shadowDir }, off unless asked), the raw and quarantine logs are each watched for a change
+  // Orunmila did not make, against Orunmila's own copy in shadowDir; a change is recorded as a tampered mark and put back.
+  const guards = guard ? [['raw', rawFile], ['quarantine', qFile]].map(([log, file]) => ({ log, g: createGuard(file, path.join(guard.shadowDir, path.basename(file))) })) : [];
+  const guardOf = (log) => (guards.find((x) => x.log === log) || {}).g;
+  let guarding = false;
+
+  /** TE1: look at each guarded log; record each change found (when its log was put back) and return them all. */
+  function lookForTamper() {
+    if (!guards.length || guarding) return [];
+    guarding = true;
+    const found = [];
+    try {
+      for (const { log, g } of guards) {
+        const r = g.check();
+        if (!r) continue;
+        found.push({ log, ...r });
+        if (!r.restored) continue; // a log not put back is never written to: verify names where its chain breaks
+        const detail = { what: 'log_location', change: r.change, fingerprint_before: r.fingerprint_before, fingerprint: r.fingerprint, restored: true, reason: `the ${log} log was ${r.change} by something other than Orunmila and put back from Orunmila's own copy` };
+        if (r.removed) detail.removed = r.removed;
+        if (r.added) detail.added = r.added;
+        append({ schema_version: 1, session_id: header.session_id, source: 'process', agent: null, turn: null, sub_agent: null, observed_at: new Date().toISOString(), target: { kind: 'file', path: g.file, outside: true }, says: 'tampered', detail, cause_hint: null });
+      }
+    } finally {
+      guarding = false;
+    }
+    return found;
+  }
 
   // LD101: the leak check after redaction. Each record and kept file is searched,
   // right after it is written, for every `.env` value the redactor uses, in the
@@ -233,6 +262,7 @@ function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended
     if (kept.length) entry.kept = kept; // the files kept with it: evidence is never dropped (LD59)
     const sealed = seal(entry, qLast.hash);
     fs.appendFileSync(qFile, line(sealed));
+    if (guardOf('quarantine')) guardOf('quarantine').wrote(line(sealed));
     check(line(sealed), { log: 'quarantine', seq: sealed.seq }, found);
     qLast = sealed;
     counts.quarantined++;
@@ -247,6 +277,7 @@ function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended
    * are kept too, and its quarantine entry lists them.
    */
   function append(input, files = []) {
+    lookForTamper(); // TE1: a change made since Orunmila's last write is recorded first, and the log put back
     const found = []; // this call's leak-check hits (LD101)
     const kept = files.map((f) => ({ slot: f.slot, ...keep(f.text, found) }));
     const refs = kept.map((k) => k.ref);
@@ -301,6 +332,7 @@ function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended
     }
     if (reasons.length) return reject(reasons);
     fs.appendFileSync(rawFile, line(sealed));
+    if (guardOf('raw')) guardOf('raw').wrote(line(sealed));
     check(line(sealed), { log: 'raw', seq: sealed.seq }, found);
     last = sealed;
     timed = sealed;
@@ -314,7 +346,7 @@ function writer(dir, { rawFile, qFile, header, last, timed, qLast, counts, ended
   /** The raw log's last record: where an intake that restarts finds when it last wrote (test 84). */
   const lastRecord = () => ({ seq: timed.seq, mono_ns: timed.mono_ns, observed_at: timed.observed_at });
 
-  return { append, counts: () => ({ ...counts }), last: lastRecord, ended: () => ended, pin: () => pin, leaks: () => leaks.map(copy), header: () => header };
+  return { append, counts: () => ({ ...counts }), last: lastRecord, ended: () => ended, pin: () => pin, leaks: () => leaks.map(copy), header: () => header, guard: lookForTamper };
 }
 
 /** Check a session folder: the ledger uses src/verify for checking (brief v3 line 618). */

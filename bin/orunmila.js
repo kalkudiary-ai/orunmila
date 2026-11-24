@@ -1452,6 +1452,7 @@ async function cmdIntake() {
       installKey: readInstallKey(home),
       sentinel: true, // the Sentinel runs inside the intake (B4, LD145)
       baseline: oponLive(), // the Ọpọ́n's live path, only with ORUNMILA_OPON_LIVE=1: the baseline at session start (N1b, LD170), stations 2-6 and odu.jsonl (L1c, LD200)
+      guard: process.env.ORUNMILA_LOG_GUARD === '1', // TE1 (LD279): every session's logs watched for a change Orunmila did not make, and put back
       judge: process.env.ORUNMILA_JUDGE_LIVE === '1', // the judge at each closeout, only with ORUNMILA_JUDGE_LIVE=1 too (BB6; on live only on O's word, Q38)
     });
     const server = createServer({ home, router, httpPort: intakePort() });

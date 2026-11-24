@@ -45,8 +45,9 @@
  *                         `also` added to its lost text (a squat, LD132);
  *                         returns { gaps: [{ id, seq }], failed: [{ id, reason }],
  *                         skipped: [{ id, reason }] } (sessions that ended)
- *   intake.stop(reason)   a planned stop: a closing note in each session not
- *                         yet ended, then nothing more (LD56); returns
+ *   intake.stop(reason, { first }?)
+ *                         a planned stop: a closing note in each session not
+ *                         yet ended (after first(id, now)'s mark, TE2), then nothing more (LD56); returns
  *                         { notes: [{ id, seq }], failed: [{ id, reason }] }
  *   intake.release(id, reason)
  *                         stops holding one session (LD123): the same closing
@@ -262,14 +263,20 @@ function createIntake({ openLog, clock, checkSender, tickMs = TICK_MS }) {
    * A planned stop (LD56): one closing note in each session not yet ended,
    * then nothing more is accepted or ticked. The next restart's gap starts
    * at the note, the intake's last write. A second stop writes nothing.
+   * `first(id, now)` (TE2, LD283): a mark written before each note, the
+   * tampered mark of a stop no one asked for.
    */
-  function stop(reason) {
+  function stop(reason, { first } = {}) {
     const out = { notes: [], failed: [] };
     if (stopped) return out;
     stopped = true;
     const now = clock();
     for (const [id, s] of sessions) {
       if (s.ended) continue;
+      if (first) {
+        const t = write(s, first(id, now), now);
+        if (!t.ok) out.failed.push({ id, reason: (t.reasons || [t.reason]).join('; ') });
+      }
       const r = write(s, note(id, reason, now), now);
       if (r.ok) out.notes.push({ id, seq: r.seq });
       else out.failed.push({ id, reason: (r.reasons || [r.reason]).join('; ') });

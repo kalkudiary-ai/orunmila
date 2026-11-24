@@ -208,7 +208,8 @@ it(
       assert.strictEqual(stopped.status, 0, stopped.stdout + stopped.stderr);
     }
     const last = raw(home, 'ses_s1').slice(-1)[0];
-    assert.deepStrictEqual([last.says, last.target.name, last.detail.reason], ['exited', 'intake', 'stopped by SIGTERM']);
+    // TE2 (LD283): `orunmila intake stop` asks over the socket, so the note says the stop was asked for.
+    assert.deepStrictEqual([last.says, last.target.name, last.detail.reason], ['exited', 'intake', 'stopped as asked: orunmila intake stop']);
     assert.ok(!fs.existsSync(p.sock) && !fs.existsSync(p.lock), 'socket and lock removed');
     assert.strictEqual(run('bin/orunmila.js', { args: ['intake', 'stop'], env }).status, 1, 'nothing to stop');
   }),

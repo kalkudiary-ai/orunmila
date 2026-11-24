@@ -50,6 +50,7 @@ const RULES = {
   R20: { line: 651, says: 'low confidence', verdict: 'look_at_this' },
   R24: { line: 662, says: 'a conflict this judge does not know', verdict: 'look_at_this' },
   R25: { line: 76, says: "the agent looked at Orunmila's record (LD262)", verdict: 'look_at_this', never: ['violation'] },
+  R26: { line: 245, says: 'the intake stopped by a signal no one asked for (TE2, LD283)', verdict: 'look_at_this', never: ['off'] },
 };
 const VERDICTS = ['violation', 'look_at_this', 'off'];
 

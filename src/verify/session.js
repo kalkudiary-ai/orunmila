@@ -335,6 +335,10 @@ function verifySession(dir) {
   const tampers = [];
   for (const { rec, part, line } of marks) {
     const d = rec && rec.says === 'tampered' && rec.detail && typeof rec.detail === 'object' ? rec.detail : null;
+    if (d && d.what === 'intake_stop' && typeof d.signal === 'string') {
+      tampers.push(`the intake was stopped by ${d.signal}, which no one asked for (${where('raw log', part, line)})`); // TE2 (LD283)
+      continue;
+    }
     if (!d || d.what !== 'log_location' || typeof d.change !== 'string') continue;
     const which = rec.target && typeof rec.target.path === 'string' ? path.basename(rec.target.path).replace(/(\.[0-9]+)?\.jsonl$/, '') : 'a';
     tampers.push(`the ${which} log was ${d.change} by something other than Orunmila${d.restored === true ? ' and put back' : ', not put back'} (${where('raw log', part, line)})`);

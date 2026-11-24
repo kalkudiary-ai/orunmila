@@ -37,7 +37,7 @@ const CONFLICT_RULE = {
   missed_live: 'R18',
   unfingerprinted: 'R19',
 };
-const TAMPER_RULES = ['R4', 'R8', 'R12', 'R16', 'R17'];
+const TAMPER_RULES = ['R4', 'R8', 'R12', 'R16', 'R17', 'R26'];
 const CHANGES = ['created', 'modified', 'deleted', 'renamed'];
 const FROZEN_FILES = ['rules', 'byproducts', 'ignore', 'laws.json'];
 const posix = (p) => String(p).replace(/\\/g, '/');
@@ -46,6 +46,7 @@ const ruleNo = (r) => Number(r.slice(1));
 /** Which rule a tampered odù breaks, from its target (the mark's `what` is not in the odù; tamper.js, engine.js). */
 function tamperRule(o, header) {
   const t = o.target;
+  if (t && t.kind === 'process' && t.name === 'intake') return 'R26'; // TE2 (LD283): intake_stop, target the process intake (router.js stop)
   if (!t || t.kind === 'process') return 'R17'; // foreign_sender: target { kind: process } (engine.js foreign)
   if (t.kind === 'dir') return 'R16'; // orunmila_code: the code folder (tamper.js)
   if (/^(raw|quarantine|odu|verdict)(\.[0-9]+)?\.jsonl$/.test(path.posix.basename(posix(t.path)))) return 'R4'; // TE1: one of Orunmila's own logs (LD279)
@@ -97,7 +98,12 @@ function fired(o, rules, header) {
   };
   // A Violation needs confidence high (limit (b), line 657); a rule set to violation gives Look at this below it.
   const strong = (rule) => (set[rule] === 'violation' && o.confidence !== 'high' ? 'look_at_this' : set[rule]);
-  if (o.action === 'tampered') give(tamperRule(o, header), 'violation');
+  if (o.action === 'tampered') {
+    // Tampering is a Violation whoever made it (line 658); a stop no one asked for (R26, TE2) is the rule set's, Look at
+    // this by default: a logout or shutdown sends the same signal, and a wrong Violation costs trust (line 11).
+    const rule = tamperRule(o, header);
+    give(rule, rule === 'R26' ? set.R26 : 'violation');
+  }
   if (o.action === 'gap') give('R9', set.R9);
   for (const c of o.conflicts || []) {
     const rule = CONFLICT_RULE[c.kind] || 'R24';

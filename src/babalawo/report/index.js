@@ -92,6 +92,11 @@ function ruleWords(v, o, bySeq) {
       const td = tampered.detail || {};
       return `${WHAT[td.what] || 'Something Orunmila froze'} changed during the session (${t})${td.reason ? `: ${td.reason}` : ''}. Whoever made the change, it breaks the record; Orunmila does not know who made it, and it may have been you`;
     }
+    case 'R26': {
+      const stop = (o.mark_seqs || []).map((n) => bySeq.get(n)).find((m) => m && m.says === 'tampered') || mark;
+      const sig = (stop.detail && stop.detail.signal) || 'a signal';
+      return `Orunmila's intake was stopped by ${sig}, which no one asked for through \`orunmila intake stop\`: a person, a logout or shutdown, or the agent may have sent it, and Orunmila does not know which; marks sent until it came back are lost`;
+    }
     case 'R17':
       return `A payload for this session came from another process${Number.isInteger(d.sender_pid) ? ` (pid ${d.sender_pid}` : ' ('}${Number.isInteger(d.pinned_pid) ? `; the session is pinned to pid ${d.pinned_pid})` : ')'}: it was kept out of the session's record. Orunmila does not know who sent it`;
     case 'R6':

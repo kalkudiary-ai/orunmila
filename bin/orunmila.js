@@ -1425,7 +1425,8 @@ function leakCheck() {
  * LD132): one per machine, on a Unix socket in Orunmila's home. `run` serves in
  * the foreground (what a launch agent runs); `start` runs it detached and waits
  * up to 5 s for it to answer; `status` exits 0 when one answers, 1 when none
- * does; `stop` sends SIGTERM to the pid it answers with and waits for it to go.
+ * does; `stop` asks it to stop over its socket (TE2, LD283; SIGTERM after 2 s for an intake from before TE2) and
+ * waits for it to go. A signal no one asked for is recorded as tampering and exits 1, so the launch agent restarts it.
  * Nothing sends to it yet: the hooks' sender is slice B2.
  */
 async function cmdIntake() {
@@ -1433,8 +1434,8 @@ async function cmdIntake() {
   const home = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
   const p = intakePaths(home);
   const sub = args[1];
-  const waitFor = async (cond) => {
-    for (let end = Date.now() + 5000; Date.now() < end; ) {
+  const waitFor = async (cond, ms = 5000) => {
+    for (let end = Date.now() + ms; Date.now() < end; ) {
       if (await cond()) return true;
       await new Promise((r) => setTimeout(r, 50));
     }
@@ -1455,21 +1456,41 @@ async function cmdIntake() {
       guard: process.env.ORUNMILA_LOG_GUARD === '1', // TE1 (LD279): every session's logs watched for a change Orunmila did not make, and put back
       judge: process.env.ORUNMILA_JUDGE_LIVE === '1', // the judge at each closeout, only with ORUNMILA_JUDGE_LIVE=1 too (BB6; on live only on O's word, Q38)
     });
-    const server = createServer({ home, router, httpPort: intakePort() });
+    // TE2 (LD283): a stop asked for comes over the socket (`orunmila intake stop`) and exits 0; a signal with no ask is
+    // a tampered mark in every held session, kept in last-stop.json for the next start's gap, and exits 1, so the
+    // launch agent (KeepAlive SuccessfulExit false) starts the intake again.
+    const lastStop = path.join(p.dir, 'last-stop.json');
+    let resumeAlso = null;
+    try {
+      const k = JSON.parse(fs.readFileSync(lastStop, 'utf8'));
+      if (k && typeof k.signal === 'string') resumeAlso = `the intake was stopped by ${k.signal}, which no one asked for through \`orunmila intake stop\` (at ${k.at})`;
+    } catch {
+      /* none kept: the last stop was asked for, or a kill no handler sees */
+    }
+    let stopping = false;
+    let server = null;
+    const onStop = async (reason) => {
+      if (stopping) return;
+      stopping = true;
+      await server.stop(`stopped as asked: ${reason}`);
+      process.exit(0);
+    };
+    server = createServer({ home, router, httpPort: intakePort(), onStop, resumeAlso });
     const r = await server.start();
     if (!r.ok) {
       console.error(`orunmila intake: ${r.reason}`);
       process.exit(r.code === 'running' ? 3 : 1);
     }
+    fs.rmSync(lastStop, { force: true }); // named once, in this start's gaps
     console.log(`orunmila intake: listening on ${r.sock} (pid ${process.pid})` + (r.squat ? `; another process held the socket: recorded in ${p.errors}` : ''));
     console.log(r.http.listening ? `orunmila intake: HTTP on 127.0.0.1:${r.http.port}` : `orunmila intake: HTTP port 127.0.0.1:${r.http.port} is held by another process (recorded in ${p.errors}); tried again every second`);
-    let stopping = false;
     for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) {
       process.on(sig, async () => {
         if (stopping) return;
         stopping = true;
-        await server.stop(`stopped by ${sig}`);
-        process.exit(0);
+        await server.stop(`stopped by ${sig}, which no one asked for through orunmila intake stop`, { signal: sig });
+        fs.writeFileSync(lastStop, JSON.stringify({ signal: sig, at: new Date().toISOString() }) + '\n', { mode: 0o600 });
+        process.exit(1);
       });
     }
     return;
@@ -1514,9 +1535,20 @@ async function cmdIntake() {
       process.exitCode = 1;
       return;
     }
-    process.kill(st.pid, 'SIGTERM');
-    const gone = await waitFor(async () => !fs.existsSync(p.lock) && (await statusOf(p.sock, 300)) === null);
-    console.log(gone ? `orunmila intake: stopped (pid ${st.pid})` : `orunmila intake: pid ${st.pid} did not stop within 5 s`);
+    // TE2 (LD283): ask over the socket, so the intake knows the stop was asked for. An intake from before TE2 does not
+    // know the op; for it, after 2 s, the old way: SIGTERM.
+    await new Promise((resolve) => {
+      const c = require('net').createConnection(p.sock);
+      c.on('error', resolve);
+      c.on('close', resolve);
+      c.on('connect', () => c.end(JSON.stringify({ op: 'stop', reason: 'orunmila intake stop' }) + '\n'));
+    });
+    let gone = await waitFor(async () => !fs.existsSync(p.lock) && (await statusOf(p.sock, 300)) === null, 2000);
+    if (!gone) {
+      process.kill(st.pid, 'SIGTERM');
+      gone = await waitFor(async () => !fs.existsSync(p.lock) && (await statusOf(p.sock, 300)) === null);
+    }
+    console.log(gone ? `orunmila intake: stopped (pid ${st.pid})` : `orunmila intake: pid ${st.pid} did not stop within 7 s`);
     if (!gone) process.exitCode = 1;
     return;
   }

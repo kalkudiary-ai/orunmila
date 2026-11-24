@@ -649,7 +649,7 @@ const MUTANTS = [
     fails: ['LD55: on restart, a session that ended'] },
   // Track B slice B1e: the closing note on a planned stop (LD56).
   { id: 'B22 an ended session given a closing note', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
-    from: 'if (s.ended) continue;\n      const r = write(s, note(id, reason, now), now);', to: 'const r = write(s, note(id, reason, now), now);',
+    from: 'if (s.ended) continue;\n      if (first) {', to: 'if (first) {', // TE2 (LD283): the stop's loop now writes `first` before the note
     fails: ['LD56: a planned stop writes one closing note'] },
   { id: 'B23 marks still accepted after a stop', file: 'src/opon/intake/engine.js', test: 'test/intake-engine.js',
     from: "if (stopped) return { ok: false, reason: 'intake has stopped:", to: "if (false) return { ok: false, reason: 'intake has stopped:",
@@ -1154,13 +1154,13 @@ const MUTANTS = [
     from: 'router.poll();', to: 'void 0;',
     fails: ['B1e: a held session gets ticks while idle'] },
   { id: 'B1e-6 a stop writes no closing note', file: 'src/opon/intake/server.js', test: 'test/intake-server.js',
-    from: 'const out = router.stop(reason);', to: 'const out = null;',
+    from: 'const out = router.stop(reason, opts);', to: 'const out = null;', // TE2 (LD283): the stop's options
     fails: ['B1e CLI: intake start, status and stop'] },
   { id: 'B1e-7 command payloads not labelled with their channel', file: 'src/opon/intake/server.js', test: 'test/intake-server.js',
     from: "router.payload(r.payload, { channel: 'command' });", to: 'router.payload(r.payload, {});',
     fails: ['B1e: payload lines over the socket reach the session log'] },
   { id: 'B1e-8 a socket path left by a crash blocks the start', file: 'src/opon/intake/server.js', test: 'test/intake-server.js',
-    from: 'fs.rmSync(p.sock, { force: true });\n      const resumed', to: 'const resumed',
+    from: 'fs.rmSync(p.sock, { force: true });\n      const also', to: 'const also', // TE2 (LD283): the resume's extra text comes first
     fails: ['B1e: a stale lock (a dead pid)', 'test 83 (socket form)'] },
   // Slice B1f: the lock race (LD136). The whole-file placement itself and the
   // takeover's same-pid recheck are timing races: only the silence tests (eight
@@ -2472,7 +2472,7 @@ const MUTANTS = [
     from: "const strong = (rule) => (set[rule] === 'violation' && o.confidence !== 'high' ? 'look_at_this' : set[rule]);", to: 'const strong = (rule) => set[rule];',
     fails: ['tests 38 and 73'] },
   { id: 'BB-2 tampering not judged', file: 'src/babalawo/verdict/index.js', test: 'test/judge.js',
-    from: "  if (o.action === 'tampered') give(tamperRule(o, header), 'violation');\n", to: '',
+    from: "    give(rule, rule === 'R26' ? set.R26 : 'violation');\n", to: '', // TE2 (LD283): the tampered branch now names its rule first
     fails: ['tests 10, 30, 42, 52'] },
   { id: "BB-3 the agent's hook settings read as frozen configuration", file: 'src/babalawo/verdict/index.js', test: 'test/judge.js',
     from: "  if (hooks.includes(abs)) return 'R12';\n", to: '',
@@ -2645,6 +2645,35 @@ const MUTANTS = [
   { id: 'Q41-1 the mark schema does not declare restored', file: 'spec/mark.schema.json', test: 'test/tamper-log.js',
     from: '        "restored": {', to: '        "restored_not_declared": {',
     fails: ['TE1, TE4: the raw log appended', 'TE1, TE4: the raw log cut', 'TE1, TE4: the raw log deleted then rewritten'] },
+  // TE2 (LD283): a stop of the intake no one asked for.
+  { id: 'TE2-1 a stop no one asked for exits 0', file: 'bin/orunmila.js', test: 'test/intake-stop.js',
+    from: "fs.writeFileSync(lastStop, JSON.stringify({ signal: sig, at: new Date().toISOString() }) + '\\n', { mode: 0o600 });\n        process.exit(1);",
+    to: "fs.writeFileSync(lastStop, JSON.stringify({ signal: sig, at: new Date().toISOString() }) + '\\n', { mode: 0o600 });\n        process.exit(0);",
+    fails: ['TE2 (LD283): a SIGTERM no one asked for'] },
+  { id: 'TE2-2 the router forgets the signal', file: 'src/opon/intake/router.js', test: 'test/intake-stop.js',
+    from: 'return engine.stop(reason, { first });', to: 'return engine.stop(reason, {});',
+    fails: ['TE2 (LD283): a SIGTERM no one asked for'] },
+  { id: 'TE2-3 the socket refuses a stop asked for', file: 'src/opon/intake/server.js', test: 'test/intake-stop.js',
+    from: "if (r && r.op === 'stop' && typeof onStop === 'function') {", to: 'if (false) {',
+    fails: ['TE2 (LD283): a SIGTERM no one asked for'] },
+  { id: 'TE2-4 a stop no one asked for is a Violation', file: 'src/babalawo/verdict/index.js', test: 'test/intake-stop.js',
+    from: "give(rule, rule === 'R26' ? set.R26 : 'violation');", to: "give(rule, 'violation');",
+    fails: ['TE2: the judge reads a stop'] },
+  { id: 'TE2-5 an intake stop is read as a foreign sender', file: 'src/babalawo/verdict/index.js', test: 'test/intake-stop.js',
+    from: "  if (t && t.kind === 'process' && t.name === 'intake') return 'R26';", to: '  if (false) return null;',
+    fails: ['TE2: the judge reads a stop'] },
+  { id: 'TE2-6 the restart gap does not name the stop', file: 'src/opon/intake/server.js', test: 'test/intake-stop.js',
+    from: ', resumeAlso].filter(Boolean);', to: '].filter(Boolean);',
+    fails: ['TE2 (LD283): a SIGTERM no one asked for'] },
+  { id: 'TE2-7 verify does not name the stop', file: 'src/verify/session.js', test: 'test/intake-stop.js',
+    from: "      tampers.push(`the intake was stopped by ${d.signal}, which no one asked for (${where('raw log', part, line)})`); // TE2 (LD283)\n", to: '',
+    fails: ['TE2 (LD283): a SIGTERM no one asked for'] },
+  { id: 'TE2-8 the kept stop is named at every start', file: 'bin/orunmila.js', test: 'test/intake-stop.js',
+    from: "    fs.rmSync(lastStop, { force: true }); // named once, in this start's gaps\n", to: '',
+    fails: ['TE2 (LD283): a SIGTERM no one asked for'] },
+  { id: 'TE2-9 the report gives no sentence for the stop', file: 'src/babalawo/report/index.js', test: 'test/intake-stop.js',
+    from: "    case 'R26': {", to: "    case 'R26_unused': {",
+    fails: ['TE2: the judge reads a stop'] },
 ];
 
 function copyRepo(root) {

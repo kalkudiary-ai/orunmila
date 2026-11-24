@@ -18,9 +18,10 @@
  *     .status()    -> { ok, loaded, state, pid, plist }: from `launchctl print`
  *
  * The agent runs `<node> <script> intake run`, at load, and launchd restarts it
- * only after a failed exit (KeepAlive SuccessfulExit false): a crash or an
- * uncaught error, never a signal stop, which exits 0 (LD132), so `orunmila
- * intake stop` stays a stop; a refused start (another intake runs: exit 3) is
+ * only after a failed exit (KeepAlive SuccessfulExit false): a crash, an
+ * uncaught error, or a signal no one asked for (TE2, LD283: recorded as
+ * tampering, exit 1); `orunmila intake stop` asks over the socket and exits 0
+ * (LD132), so it stays a stop; a refused start (another intake runs: exit 3) is
  * retried every ThrottleInterval seconds. Only ORUNMILA_HOME,
  * ORUNMILA_INTAKE_PORT and ORUNMILA_OPON_LIVE (LA2, LD219) are copied from the
  * installing environment, and only when set.

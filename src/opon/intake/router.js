@@ -45,7 +45,9 @@
  *                       sessions held at the last write of held.json and gives
  *                       each a gap for the downtime (test 84), `also` added to
  *                       its lost text (LD132); the engine's answer
- *   router.stop(reason) the engine's planned stop (LD56)
+ *   router.stop(reason, { signal }?)
+ *                       the engine's planned stop (LD56); with `signal`, a stop no one
+ *                       asked for: a tampered mark (intake_stop) before each closing note (TE2)
  *   router.error(reason, payload)
  *                       a line to <home>/intake/errors.jsonl, redacted (LD124);
  *                       the server's unreadable lines and squats (LD132)
@@ -555,10 +557,16 @@ function createRouter(o) {
     return { ...out, failed: [...out.failed, ...failed] };
   }
 
-  function stop(reason) {
+  /**
+   * The intake's stop (LD56). With `signal` (TE2, LD283): a stop no one asked for through `orunmila intake stop`, so a
+   * tampered mark (what: intake_stop, the signal) goes before the closing note in every session not yet ended.
+   */
+  function stop(reason, { signal } = {}) {
     if (sentinels) sentinels.stop();
-    const out = engine.stop(reason);
-    return out;
+    const first = signal
+      ? (id, now) => ({ schema_version: 1, session_id: id, source: 'process', agent: null, turn: null, sub_agent: null, observed_at: now.wall, mono_ns: now.mono, target: { kind: 'process', name: 'intake' }, says: 'tampered', detail: { what: 'intake_stop', signal }, cause_hint: null })
+      : undefined;
+    return engine.stop(reason, { first });
   }
 
   /** A gap in every held session, naming what was lost (a squat on the HTTP port, LD139). */

@@ -508,9 +508,14 @@
           "const": "intake"
         },
         "what": {
-          "description": "On a tampered mark, what was tampered with: `hook_settings`, `frozen_config`, `log_location`, `orunmila_code` or `foreign_sender`.",
-          "$comment": "brief v4 line 245",
-          "enum": ["hook_settings", "frozen_config", "log_location", "orunmila_code", "foreign_sender"]
+          "description": "On a tampered mark, what was tampered with: `hook_settings`, `frozen_config`, `log_location`, `orunmila_code`, `foreign_sender`, or `intake_stop` (the intake stopped by a signal that no one asked for through `orunmila intake stop`; target the process `intake`).",
+          "$comment": "brief v4 line 245; intake_stop is TE2's kind (LD283, Phase 5 plan section 4), approved by O as part of Q41 (2026-11-24)",
+          "enum": ["hook_settings", "frozen_config", "log_location", "orunmila_code", "foreign_sender", "intake_stop"]
+        },
+        "signal": {
+          "description": "On a tampered mark for an intake stop no one asked for: the signal that stopped it.",
+          "$comment": "agent's proposal (TE2, LD283), approved by O as part of Q41 (2026-11-24)",
+          "enum": ["SIGTERM", "SIGINT", "SIGHUP"]
         },
         "channel": {
           "description": "Glove marks: how the mark reached intake. `http` for HTTP hooks, whose sender intake pins to the session's process at first contact; `command` for a command hook, which the agent can forge until the separate-user setup (Phase 5).",

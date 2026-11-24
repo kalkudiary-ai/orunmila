@@ -38,9 +38,15 @@
  *     .stop(reason) -> the router's stop (LD56), then the socket and the lock
  *               removed; null when it never started
  *
+ *   onStop(reason)  TE2 (LD283): called for {"op":"stop"}, a stop asked for through `orunmila intake stop`;
+ *                   without it the op is refused like any unknown one
+ *   resumeAlso      text added to the restart gap's lost text (TE2: a stop no one asked for, kept from the last run)
+ *   .stop(reason, { signal }?)  with `signal`, the router's stop no one asked for (TE2)
+ *
  * The protocol: newline-delimited JSON, one request per line.
  *   {"op":"payload","payload":{...}}  to the router on channel `command`; no reply
  *   {"op":"status"}                   one line back, then the connection closes
+ *   {"op":"stop","reason":"..."}      {"ok":true,"pid":N} back, then onStop(reason) (TE2)
  * A line that is not JSON, names no known op, or passes maxLine bytes with no
  * end goes to the error log, redacted (LD124); the connection carries on, except
  * after an over-long line, which closes it.
@@ -181,7 +187,7 @@ function alive(pid) {
   }
 }
 
-function createServer({ home, router, pollMs = 100, statusTimeoutMs = 1000, maxLine = MAX_LINE, httpPort = null, httpRetryMs = 1000, lookups = peer }) {
+function createServer({ home, router, pollMs = 100, statusTimeoutMs = 1000, maxLine = MAX_LINE, httpPort = null, httpRetryMs = 1000, lookups = peer, onStop = null, resumeAlso = null }) {
   const p = intakePaths(home);
   let server = null;
   let timer = null;
@@ -364,7 +370,13 @@ function createServer({ home, router, pollMs = 100, statusTimeoutMs = 1000, maxL
       c.end(JSON.stringify(status()) + '\n');
       return;
     }
-    router.error('a line with no known op (payload or status) reached the intake\'s socket', r);
+    if (r && r.op === 'stop' && typeof onStop === 'function') {
+      // TE2 (LD283): a stop asked for through `orunmila intake stop`; the answer goes back before the stop begins.
+      c.end(JSON.stringify({ ok: true, pid: process.pid }) + '\n');
+      onStop(typeof r.reason === 'string' && r.reason ? r.reason : 'orunmila intake stop');
+      return;
+    }
+    router.error('a line with no known op (payload, status or stop) reached the intake\'s socket', r);
   }
 
   function onConnection(c) {
@@ -417,7 +429,8 @@ function createServer({ home, router, pollMs = 100, statusTimeoutMs = 1000, maxL
         );
       }
       fs.rmSync(p.sock, { force: true });
-      const resumed = router.resume(squat ? { also: "another process was listening on the intake's socket when it started (its pid is not known), so marks sent before then may have gone to it" } : {});
+      const also = [squat ? "another process was listening on the intake's socket when it started (its pid is not known), so marks sent before then may have gone to it" : null, resumeAlso].filter(Boolean);
+      const resumed = router.resume(also.length ? { also: also.join('; ') } : {});
       const s = net.createServer(onConnection);
       await new Promise((resolve, reject) => {
         s.once('error', reject);
@@ -448,11 +461,11 @@ function createServer({ home, router, pollMs = 100, statusTimeoutMs = 1000, maxL
     }
   }
 
-  async function stop(reason) {
+  async function stop(reason, opts = {}) {
     if (!server) return null;
     clearInterval(timer);
     clearTimeout(httpTimer);
-    const out = router.stop(reason);
+    const out = router.stop(reason, opts); // opts.signal: a stop no one asked for (TE2)
     const s = server;
     server = null;
     for (const c of conns) c.destroy();

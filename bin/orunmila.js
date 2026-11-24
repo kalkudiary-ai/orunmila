@@ -1223,13 +1223,42 @@ function cmdJson() {
     }
     return feedbackFromOdu({ sessionId, agent: detectAgent(), oduText: fs.readFileSync(file, 'utf8'), turn, include, generatedAt, redactOpts: { home, root: process.cwd() } });
   };
+  // BB9 (LD273): the verdicts' feedback with ORUNMILA_FEEDBACK_FROM_VERDICTS=1, in the same 1.0 shape; with --side-by-side, beside the old path's.
+  const fromVerdicts = process.env.ORUNMILA_FEEDBACK_FROM_VERDICTS === '1';
+  const verdictJson = () => {
+    const { checkLog } = require('../src/verify/session');
+    const { sessionFolderName } = require('../src/opon/intake/paths');
+    const { feedbackFromVerdicts } = require('../src/babalawo/report/feedback');
+    const dir = path.join(eventlog.dataDir(), 'sessions', sessionFolderName(sessionId));
+    const raw = checkLog(dir, 'raw');
+    const oduFile = path.join(dir, 'odu.jsonl');
+    if (!raw.ok || !fs.existsSync(oduFile)) {
+      console.error(`No verified raw log and odù log for session ${sessionId} in ${dir}: the verdicts' feedback needs both (ORUNMILA_OPON_LIVE=1).`);
+      process.exit(1);
+    }
+    const recs = raw.records.filter((r) => !(r.part > 1 && r.line === 1)).map((r) => r.rec);
+    const oduText = fs.readFileSync(oduFile, 'utf8');
+    const vFile = path.join(dir, 'verdict.jsonl');
+    const judgedNow = !fs.existsSync(vFile);
+    let verdictText;
+    if (judgedNow) {
+      const j = require('../src/babalawo').judge({ header: recs[0], oduText });
+      if (!j.ok) {
+        console.error(j.words);
+        process.exit(1);
+      }
+      verdictText = j.text;
+    } else verdictText = fs.readFileSync(vFile, 'utf8');
+    const generatedAt = recs.reduce((a, r) => (typeof r.observed_at === 'string' && (a === null || r.observed_at > a) ? r.observed_at : a), null);
+    return feedbackFromVerdicts({ sessionId, agent: detectAgent(), header: recs[0], marks: recs.slice(1), oduText, verdictText, judgedNow, generatedAt, turn, include, redactOpts: { home, root: process.cwd() } });
+  };
   let json;
   if (both) {
     const { sideBySide } = require('../src/opon/feedback/from-odu');
     const old = JSON.parse(oldJson());
-    const odu = oduJson();
-    json = JSON.stringify({ old, odu, compare: sideBySide(old, odu) }, null, 2);
-  } else json = fromOdu ? JSON.stringify(oduJson(), null, 2) : oldJson();
+    const odu = fromVerdicts ? verdictJson() : oduJson();
+    json = JSON.stringify({ old, [fromVerdicts ? 'verdicts' : 'odu']: odu, compare: sideBySide(old, odu) }, null, 2);
+  } else json = fromVerdicts ? JSON.stringify(verdictJson(), null, 2) : fromOdu ? JSON.stringify(oduJson(), null, 2) : oldJson();
   const out = flag('out', null);
   if (out) {
     fs.writeFileSync(out, json);

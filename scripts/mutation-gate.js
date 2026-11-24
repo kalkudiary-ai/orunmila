@@ -2561,6 +2561,16 @@ const MUTANTS = [
   { id: "BB8-7 a gap's length is not said", file: 'src/babalawo/report/index.js', test: 'test/report.js',
     from: '(${span(d.since.mono_ns, d.until.mono_ns)})', to: '(some time)',
     fails: ["tests 12, 18, 21 and 84's report half"] },
+  // BB9: the agent's feedback from the verdicts.
+  { id: 'BB9-1 a phantom claim carries no verdict', file: 'src/babalawo/report/feedback.js', test: 'test/feedback-verdicts.js',
+    from: '  for (const t of payload.turns) for (const c of t.claims) if (latest.has(c.evidence.odu_id)) c.verdict = latest.get(c.evidence.odu_id).verdict;\n', to: '',
+    fails: ['BB9: with the flag'] },
+  { id: "BB9-2 the verdicts' flag is not read", file: 'bin/orunmila.js', test: 'test/feedback-verdicts.js',
+    from: "const fromVerdicts = process.env.ORUNMILA_FEEDBACK_FROM_VERDICTS === '1';", to: 'const fromVerdicts = false;',
+    fails: ['BB9: with the flag', 'BB9: with no verdict log'] },
+  { id: 'BB9-3 a session judged now is not said to be', file: 'src/babalawo/report/feedback.js', test: 'test/feedback-verdicts.js',
+    from: '    judged_now: judgedNow,\n', to: '    judged_now: false,\n',
+    fails: ['BB9: with no verdict log'] },
 ];
 
 function copyRepo(root) {

@@ -23,7 +23,8 @@
  * tampering, exit 1); `orunmila intake stop` asks over the socket and exits 0
  * (LD132), so it stays a stop; a refused start (another intake runs: exit 3) is
  * retried every ThrottleInterval seconds. Only ORUNMILA_HOME,
- * ORUNMILA_INTAKE_PORT and ORUNMILA_OPON_LIVE (LA2, LD219) are copied from the
+ * ORUNMILA_INTAKE_PORT, ORUNMILA_OPON_LIVE (LA2, LD219), ORUNMILA_JUDGE_LIVE,
+ * ORUNMILA_LOG_GUARD and ORUNMILA_WATCH_EXTRA (LA3, LD290) are copied from the
  * installing environment, and only when set.
  */
 
@@ -31,7 +32,8 @@ const fs = require('fs');
 const path = require('path');
 
 const LABEL = 'dev.orunmila.intake';
-const ENV_KEYS = ['ORUNMILA_HOME', 'ORUNMILA_INTAKE_PORT', 'ORUNMILA_OPON_LIVE']; // LA2 (LD219): the live flag kept across restarts
+// LA2 (LD219): the live flag kept across restarts; LA3 (LD290): every other flag the intake reads, too.
+const ENV_KEYS = ['ORUNMILA_HOME', 'ORUNMILA_INTAKE_PORT', 'ORUNMILA_OPON_LIVE', 'ORUNMILA_JUDGE_LIVE', 'ORUNMILA_LOG_GUARD', 'ORUNMILA_WATCH_EXTRA'];
 const THROTTLE_S = 10;
 
 const xml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

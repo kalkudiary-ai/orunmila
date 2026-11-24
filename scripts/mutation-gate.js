@@ -2233,7 +2233,7 @@ const MUTANTS = [
     fails: ['K6 line 614'] },
   // Slice LA2: the launch agent keeps the live flag (Q7, LD219).
   { id: 'LA2-1 the launch agent drops the live flag', file: 'src/opon/intake/launch-agent.js', test: 'test/launch-agent.js',
-    from: ", 'ORUNMILA_OPON_LIVE']; // LA2", to: ']; // LA2',
+    from: "'ORUNMILA_INTAKE_PORT', 'ORUNMILA_OPON_LIVE', 'ORUNMILA_JUDGE_LIVE'", to: "'ORUNMILA_INTAKE_PORT', 'ORUNMILA_JUDGE_LIVE'", // LA3 (LD290): the list grew
     fails: ['LA2'] },
   // Slice C3d3c: wrapper text and a code block's bare names (LD211 (2), LD215).
   { id: 'C3d3c-1 harness wrapper text counts as a mention', file: 'src/opon/corroborate/claims.js', test: 'test/conflicts.js',
@@ -2706,6 +2706,10 @@ const MUTANTS = [
   { id: 'LD286-3 a resumed session never ticks again', file: 'src/opon/intake/engine.js', test: 'test/judge-live.js',
     from: "    if (r.ok && resumes && s.ended && glove && m.says === 'prompted') s.ended = false;\n", to: '',
     fails: ["LD286 (LD249's open point)"] },
+  // LA3 (LD290): the launch agent keeps every flag the intake reads.
+  { id: "LA3-1 the plist drops the judge's, the guard's and the extra folders' flags", file: 'src/opon/intake/launch-agent.js', test: 'test/launch-agent.js',
+    from: ", 'ORUNMILA_JUDGE_LIVE', 'ORUNMILA_LOG_GUARD', 'ORUNMILA_WATCH_EXTRA'];", to: '];',
+    fails: ['LA3 (LD290)'] },
   // Q12 (a) (LD289): extra folders the Sentinel watches.
   { id: 'Q12-1 the extra folders are not watched', file: 'src/opon/intake/router.js', test: 'test/intake-sentinel.js',
     from: '    for (const x of s.extras) sentinels.watch(x, s.limit);\n', to: '',

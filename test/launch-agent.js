@@ -37,7 +37,7 @@ it('LA: the plist runs `intake run` with the absolute node and script, at load, 
   assert.ok(x.includes(`<key>Label</key>\n  <string>${LABEL}</string>`));
   assert.ok(x.includes('<key>ProgramArguments</key>\n  <array>\n    <string>/opt/node/bin/node</string>\n    <string>/repo/bin/orunmila.js</string>\n    <string>intake</string>\n    <string>run</string>\n  </array>'));
   assert.ok(x.includes('<key>RunAtLoad</key>\n  <true/>'));
-  assert.ok(x.includes('<key>KeepAlive</key>\n  <dict>\n    <key>SuccessfulExit</key>\n    <false/>\n  </dict>'), 'restarted only after a failed exit: a signal stop exits 0 and stays stopped');
+  assert.ok(x.includes('<key>KeepAlive</key>\n  <dict>\n    <key>SuccessfulExit</key>\n    <false/>\n  </dict>'), 'restarted only after a failed exit: a stop asked for exits 0 and stays stopped (a signal no one asked for exits 1, TE2)');
   assert.ok(x.includes('<key>ThrottleInterval</key>\n  <integer>10</integer>'));
   assert.ok(x.includes('<key>StandardOutPath</key>\n  <string>/u/.orunmila/intake/intake.out</string>'));
   assert.ok(x.includes('<key>StandardErrorPath</key>\n  <string>/u/.orunmila/intake/intake.out</string>'));
@@ -55,6 +55,14 @@ it('LA2 (Q7, LD219): the plist carries ORUNMILA_OPON_LIVE when set, so an agent 
   const on = plistFor({ ...BASE, env: { ORUNMILA_OPON_LIVE: '1' } });
   assert.ok(on.includes('<key>EnvironmentVariables</key>\n  <dict>\n    <key>ORUNMILA_OPON_LIVE</key>\n    <string>1</string>\n  </dict>'), on);
   assert.ok(!plistFor({ ...BASE, env: { ORUNMILA_OPON_LIVE: '' } }).includes('ORUNMILA_OPON_LIVE'));
+});
+
+it("LA3 (LD290): the plist carries every flag the intake reads (the judge's, the log guard's, the extra folders), so an agent installed with them keeps them across restarts; unset, none", () => {
+  const env = { ORUNMILA_JUDGE_LIVE: '1', ORUNMILA_LOG_GUARD: '1', ORUNMILA_WATCH_EXTRA: '/a:/b' };
+  const on = plistFor({ ...BASE, env });
+  for (const [k, v] of Object.entries(env)) assert.ok(on.includes(`<key>${k}</key>\n    <string>${v}</string>`), `${k}: ${on}`);
+  const off = plistFor({ ...BASE, env: { ORUNMILA_JUDGE_LIVE: '', ORUNMILA_LOG_GUARD: '', ORUNMILA_WATCH_EXTRA: '' } });
+  assert.ok(!off.includes('EnvironmentVariables'), off);
 });
 
 it(

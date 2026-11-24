@@ -43,6 +43,37 @@ function setup({ releaseMs } = {}) {
 
 const open = (t, id) => t.router.payload({ session_id: id, hook_event_name: 'SessionStart', cwd: t.root }, { channel: 'command' });
 
+it("Q12 (a) (LD212, LD289): with extra folders named (ORUNMILA_WATCH_EXTRA, off by default), the Sentinel watches each for every held session: a write there is a sentinel mark with the file's absolute path, outside the project; with none named, it is not seen", async () => {
+  for (const on of [true, false]) {
+    const extra = fs.realpathSync(tmpDir());
+    const home = fs.realpathSync(tmpDir());
+    const root = fs.realpathSync(tmpDir());
+    const missing = path.join(extra, 'no-such-folder');
+    const router = createRouter({ home, clock: () => ({ mono: nowMono(), wall: new Date().toISOString() }), checkSender: () => true, codeRoot: SRC, orunmilaVersion: '0.0.0-test', installKey: KEY, hookSettingsFor: () => [], sentinel: true, watchExtra: on ? [extra, missing] : [] });
+    if (on) assert.ok(fs.readFileSync(path.join(home, 'intake', 'errors.jsonl'), 'utf8').includes('no-such-folder'), 'a folder that is not there is named in the error log, not watched');
+    const marks = () => checkLog(path.join(home, 'sessions', 'sx'), 'raw').records.map((r) => r.rec).slice(1).filter((m) => m.source === 'sentinel');
+    try {
+      router.payload({ session_id: 'sx', hook_event_name: 'SessionStart', cwd: root }, { channel: 'command' });
+      assert.deepStrictEqual(router.watching(), on ? [extra, root].sort() : [root]);
+      const outside = (p) => marks().some((m) => m.target.path === p && m.target.outside === true);
+      if (on) {
+        assert.ok(await awaitWatching(extra, outside), 'a write in the extra folder became a sentinel mark naming its absolute path, outside');
+        const m = marks().find((x) => x.target.outside);
+        assert.strictEqual(m.detail.root, extra, 'the mark names the folder watched');
+      } else {
+        fs.writeFileSync(path.join(extra, 'not-watched.txt'), 'x');
+        await sleep(600);
+        assert.deepStrictEqual(marks().filter((x) => x.target.outside), [], 'off: nothing outside the project is watched');
+      }
+    } finally {
+      router.stop('test over');
+      rmrf(home);
+      rmrf(root);
+      rmrf(extra);
+    }
+  }
+});
+
 async function until(cond, ms = 5000) {
   for (const end = Date.now() + ms; Date.now() < end; await sleep(50)) if (cond()) return true;
   return cond();

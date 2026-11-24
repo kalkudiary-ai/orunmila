@@ -2706,6 +2706,16 @@ const MUTANTS = [
   { id: 'LD286-3 a resumed session never ticks again', file: 'src/opon/intake/engine.js', test: 'test/judge-live.js',
     from: "    if (r.ok && resumes && s.ended && glove && m.says === 'prompted') s.ended = false;\n", to: '',
     fails: ["LD286 (LD249's open point)"] },
+  // Q12 (a) (LD289): extra folders the Sentinel watches.
+  { id: 'Q12-1 the extra folders are not watched', file: 'src/opon/intake/router.js', test: 'test/intake-sentinel.js',
+    from: '    for (const x of s.extras) sentinels.watch(x, s.limit);\n', to: '',
+    fails: ['Q12 (a) (LD212, LD289)'] },
+  { id: "Q12-2 an extra folder's mark keeps its path relative to that folder", file: 'src/opon/intake/router.js', test: 'test/intake-sentinel.js',
+    from: '{ ...mark, target: { ...mark.target, path: path.join(root, mark.target.path) } }', to: 'mark',
+    fails: ['Q12 (a) (LD212, LD289)'] },
+  { id: 'Q12-3 a missing extra folder is not named', file: 'src/opon/intake/router.js', test: 'test/intake-sentinel.js',
+    from: "      error(`an extra folder to watch could not be found, so it is not watched: ${x} (${e.code || e.message})`, null);\n", to: '',
+    fails: ['Q12 (a) (LD212, LD289)'] },
   // The verb list (LD203 (b), LD288): the edit verbs, behind ORUNMILA_EDIT_VERBS=1.
   { id: 'VL-1 the edit verbs never read', file: 'src/reconcile/claim-extractor.js', test: 'test/claims.js',
     from: "  ...(process.env.ORUNMILA_EDIT_VERBS === '1' ? EDIT_VERBS : []),\n", to: '',

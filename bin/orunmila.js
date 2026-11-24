@@ -1444,6 +1444,8 @@ async function cmdIntake() {
       baseline: oponLive(), // the Ọpọ́n's live path, only with ORUNMILA_OPON_LIVE=1: the baseline at session start (N1b, LD170), stations 2-6 and odu.jsonl (L1c, LD200)
       guard: process.env.ORUNMILA_LOG_GUARD === '1', // TE1 (LD279): every session's logs watched for a change Orunmila did not make, and put back
       judge: process.env.ORUNMILA_JUDGE_LIVE === '1', // the judge at each closeout, only with ORUNMILA_JUDGE_LIVE=1 too (BB6; on live only on O's word, Q38)
+      // Q12 (a) (LD289): extra folders the Sentinel watches, absolute paths joined by the path delimiter (none by default)
+      watchExtra: (process.env.ORUNMILA_WATCH_EXTRA || '').split(path.delimiter).filter((x) => x && path.isAbsolute(x)),
     });
     // TE2 (LD283): a stop asked for comes over the socket (`orunmila intake stop`) and exits 0; a signal with no ask is
     // a tampered mark in every held session, kept in last-stop.json for the next start's gap, and exits 1, so the

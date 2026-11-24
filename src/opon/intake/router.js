@@ -56,7 +56,11 @@
  *   router.gap(lost)    a gap in every held session, naming what was lost and
  *                       the sessions held (the HTTP port's squat, LD139)
  *   router.held()       the ids of the sessions held, sorted
- *   router.watching()   the project roots the Sentinel watches, sorted (slice
+ *   watchExtra          Q12 (a) (LD289): extra folders the Sentinel watches for every
+ *                       held session (none by default); a mark there names its file's
+ *                       absolute path (outside the project); one that holds the
+ *                       project, or lies inside it, is skipped
+ *   router.watching()   the folders the Sentinel watches, sorted (slice
  *                       B4, LD145): with `sentinel: true`, each session's root
  *                       is watched from its first payload until it is released,
  *                       and its `sentinel` marks and watch gaps go into every
@@ -220,6 +224,12 @@ function createRouter(o) {
   // BB6 (plan section 5): with `judge` too (ORUNMILA_JUDGE_LIVE=1, off by default), the closeout writes the verdict log.
   const live = o.baseline ? createLive({ key: o.installKey, clock, judge: o.judge || false, receive: (m) => engine.receive(m, {}), error: (reason, payload) => error(reason, payload) }) : null;
   let heldText = null;
+  // Q12 (a) (LD212, LD289): extra folders the Sentinel watches for every held session (ORUNMILA_WATCH_EXTRA; none by
+  // default), by their real paths; a mark there names its file's absolute path, so it reads as outside the project.
+  const extraRoots = []; // filled below, once the error log can be written
+  const inside = (a, b) => a === b || a.startsWith(b.endsWith(path.sep) ? b : b + path.sep);
+  /** The extra folders a session's Sentinel watches: none that holds its project or lies inside it (that would watch it twice). */
+  const extrasFor = (root) => extraRoots.filter((x) => !inside(root, x) && !inside(x, root));
   // The Sentinel inside the intake (B4): its marks go to every watching session of the root.
   const sentinels = o.sentinel
     ? createSentinels({
@@ -228,6 +238,12 @@ function createRouter(o) {
         diffOf,
         emit: (root, mark, keep) => {
           for (const [id, s] of [...states].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+            if (s.watched && s.root !== root && (s.extras || []).includes(root)) {
+              // Q12 (a): a file under an extra folder, by its absolute path (normalise marks it outside).
+              const abs = mark.target && mark.target.kind === 'file' ? { ...mark, target: { ...mark.target, path: path.join(root, mark.target.path) } } : mark;
+              engine.receive(normalise(s, { ...abs, session_id: id }), {}, keep);
+              continue;
+            }
             if (s.watched && s.root === root) engine.receive(normalise(s, { ...mark, session_id: id }), {}, keep);
             // Any write in the project's .orunmila/ is tampering, at once (test 10, B3).
             const rel = mark.source === 'sentinel' && mark.target ? mark.target.path : '';
@@ -243,14 +259,24 @@ function createRouter(o) {
     if (!sentinels || s.watched) return;
     s.watched = true;
     sentinels.watch(s.root, s.limit);
+    s.extras = extrasFor(s.root); // Q12 (a)
+    for (const x of s.extras) sentinels.watch(x, s.limit);
   }
   function unwatchFor(s) {
     if (!sentinels || !s.watched) return;
     s.watched = false;
     sentinels.unwatch(s.root);
+    for (const x of s.extras || []) sentinels.unwatch(x);
   }
 
   const ensureDir = (d) => fs.mkdirSync(d, { recursive: true, mode: 0o700 });
+  for (const x of o.watchExtra || []) {
+    try {
+      extraRoots.push(fs.realpathSync(x)); // Q12 (a)
+    } catch (e) {
+      error(`an extra folder to watch could not be found, so it is not watched: ${x} (${e.code || e.message})`, null);
+    }
+  }
   // TE1 (LD279): with `guard` (ORUNMILA_LOG_GUARD=1, off by default), each session's raw and quarantine logs are watched
   // against Orunmila's own copy in <home>/intake/keep/<session>/, at every write and every heartbeat.
   const guardFor = (id) => (o.guard ? { shadowDir: path.join(intakeDir, 'keep', sessionFolderName(id)) } : null);

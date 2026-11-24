@@ -2720,6 +2720,10 @@ const MUTANTS = [
   { id: "PM3-3 a quoted script path keeps its quotes", file: 'bin/orunmila.js', test: 'test/status-hooks.js',
     from: 'words.push(m[1] !== undefined ? m[1] : m[2] !== undefined ? m[2] : m[3]);', to: 'words.push(m[0]);',
     fails: ['PM3 (LD291)'] },
+  // W1 (LD297): the hooks, installed into a path with a space and run as written.
+  { id: 'W1-1 the hook command leaves its script path unquoted', file: 'bin/orunmila.js', test: 'test/smoke-hooks.js',
+    from: "const s = (name) => `node \"${path.join(root, 'src/capture/claude-code', name)}\"`;", to: "const s = (name) => `node ${path.join(root, 'src/capture/claude-code', name)}`;",
+    fails: ['W1 (LD297)'] },
   // SN1 (LD294): a session's start off the intake's thread.
   { id: 'SN1-1 the start never leaves the thread', file: 'src/opon/intake/router.js', test: 'test/start-thread.js',
     from: "if (o.asyncStart && typeof id === 'string' && id && !states.has(id)) {", to: "if (false && typeof id === 'string' && id && !states.has(id)) {",

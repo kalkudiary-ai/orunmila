@@ -2,7 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # ci/** (W1, W2, LD297): a test branch pushed so a branch's code runs on Linux and Windows before it reaches main.
+    branches: [main, 'ci/**']
   pull_request:
     branches: [main]
 
@@ -28,6 +29,29 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+
+  # W1 (LD297): the hooks as a user's machine runs them. The package is packed, installed globally into a prefix whose
+  # path holds a space, and every installed hook command is run exactly as written, through the platform's shell
+  # (cmd.exe on Windows) and, on Windows, through Git Bash too; the events are read back with `orunmila trail --json`.
+  # (npm test runs the cmd.exe and /bin/sh form on every OS through test/smoke-hooks.js.)
+  smoke:
+    name: smoke (hooks as installed / ${{ matrix.os }} / ${{ matrix.shell }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, shell: cmd }
+          - { os: windows-latest, shell: bash }
+          - { os: ubuntu-latest, shell: sh }
+          - { os: macos-latest, shell: sh }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: The hooks, run as written
+        run: node scripts/smoke-hooks.js ${{ matrix.shell == 'bash' && '--bash' || '' }}
 
   # The coverage gate (c8 check-coverage in .c8rc.json) and the detection
   # accuracy gate are the two quality bars. They are deterministic on Linux;

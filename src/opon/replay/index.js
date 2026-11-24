@@ -6,9 +6,10 @@
  * 4). It feeds a recorded raw log into a fresh Ọpọ́n and gives back its output,
  * so every settling rule is built and tested through it.
  *
- *   replayFolder(dir) -> { ok, words, lines, text, odu }
+ *   replayFolder(dir) -> { ok, words, lines, text, odu, verdict, verdict_words }
  *     odu: the odù log the sealed groups make (src/opon/ledger/odu-log.js,
- *     Phase 3 slice O1)
+ *     Phase 3 slice O1); verdict: that odù log judged from scratch (Phase 6
+ *     slice BB6, the judge's one interface), or null with verdict_words
  *
  * The raw log must verify (chain and records): replay never judges an altered
  * record, and refuses with the verifier's words. Settings come from the
@@ -106,7 +107,9 @@ function replayFolder(dir) {
     lost_evidence: [...v.files.bad.map((b) => ({ seq: b.seq, ref: b.ref, problem: b.problem })), ...others.lost],
   };
   const lines = [head, ...groups].map(canonicalize);
-  return { ok: true, words: `replayed ${recs.length - 1} marks into ${groups.length} groups`, lines, text: lines.join('\n') + '\n', odu };
+  // BB6 (guarantee 3): the odù log judged from scratch, as the closeout judges it; null with the judge's words when it refuses.
+  const j = require('../../babalawo').judge({ header, oduText: odu });
+  return { ok: true, words: `replayed ${recs.length - 1} marks into ${groups.length} groups`, lines, text: lines.join('\n') + '\n', odu, verdict: j.ok ? j.text : null, verdict_words: j.ok ? null : j.words };
 }
 
 module.exports = { replayFolder };

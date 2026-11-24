@@ -2513,6 +2513,19 @@ const MUTANTS = [
   { id: 'BB-15 a protected path changed by an unknown cause is a Violation', file: 'src/babalawo/verdict/index.js', test: 'test/judge.js',
     from: "give('R7', set.R7 === 'violation' && !(o.attribution === 'explained' && o.confidence === 'high') ? 'look_at_this' : set.R7);", to: "give('R7', set.R7);",
     fails: ['Q35, line 672'] },
+  // BB6: the verdict log in the closeout, behind ORUNMILA_JUDGE_LIVE=1.
+  { id: 'BB6-1 the footer names no verdict line', file: 'src/opon/intake/live.js', test: 'test/judge-live.js',
+    from: 'odu: st.on ? { seq: st.oduLast.seq, hash: st.oduLast.hash } : null, verdict };', to: 'odu: st.on ? { seq: st.oduLast.seq, hash: st.oduLast.hash } : null, verdict: null };',
+    fails: ['BB6: with the judge on'] },
+  { id: "BB6-2 the rules file's text is not copied into the header", file: 'src/opon/intake/header.js', test: 'test/judge-live.js',
+    from: "  if (o.rules && rules !== null) config.rules = rules.toString('utf8');\n", to: '',
+    fails: ['Q34, lines 283 and 669'] },
+  { id: 'BB6-3 the judge is on by default', file: 'src/opon/intake/router.js', test: 'test/judge-live.js',
+    from: 'createLive({ key: o.installKey, clock, judge: Boolean(o.judge),', to: 'createLive({ key: o.installKey, clock, judge: true,',
+    fails: ['BB6: with the judge off'] },
+  { id: 'BB6-4 replay does not judge', file: 'src/opon/replay/index.js', test: 'test/judge-live.js',
+    from: 'verdict: j.ok ? j.text : null,', to: 'verdict: null,',
+    fails: ['BB6: with the judge on', 'Q34, lines 283 and 669'] },
 ];
 
 function copyRepo(root) {

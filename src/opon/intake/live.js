@@ -47,12 +47,13 @@ const { createOpon } = require('../settle/engine');
 const { createOduWriter } = require('../ledger/odu-log');
 const { configFromHeader } = require('./header');
 const { canonicalize } = require('../../verify/canonical');
+const { verifyText } = require('../../verify/chain');
 const { fingerprintNow } = require('../net/baseline');
 const { applyOverlapped, sharesFiles } = require('./overlap');
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
-function createLive({ key, clock, receive, error }) {
+function createLive({ key, clock, receive, error, judge = false }) {
   const held = new Map(); // session id -> its live state, for pairing (L2)
 
   function stop(st, why) {
@@ -176,13 +177,48 @@ function createLive({ key, clock, receive, error }) {
 
   /**
    * K4 (LD209; line 454): footer.json beside the logs at the closeout's end: the raw log's last
-   * line (the sweep's exited mark) and the odù log's, by seq and hash; the verdict log's is null until
-   * Phase 6. Placed whole; a failure is in the error log and never stops capture. LD249: at every
+   * line (the sweep's exited mark) and the odù log's, by seq and hash; the verdict log's when the judge
+   * wrote one (BB6), else null. Placed whole; a failure is in the error log and never stops capture. LD249: at every
    * closeout's end, so a session resumed and swept again is footed at its latest end.
    */
+  /**
+   * BB6 (lines 453-454; plan section 5): with the judge on, closeout step 7: the sealed odù log judged through the
+   * judge's one interface (src/babalawo), its new records appended to verdict.jsonl beside the other two logs (a
+   * resumed session's second closeout adds only what changed, LD249). Returns the log's last line, or null when no
+   * verdict log could be written, which the error log says; capture never waits on it and never breaks for it.
+   */
+  function writeVerdicts(st) {
+    if (!judge || !st.on) return null;
+    const id = st.header.session_id;
+    const file = path.join(path.dirname(st.file), 'verdict.jsonl');
+    try {
+      let prior = [];
+      if (fs.existsSync(file)) {
+        const text = fs.readFileSync(file, 'utf8');
+        if (!verifyText(text).ok) {
+          error(`the verdict log of ${id} does not verify, and it is never edited: no verdicts were written at this closeout`, { session_id: id });
+          return null;
+        }
+        prior = text.split('\n').slice(0, -1).map((l) => JSON.parse(l));
+      }
+      const r = require('../../babalawo').judge({ header: st.header, oduText: fs.readFileSync(st.file, 'utf8'), prior });
+      if (!r.ok) {
+        error(`the judge did not judge session ${id}: ${r.words}`, { session_id: id });
+        return null;
+      }
+      if (r.added.length) fs.appendFileSync(file, r.added.map((x) => canonicalize(x) + '\n').join(''), { mode: 0o600 });
+      const last = r.records[r.records.length - 1];
+      return { seq: last.seq, hash: last.hash };
+    } catch (e) {
+      error(`the verdict log of ${id} could not be written: ${e.code || e.message}`, { session_id: id });
+      return null;
+    }
+  }
+
   function writeFooter(st, rec) {
     const dir = path.dirname(st.file);
-    const footer = { schema_version: 1, record: 'session_footer', session_id: st.header.session_id, raw: { seq: rec.seq, hash: rec.hash }, odu: st.on ? { seq: st.oduLast.seq, hash: st.oduLast.hash } : null, verdict: null };
+    const verdict = writeVerdicts(st);
+    const footer = { schema_version: 1, record: 'session_footer', session_id: st.header.session_id, raw: { seq: rec.seq, hash: rec.hash }, odu: st.on ? { seq: st.oduLast.seq, hash: st.oduLast.hash } : null, verdict };
     try {
       const tmp = path.join(dir, `footer.json.${process.pid}.tmp`);
       fs.writeFileSync(tmp, canonicalize(footer) + '\n', { mode: 0o600 });

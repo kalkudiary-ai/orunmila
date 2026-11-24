@@ -1587,6 +1587,18 @@
       }
     },
     {
+      "name": "rules not text (BB6, Q34)",
+      "from": "header",
+      "set": {
+        "/config/rules": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/rules",
+        "keyword": "type"
+      }
+    },
+    {
       "name": "byproducts holding an entry that is not a string (A1a)",
       "from": "header",
       "set": {

@@ -1351,6 +1351,7 @@ async function cmdIntake() {
       installKey: readInstallKey(home),
       sentinel: true, // the Sentinel runs inside the intake (B4, LD145)
       baseline: oponLive(), // the Ọpọ́n's live path, only with ORUNMILA_OPON_LIVE=1: the baseline at session start (N1b, LD170), stations 2-6 and odu.jsonl (L1c, LD200)
+      judge: process.env.ORUNMILA_JUDGE_LIVE === '1', // the judge at each closeout, only with ORUNMILA_JUDGE_LIVE=1 too (BB6; on live only on O's word, Q38)
     });
     const server = createServer({ home, router, httpPort: intakePort() });
     const r = await server.start();
@@ -1496,9 +1497,67 @@ function cmdReplay() {
   } else process.stdout.write(r.text);
 }
 
+/**
+ * `orunmila judge --session <id> [--rules <file>]` (Phase 6 slice BB6; brief v4 line 684): judge a session's sealed odù
+ * log again and append to its verdict log (verdict.jsonl beside the other two): each verdict that changed supersedes
+ * the old one, which is never edited. The rules are the header's (the rules file as it was at session start), or the
+ * file named. Nothing else in the folder is written. Exit 0 judged, 1 refused (a log that does not verify, a rules file
+ * that cannot be read), 2 usage.
+ */
+function cmdJudge() {
+  const { checkLog } = require('../src/verify/session');
+  const { sessionFolderName } = require('../src/opon/intake/paths');
+  const { verifyText } = require('../src/verify/chain');
+  const { canonicalize } = require('../src/verify/canonical');
+  const babalawo = require('../src/babalawo');
+  const home = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
+  const id = flag('session', null);
+  let dir;
+  try {
+    dir = id && path.join(home, 'sessions', sessionFolderName(id));
+  } catch {
+    dir = null; // an id unsafe as a folder name has no session log
+  }
+  if (!dir) {
+    console.error('Usage: orunmila judge --session <id> [--rules <file>]');
+    process.exitCode = 2;
+    return;
+  }
+  const refuse = (words) => {
+    console.log(`orunmila judge: ${words}`);
+    process.exitCode = 1;
+  };
+  const raw = checkLog(dir, 'raw');
+  if (!raw.ok) return refuse(`not judged: the raw log of ${id} is missing or does not verify (orunmila verify ${dir})`);
+  const oduFile = path.join(dir, 'odu.jsonl');
+  if (!fs.existsSync(oduFile)) return refuse(`not judged: session ${id} has no odù log (the intake writes one only with ORUNMILA_OPON_LIVE=1)`);
+  const file = path.join(dir, 'verdict.jsonl');
+  let prior = [];
+  if (fs.existsSync(file)) {
+    const text = fs.readFileSync(file, 'utf8');
+    if (!verifyText(text).ok) return refuse(`not judged: the verdict log ${file} does not verify, and it is never edited`);
+    prior = text.split('\n').slice(0, -1).map((l) => JSON.parse(l));
+  }
+  const rulesPath = flag('rules', null);
+  let rulesText;
+  if (rulesPath) {
+    try {
+      rulesText = fs.readFileSync(rulesPath, 'utf8');
+    } catch (e) {
+      return refuse(`not judged: the rules file ${rulesPath} could not be read (${e.code || e.message})`);
+    }
+  }
+  const r = babalawo.judge({ header: raw.records[0].rec, oduText: fs.readFileSync(oduFile, 'utf8'), rulesText, prior });
+  if (!r.ok) return refuse(r.words);
+  if (r.added.length) fs.appendFileSync(file, r.added.map((x) => canonicalize(x) + '\n').join(''), { mode: 0o600 });
+  const s = r.records.filter((x) => x.record === 'session_verdict').pop();
+  console.log(`orunmila judge: judged ${id}: ${r.added.length} record(s) added to ${file}; the session's verdict: ${s.verdict} (${s.rules_source} rules, ${babalawo.name} ${babalawo.version})`);
+}
+
 const COMMANDS = {
   install: cmdInstall,
   replay: cmdReplay,
+  judge: cmdJudge,
   intake: cmdIntake,
   agents: cmdAgents,
   laws: cmdLaws,
@@ -1591,6 +1650,7 @@ Both lenses
   orunmila intake run|start|status|stop           the intake server, one per machine (install --intake sends to it)
   orunmila intake agent install|uninstall|status  keep the intake running at login with a launch agent (macOS)
   orunmila replay <session-folder> [--expect file]  the Opon's settled groups for a session log, replayed (Phase 2)
+  orunmila judge --session ID [--rules file]      judge a session's odù log again; new verdicts supersede, old ones stay
 
 Docs: README.md · known issues with status: review/ISSUES.md
 `);

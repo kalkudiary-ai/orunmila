@@ -8,7 +8,9 @@
  *
  *   createRouter({ home, clock, checkSender, codeRoot, orunmilaVersion,
  *                  installKey, hookSettingsFor?, lawPacksFor?, config?,
- *                  diff?, tickMs?, releaseMs?, sentinel?, baseline? })
+ *                  diff?, tickMs?, releaseMs?, sentinel?, baseline?, judge? })
+ *       judge (BB6, with baseline): the rules file's text in each new
+ *       session's header, and the verdict log written at its closeout
  *   router.payload(payload, { channel, pid, monoNs } = {})
  *       -> { ok, results: [the log's answer per mark], reason? }
  *       In order: the session's log is made at first contact, with its header
@@ -210,7 +212,8 @@ function createRouter(o) {
   const states = new Map(); // session id -> { log, root, ci, n, open, pre, last, limit }
   const engine = createIntake({ openLog: (id) => states.get(id).log, clock, checkSender: o.checkSender, tickMs: o.tickMs });
   // The Ọpọ́n live (slice L1c, LD200), with the live path's flag only: one engine per session it starts.
-  const live = o.baseline ? createLive({ key: o.installKey, clock, receive: (m) => engine.receive(m, {}), error: (reason, payload) => error(reason, payload) }) : null;
+  // BB6 (plan section 5): with `judge` too (ORUNMILA_JUDGE_LIVE=1, off by default), the closeout writes the verdict log.
+  const live = o.baseline ? createLive({ key: o.installKey, clock, judge: Boolean(o.judge), receive: (m) => engine.receive(m, {}), error: (reason, payload) => error(reason, payload) }) : null;
   let heldText = null;
   // The Sentinel inside the intake (B4): its marks go to every watching session of the root.
   const sentinels = o.sentinel
@@ -365,6 +368,7 @@ function createRouter(o) {
       monoNs: now.mono,
       envValues: entries.map((e) => e.value),
       byproducts: Boolean(o.baseline), // the live path's flag (LD166): the byproducts list in the header (A1a, LD175)
+      rules: Boolean(o.judge), // the judge's flag (BB6): the rules file's text in the header (Q34)
     });
     let baseline = null;
     if (o.baseline) {

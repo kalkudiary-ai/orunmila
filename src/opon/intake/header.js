@@ -17,7 +17,9 @@
  *        with `byproducts: true` (the live path, slice A1a, LD175), the
  *        entries of `.orunmila/byproducts` as config.byproducts, from the
  *        bytes its frozen fingerprint covers, so replay has the list itself
- *        (station 5, step 4) and never reads current settings
+ *        (station 5, step 4) and never reads current settings; with
+ *        `rules: true` (the judge's flag, BB6), the text of `.orunmila/rules`
+ *        as config.rules, from the bytes frozen.rules fingerprints
  *   codeFingerprint(dir)       one fingerprint over every file under dir
  *                              (path and content), for Orunmila's own code
  *                              (ledger A3, NF41); a change mid-session is a
@@ -111,6 +113,10 @@ function buildHeader(o) {
   if (typeof o.caseInsensitive === 'boolean') config.case_insensitive = o.caseInsensitive; // Q25 (LD233): replay folds a claim's path as intake folds marks
   const byproducts = readRegular(path.join(orunmilaDir, 'byproducts')); // read once: the fingerprint and the list are of the same bytes
   if (o.byproducts) config.byproducts = byproductsFrom(byproducts);
+  // BB6 (Q34, LD262): with the judge on, the rules file's text as config.rules, from the bytes frozen.rules fingerprints,
+  // so replay and re-judging read the rules from the header (line 283). Copied, never parsed: only the judge reads it.
+  const rules = readRegular(path.join(orunmilaDir, 'rules'));
+  if (o.rules && rules !== null) config.rules = rules.toString('utf8');
   return {
     schema_version: 1,
     record: 'session_header',
@@ -124,7 +130,7 @@ function buildHeader(o) {
     project_root: fs.realpathSync(o.root),
     config,
     frozen: {
-      rules: fileFingerprint(path.join(orunmilaDir, 'rules')),
+      rules: fingerprintOf(rules),
       byproducts: fingerprintOf(byproducts),
       ignore: fileFingerprint(path.join(orunmilaDir, 'ignore')),
       law_packs: lawPacks,

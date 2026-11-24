@@ -1017,6 +1017,35 @@
       "cause_hint": null,
       "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
       "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_tampered_log": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 9,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-24T09:00:00.000Z",
+      "mono_ns": "6000000000",
+      "target": {
+        "kind": "file",
+        "path": "/home/u/.orunmila/sessions/ses_test_0001/raw.jsonl",
+        "outside": true
+      },
+      "says": "tampered",
+      "detail": {
+        "what": "log_location",
+        "change": "edited",
+        "removed": "{\"says\":\"read\"}",
+        "added": "{\"says\":\"exited\"}",
+        "fingerprint_before": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "fingerprint": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "restored": true
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
     }
   },
   "bad": [
@@ -3433,6 +3462,12 @@
     {"name":"overlapped ended with no end (L2)","from":"process_overlapped_ended","set":{},"unset":["/detail/to"],"error":{"path":"/detail/to","keyword":"required"}},
     {"name":"overlapped not ended with an end (L2)","from":"process_overlapped","set":{"/detail/to":"4900000000"},"unset":[],"error":{"path":"/detail","keyword":"not"}},
     {"name":"rescan that is not a boolean (K2, LD207)","from":"process_fingerprinted_rescan","set":{"/detail/rescan":"yes"},"unset":[],"error":{"path":"/detail/rescan","keyword":"type"}},
-    {"name":"rescan entry of no known kind (F9, LD234)","from":"process_fingerprinted_rescan_unknown","set":{"/detail/entry":"socket"},"unset":[],"error":{"path":"/detail/entry","keyword":"enum"}}
+    {"name":"rescan entry of no known kind (F9, LD234)","from":"process_fingerprinted_rescan_unknown","set":{"/detail/entry":"socket"},"unset":[],"error":{"path":"/detail/entry","keyword":"enum"}},
+    {"name": "a log change of no known kind (Q41, LD282)", "from": "process_tampered_log", "set": {"/detail/change": "rewritten"}, "unset": [], "error": {"path": "/detail/change", "keyword": "enum"}},
+    {"name": "removed text that is not text (Q41)", "from": "process_tampered_log", "set": {"/detail/removed": 3}, "unset": [], "error": {"path": "/detail/removed", "keyword": "type"}},
+    {"name": "removed text over 2,000 characters (Q41)", "from": "process_tampered_log", "set": {"/detail/removed": {"$repeat": "x", "times": 2001}}, "unset": [], "error": {"path": "/detail/removed", "keyword": "maxLength"}},
+    {"name": "added text that is not text (Q41)", "from": "process_tampered_log", "set": {"/detail/added": ["x"]}, "unset": [], "error": {"path": "/detail/added", "keyword": "type"}},
+    {"name": "added text over 2,000 characters (Q41)", "from": "process_tampered_log", "set": {"/detail/added": {"$repeat": "y", "times": 2001}}, "unset": [], "error": {"path": "/detail/added", "keyword": "maxLength"}},
+    {"name": "restored that is not a boolean (Q41)", "from": "process_tampered_log", "set": {"/detail/restored": "yes"}, "unset": [], "error": {"path": "/detail/restored", "keyword": "type"}}
   ]
 }

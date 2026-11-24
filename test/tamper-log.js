@@ -56,6 +56,8 @@ for (const [name, change, words] of CASES) {
       const v = verifySession(t.s.dir);
       assert.strictEqual(v.ok, true, v.words);
       assert.ok(v.words.includes(`the raw log was ${expectChange} by something other than Orunmila and put back (line ${m.seq + 1} of the raw log)`), v.words);
+      // Q41 (O, 2026-11-24): the tamper mark's detail fields are the spec's own, so verify names none as undeclared.
+      assert.deepStrictEqual(v.undeclared, [], JSON.stringify(v.undeclared));
       // Time moves on after the mark (stamped on the machine's clock, this fixture's own being made up), so its odù seals.
       t.s.append({ ...M.tick(0), mono_ns: String(BigInt(m.mono_ns) + 10000000000n) });
       const r = replayFolder(t.s.dir);

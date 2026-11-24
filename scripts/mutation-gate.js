@@ -2641,6 +2641,10 @@ const MUTANTS = [
   { id: 'Q39-1 the odù schema refuses the overlapped verb', file: 'spec/odu.schema.json', test: 'test/odu.js',
     from: '        "tampered",\n        "overlapped"\n', to: '        "tampered"\n',
     fails: ['Q39 (LD265, O 2026-11-24)', 'Q39: an overlapped mark replays'] },
+  // Q41 (LD282): the tamper mark's detail fields declared in the mark schema.
+  { id: 'Q41-1 the mark schema does not declare restored', file: 'spec/mark.schema.json', test: 'test/tamper-log.js',
+    from: '        "restored": {', to: '        "restored_not_declared": {',
+    fails: ['TE1, TE4: the raw log appended', 'TE1, TE4: the raw log cut', 'TE1, TE4: the raw log deleted then rewritten'] },
 ];
 
 function copyRepo(root) {

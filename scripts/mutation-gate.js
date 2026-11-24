@@ -2706,6 +2706,16 @@ const MUTANTS = [
   { id: 'LD286-3 a resumed session never ticks again', file: 'src/opon/intake/engine.js', test: 'test/judge-live.js',
     from: "    if (r.ok && resumes && s.ended && glove && m.says === 'prompted') s.ended = false;\n", to: '',
     fails: ["LD286 (LD249's open point)"] },
+  // PM3 (LD291): status names a hook whose script is missing.
+  { id: 'PM3-1 a missing script is taken as there', file: 'bin/orunmila.js', test: 'test/status-hooks.js',
+    from: 'if (s && path.isAbsolute(s) && !fs.existsSync(s)) out.push({ event, script: s });', to: 'if (false) out.push({ event, script: s });',
+    fails: ['PM3 (LD291)'] },
+  { id: 'PM3-2 status exits 0 with a missing script', file: 'bin/orunmila.js', test: 'test/status-hooks.js',
+    from: "      console.log('  Install again from a copy that stays (npm i -g orunmila, then orunmila install): a package runner\\'s cache can be cleared.');\n      process.exitCode = 1;", to: "      console.log('  Install again from a copy that stays (npm i -g orunmila, then orunmila install): a package runner\\'s cache can be cleared.');",
+    fails: ['PM3 (LD291)'] },
+  { id: "PM3-3 a quoted script path keeps its quotes", file: 'bin/orunmila.js', test: 'test/status-hooks.js',
+    from: 'words.push(m[1] !== undefined ? m[1] : m[2] !== undefined ? m[2] : m[3]);', to: 'words.push(m[0]);',
+    fails: ['PM3 (LD291)'] },
   // LA3 (LD290): the launch agent keeps every flag the intake reads.
   { id: "LA3-1 the plist drops the judge's, the guard's and the extra folders' flags", file: 'src/opon/intake/launch-agent.js', test: 'test/launch-agent.js',
     from: ", 'ORUNMILA_JUDGE_LIVE', 'ORUNMILA_LOG_GUARD', 'ORUNMILA_WATCH_EXTRA'];", to: '];',

@@ -54,6 +54,33 @@ function mergeClaudeHook(settings, eventName, matcher, command) {
   settings.hooks[eventName].push({ matcher, hooks: [{ type: 'command', command }] });
 }
 
+/**
+ * PM3 (LD291): the script a hook command runs, when it is one of Orunmila's (by its basename), read from the command's
+ * words with their quotes taken off; and every command hook in a settings object whose script is not there (a package
+ * runner's cache cleared, a copy moved), as [{ event, script }]. Such a hook runs nothing, so it records nothing.
+ */
+const ORUNMILA_SCRIPTS = ['user-prompt-submit.js', 'pre-tool-use.js', 'post-tool-use.js', 'stop.js', 'law-gate.js', 'intake-send.js', 'connector.js'];
+function scriptOf(command) {
+  const words = [];
+  const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  let m;
+  while ((m = re.exec(String(command)))) words.push(m[1] !== undefined ? m[1] : m[2] !== undefined ? m[2] : m[3]);
+  return words.find((w) => ORUNMILA_SCRIPTS.includes(path.basename(w))) || null;
+}
+function missingHookScripts(settings) {
+  const out = [];
+  for (const [event, entries] of Object.entries((settings && settings.hooks) || {})) {
+    for (const entry of Array.isArray(entries) ? entries : []) {
+      for (const h of (entry && entry.hooks) || []) {
+        if (!h || h.type !== 'command') continue;
+        const s = scriptOf(h.command);
+        if (s && path.isAbsolute(s) && !fs.existsSync(s)) out.push({ event, script: s });
+      }
+    }
+  }
+  return out;
+}
+
 // The four purpose-named Claude-Code capture scripts. We detect an existing
 // install by SCRIPT BASENAME (not full command string) so that a second install
 // pointing at a DIFFERENT copy of orunmila (e.g. ~/.claude/orunmila/... vs
@@ -524,6 +551,14 @@ function cmdStatus() {
       console.log('  \x1b[33mORUNMILA_LAWS=off is set in this shell — the gate is disabled regardless of install.\x1b[0m');
     }
     console.log(`  config: ${ls.configPath}`);
+    // PM3 (LD291): a hook whose script is gone runs nothing; name each one, and exit 1 so a self-check can rely on it.
+    const missing = ls.exists ? missingHookScripts(readJson(ls.configPath, {})) : [];
+    if (missing.length) {
+      console.log(`  \x1b[31m${missing.length} ${missing.length === 1 ? 'hook names a script that is' : 'hooks name a script that is'} not there\x1b[0m, so ${missing.length === 1 ? 'it records' : 'they record'} nothing:`);
+      for (const m of missing) console.log(`    [${m.event}] ${m.script}`);
+      console.log('  Install again from a copy that stays (npm i -g orunmila, then orunmila install): a package runner\'s cache can be cleared.');
+      process.exitCode = 1;
+    }
     console.log('  detail: orunmila lenses\n');
   }
 

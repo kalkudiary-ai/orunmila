@@ -43,15 +43,12 @@ Summary: 1 verified, 0 partial, 1 phantom, 1 phantom-verification,
 ```
 
 100% free, Apache 2.0 licensed, runs entirely on your machine. No telemetry, no
-account, no API key required for the default mode.
+account, no API key, no AI model.
 
-**One exception, stated up front because it is a privacy claim.** The `orunmila`
-CLI itself makes no outbound requests. The HTML report it generates has one tab
-— **3D Graph** — that fetches a `3d-force-graph` bundle from unpkg (falling back
-to jsdelivr) when a viewer opens it. Opening that tab therefore reveals the
-viewer's IP, and the fact that they opened a report, to a CDN. Every other tab
-is fully self-contained and works offline. Tracked as
-[P2-8](review/ISSUES.md).
+**No internet call does Orunmila's work.** The `orunmila` CLI makes no outbound
+requests, and the HTML reports it writes load nothing from the network: they
+work offline, and opening or sharing one reveals nothing to a third party. Only
+updates of Orunmila itself may reach the internet.
 
 ![Orunmila's report: what the agent claimed, against what it actually did](docs/images/stain-map.png)
 
@@ -648,8 +645,9 @@ change how you should read a report:
   recorded as a full read** (LD94). `ORUNMILA_EXACT_CAPTURE=1` records the code
   and output Claude Code reports, and how much of the file the read returned.
   It is off by default until it has run on real sessions.
-- **Deep verify is specified and not built.** The optional LLM-judge pass for
-  semantic claims is designed, off by default, and not wired up.
+- **Subtle semantic claims are not judged.** "Added proper error handling" is
+  checked against the evidence, not against the code's meaning; an AI pass for
+  that is not part of the free version.
 
 That list is in the README on purpose. A verification tool that hides its own
 failure modes is asking you to take its word for something — which is the exact
@@ -667,12 +665,12 @@ redact secrets. Details, and what the patch does not cover, in the
 
 Recent additions to The Diviner:
 
-- **Interactive HTML report.** `orunmila trail` now renders a six-tab session
-  view: **Timeline** (turn-by-turn pips), **Tree** (project files with
-  stain bars), **Graph** (2D radial — zoom, pan, search, filter by channel
-  or outcome), **3D Graph** (force-directed WebGL view with hover/click
-  detail), **Dashboard** (donut + KPI cards), and **Report** (copy-paste
-  prompt to send the agent back to fix every flagged item).
+- **Interactive HTML report.** `orunmila trail` renders a session view that
+  loads nothing from the network: **Timeline** (turn-by-turn pips), **Tree**
+  (project files with stain bars), **Graph** (2D radial — zoom, pan, search,
+  filter by channel or outcome), **Dashboard** (donut + KPI cards), and
+  **Report** (copy-paste prompt to send the agent back to fix every flagged
+  item).
 - **Glossary tab.** Plain-English definitions for every outcome (`verified`,
   `partial`, `phantom`, `phantom_verification`, `silently_dropped`,
   `undisclosed`, `untracked_write`, `unverifiable`), every channel, and
@@ -681,11 +679,6 @@ Recent additions to The Diviner:
 - **Report tab reordered** — stats lead, copy-paste prompt next, findings
   last. The prompt is the action; you shouldn't have to scroll past 20
   findings to reach it.
-- **3D Graph rewritten.** Single-script CDN load (no chained loader), bundles
-  its own three.js (no context conflicts), disposes previous instances on
-  re-render (no WebGL context leaks), and ships lenient `rendererConfig`
-  (`powerPreference: 'low-power'`, `failIfMajorPerformanceCaveat: false`)
-  so restrictive Chrome states still get a context.
 - **Model personality summaries.** `bench-results/README.md` now includes
   one-line character reads for every benchmarked model — *honest workhorse*,
   *talks confidently, sometimes too confidently*, *underpromises and
@@ -745,6 +738,27 @@ still written, but `cases[]` entries carry no claim text and are not
 corpus-runnable — re-run with the flag on builds whose content you're
 comfortable sharing.
 
+## Session verdicts (Babaláwo, the judge; off by default)
+
+With the intake's live path and `ORUNMILA_JUDGE_LIVE=1`, each session's closeout
+judges every event in its record with fixed rules (no model) and writes a third
+hash-chained log, `verdict.jsonl`: each event **Clean**, **Look at this** or
+**Violation**, citing the rule and the marks behind it, and the session as a
+whole, **Incomplete** whenever evidence was lost. The rules live in
+`.orunmila/rules`, copied into the session's header at its start; edit them
+between sessions.
+
+```bash
+orunmila report --verdicts --session <id>              # top line first, each finding naming both witnesses
+orunmila report --verdicts --session <id> --html r.html # the same as one offline page
+orunmila judge --session <id> --rules my-rules          # judge again; new verdicts supersede, none is edited
+orunmila verify ~/.orunmila/sessions/<id>               # checks the verdict log too
+```
+
+`ORUNMILA_FEEDBACK_FROM_VERDICTS=1` gives the agent the same findings through
+`orunmila json`, in its usual shape. If the agent reads Orunmila's own record,
+the report says so in one line.
+
 ## Cross-agent comparison
 
 Use multiple agents on the same codebase? `stats` aggregates every
@@ -756,13 +770,15 @@ orunmila stats
 ```
 
 For controlled benchmarks, the task corpus provides identical prompts to
-run across agents and model tiers:
+run across agents and model tiers. The runner is a research tool in a git clone,
+not part of the package: it runs AI agents and calls AI models over the
+internet, which Orunmila itself never does.
 
 ```bash
-node bin/bench.js --agent claude-code --model haiku
-node bin/bench.js --agent claude-code --model sonnet
-node bin/bench.js --agent claude-code --model opus
-node bin/bench.js --agent gemini-cli --model gemini-2.5-flash
+node scripts/bench.js --agent claude-code --model haiku
+node scripts/bench.js --agent claude-code --model sonnet
+node scripts/bench.js --agent claude-code --model opus
+node scripts/bench.js --agent gemini-cli --model gemini-2.5-flash
 ```
 
 The runner installs orunmila hooks in each task, captures the full
@@ -795,15 +811,14 @@ field accessors already understand most common naming conventions, so most
 agents need only the `id`, `config`, and `events`. PRs adding agents are exactly
 what this project wants.
 
-## Deep verify (specified, NOT built)
+## No AI judges the agent
 
-The default reconciler is pure heuristic text/diff matching - free, local,
-no API calls. It catches the big stuff (phantom claims, missing test runs,
-undisclosed files) but can't judge subtler semantic claims like "added
-proper error handling" against three lines of code. An opt-in deep-verify
-pass can route ambiguous claims to an LLM judge using your own API key - off
-by default so the tool is genuinely free to run with zero setup, not gated
-behind anything. (Not yet wired up in this v0 - see Roadmap.)
+The reconciler and the judge are plain code: heuristic text and diff matching,
+and fixed rules over the record - free, local, no API calls, no model. They
+catch the big stuff (phantom claims, missing test runs, undisclosed files) but
+cannot judge subtler semantic claims like "added proper error handling" against
+three lines of code. An AI pass for that is not part of the free version: no AI
+judges AI here.
 
 ## Honesty about v0 (implementation notes)
 
@@ -844,16 +859,9 @@ behind anything. (Not yet wired up in this v0 - see Roadmap.)
 
 ## Sharing a report (privacy)
 
-**Before anything else: one tab in the report reaches the network.** The
-**3D Graph** tab fetches `3d-force-graph` from unpkg (fallback jsdelivr) on
-open. No session content is sent — verified: the loader sets `script.src` to a
-bare versioned URL with no query string and appends it, and those two URLs are
-the only external references in the entire rendering layer. But the request
-still discloses the viewer's IP and that a report was opened. **And if you
-*host* a report rather than opening it locally, the browser's `Referer` header
-sends the report's URL to the CDN too** — worth knowing before publishing one
-publicly. If any of that matters for your threat model, avoid that one tab;
-every other tab is self-contained and works with no network at all.
+**The report reaches no network.** Every tab is self-contained and works
+offline, so opening, sharing or hosting a report discloses nothing to a third
+party.
 
 The HTML report is the one artifact you're likely to *share* - paste in an
 issue, send a teammate, screenshot. The event log itself stays complete and

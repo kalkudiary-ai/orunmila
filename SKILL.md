@@ -76,9 +76,10 @@ observable from the outside.
   npx orunmila trail
   ```
   Writes a self-contained `.html` file - the complete trail (the glove) plus
-  lineage plus the claim-vs-reality stains, in one page. Six tabs: Timeline,
-  Tree, Graph, 3D Graph, Dashboard, Report. The Report tab carries a
-  copy-paste prompt that sends the agent back to fix every flagged item.
+  lineage plus the claim-vs-reality stains, in one page that loads nothing from
+  the internet. Tabs: Timeline, Tree, Graph, Dashboard, Report, Glossary. The
+  Report tab carries a copy-paste prompt that sends the agent back to fix every
+  flagged item.
 - `npx orunmila html` - the older mismatch-only report, if that is all they want.
 - `npx orunmila json` / `npx orunmila trail --json` - machine-readable, for
   downstream tooling. `--facts-only` drops the inferred lineage layer.
@@ -153,8 +154,9 @@ engine stops enforcing, it never stops the agent.
   two concurrent sessions over one tree each adopts the other's writes. Read a
   touch list as "what changed on this machine while I worked", never as
   authorship.
-- Deep verify (an optional LLM-judge pass for semantic claims) is **specified
-  and not built**.
+- **No AI model and no internet call does Orunmila's work.** An AI pass over
+  semantic claims is not part of the free version; only updates of Orunmila
+  itself may reach the internet.
 
 Full status for every known issue, open and closed: `review/ISSUES.md`.
 

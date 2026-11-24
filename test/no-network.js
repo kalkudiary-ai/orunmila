@@ -96,4 +96,16 @@ it('NI1: the check sees each kind of call it refuses (planted in memory, never o
   assert.deepStrictEqual(problemsOf('src/x.js', "fetch('/api/sessions')"), [], 'a page fetching its own local server is not the internet');
 });
 
+it("DOC1 (LD278): the shipped docs make no network promise the code broke: no 3D Graph tab, no CDN, no bin/bench.js, no AI judge with the user's API key", () => {
+  // CHANGELOG.md is the history of past releases: what an earlier version did stays true of it, so it is not read here.
+  const docs = shipped().filter((f) => f.endsWith('.md') && f !== 'CHANGELOG.md');
+  assert.ok(docs.includes('README.md') && docs.some((f) => f.startsWith('skills/')), docs.join(', '));
+  const said = [];
+  for (const f of docs) {
+    const text = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    for (const words of ['3D Graph', 'bin/bench.js', 'API key required', 'using your own API key', ...CDN_HOSTS, 'unpkg', 'jsdelivr']) if (text.includes(words)) said.push(`${f}: ${words}`);
+  }
+  assert.deepStrictEqual(said, [], `\n${said.join('\n')}`);
+});
+
 runAll('no-network');

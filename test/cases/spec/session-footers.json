@@ -24,6 +24,23 @@
       },
       "odu": null,
       "verdict": null
+    },
+    "footer_with_verdict": {
+      "schema_version": 1,
+      "record": "session_footer",
+      "session_id": "ses_test_0001",
+      "raw": {
+        "seq": 41,
+        "hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "odu": {
+        "seq": 12,
+        "hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "verdict": {
+        "seq": 7,
+        "hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
     }
   },
   "bad": [
@@ -172,15 +189,17 @@
       }
     },
     {
-      "name": "a verdict log named before Phase 6",
+      "name": "a verdict slot that is neither a line nor null",
       "from": "footer",
       "set": {
-        "/verdict": {}
+        "/verdict": {
+          "seq": 3
+        }
       },
       "unset": [],
       "error": {
         "path": "/verdict",
-        "keyword": "type"
+        "keyword": "anyOf"
       }
     },
     {

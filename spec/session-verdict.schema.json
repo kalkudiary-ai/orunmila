@@ -1,0 +1,180 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:orunmila:spec:v1:session-verdict",
+  "title": "Orunmila session verdict, schema version 1: DRAFT",
+  "description": "The whole session's one verdict, the last line a judgement writes to the verdict log: Incomplete if any evidence was lost, otherwise the most serious verdict among its events.",
+  "$comment": "brief v4 line 686; Q34, approved by O 2026-11-24 (LD262). Unknown fields are allowed (brief v4 line 209).",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "record",
+    "seq",
+    "session_id",
+    "verdict_id",
+    "verdict",
+    "reasons",
+    "counts",
+    "judged",
+    "judge",
+    "rules",
+    "rules_source",
+    "supersedes",
+    "prev_hash",
+    "hash"
+  ],
+  "properties": {
+    "schema_version": {
+      "description": "All carry a schema_version.",
+      "$comment": "brief v4 line 209",
+      "const": 1
+    },
+    "record": {
+      "description": "Marks this line as the session's verdict.",
+      "$comment": "agent's choice, Q34",
+      "const": "session_verdict"
+    },
+    "seq": {
+      "description": "The record's place in the verdict log.",
+      "$comment": "agent's choice, spec/hash-chain.md",
+      "type": "integer",
+      "minimum": 1
+    },
+    "session_id": {
+      "description": "The session.",
+      "$comment": "brief v4 line 293",
+      "type": "string",
+      "minLength": 1
+    },
+    "verdict_id": {
+      "description": "The session verdict's id, numbered with the log's verdicts.",
+      "$comment": "agent's choice, Q34",
+      "$ref": "#/definitions/verdict_id"
+    },
+    "verdict": {
+      "description": "incomplete, clean, look_at_this or violation. Incomplete outranks Clean, always.",
+      "$comment": "brief v4 line 686",
+      "enum": ["incomplete", "clean", "look_at_this", "violation"]
+    },
+    "reasons": {
+      "description": "Each reason the session is Incomplete, empty when it is not: a gap (a source lost events: the gap odùs), the law gate silent, or the Glove silent (the Sentinel's odùs inside the project it said nothing about).",
+      "$comment": "brief v4 lines 670, 674, 678, 679, 686",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["reason", "rule", "odu_ids"],
+        "properties": {
+          "reason": {
+            "description": "gap, law_gate_silent or glove_silent.",
+            "$comment": "brief v4 lines 674, 678, 679",
+            "enum": ["gap", "law_gate_silent", "glove_silent"]
+          },
+          "rule": {
+            "description": "The rule behind the reason.",
+            "$comment": "brief v4 line 659",
+            "$ref": "#/definitions/rule"
+          },
+          "odu_ids": {
+            "description": "The odùs that show it, in order; empty for the law gate silent, which is shown by none.",
+            "$comment": "agent's choice, Q34",
+            "type": "array",
+            "items": { "type": "string", "pattern": "^odu_[0-9]{4,}$" }
+          }
+        }
+      }
+    },
+    "counts": {
+      "description": "How many odùs got each verdict, and how many of them the default view hides.",
+      "$comment": "agent's choice, Q34 (the report gives the counts, brief v4 line 690)",
+      "type": "object",
+      "required": ["clean", "look_at_this", "violation", "hidden"],
+      "properties": {
+        "clean": { "description": "Clean odùs.", "$comment": "brief v4 line 650", "$ref": "#/definitions/count" },
+        "look_at_this": {
+          "description": "Look at this odùs.",
+          "$comment": "brief v4 line 651",
+          "$ref": "#/definitions/count"
+        },
+        "violation": {
+          "description": "Violation odùs.",
+          "$comment": "brief v4 line 652",
+          "$ref": "#/definitions/count"
+        },
+        "hidden": {
+          "description": "Of them, those the default view hides.",
+          "$comment": "brief v4 lines 661, 662",
+          "$ref": "#/definitions/count"
+        }
+      }
+    },
+    "judged": {
+      "description": "The odù log's last line this judgement read, by seq and hash.",
+      "$comment": "agent's choice, Q34",
+      "type": "object",
+      "required": ["seq", "hash"],
+      "properties": {
+        "seq": {
+          "description": "The line's seq.",
+          "$comment": "agent's choice, spec/hash-chain.md",
+          "type": "integer",
+          "minimum": 0
+        },
+        "hash": {
+          "description": "The line's hash.",
+          "$comment": "agent's choice, spec/hash-chain.md",
+          "$ref": "#/definitions/fingerprint"
+        }
+      }
+    },
+    "judge": {
+      "description": "The judge that gave this verdict: its name and version.",
+      "$comment": "brief v4 line 682",
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": {
+          "description": "The judge's name.",
+          "$comment": "brief v4 line 682",
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "description": "The judge's version.",
+          "$comment": "brief v4 line 682",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "rules": {
+      "description": "The fingerprint of the rule set that judged it.",
+      "$comment": "brief v4 line 684",
+      "$ref": "#/definitions/fingerprint"
+    },
+    "rules_source": {
+      "description": "Where the rules came from: `header` (the rules file as it was at session start, kept in the session header), `default` (the session header holds none, so Orunmila's default rules), `file` (a re-judgement with a rules file named by the user).",
+      "$comment": "brief v4 lines 283, 664, 684; agent's choice, Q34",
+      "enum": ["header", "default", "file"]
+    },
+    "supersedes": {
+      "description": "null, or the earlier session verdict a later judgement replaces.",
+      "$comment": "brief v4 line 684",
+      "anyOf": [{ "type": "null" }, { "$ref": "#/definitions/verdict_id" }]
+    },
+    "prev_hash": {
+      "description": "The previous line's hash.",
+      "$comment": "agent's choice, spec/hash-chain.md",
+      "$ref": "#/definitions/fingerprint"
+    },
+    "hash": {
+      "description": "This record's hash.",
+      "$comment": "agent's choice, spec/hash-chain.md",
+      "$ref": "#/definitions/fingerprint"
+    }
+  },
+  "definitions": {
+    "fingerprint": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "verdict_id": { "type": "string", "pattern": "^v_[0-9]{4,}$" },
+    "rule": { "type": "string", "pattern": "^R[0-9]+$" },
+    "count": { "type": "integer", "minimum": 0 }
+  }
+}

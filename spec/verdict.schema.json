@@ -1,0 +1,133 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:orunmila:spec:v1:verdict",
+  "title": "Orunmila verdict record, schema version 1: DRAFT",
+  "description": "One verdict on one sealed odù record: Clean, Look at this or Violation, with its receipt. A line of the verdict log, hash-chained like the other two logs. Same odù records plus same rules always give the same verdicts, so a verdict holds no clock.",
+  "$comment": "brief v4 lines 642-686; guarantees 3, 4, 6, 8 (lines 490-495); Q34, approved by O 2026-11-24 (LD262). Unknown fields are allowed (brief v4 line 209).",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "record",
+    "seq",
+    "session_id",
+    "verdict_id",
+    "odu_id",
+    "odu_hash",
+    "verdict",
+    "rule",
+    "also",
+    "mark_seqs",
+    "witness_status",
+    "hidden",
+    "opened",
+    "supersedes",
+    "rules",
+    "prev_hash",
+    "hash"
+  ],
+  "properties": {
+    "schema_version": {
+      "description": "All carry a schema_version.",
+      "$comment": "brief v4 line 209",
+      "const": 1
+    },
+    "record": {
+      "description": "Marks this line as a verdict on one odù.",
+      "$comment": "agent's choice, as the odù log's records (LD167)",
+      "const": "verdict"
+    },
+    "seq": {
+      "description": "The record's place in the verdict log: the header is 0, records follow from 1.",
+      "$comment": "agent's choice, spec/hash-chain.md",
+      "type": "integer",
+      "minimum": 1
+    },
+    "session_id": {
+      "description": "The session.",
+      "$comment": "brief v4 line 293",
+      "type": "string",
+      "minLength": 1
+    },
+    "verdict_id": {
+      "description": "The verdict's id, unique in its log; a later verdict names an earlier one by it in `supersedes`.",
+      "$comment": "agent's choice, Q34",
+      "$ref": "#/definitions/verdict_id"
+    },
+    "odu_id": {
+      "description": "The odù the verdict judges.",
+      "$comment": "brief v4 lines 659, 684",
+      "type": "string",
+      "pattern": "^odu_[0-9]{4,}$"
+    },
+    "odu_hash": {
+      "description": "That odù's hash in the odù log, so the verdict points at exactly one record.",
+      "$comment": "brief v4 line 684 (points back to the odù it judged); agent's choice of field, Q34",
+      "$ref": "#/definitions/fingerprint"
+    },
+    "verdict": {
+      "description": "Three verdicts, nothing else: clean, look_at_this, violation.",
+      "$comment": "brief v4 lines 129, 646-652",
+      "enum": ["clean", "look_at_this", "violation"]
+    },
+    "rule": {
+      "description": "The rule that decided the verdict, by its id in the rule set (R0: no rule found anything, so the odù is Clean). For a parent raised by a child, the child's rule.",
+      "$comment": "brief v4 line 659 (the rule that fired)",
+      "$ref": "#/definitions/rule"
+    },
+    "also": {
+      "description": "Every other rule that fired on the odù, by id, sorted; empty when none did.",
+      "$comment": "agent's choice, Q34: line 659 cites one rule, and an odù can break more than one",
+      "type": "array",
+      "items": { "$ref": "#/definitions/rule" }
+    },
+    "mark_seqs": {
+      "description": "The receipt: the odù's marks. A verdict without a receipt cannot exist.",
+      "$comment": "brief v4 line 659",
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "integer", "minimum": 1 }
+    },
+    "witness_status": {
+      "description": "The odù's witness_status, copied, so the verdict log alone shows what each witness recorded.",
+      "$comment": "brief v4 line 684",
+      "type": "object",
+      "required": ["glove", "sentinel"]
+    },
+    "hidden": {
+      "description": "True when the default view hides the odù: a Clean reverted change, or a Clean mark that changes nothing on disk.",
+      "$comment": "brief v4 lines 332, 661, 662",
+      "type": "boolean"
+    },
+    "opened": {
+      "description": "For a parent: the children whose own verdict is more serious than the parent's own and raised it; empty otherwise.",
+      "$comment": "brief v4 line 660 (parents first)",
+      "type": "array",
+      "items": { "type": "string", "pattern": "^odu_[0-9]{4,}$" }
+    },
+    "supersedes": {
+      "description": "null, or the earlier verdict on the same odù that a re-judgement replaces. Old verdicts are never edited.",
+      "$comment": "brief v4 line 684",
+      "anyOf": [{ "type": "null" }, { "$ref": "#/definitions/verdict_id" }]
+    },
+    "rules": {
+      "description": "The fingerprint of the rule set that judged it: SHA-256 of the rules file's bytes.",
+      "$comment": "brief v4 line 684",
+      "$ref": "#/definitions/fingerprint"
+    },
+    "prev_hash": {
+      "description": "The previous line's hash.",
+      "$comment": "agent's choice, spec/hash-chain.md",
+      "$ref": "#/definitions/fingerprint"
+    },
+    "hash": {
+      "description": "This record's hash.",
+      "$comment": "agent's choice, spec/hash-chain.md",
+      "$ref": "#/definitions/fingerprint"
+    }
+  },
+  "definitions": {
+    "fingerprint": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "verdict_id": { "type": "string", "pattern": "^v_[0-9]{4,}$" },
+    "rule": { "type": "string", "pattern": "^R[0-9]+$" }
+  }
+}

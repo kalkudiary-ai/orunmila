@@ -1,0 +1,820 @@
+{
+  "good": {
+    "session": {
+      "schema_version": 1,
+      "record": "session_verdict",
+      "seq": 9,
+      "session_id": "ses_test_0001",
+      "verdict_id": "v_0009",
+      "verdict": "incomplete",
+      "reasons": [
+        {
+          "reason": "gap",
+          "rule": "R9",
+          "odu_ids": ["odu_0004"]
+        }
+      ],
+      "counts": {
+        "clean": 5,
+        "look_at_this": 2,
+        "violation": 1,
+        "hidden": 3
+      },
+      "judged": {
+        "seq": 8,
+        "hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "judge": {
+        "name": "babalawo",
+        "version": "1.0.0"
+      },
+      "rules": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "rules_source": "default",
+      "supersedes": "v_0003",
+      "prev_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    "session_clean": {
+      "schema_version": 1,
+      "record": "session_verdict",
+      "seq": 9,
+      "session_id": "ses_test_0001",
+      "verdict_id": "v_0009",
+      "verdict": "clean",
+      "reasons": [],
+      "counts": {
+        "clean": 5,
+        "look_at_this": 2,
+        "violation": 1,
+        "hidden": 3
+      },
+      "judged": {
+        "seq": 8,
+        "hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "judge": {
+        "name": "babalawo",
+        "version": "1.0.0"
+      },
+      "rules": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "rules_source": "default",
+      "supersedes": null,
+      "prev_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  },
+  "bad": [
+    {
+      "name": "no schema_version",
+      "from": "session",
+      "set": {},
+      "unset": ["/schema_version"],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no record",
+      "from": "session",
+      "set": {},
+      "unset": ["/record"],
+      "error": {
+        "path": "/record",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no seq",
+      "from": "session",
+      "set": {},
+      "unset": ["/seq"],
+      "error": {
+        "path": "/seq",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no session_id",
+      "from": "session",
+      "set": {},
+      "unset": ["/session_id"],
+      "error": {
+        "path": "/session_id",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no verdict_id",
+      "from": "session",
+      "set": {},
+      "unset": ["/verdict_id"],
+      "error": {
+        "path": "/verdict_id",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no verdict",
+      "from": "session",
+      "set": {},
+      "unset": ["/verdict"],
+      "error": {
+        "path": "/verdict",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no reasons",
+      "from": "session",
+      "set": {},
+      "unset": ["/reasons"],
+      "error": {
+        "path": "/reasons",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no counts",
+      "from": "session",
+      "set": {},
+      "unset": ["/counts"],
+      "error": {
+        "path": "/counts",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no judged",
+      "from": "session",
+      "set": {},
+      "unset": ["/judged"],
+      "error": {
+        "path": "/judged",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no judge",
+      "from": "session",
+      "set": {},
+      "unset": ["/judge"],
+      "error": {
+        "path": "/judge",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no rules",
+      "from": "session",
+      "set": {},
+      "unset": ["/rules"],
+      "error": {
+        "path": "/rules",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no rules_source",
+      "from": "session",
+      "set": {},
+      "unset": ["/rules_source"],
+      "error": {
+        "path": "/rules_source",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no supersedes",
+      "from": "session",
+      "set": {},
+      "unset": ["/supersedes"],
+      "error": {
+        "path": "/supersedes",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no prev_hash",
+      "from": "session",
+      "set": {},
+      "unset": ["/prev_hash"],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no hash",
+      "from": "session",
+      "set": {},
+      "unset": ["/hash"],
+      "error": {
+        "path": "/hash",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "schema_version 2",
+      "from": "session",
+      "set": {
+        "/schema_version": 2
+      },
+      "unset": [],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "another record",
+      "from": "session",
+      "set": {
+        "/record": "verdict"
+      },
+      "unset": [],
+      "error": {
+        "path": "/record",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "seq 0",
+      "from": "session",
+      "set": {
+        "/seq": 0
+      },
+      "unset": [],
+      "error": {
+        "path": "/seq",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "seq a string",
+      "from": "session",
+      "set": {
+        "/seq": "9"
+      },
+      "unset": [],
+      "error": {
+        "path": "/seq",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "empty session",
+      "from": "session",
+      "set": {
+        "/session_id": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/session_id",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "session a number",
+      "from": "session",
+      "set": {
+        "/session_id": 5
+      },
+      "unset": [],
+      "error": {
+        "path": "/session_id",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "verdict_id malformed",
+      "from": "session",
+      "set": {
+        "/verdict_id": "s_0009"
+      },
+      "unset": [],
+      "error": {
+        "path": "/verdict_id",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "verdict_id a number",
+      "from": "session",
+      "set": {
+        "/verdict_id": 9
+      },
+      "unset": [],
+      "error": {
+        "path": "/verdict_id",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a fifth verdict",
+      "from": "session",
+      "set": {
+        "/verdict": "broken"
+      },
+      "unset": [],
+      "error": {
+        "path": "/verdict",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "reasons not a list",
+      "from": "session",
+      "set": {
+        "/reasons": {}
+      },
+      "unset": [],
+      "error": {
+        "path": "/reasons",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a reason not an object",
+      "from": "session",
+      "set": {
+        "/reasons/0": "gap"
+      },
+      "unset": [],
+      "error": {
+        "path": "/reasons/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a reason with no reason",
+      "from": "session",
+      "set": {},
+      "unset": ["/reasons/0/reason"],
+      "error": {
+        "path": "/reasons/0/reason",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "a reason with no rule",
+      "from": "session",
+      "set": {},
+      "unset": ["/reasons/0/rule"],
+      "error": {
+        "path": "/reasons/0/rule",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "a reason with no odu_ids",
+      "from": "session",
+      "set": {},
+      "unset": ["/reasons/0/odu_ids"],
+      "error": {
+        "path": "/reasons/0/odu_ids",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "an unknown reason",
+      "from": "session",
+      "set": {
+        "/reasons/0/reason": "tired"
+      },
+      "unset": [],
+      "error": {
+        "path": "/reasons/0/reason",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "a reason with a malformed rule",
+      "from": "session",
+      "set": {
+        "/reasons/0/rule": "gap"
+      },
+      "unset": [],
+      "error": {
+        "path": "/reasons/0/rule",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "a reason with a rule number",
+      "from": "session",
+      "set": {
+        "/reasons/0/rule": 9
+      },
+      "unset": [],
+      "error": {
+        "path": "/reasons/0/rule",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a reason whose odu_ids is not a list",
+      "from": "session",
+      "set": {
+        "/reasons/0/odu_ids": "odu_0004"
+      },
+      "unset": [],
+      "error": {
+        "path": "/reasons/0/odu_ids",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a reason naming a malformed od\u00f9",
+      "from": "session",
+      "set": {
+        "/reasons/0/odu_ids/0": "odu_4"
+      },
+      "unset": [],
+      "error": {
+        "path": "/reasons/0/odu_ids/0",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "a reason naming a number",
+      "from": "session",
+      "set": {
+        "/reasons/0/odu_ids/0": 4
+      },
+      "unset": [],
+      "error": {
+        "path": "/reasons/0/odu_ids/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "counts not an object",
+      "from": "session",
+      "set": {
+        "/counts": 8
+      },
+      "unset": [],
+      "error": {
+        "path": "/counts",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "counts with no clean",
+      "from": "session",
+      "set": {},
+      "unset": ["/counts/clean"],
+      "error": {
+        "path": "/counts/clean",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "counts with no look_at_this",
+      "from": "session",
+      "set": {},
+      "unset": ["/counts/look_at_this"],
+      "error": {
+        "path": "/counts/look_at_this",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "counts with no violation",
+      "from": "session",
+      "set": {},
+      "unset": ["/counts/violation"],
+      "error": {
+        "path": "/counts/violation",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "counts with no hidden",
+      "from": "session",
+      "set": {},
+      "unset": ["/counts/hidden"],
+      "error": {
+        "path": "/counts/hidden",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "counts clean negative",
+      "from": "session",
+      "set": {
+        "/counts/clean": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/counts/clean",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "counts look_at_this negative",
+      "from": "session",
+      "set": {
+        "/counts/look_at_this": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/counts/look_at_this",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "counts violation negative",
+      "from": "session",
+      "set": {
+        "/counts/violation": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/counts/violation",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "counts hidden negative",
+      "from": "session",
+      "set": {
+        "/counts/hidden": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/counts/hidden",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "counts clean not an integer",
+      "from": "session",
+      "set": {
+        "/counts/clean": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/counts/clean",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "judged not an object",
+      "from": "session",
+      "set": {
+        "/judged": 8
+      },
+      "unset": [],
+      "error": {
+        "path": "/judged",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "judged with no seq",
+      "from": "session",
+      "set": {},
+      "unset": ["/judged/seq"],
+      "error": {
+        "path": "/judged/seq",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "judged with no hash",
+      "from": "session",
+      "set": {},
+      "unset": ["/judged/hash"],
+      "error": {
+        "path": "/judged/hash",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "judged seq negative",
+      "from": "session",
+      "set": {
+        "/judged/seq": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/judged/seq",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "judged seq a string",
+      "from": "session",
+      "set": {
+        "/judged/seq": "8"
+      },
+      "unset": [],
+      "error": {
+        "path": "/judged/seq",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/judged/hash not a fingerprint",
+      "from": "session",
+      "set": {
+        "/judged/hash": "sha256:xyz"
+      },
+      "unset": [],
+      "error": {
+        "path": "/judged/hash",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/judged/hash not a string",
+      "from": "session",
+      "set": {
+        "/judged/hash": 5
+      },
+      "unset": [],
+      "error": {
+        "path": "/judged/hash",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "judge not an object",
+      "from": "session",
+      "set": {
+        "/judge": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/judge",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "judge with no name",
+      "from": "session",
+      "set": {},
+      "unset": ["/judge/name"],
+      "error": {
+        "path": "/judge/name",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "judge with no version",
+      "from": "session",
+      "set": {},
+      "unset": ["/judge/version"],
+      "error": {
+        "path": "/judge/version",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "judge name empty",
+      "from": "session",
+      "set": {
+        "/judge/name": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/judge/name",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "judge name a number",
+      "from": "session",
+      "set": {
+        "/judge/name": 1
+      },
+      "unset": [],
+      "error": {
+        "path": "/judge/name",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "judge version empty",
+      "from": "session",
+      "set": {
+        "/judge/version": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/judge/version",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "judge version a number",
+      "from": "session",
+      "set": {
+        "/judge/version": 1
+      },
+      "unset": [],
+      "error": {
+        "path": "/judge/version",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/rules not a fingerprint",
+      "from": "session",
+      "set": {
+        "/rules": "sha256:xyz"
+      },
+      "unset": [],
+      "error": {
+        "path": "/rules",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/rules not a string",
+      "from": "session",
+      "set": {
+        "/rules": 5
+      },
+      "unset": [],
+      "error": {
+        "path": "/rules",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/prev_hash not a fingerprint",
+      "from": "session",
+      "set": {
+        "/prev_hash": "sha256:xyz"
+      },
+      "unset": [],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/prev_hash not a string",
+      "from": "session",
+      "set": {
+        "/prev_hash": 5
+      },
+      "unset": [],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/hash not a fingerprint",
+      "from": "session",
+      "set": {
+        "/hash": "sha256:xyz"
+      },
+      "unset": [],
+      "error": {
+        "path": "/hash",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/hash not a string",
+      "from": "session",
+      "set": {
+        "/hash": 5
+      },
+      "unset": [],
+      "error": {
+        "path": "/hash",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "an unknown rules source",
+      "from": "session",
+      "set": {
+        "/rules_source": "memory"
+      },
+      "unset": [],
+      "error": {
+        "path": "/rules_source",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "supersedes malformed",
+      "from": "session",
+      "set": {
+        "/supersedes": "v_3"
+      },
+      "unset": [],
+      "error": {
+        "path": "/supersedes",
+        "keyword": "anyOf"
+      }
+    }
+  ]
+}

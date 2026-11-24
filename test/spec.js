@@ -56,6 +56,10 @@ const FORMATS = [
   { name: 'retention removal', schema: 'retention-removal.schema.json', cases: 'retention-removals.json', sweep: true },
   { name: 'baseline entry', schema: 'baseline.schema.json', cases: 'baseline-entries.json', sweep: true },
   { name: 'session footer', schema: 'session-footer.schema.json', cases: 'session-footers.json', sweep: true },
+  // BB1 (Q34, LD262; brief v4 lines 659, 684, 686): the verdict log's three records.
+  { name: 'verdict header', schema: 'verdict-header.schema.json', cases: 'verdict-headers.json', sweep: true },
+  { name: 'verdict', schema: 'verdict.schema.json', cases: 'verdicts.json', sweep: true },
+  { name: 'session verdict', schema: 'session-verdict.schema.json', cases: 'session-verdicts.json', sweep: true },
 ];
 
 // --- the deletion sweep (NF85, LD79) ----------------------------------------------

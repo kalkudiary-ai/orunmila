@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:orunmila:spec:v1:verdict-header",
+  "title": "Orunmila verdict log header, schema version 1: DRAFT",
+  "description": "The verdict log's first line, where its hash chain starts. It names the session, the odù log it judges and the judge that wrote it.",
+  "$comment": "brief v4 lines 684 (a third hash-chained log), 682 (the swappable judge); Q34, approved by O 2026-11-24 (LD262). The header's shape follows the odù log's (LD167). Unknown fields are allowed (brief v4 line 209).",
+  "type": "object",
+  "required": ["schema_version", "record", "seq", "session_id", "odu_header", "judge", "prev_hash", "hash"],
+  "properties": {
+    "schema_version": {
+      "description": "All carry a schema_version.",
+      "$comment": "brief v4 line 209",
+      "const": 1
+    },
+    "record": {
+      "description": "Marks this line as the verdict log's header.",
+      "$comment": "agent's choice, as the odù log's header (LD167)",
+      "const": "verdict_header"
+    },
+    "seq": {
+      "description": "The header is the first record of the verdict log; verdicts follow from seq 1.",
+      "$comment": "agent's choice, spec/hash-chain.md",
+      "const": 0
+    },
+    "session_id": {
+      "description": "The session.",
+      "$comment": "brief v4 line 293",
+      "type": "string",
+      "minLength": 1
+    },
+    "odu_header": {
+      "description": "The hash of the odù log's header, so the verdict log is tied to the odù log it judged.",
+      "$comment": "brief v4 line 684 (points back to the odù it judged); agent's choice of field, Q34",
+      "$ref": "#/definitions/fingerprint"
+    },
+    "judge": {
+      "description": "The judge that wrote the log: its name and version. A stricter judge can replace the default one through the same interface.",
+      "$comment": "brief v4 line 682; agent's choice of field, Q34",
+      "$ref": "#/definitions/judge"
+    },
+    "prev_hash": {
+      "description": "null: the chain starts here.",
+      "$comment": "agent's choice, spec/hash-chain.md",
+      "type": "null"
+    },
+    "hash": {
+      "description": "This record's hash.",
+      "$comment": "agent's choice, spec/hash-chain.md",
+      "$ref": "#/definitions/fingerprint"
+    }
+  },
+  "definitions": {
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "judge": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": {
+          "description": "The judge's name: `babalawo` for Orunmila's default judge.",
+          "$comment": "brief v4 line 682",
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "description": "The judge's version.",
+          "$comment": "brief v4 line 682",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

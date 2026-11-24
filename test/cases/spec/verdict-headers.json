@@ -1,0 +1,299 @@
+{
+  "good": {
+    "header": {
+      "schema_version": 1,
+      "record": "verdict_header",
+      "seq": 0,
+      "session_id": "ses_test_0001",
+      "odu_header": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "judge": {
+        "name": "babalawo",
+        "version": "1.0.0"
+      },
+      "prev_hash": null,
+      "hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  },
+  "bad": [
+    {
+      "name": "no schema_version",
+      "from": "header",
+      "set": {},
+      "unset": ["/schema_version"],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no record",
+      "from": "header",
+      "set": {},
+      "unset": ["/record"],
+      "error": {
+        "path": "/record",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no seq",
+      "from": "header",
+      "set": {},
+      "unset": ["/seq"],
+      "error": {
+        "path": "/seq",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no session_id",
+      "from": "header",
+      "set": {},
+      "unset": ["/session_id"],
+      "error": {
+        "path": "/session_id",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no odu_header",
+      "from": "header",
+      "set": {},
+      "unset": ["/odu_header"],
+      "error": {
+        "path": "/odu_header",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no judge",
+      "from": "header",
+      "set": {},
+      "unset": ["/judge"],
+      "error": {
+        "path": "/judge",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no prev_hash",
+      "from": "header",
+      "set": {},
+      "unset": ["/prev_hash"],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no hash",
+      "from": "header",
+      "set": {},
+      "unset": ["/hash"],
+      "error": {
+        "path": "/hash",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "schema_version 2",
+      "from": "header",
+      "set": {
+        "/schema_version": 2
+      },
+      "unset": [],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "another record",
+      "from": "header",
+      "set": {
+        "/record": "odu_header"
+      },
+      "unset": [],
+      "error": {
+        "path": "/record",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "seq 1",
+      "from": "header",
+      "set": {
+        "/seq": 1
+      },
+      "unset": [],
+      "error": {
+        "path": "/seq",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "empty session",
+      "from": "header",
+      "set": {
+        "/session_id": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/session_id",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "session a number",
+      "from": "header",
+      "set": {
+        "/session_id": 5
+      },
+      "unset": [],
+      "error": {
+        "path": "/session_id",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/odu_header not a fingerprint",
+      "from": "header",
+      "set": {
+        "/odu_header": "sha256:xyz"
+      },
+      "unset": [],
+      "error": {
+        "path": "/odu_header",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/odu_header not a string",
+      "from": "header",
+      "set": {
+        "/odu_header": 5
+      },
+      "unset": [],
+      "error": {
+        "path": "/odu_header",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/hash not a fingerprint",
+      "from": "header",
+      "set": {
+        "/hash": "sha256:xyz"
+      },
+      "unset": [],
+      "error": {
+        "path": "/hash",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/hash not a string",
+      "from": "header",
+      "set": {
+        "/hash": 5
+      },
+      "unset": [],
+      "error": {
+        "path": "/hash",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "judge not an object",
+      "from": "header",
+      "set": {
+        "/judge": "babalawo"
+      },
+      "unset": [],
+      "error": {
+        "path": "/judge",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "judge with no name",
+      "from": "header",
+      "set": {},
+      "unset": ["/judge/name"],
+      "error": {
+        "path": "/judge/name",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "judge with no version",
+      "from": "header",
+      "set": {},
+      "unset": ["/judge/version"],
+      "error": {
+        "path": "/judge/version",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "judge name empty",
+      "from": "header",
+      "set": {
+        "/judge/name": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/judge/name",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "judge name a number",
+      "from": "header",
+      "set": {
+        "/judge/name": 1
+      },
+      "unset": [],
+      "error": {
+        "path": "/judge/name",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "judge version empty",
+      "from": "header",
+      "set": {
+        "/judge/version": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/judge/version",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "judge version a number",
+      "from": "header",
+      "set": {
+        "/judge/version": 1
+      },
+      "unset": [],
+      "error": {
+        "path": "/judge/version",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "prev_hash set",
+      "from": "header",
+      "set": {
+        "/prev_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "unset": [],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "type"
+      }
+    }
+  ]
+}

@@ -34,9 +34,9 @@
       "anyOf": [{ "$ref": "#/definitions/line" }, { "type": "null" }]
     },
     "verdict": {
-      "description": "The verdict log's last line: null until the verdict log exists (Phase 6).",
-      "$comment": "brief v4 lines 453-454, 617; agent's proposal (LD209)",
-      "type": "null"
+      "description": "The verdict log's last line at the closeout's end, or null when no verdict log was written (the judge is off, or it failed, which the error log says).",
+      "$comment": "brief v4 lines 453-454; agent's proposal (LD209), the line's shape since Phase 6 (Q34, LD262)",
+      "anyOf": [{ "$ref": "#/definitions/line" }, { "type": "null" }]
     }
   },
   "definitions": {

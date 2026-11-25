@@ -259,6 +259,16 @@ never mentioned at all.
 That gap is what orunmila fills. It's the layer on top of activity logging,
 not a replacement for it.
 
+Other tools now check an agent's claims too, mostly "tests pass" against the
+commands its hooks or transcript recorded. That record is the agent's own
+account, and an agent can shape it or delete it. Orunmila checks the claim
+against two witnesses: the Glove (the agent's hooks) and the Sentinel, a disk
+watcher the agent does not drive. On one user's machine (Claude Code only), the
+Glove recorded a matching agent edit for about a quarter of the disk changes
+the Sentinel recorded; most of the rest came within a minute of a command the
+Glove recorded ending. No AI model decides anything, the record is
+hash-chained, and `orunmila verify` checks it for free.
+
 ## The Stain Map: what it catches
 
 Every claim the agent makes gets sorted into one of these, backed by actual
@@ -477,6 +487,26 @@ orunmila facts (from the records, not your prose): Test runs this turn: npm test
   event to start from, or the log could not be read.
 - The text after the line is exactly what the gate prints without it. With the
   switch unset, or set to anything but `1`, the gate's output is unchanged.
+
+### The claims block (off by default)
+
+With `ORUNMILA_CLAIMS_BLOCK=1`, an agent may end its message with a block that
+says exactly what it claims, instead of leaving the gate to read sentences:
+
+````markdown
+```orunmila-claims
+changed: src/auth.js, test/auth.test.js
+proved: npm test
+not done: the Windows run
+```
+````
+
+Each `proved:` command must have run in that turn and passed, with the run's
+exit status its own: `cd web && npm test` and `cd web; npm test` prove `npm
+test`; `npm test; echo done`, a pipe, or `|| true` do not. Otherwise it is the
+`no-green-without-command` law's finding.
+Sentences are still read as before, so a block cannot hide a claim made in
+prose. The format is [`spec/claims-block.md`](spec/claims-block.md).
 
 ### What counts as proof
 
@@ -754,6 +784,26 @@ orunmila judge --session <id> --rules my-rules          # judge again; new verdi
 orunmila verify ~/.orunmila/sessions/<id>               # checks the verdict log too
 ```
 
+The report's second line is the **witness gap**: every file change in the
+session, counted by what both witnesses recorded of it (both; the Sentinel
+alone, which nothing the agent did explains; the Glove alone, outside the
+watched folders). The trail page shows it under its header.
+
+Rule R27, **tests weakened**, is a **Look at this** when the agent deletes a
+test file, adds skip or only markers to one, or removes more assertions from one
+than it adds, read from the diffs kept beside the log; the report says so, and
+says when that turn's claim says the tests pass.
+
+To put a session's verdict on a commit, where a reviewer sees it:
+
+```bash
+orunmila trailer --session <id>                         # Orunmila-Session, -Verdict and -Seal lines
+echo 'orunmila trailer --session <id> --append "$1"' > .git/hooks/commit-msg   # each commit carries them
+```
+
+A trailer is a convenience, not evidence: anyone can write or remove one.
+`orunmila verify` over the session's logs is what proves the record.
+
 `ORUNMILA_FEEDBACK_FROM_VERDICTS=1` gives the agent the same findings through
 `orunmila json`, in its usual shape. If the agent reads Orunmila's own record,
 the report says so in one line. The law gate's results are part of the record:
@@ -925,9 +975,17 @@ already does local-first audit trails (file reads/writes/diffs/commands)
 for Claude Code, Cursor, Antigravity and others, well, and is worth using
 alongside this for raw session forensics. The Claude Code hooks ecosystem
 more broadly (`claude-code-hooks-mastery`, `claude-hooks`, etc.) is the
-proven plumbing this project builds on rather than reinvents. What's new
-here is the reconciliation layer on top: checking the agent's *narrative*
-against the *evidence*, not just recording the evidence.
+proven plumbing this project builds on rather than reinvents.
+
+Checking the agent's claims is no longer rare. Several small tools stop a
+Claude Code turn that says "tests pass" with no test run behind it, and some
+re-run the checks or ask a second agent to. They read the agent's own record.
+What Orunmila adds is a second witness the agent does not control, set beside
+the first event by event, with fixed rules instead of a model, a tamper-evident
+log, and a verifier anyone can run. Container and kernel tools (StrongDM's
+Leash, Perplexity's numbat) see more than the Sentinel does, including which
+process wrote a file; they do not, as far as we know, check what the agent
+said it did.
 
 ## Further reading
 

@@ -17,6 +17,19 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   touched, each link grows once both its ends are there), following the agent
   from file to file, and a Calm (the default) or Vivid look. Without WebGL2 it says so and
   points to the Graph tab.
+- **The witness gap.** `orunmila report --verdicts` gives, second after its
+  top line, every file change in the session counted by what both witnesses
+  recorded of it; the trail page shows it under its header, and says when a
+  session has no odù log to read it from.
+- **Rule R27, tests weakened** (the judge 1.2.0). A **Look at this** when the
+  agent deletes a test file, adds skip or only markers to one, or removes more
+  assertion lines than it adds, read from the diffs kept beside the log; the
+  report says when that turn's claim says the tests pass.
+- **`orunmila trailer`.** A session's verdict as git trailers on a commit
+  message (`--append` for a `commit-msg` hook). A convenience, not evidence.
+- **The claims block** (`ORUNMILA_CLAIMS_BLOCK=1`, off by default). An agent
+  may end a turn with an `orunmila-claims` block; each `proved:` command must
+  have run in the turn and passed. Format: `spec/claims-block.md`.
 - **The Graph tab reads left to right.** Three levels (what the agent read, ran
   and changed), each in its folders, flagged things first; links curve between
   the columns instead of through one centre point. A folder or file written

@@ -2928,6 +2928,16 @@ const MUTANTS = [
   { id: 'MR2-7 R27 beside another rule vanishes from the report', file: 'src/babalawo/report/index.js', test: 'test/weakened.js',
     from: "    if (v.rule === 'R27' || v.also.includes('R27')) weakened.push({ v, o });", to: "    if (v.rule === 'R27') weakened.push({ v, o });",
     fails: ['MR2 (line 176)'] },
+  // MR4 (LD318): orunmila trailer.
+  { id: 'MR4-1 a closed, unjudged session reads open', file: 'src/render/trailer.js', test: 'test/trailer.js',
+    from: "  else if (footer) out.push('Orunmila-Verdict: not judged", to: "  else if (false) out.push('Orunmila-Verdict: not judged",
+    fails: ['MR4: the trailers say the session'] },
+  { id: 'MR4-2 an old Orunmila trailer is kept beside the new one', file: 'src/render/trailer.js', test: 'test/trailer.js',
+    from: "  const kept = text.split('\\n').filter((l) => !KEYS.some((k) => l.startsWith(`${k}:`)));", to: "  const kept = text.split('\\n');",
+    fails: ["MR4: appended as the message's trailers"] },
+  { id: 'MR4-3 a verdict log that does not verify still gives a verdict', file: 'bin/orunmila.js', test: 'test/trailer.js',
+    from: '    if (!verifyText(text).ok) return refuse(`the verdict log of ${id} does not verify (orunmila verify ${dir}), so no verdict is given`);', to: '',
+    fails: ['MR4: `orunmila trailer --session ID`'] },
 ];
 
 function copyRepo(root) {

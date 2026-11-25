@@ -1747,6 +1747,54 @@ async function cmdJudge() {
   console.log(`orunmila judge: judged ${id}: ${r.added.length} record(s) added to ${file}; the session's verdict: ${s.verdict} (${s.rules_source} rules, ${babalawo.name} ${babalawo.version})`);
 }
 
+/**
+ * `orunmila trailer --session ID [--append FILE]` (MR4, LD318): the session's verdict as git trailers (src/render/trailer.js),
+ * printed, or appended to a commit message file (a `commit-msg` hook passes it as $1). A convenience outside the evidence
+ * path: it reads the session folder and writes only the file named. Exit 0 done, 1 no session here or its verdict log
+ * does not verify, 2 usage.
+ */
+function cmdTrailer() {
+  const { sessionFolderName } = require('../src/opon/intake/paths');
+  const { verifyText } = require('../src/verify/chain');
+  const { trailerLines, appendTrailers } = require('../src/render/trailer');
+  const home = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
+  const id = flag('session', null);
+  let dir;
+  try {
+    dir = id ? path.join(home, 'sessions', sessionFolderName(id)) : null;
+  } catch {
+    dir = null; // an id unsafe as a folder name has no session log
+  }
+  if (!dir) {
+    console.error('Usage: orunmila trailer --session ID [--append FILE]');
+    process.exitCode = 2;
+    return;
+  }
+  const refuse = (words) => {
+    console.log(`orunmila trailer: ${words}`);
+    process.exitCode = 1;
+  };
+  if (!fs.existsSync(path.join(dir, 'raw.jsonl'))) return refuse(`session ${id} has no session log here (${dir})`);
+  let footer;
+  try {
+    footer = JSON.parse(fs.readFileSync(path.join(dir, 'footer.json'), 'utf8'));
+  } catch {
+    footer = null; // not closed out yet
+  }
+  let sessionVerdict = null;
+  const vFile = path.join(dir, 'verdict.jsonl');
+  if (fs.existsSync(vFile)) {
+    const text = fs.readFileSync(vFile, 'utf8');
+    if (!verifyText(text).ok) return refuse(`the verdict log of ${id} does not verify (orunmila verify ${dir}), so no verdict is given`);
+    sessionVerdict = text.split('\n').slice(0, -1).map((l) => JSON.parse(l)).filter((r) => r.record === 'session_verdict').pop() || null;
+  }
+  const lines = trailerLines({ sessionId: id, footer, sessionVerdict });
+  const file = flag('append', null);
+  if (!file) return void process.stdout.write(lines.join('\n') + '\n');
+  fs.writeFileSync(file, appendTrailers(fs.readFileSync(file, 'utf8'), lines));
+  console.log(`orunmila trailer: ${lines.length} trailers in ${file}`);
+}
+
 const COMMANDS = {
   install: cmdInstall,
   replay: cmdReplay,
@@ -1775,6 +1823,7 @@ const COMMANDS = {
   'debug-transcript': cmdDebugTranscript,
   verify: cmdVerify,
   'leak-check': cmdLeakCheck,
+  trailer: cmdTrailer,
 };
 
 // The installed version (SECURITY.md asks a reporter to give it; OW2, LD151).
@@ -1846,6 +1895,8 @@ Both lenses
   orunmila judge --session ID [--rules file]      judge a session's odù log again; new verdicts supersede, old ones stay
   orunmila report --verdicts --session ID [--html FILE] [--json]
                                                   the session report: top line, each finding naming both witnesses
+  orunmila trailer --session ID [--append FILE]   the session's verdict as git trailers for a commit message
+                                                  (a convenience, not evidence: orunmila verify proves the record)
 
 Docs: README.md · known issues with status: review/ISSUES.md
 `);

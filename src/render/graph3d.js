@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 KALKU DIGITAL SOLUTIONS LIMITED
 'use strict';
 
 /* global orunmilaGraph3DCore, orunmilaGraph3DShaders, document, window, requestAnimationFrame, cancelAnimationFrame,

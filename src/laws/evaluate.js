@@ -459,7 +459,7 @@ function lexicalHits(law, { claimText, promptText, turnEvents }) {
  *                                     a green claim; the caller reads the switch
  * @returns {{ findings: object[], blocking: object[], assertions: object[] }}
  */
-function evaluateTurn({ claimText = '', promptText = '', turnEvents = [], laws = [], strictProof = false, receipts: given = null } = {}) {
+function evaluateTurn({ claimText = '', promptText = '', turnEvents = [], laws = [], strictProof = false, receipts: given = null, claimsBlock = false } = {}) {
   const receipts = given || buildReceipts(turnEvents); // from marks with ORUNMILA_GATE_FROM_MARKS=1 (B9)
   const assertions = extractAssertions(claimText);
   const proof = strictProof ? proofOfPass(turnEvents) : null;
@@ -481,6 +481,28 @@ function evaluateTurn({ claimText = '', promptText = '', turnEvents = [], laws =
       const detail = rule(assertion, receipts, { laws, proof });
       if (detail) findings.push(finding(law, assertion, detail));
     }
+  }
+
+  // MR1 (LD319; brief line 443; spec/claims-block.md): with ORUNMILA_CLAIMS_BLOCK=1 the caller passes claimsBlock, and
+  // each `proved:` line of the agent's claims block is checked exactly: the declared command must be one step of a run
+  // in the turn that passed with an exit status that means what it says. A miss is the green law's own finding, at its
+  // severity. Prose claims were read above as before: the block adds, it replaces nothing.
+  // Loaded only with the switch on, so with it off the hooks load no new code (Leopard rule 2; hook-reach unchanged).
+  const { parseClaimsBlock, provedBy, mentions } = claimsBlock ? require('../reconcile/claims-block') : {};
+  const block = claimsBlock ? parseClaimsBlock(claimText) : null;
+  const green = block && laws.find((l) => l.enabled && l.rule === 'verification_without_command');
+  for (const cmd of green ? block.proved : []) {
+    if (provedBy(cmd, receipts.passingCommands)) continue;
+    const named = (c) => mentions(cmd, c);
+    findings.push(
+      finding(green, { text: `proved: ${cmd}`, targets: [] }, {
+        declared_command: cmd,
+        passing_commands: receipts.passingCommands.length,
+        failed_commands: receipts.failedCommands.filter(named).map((c) => `exit ${c.exit_code}: ${c.command}`),
+        exit_code_laundered_by_pipe: receipts.unreliableCommands.filter(named).map((c) => c.command),
+        exit_code_laundered_by_or: receipts.passingCommands.filter((c) => named(c) && String(c.command).includes('||')).map((c) => c.command),
+      }),
+    );
   }
 
   return {

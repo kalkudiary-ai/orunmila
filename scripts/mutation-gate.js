@@ -2938,6 +2938,19 @@ const MUTANTS = [
   { id: 'MR4-3 a verdict log that does not verify still gives a verdict', file: 'bin/orunmila.js', test: 'test/trailer.js',
     from: '    if (!verifyText(text).ok) return refuse(`the verdict log of ${id} does not verify (orunmila verify ${dir}), so no verdict is given`);', to: '',
     fails: ['MR4: `orunmila trailer --session ID`'] },
+  // MR1 (LD319): the claims block.
+  { id: 'MR1-1 a run with || proves a declared command', file: 'src/reconcile/claims-block.js', test: 'test/claims-block.js',
+    from: "      return !last.includes('||') && ", to: '      return ',
+    fails: ["MR1: a run proves a declared command only when the run's exit status is that command's"] },
+  { id: "MR1-4 a command before a ; is proved by the run's status", file: 'src/reconcile/claims-block.js', test: 'test/claims-block.js',
+    from: '      const last = segments[segments.length - 1] || ' + "'';", to: "      const last = segments.join(' && ');",
+    fails: ["MR1: a run proves a declared command only when the run's exit status is that command's"] },
+  { id: 'MR1-2 the first block counts, not the last', file: 'src/reconcile/claims-block.js', test: 'test/claims-block.js',
+    from: '    if (j < lines.length) block = body;', to: '    if (j < lines.length && !block) block = body;',
+    fails: ['MR1: the block is read'] },
+  { id: 'MR1-3 the gate never reads the block', file: 'src/laws/evaluate.js', test: 'test/claims-block.js',
+    from: '  const block = claimsBlock ? parseClaimsBlock(claimText) : null;', to: '  const block = null;',
+    fails: ['MR1 (ORUNMILA_CLAIMS_BLOCK=1)'] },
 ];
 
 function copyRepo(root) {

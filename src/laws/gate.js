@@ -274,7 +274,8 @@ function decideForTurn({ sessionId, turnId, promptId, claimText, promptText, tur
     return factsOnly;
   }
 
-  const res = evaluateTurn({ claimText, promptText, turnEvents, laws: active, strictProof: strictProofEnabled(), receipts });
+  // MR1 (LD319): the claims block's proved: lines, checked exactly, behind ORUNMILA_CLAIMS_BLOCK=1 (Leopard rule 2: the gate runs live)
+  const res = evaluateTurn({ claimText, promptText, turnEvents, laws: active, strictProof: strictProofEnabled(), receipts, claimsBlock: process.env.ORUNMILA_CLAIMS_BLOCK === '1' });
   if (!res.findings.length) {
     onCheck({ findings: [], lawErrors });
     return factsOnly;

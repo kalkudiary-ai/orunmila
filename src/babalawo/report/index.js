@@ -127,6 +127,53 @@ function ruleWords(v, o, bySeq) {
   }
 }
 
+/**
+ * MR3 (LD316): the witness gap, the report's second line. Every real change of a file in the session (a sealed odù
+ * whose action is a change and whose net change is not undone), counted once, by what both witnesses recorded of it
+ * (the odù's witness_status, its attribution and cause): never one witness's rate alone (CLAUDE.md close-out 2). The
+ * Glove's record of a change can sit in another odù (the edit's or the command's), which the odù's cause names.
+ */
+const CHANGE_VERBS = ['created', 'modified', 'deleted', 'renamed'];
+function witnessGap(odus) {
+  const c = { changes: 0, both_edit: 0, both_command: 0, both_other: 0, sentinel_only: 0, glove_only_outside: 0, glove_only_inside: 0, neither: 0 };
+  for (const o of odus) {
+    if (o.record !== 'odu' || o.state !== 'sealed' || !CHANGE_VERBS.includes(o.action) || !o.target || o.target.kind !== 'file') continue;
+    if (o.net_change && o.net_change.changed === false) continue;
+    c.changes++;
+    const ws = o.witness_status || {};
+    const g = (ws.glove || {}).status === 'saw';
+    const s = (ws.sentinel || {}).status === 'saw';
+    const cause = o.attribution === 'explained' && o.cause && typeof o.cause.kind === 'string' ? o.cause.kind : null;
+    if (s && (g || cause === 'agent_tool_call')) c.both_edit++;
+    else if (s && cause === 'agent_command') c.both_command++;
+    else if (s && cause) c.both_other++;
+    else if (s) c.sentinel_only++;
+    else if (g && (ws.sentinel || {}).status === 'out_of_scope') c.glove_only_outside++;
+    else if (g) c.glove_only_inside++;
+    else c.neither++;
+  }
+  const parts = [];
+  const both = c.both_edit + c.both_command + c.both_other;
+  if (both) {
+    const how = [];
+    if (c.both_edit) how.push(`${c.both_edit} by an agent edit tool`);
+    if (c.both_command) how.push(`${c.both_command} by a command the agent ran (the Glove recorded the command, the Sentinel the change)`);
+    if (c.both_other) how.push(`${c.both_other} by another agent action the Glove recorded`);
+    parts.push(`Both witnesses recorded ${both}: ${how.join(', ')}.`);
+  }
+  if (c.sentinel_only) parts.push(`The Sentinel alone recorded ${c.sentinel_only}: no tool call or command the agent made explains ${c.sentinel_only === 1 ? 'it' : 'them'}.`);
+  const gAlone = c.glove_only_outside + c.glove_only_inside;
+  if (gAlone) {
+    const where = [];
+    if (c.glove_only_outside) where.push(`${c.glove_only_inside ? `${c.glove_only_outside} ` : ''}outside the folders the Sentinel watches`);
+    if (c.glove_only_inside) where.push(c.glove_only_outside ? `${c.glove_only_inside} inside them, where the Sentinel recorded no change` : 'inside the folders the Sentinel watches, where it recorded no change');
+    parts.push(`The Glove alone recorded ${gAlone}: ${where.join('; ')}.`);
+  }
+  if (c.neither) parts.push(`Neither witness recorded ${c.neither} live: only the closeout's rescan or git found ${c.neither === 1 ? 'it' : 'them'}.`);
+  c.sentence = c.changes ? `What changed on disk: ${plural(c.changes, 'change', 'changes')}. ${parts.join(' ')}` : 'What changed on disk: neither witness recorded a change to a file in this session.';
+  return c;
+}
+
 function buildReport({ header, marks, odus, verdicts, quarantined = 0, judgedNow = false }) {
   const bySeq = new Map(marks.map((m) => [m.seq, m]));
   const latest = new Map();
@@ -223,6 +270,7 @@ function buildReport({ header, marks, odus, verdicts, quarantined = 0, judgedNow
     session_verdict: session ? session.verdict : null,
     top_line,
     judged_now: judgedNow,
+    witnesses: witnessGap(odus),
     findings,
     law_gate,
     hidden: session ? session.counts.hidden : 0,
@@ -272,6 +320,7 @@ function summaryWords(findings) {
 
 function lines(rep) {
   const out = [rep.top_line];
+  if (rep.witnesses) out.push(rep.witnesses.sentence); // MR3 (LD316): the witness gap, second
   if (rep.judged_now) out.push('(judged now: this session has no verdict log, so nothing here is recorded; the judge was off when it closed)');
   if (rep.experimental) out.push(`This session's agent (${rep.experimental}) is experimental: built, tested only with sample data; results may be wrong.`);
   if (rep.findings.length) out.push(`In all: ${summaryWords(rep.findings)}.`, '');
@@ -296,12 +345,14 @@ function renderHtml(rep) {
   const items = grouped(rep.findings)
     .map((g) => `<li class="${esc(g.f.verdict)}"><b>${esc(LABEL[g.f.verdict])}</b> ${g.count > 1 ? `<span class="n">${g.count}×</span> ` : ''}${esc(g.f.sentence)}${g.ids.length ? ` <small>${esc(idsWords(g.ids))}, ${esc(g.f.rule)}</small>` : ''}</li>`)
     .join('\n');
-  const rest = lines(rep).slice(1).filter((l) => l && !l.startsWith('- '));
+  const gap = rep.witnesses ? rep.witnesses.sentence : null;
+  const rest = lines(rep).slice(1).filter((l) => l && !l.startsWith('- ') && l !== gap);
   return [
     '<!doctype html>',
     `<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Orunmila session report: ${esc(rep.session_id)}</title>`,
     '<style>body{font:15px/1.5 -apple-system,Segoe UI,Helvetica,Arial,sans-serif;max-width:860px;margin:24px auto;padding:0 16px;background:#fff;color:#1b1f24}h1{font-size:22px}li{margin:8px 0}li.violation b{color:#b3261e}li.look_at_this b{color:#8a5a00}li.incomplete b{color:#5b3fa8}.n{font-weight:700;font-variant-numeric:tabular-nums}small{color:#57606a}@media (prefers-color-scheme:dark){body{background:#0d1117;color:#e6edf3}small{color:#8b949e}}</style></head><body>',
     `<h1>${esc(rep.top_line)}</h1>`,
+    gap ? `<p class="gap">${esc(gap)}</p>` : '',
     `<p>Session ${esc(rep.session_id)}</p>`,
     items ? `<ul>\n${items}\n</ul>` : '',
     ...rest.map((l) => `<p>${esc(l)}</p>`),
@@ -315,4 +366,4 @@ function renderJson(rep) {
   return JSON.stringify({ schema_version: 1, ...rep }, null, 2);
 }
 
-module.exports = { buildReport, renderText, renderHtml, renderJson, witnessWords };
+module.exports = { buildReport, renderText, renderHtml, renderJson, witnessWords, witnessGap };

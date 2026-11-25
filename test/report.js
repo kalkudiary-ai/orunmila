@@ -211,4 +211,47 @@ it('BB8: `orunmila report --verdicts` prints the report of a session folder, and
   }
 });
 
+it('MR3 (LD316): the second line is the witness gap: each change on disk counted by what both witnesses recorded of it, joint, never one rate alone', () => {
+  const rep = reportOf((s) => {
+    s.append(M.prompted(0));
+    s.append(M.started(10, 'e1', { kind: 'file', path: 'src/a.ts' }));
+    s.append(M.edited(50, 'e1', 'src/a.ts')); // the agent's own edit: both witnesses
+    s.append(M.disk(70, 'src/a.ts'));
+    s.append(M.started(100, 'c1', { kind: 'command', text: 'npm run build' }, 'Bash'));
+    s.append(M.disk(150, 'dist/out.js', 'created')); // a command's side effect: the Glove has the command, the Sentinel the change
+    s.append(M.exited(200, 'c1', 'npm run build'));
+    s.append(M.disk(5000, 'src/hand.ts')); // nothing the agent did explains it: the Sentinel alone
+    const outside = { kind: 'file', path: '/elsewhere/notes.md', outside: true }; // as the adapter marks a path outside the project
+    s.append(M.started(6000, 'e2', outside));
+    s.append({ ...M.edited(6050, 'e2', '/elsewhere/notes.md'), target: outside }); // outside the watched folder: the Glove alone
+    s.append(M.started(7000, 'e3', { kind: 'file', path: 'src/c.ts' }));
+    s.append(M.edited(7050, 'e3', 'src/c.ts')); // inside, and the Sentinel recorded no change: the Glove alone
+    closedTurn(s, 9000, 'passed', 'I edited src/a.ts and /elsewhere/notes.md and ran npm run build.');
+    s.append(M.tick(20000));
+  });
+  assert.deepStrictEqual(
+    { ...rep.witnesses, sentence: undefined },
+    { changes: 5, both_edit: 1, both_command: 1, both_other: 0, sentinel_only: 1, glove_only_outside: 1, glove_only_inside: 1, neither: 0, sentence: undefined },
+    JSON.stringify(rep.witnesses),
+  );
+  const text = renderText(rep).split('\n');
+  assert.strictEqual(
+    text[1],
+    'What changed on disk: 5 changes. Both witnesses recorded 2: 1 by an agent edit tool, 1 by a command the agent ran (the Glove recorded the command, the Sentinel the change). The Sentinel alone recorded 1: no tool call or command the agent made explains it. The Glove alone recorded 2: 1 outside the folders the Sentinel watches; 1 inside them, where the Sentinel recorded no change.',
+  );
+  assert.ok(renderHtml(rep).includes(`<p class="gap">${text[1]}</p>`), 'the HTML carries it under the top line');
+  assert.deepStrictEqual(JSON.parse(renderJson(rep)).witnesses, rep.witnesses, 'and the agent gets the same counts');
+});
+
+it('MR3: a session with no change on disk says that neither witness recorded one, never a rate over nothing', () => {
+  const rep = reportOf((s) => {
+    s.append(M.prompted(0));
+    s.append(M.read(100, 'r1', 'src/b.ts'));
+    closedTurn(s, 900);
+    s.append(M.tick(10000));
+  });
+  assert.strictEqual(rep.witnesses.changes, 0);
+  assert.strictEqual(renderText(rep).split('\n')[1], 'What changed on disk: neither witness recorded a change to a file in this session.');
+});
+
 runAll('report');

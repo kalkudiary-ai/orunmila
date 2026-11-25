@@ -90,4 +90,13 @@ it('HTML1: no emoji icons (they draw differently, or not at all, on Windows and 
   assert.deepStrictEqual([...new Set(emoji)], []);
 });
 
+it('MR3 (LD316): the trail page carries the witness gap under its header; with no odù log it says the gap is not shown, never a clean figure', () => {
+  const witnesses = { changes: 2, sentence: 'What changed on disk: 2 changes. The Sentinel alone recorded 2: no tool call or command the agent made explains them.' };
+  const html = renderSessionHtml('s1', [], trail, { witnesses });
+  assert.ok(header(html).includes(`<p class="gap">${witnesses.sentence}</p>`), header(html));
+  const none = renderSessionHtml('s1', [], trail, { witnesses: null });
+  assert.ok(header(none).includes('What changed on disk is not shown: this session has no odù log to read both witnesses from'), header(none));
+  assert.ok(!renderSessionHtml('s1', [], trail).includes('What changed on disk'), '`orunmila html`, which passes nothing, is unchanged');
+});
+
 runAll('trail-page');

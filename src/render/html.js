@@ -359,7 +359,18 @@ function renderVerdict(totals, turnCount, trail) {
   ${bar}`;
 }
 
-function renderSessionHtml(sessionId, reports, trail) {
+/**
+ * MR3 (LD316): the witness gap under the header, from the session's odù log (src/babalawo/report witnessGap): what
+ * changed on disk, each change counted by what both witnesses recorded. `witnesses` undefined: the caller has no session
+ * folder to read (`orunmila html`), and nothing is shown; null: there is no odù log, and the page says so.
+ */
+function renderGap(witnesses) {
+  if (witnesses === undefined) return '';
+  if (witnesses === null) return '<p class="gap gap-none">What changed on disk is not shown: this session has no odù log to read both witnesses from (the intake writes one with ORUNMILA_OPON_LIVE=1).</p>';
+  return `<p class="gap">${esc(witnesses.sentence)}</p>`;
+}
+
+function renderSessionHtml(sessionId, reports, trail, { witnesses } = {}) {
   const files = buildFileStains(reports);
   const trailByPath = indexTrailByPath(trail);
   // The rich, tabbed, stain-first visual (Graph/Tree/Timeline/Dashboard). Only
@@ -388,6 +399,8 @@ function renderSessionHtml(sessionId, reports, trail) {
   .verdict .big { font-size:2.5rem; font-weight:700; line-height:1; }
   .verdict .lede { font-size:0.95rem; color:#bbb; }
   .verdict .sub { color:#888; font-size:0.82rem; margin-top:6px; }
+  .gap { font-size:0.85rem; color:#c8d0d8; margin:-6px 0 18px; max-width:1100px; }
+  .gap-none { color:#888; }
   .verdict .pill { font-size:0.8rem; font-weight:600; padding:7px 14px; border-radius:8px; white-space:nowrap; color:#fff; }
   .prop { display:flex; height:12px; border-radius:6px; overflow:hidden; gap:2px; margin:4px 0 8px; background:#1c1c1c; }
   .prop span { display:block; }
@@ -430,6 +443,7 @@ function renderSessionHtml(sessionId, reports, trail) {
 <body>
   <h1>orunmila &mdash; session ${esc(sessionId)}</h1>
   ${renderVerdict(totals, reports.length, trail)}
+  ${renderGap(witnesses)}
 
   <h4>Files worth a look (ranked by severity)</h4>
   ${renderFindings(files, trailByPath, reports.length > 0)}

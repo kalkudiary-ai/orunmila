@@ -82,6 +82,7 @@ function createLive({ key, clock, receive, error, judge = false }) {
       oduLast: null,
       footed: false,
       sources: new Map(),
+      refs: new Map(), // MR2 (LD317): each mark's diff_ref by seq, for R27's diffs at the closeout
       due: [],
       draining: false,
       on: true,
@@ -195,6 +196,7 @@ function createLive({ key, clock, receive, error, judge = false }) {
   /** One record through the session's engine: its source kept, an overlapped mark's news taken first (L2); the odùs it seals. */
   function step(st, rec) {
     st.sources.set(rec.seq, rec.source);
+    if (judge && rec.detail && typeof rec.detail.diff_ref === 'string') st.refs.set(rec.seq, rec.detail.diff_ref); // only with the judge on (Leopard rule 2)
     if (rec.says === 'overlapped') applyOverlapped(st.others, rec);
     const out = st.opon.push(rec).map((g) => st.odu.add(g, (s) => st.sources.get(s))).filter(Boolean);
     if (out.length) st.oduLast = out[out.length - 1];
@@ -234,7 +236,10 @@ function createLive({ key, clock, receive, error, judge = false }) {
         error(`no judge named "${name}" is registered: no verdicts were written for session ${id}`, { session_id: id });
         return null;
       }
-      const r = chosen.judge({ header: st.header, oduText: fs.readFileSync(st.file, 'utf8'), prior });
+      const oduText = fs.readFileSync(st.file, 'utf8');
+      const { testDiffs, oduRecords } = require('../ledger/beside');
+      const diffs = testDiffs({ odus: oduRecords(oduText), refOf: (s) => st.refs.get(s) || null, dir: path.dirname(st.file) }); // MR2: R27
+      const r = chosen.judge({ header: st.header, oduText, prior, diffs });
       if (!r.ok) {
         error(`the judge did not judge session ${id}: ${r.words}`, { session_id: id });
         return null;

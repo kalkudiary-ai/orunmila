@@ -5,10 +5,12 @@
  * Deterministic rules decide every verdict: plain code from the odù records and a rule set, no clock, no file system,
  * no model (guarantee 8, line 656). Same records plus same rules always give the same verdicts (guarantee 3).
  *
- *   judgeOdus({ header, odus, rules }) -> { verdicts: [...], session: { verdict, reasons, counts } }
+ *   judgeOdus({ header, odus, rules, diffs }) -> { verdicts: [...], session: { verdict, reasons, counts } }
  *     header  the raw log's session header (project_root, frozen.hook_settings: which tampered file is which)
  *     odus    the odù log's sealed records, in seq order (only sealed ones reach the judge, line 644)
  *     rules   loadRules(...).rules
+ *     diffs   { [odu_id]: [diff text] }: the diffs kept beside the log for R27's candidates (weakened.js diffsFor), read
+ *             by the caller and checked against their fingerprints (line 267); none given, R27 sees deletions only
  *
  * One verdict per sealed odù, children too, so nothing goes unjudged (line 662; plan section 3). Each rule that fires
  * gives a verdict; the odù takes the most serious, citing that rule, the rest in `also`. A parent then takes the most
@@ -25,6 +27,7 @@
 
 const path = require('path');
 const { isIgnored } = require('../../capture/fs-sentinel/ignore');
+const { weakening } = require('../weakened');
 
 const RANK = { clean: 0, look_at_this: 1, violation: 2 };
 const CONFLICT_RULE = {
@@ -90,7 +93,7 @@ function looksAtRecord(o) {
 }
 
 /** Every rule that fires on one odù, as [{ rule, verdict }]. */
-function fired(o, rules, header) {
+function fired(o, rules, header, diffs = {}) {
   const out = [];
   const set = rules.verdict;
   const give = (rule, verdict) => {
@@ -118,6 +121,8 @@ function fired(o, rules, header) {
   }
   if (o.confidence === 'low') give('R20', set.R20);
   if (looksAtRecord(o)) give('R25', set.R25);
+  // MR2 (LD317): the agent's own change to a test file that makes the suite easier to pass (line 176's example).
+  if (weakening(o, diffs[o.odu_id] || [])) give('R27', strong('R27'));
   // Q40 (LD284; line 692): a turn the law gate blocked is its own finding, from the law_gate witness's result slots.
   const lg = o.witness_status && o.witness_status.law_gate;
   if (lg && lg.status === 'saw' && (lg.slots || []).some((s) => s.result === 'blocked')) give('R21', set.R21);
@@ -146,9 +151,9 @@ function worst(list) {
   return list.reduce((a, b) => (!a || RANK[b.verdict] > RANK[a.verdict] || (RANK[b.verdict] === RANK[a.verdict] && ruleNo(b.rule) < ruleNo(a.rule)) ? b : a), null);
 }
 
-function judgeOdus({ header, odus, rules }) {
+function judgeOdus({ header, odus, rules, diffs = {} }) {
   const sealed = odus.filter((o) => o.state === 'sealed');
-  const own = new Map(sealed.map((o) => [o.odu_id, fired(o, rules, header)]));
+  const own = new Map(sealed.map((o) => [o.odu_id, fired(o, rules, header, diffs || {})]));
   const byId = new Map(sealed.map((o) => [o.odu_id, o]));
   const ownTop = (id) => worst(own.get(id)) || { rule: 'R0', verdict: 'clean' };
   const verdicts = sealed.map((o) => {

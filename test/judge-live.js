@@ -31,11 +31,18 @@ function fakeClock() {
 const lines = (f) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8').split('\n').slice(0, -1).map((l) => JSON.parse(l)) : []);
 
 /** A session through a live router to its closeout: a prompt, a Write, a hand edit, a Stop, a SessionEnd, then polls past the lag grace. */
-function closedSession(base, { judge, rules = null, sid = 'ses_judge_live', hole = 0, idle = 0, step = 500 }) {
+function closedSession(base, { judge, rules = null, sid = 'ses_judge_live', hole = 0, idle = 0, step = 500, weaken = false }) {
   const home = path.join(base, 'home');
   const project = path.join(base, 'project');
   fs.mkdirSync(path.join(project, 'src'), { recursive: true });
   fs.writeFileSync(path.join(project, 'src', 'hand.js'), 'old\n');
+  const spec = path.join(project, 'test', 'a.test.js');
+  const before = "it('adds', () => {\n  expect(add(1, 2)).toBe(3);\n});\n";
+  const after = "it('adds', () => {\n  add(1, 2);\n});\n";
+  if (weaken) {
+    fs.mkdirSync(path.dirname(spec), { recursive: true });
+    fs.writeFileSync(spec, before);
+  }
   if (rules !== null) {
     fs.mkdirSync(path.join(project, '.orunmila'), { recursive: true });
     fs.writeFileSync(path.join(project, '.orunmila', 'rules'), rules);
@@ -53,6 +60,13 @@ function closedSession(base, { judge, rules = null, sid = 'ses_judge_live', hole
   for (let t = 0; t < idle; t += 500) {
     clock.advance(500); // BB5a: idle and polled: a tick each 500 ms, pauses under the lag grace
     router.poll();
+  }
+  if (weaken) {
+    // MR2 (LD317): the agent edits a test file and removes its assertion: R27, from the diff kept beside the log
+    const edit = { file_path: spec, old_string: '  expect(add(1, 2)).toBe(3);', new_string: '  add(1, 2);' };
+    send({ hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: edit, tool_use_id: 'e9' });
+    fs.writeFileSync(spec, after);
+    send({ hook_event_name: 'PostToolUse', tool_name: 'Edit', tool_input: edit, tool_response: {}, tool_use_id: 'e9' });
   }
   fs.writeFileSync(path.join(project, 'src', 'hand.js'), 'by hand\n'); // nobody's tool call: the closeout's rescan finds it
   send({ hook_event_name: 'Stop', last_assistant_message: 'I wrote src/new.js.' });
@@ -93,6 +107,20 @@ it('BB6: with the judge on, the closeout writes the verdict log, the footer name
     const r = replayFolder(dir);
     assert.strictEqual(r.ok, true, r.words);
     assert.strictEqual(r.verdict, text, 'live equals replay (guarantee 3)');
+  } finally {
+    rmrf(base);
+  }
+});
+
+it('MR2 (LD317): the closeout judges R27 from the diff kept beside the log, and replay gives the same verdict log byte for byte', () => {
+  const base = tmpDir();
+  try {
+    const { dir } = closedSession(base, { judge: true, weaken: true });
+    const text = fs.readFileSync(path.join(dir, 'verdict.jsonl'), 'utf8');
+    const recs = text.split('\n').slice(0, -1).map((l) => JSON.parse(l));
+    const r27 = recs.filter((v) => v.record === 'verdict' && (v.rule === 'R27' || v.also.includes('R27')));
+    assert.strictEqual(r27.length, 1, JSON.stringify(recs.filter((v) => v.record === 'verdict').map((v) => [v.rule, v.also])));
+    assert.strictEqual(replayFolder(dir).verdict, text, 'live equals replay (guarantee 3)');
   } finally {
     rmrf(base);
   }

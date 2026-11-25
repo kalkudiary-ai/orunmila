@@ -5,13 +5,15 @@
  * the same data: plain words for a person (text, or one HTML file that loads nothing, test 46) and JSON for the agent.
  * Sentences come from fixed templates: plain code, no model (guarantee 8).
  *
- *   buildReport({ header, marks, odus, verdicts, quarantined, judgedNow }) -> the report's model
+ *   buildReport({ header, marks, odus, verdicts, quarantined, judgedNow, diffs }) -> the report's model
  *     header, marks   the raw log (the verdicts do not carry a gap's times or what a tampering mark says changed; the
  *                     report reads them from the marks the verdicts cite; the law gate's results come from the verdict
  *                     log since Q40, LD284, and from the marks for a judgement made before it, LD267)
  *     odus            the odù log's records; verdicts, the verdict log's (the latest verdict of each odù counts)
  *     quarantined     how many inputs the quarantine log holds (test 28)
  *     judgedNow       true when the session has no verdict log and was judged for this report only
+ *     diffs           R27's diffs kept beside the log, by odù, read by the caller (src/opon/ledger/beside.js; MR2);
+ *                     without them R27's sentence names the file and not what changed in it
  *   renderText(model), renderHtml(model), renderJson(model)
  *
  * Top line first (line 690); each finding one sentence: what the agent claimed or what changed, what happened, where to
@@ -19,6 +21,10 @@
  * finding for the session (line 434). The law gate's turns checked, skipped and blocked, each block its own finding,
  * and a skip rate over 2% its own Look at this (lines 686, 692).
  */
+
+const { weakening } = require('../weakened');
+const { findExecutionClaims } = require('../../reconcile/verification-claim');
+const { splitSentences } = require('../../laws/assert-extractor');
 
 const RANK = { clean: 0, look_at_this: 1, violation: 2, incomplete: 3 };
 const LABEL = { violation: 'Violation', look_at_this: 'Look at this', incomplete: 'Incomplete', clean: 'Clean' };
@@ -174,8 +180,31 @@ function witnessGap(odus) {
   return c;
 }
 
-function buildReport({ header, marks, odus, verdicts, quarantined = 0, judgedNow = false }) {
+/**
+ * MR2 (LD317): R27's sentence: what the agent did to the test file, from the diffs kept beside the log, and, when the
+ * agent's claim in that turn says the tests pass (the shared claim reader, verification-claim.js), that too.
+ */
+function weakenedWords(o, texts, bySeq, marks) {
+  const t = targetOf(o);
+  const w = weakening(o, texts) || { deleted: o.action === 'deleted', skips_added: 0, asserts_removed: 0, asserts_added: 0 };
+  const did = [];
+  if (w.deleted) did.push(`deleted the test file ${t}`);
+  if (w.skips_added) did.push(`added ${plural(w.skips_added, 'skip or only marker', 'skip or only markers')} to ${t}`);
+  if (w.asserts_removed > w.asserts_added) did.push(`removed ${plural(w.asserts_removed, 'assertion line', 'assertion lines')} and added ${w.asserts_added} in ${t}`);
+  if (!did.length) did.push(`weakened the test file ${t}`);
+  const turns = new Set((o.mark_seqs || []).map((n) => bySeq.get(n)).filter((m) => m && m.turn).map((m) => m.turn));
+  const said = [];
+  for (const m of marks) {
+    if (m.source !== 'agent_claim' || m.says !== 'claimed' || !turns.has(m.turn) || !m.detail || typeof m.detail.text !== 'string') continue;
+    for (const s of splitSentences(m.detail.text)) said.push(...findExecutionClaims(s));
+  }
+  const claim = said.length ? `, while its claim in that turn says the tests pass ("${[...new Set(said)].join('", "')}")` : '';
+  return `The agent ${did.join('; ')}${claim}: a suite made easier to pass can pass without the work being right`;
+}
+
+function buildReport({ header, marks, odus, verdicts, quarantined = 0, judgedNow = false, diffs = {} }) {
   const bySeq = new Map(marks.map((m) => [m.seq, m]));
+  const weakened = []; // MR2: every odù R27 fired on, as the deciding rule or beside another
   const latest = new Map();
   let session = null;
   for (const r of verdicts) {
@@ -188,6 +217,8 @@ function buildReport({ header, marks, odus, verdicts, quarantined = 0, judgedNow
   for (const o of odus.filter((x) => x.record === 'odu')) {
     const v = latest.get(o.odu_id);
     if (!v || v.verdict === 'clean') continue;
+    if (v.rule === 'R27' || v.also.includes('R27')) weakened.push({ v, o });
+    if (v.rule === 'R27') continue;
     // A parent raised only by a child: the child's own finding says it (line 660).
     if (v.opened.length && !v.also.length && v.opened.every((c) => latest.get(c) && latest.get(c).rule === v.rule)) continue;
     if (v.rule === 'R2') {
@@ -201,6 +232,9 @@ function buildReport({ header, marks, odus, verdicts, quarantined = 0, judgedNow
     if (v.rule === 'R21') continue; // Q40: a block is the law gate's own finding, below
     if (v.rule === 'R22') continue;
     findings.push({ kind: 'verdict', verdict: v.verdict, rule: v.rule, odu_id: v.odu_id, target: targetOf(o), mark_seqs: v.mark_seqs, sentence: `${ruleWords(v, o, bySeq)}. ${witnessWords(v.witness_status, bySeq)}` });
+  }
+  for (const { v, o } of weakened) {
+    findings.push({ kind: 'verdict', verdict: v.verdict, rule: 'R27', odu_id: v.odu_id, target: targetOf(o), mark_seqs: v.mark_seqs, sentence: `${weakenedWords(o, diffs[o.odu_id] || [], bySeq, marks)}. ${witnessWords(v.witness_status, bySeq)}` });
   }
   if (silent.length) {
     // Line 434: silent changes are grouped, one finding for the session.

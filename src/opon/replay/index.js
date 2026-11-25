@@ -108,7 +108,10 @@ function replayFolder(dir) {
   };
   const lines = [head, ...groups].map(canonicalize);
   // BB6 (guarantee 3): the odù log judged from scratch, as the closeout judges it; null with the judge's words when it refuses.
-  const j = require('../../babalawo/interface').get('babalawo').judge({ header, oduText: odu }); // BB11: through the judge's one interface
+  // MR2 (LD317): R27 reads the diffs kept beside the log for the agent's test-file changes, checked by fingerprint.
+  const { testDiffsFromMarks, oduRecords } = require('../ledger/beside');
+  const diffs = testDiffsFromMarks({ odus: oduRecords(odu), marks: recs.slice(1), dir });
+  const j = require('../../babalawo/interface').get('babalawo').judge({ header, oduText: odu, diffs }); // BB11: through the judge's one interface
   return { ok: true, words: `replayed ${recs.length - 1} marks into ${groups.length} groups`, lines, text: lines.join('\n') + '\n', odu, verdict: j.ok ? j.text : null, verdict_words: j.ok ? null : j.words };
 }
 

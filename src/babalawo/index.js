@@ -6,7 +6,7 @@
  *
  *   name, version         the judge's own, written into the verdict log's header and every session verdict
  *   loadRules(text)       src/babalawo/rules: the rules file read, or refused by name
- *   judge({ header, oduText, rulesText?, prior? })
+ *   judge({ header, oduText, rulesText?, prior?, diffs? })
  *       -> { ok: true, records, added, text } | { ok: false, words }
  *     header    the raw log's session header; its config.rules, the rules file as it was at session start, judges
  *               the session (line 283); with none, the default rules
@@ -15,6 +15,7 @@
  *     prior     the verdict log's records so far (a re-judgement, or a closeout after a resumed session): each new
  *               verdict that differs from the odù's latest is appended and `supersedes` it; an unchanged one is not
  *               written again; old verdicts are never edited (line 684)
+ *     diffs     R27's diffs kept beside the log, by odù (src/babalawo/weakened.js diffsFor); the caller reads them
  *     records   the whole log after it; added, the records this judgement wrote; text, the whole log's lines
  *
  * The judge reads the odù log only, never the raw log, and writes only its own log (line 644). Plain code: the caller
@@ -27,11 +28,11 @@ const { loadRules, DEFAULT_RULES } = require('./rules');
 const { judgeOdus } = require('./verdict');
 
 const NAME = 'babalawo';
-const VERSION = '1.1.0'; // 1.1.0 (Q40, LD284): the law gate's results judged (R21, R22) and counted in the session verdict; R26 (TE2)
+const VERSION = '1.2.0'; // 1.2.0 (MR2, LD317): R27, tests weakened. 1.1.0 (Q40, LD284): the law gate's results judged (R21, R22) and counted in the session verdict; R26 (TE2)
 const vid = (n) => `v_${String(n).padStart(4, '0')}`;
 const same = (a, b) => canonicalize(a) === canonicalize(b);
 
-function judge({ header, oduText, rulesText, prior = [] }) {
+function judge({ header, oduText, rulesText, prior = [], diffs = {} }) {
   const chain = verifyText(oduText || '');
   if (!chain.ok) return { ok: false, words: `Not judged: the odù log is broken at line ${chain.line} (${chain.reason}), and the judge never judges an altered record.` };
   const odus = oduText.split('\n').slice(0, -1).map((l) => JSON.parse(l));
@@ -43,7 +44,7 @@ function judge({ header, oduText, rulesText, prior = [] }) {
   const loaded = loadRules(text);
   if (!loaded.ok) return { ok: false, words: `Not judged: the rules (${source === 'header' ? 'from the session header' : source === 'file' ? 'the file named' : 'the defaults'}) could not be read: ${loaded.errors.join('; ')}.` };
 
-  const { verdicts, session } = judgeOdus({ header, odus: odus.slice(1).filter((o) => o.record === 'odu'), rules: loaded.rules });
+  const { verdicts, session } = judgeOdus({ header, odus: odus.slice(1).filter((o) => o.record === 'odu'), rules: loaded.rules, diffs });
 
   const records = prior.map((r) => ({ ...r }));
   if (records.length && (records[0].record !== 'verdict_header' || records[0].odu_header !== head.hash)) return { ok: false, words: 'Not judged: the verdict log so far does not belong to this odù log.' };

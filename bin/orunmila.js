@@ -628,11 +628,13 @@ function cmdReportVerdicts() {
   if (!fs.existsSync(oduFile)) return refuse(`session ${id} has no odù log (the intake writes one only with ORUNMILA_OPON_LIVE=1)`);
   const oduText = fs.readFileSync(oduFile, 'utf8');
   if (!verifyText(oduText).ok) return refuse(`the odù log of ${id} does not verify (orunmila verify ${dir})`);
+  const { testDiffsFromMarks, oduRecords } = require('../src/opon/ledger/beside');
+  const diffs = testDiffsFromMarks({ odus: oduRecords(oduText), marks: recs.slice(1), dir }); // MR2 (LD317): R27, the judge and the report
   const vFile = path.join(dir, 'verdict.jsonl');
   let vText;
   const judgedNow = !fs.existsSync(vFile);
   if (judgedNow) {
-    const j = babalawo.judge({ header: recs[0], oduText });
+    const j = babalawo.judge({ header: recs[0], oduText, diffs });
     if (!j.ok) return refuse(j.words);
     vText = j.text;
   } else {
@@ -642,7 +644,7 @@ function cmdReportVerdicts() {
   const parse = (t) => t.split('\n').slice(0, -1).map((l) => JSON.parse(l));
   const q = checkLog(dir, 'quarantine');
   const quarantined = q.records.filter((r) => !(r.part === 1 && r.line === 1) && !(r.part > 1 && r.line === 1)).length;
-  const rep = buildReport({ header: recs[0], marks: recs.slice(1), odus: parse(oduText), verdicts: parse(vText), quarantined, judgedNow });
+  const rep = buildReport({ header: recs[0], marks: recs.slice(1), odus: parse(oduText), verdicts: parse(vText), quarantined, judgedNow, diffs });
   const html = flag('html', null);
   if (html) {
     fs.writeFileSync(html, renderHtml(rep));
@@ -1735,7 +1737,10 @@ async function cmdJudge() {
       return refuse(`not judged: the rules file ${rulesPath} could not be read (${e.code || e.message})`);
     }
   }
-  const r = babalawo.judge({ header: raw.records[0].rec, oduText: fs.readFileSync(oduFile, 'utf8'), rulesText, prior });
+  const oduText = fs.readFileSync(oduFile, 'utf8');
+  const { testDiffsFromMarks, oduRecords } = require('../src/opon/ledger/beside');
+  const diffs = testDiffsFromMarks({ odus: oduRecords(oduText), marks: raw.records.map((x) => x.rec), dir }); // MR2 (LD317): R27
+  const r = babalawo.judge({ header: raw.records[0].rec, oduText, rulesText, prior, diffs });
   if (!r.ok) return refuse(r.words);
   if (r.added.length) fs.appendFileSync(file, r.added.map((x) => canonicalize(x) + '\n').join(''), { mode: 0o600 });
   const s = r.records.filter((x) => x.record === 'session_verdict').pop();

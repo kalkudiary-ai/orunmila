@@ -272,7 +272,7 @@ evidence from the session, not vibes:
 | `phantom_verification` | claimed "tested/works/verified" with no passing command behind it |
 | `unverifiable` | too hedged to check at all ("added some basic validation") |
 | `undisclosed` | a file changed that no claim and no part of the original ask covers |
-| `silently_dropped` | part of the original ask has no evidence **and** was never mentioned again |
+| `silently_dropped` | part of the original ask has no evidence **and** was never mentioned again. Often wrong: measured on one user's sessions it fired on about 1 turn in 3, mostly on pasted text, quotes or command output taken for a request. Treat it as a prompt to look |
 
 Each mismatch also gets soft, non-authoritative cause-hints
 (`vague-hedge`, `high-specificity-mismatch`, `error-in-context`) - signals a
@@ -281,7 +281,7 @@ confabulation. The tool deliberately never asserts which, because intent
 genuinely isn't observable from the outside. It only ever shows evidence.
 
 Reconciliation runs against **two** sources, not one:
-- the agent's own claim (catches lies/confabulation)
+- the agent's own claim (catches claims the record does not show)
 - the *original user prompt*, independently (catches things the agent just
   never mentioned again - the more common and harder-to-spot failure mode)
 
@@ -310,6 +310,7 @@ first-class `network_call` with its host.
 | `disk` | the Filesystem Sentinel independently saw a change land on disk |
 | `command` | a shell command ran (full output saved locally) |
 | `network` | external contact - the host it reached is recorded |
+| `tool` | any other tool call (an MCP tool, a search) |
 
 **Honesty about lineage:** the read->write edge is a **turn-scoped heuristic**,
 not proven data-flow. If the agent read A and wrote B in the same turn for
@@ -666,24 +667,21 @@ redact secrets. Details, and what the patch does not cover, in the
 Recent additions to The Diviner:
 
 - **Interactive HTML report.** `orunmila trail` renders a session view that
-  loads nothing from the network: **Timeline** (turn-by-turn pips), **Tree**
-  (project files with stain bars), **Graph** (2D radial — zoom, pan, search,
-  filter by channel or outcome), **Dashboard** (donut + KPI cards), and
-  **Report** (copy-paste prompt to send the agent back to fix every flagged
-  item).
-- **Glossary tab.** Plain-English definitions for every outcome (`verified`,
-  `partial`, `phantom`, `phantom_verification`, `silently_dropped`,
-  `undisclosed`, `untracked_write`, `unverifiable`), every channel, and
-  every metric (Reliability, Phantom Rate, ConfIdx, Touches). Severity-coded
-  so a first-time reader can self-onboard without leaving the report.
-- **Report tab reordered** — stats lead, copy-paste prompt next, findings
-  last. The prompt is the action; you shouldn't have to scroll past 20
-  findings to reach it.
-- **Model personality summaries.** `bench-results/README.md` now includes
-  one-line character reads for every benchmarked model — *honest workhorse*,
-  *talks confidently, sometimes too confidently*, *underpromises and
-  overdelivers*, *the cautionary tail* — each grounded in the specific
-  metric that distinguishes that model.
+  loads nothing from the network: **Timeline** (turn by turn; repeated touches
+  of one thing fold into one line with a count), **Tree** (project files by
+  folder), **Graph** (three levels left to right: what the agent read, what it
+  ran, what it changed, each in its folders, flagged things first; search,
+  filter by channel or outcome), **3D Map** (the same map in 3D, drawn by
+  Orunmila's own code: orbit and zoom, a replay that follows the agent from
+  file to file, a Calm or Vivid look), **Dashboard**, **Report** (what needs a
+  second look, and a prompt you can paste back to the agent asking for the
+  evidence or a fix on each item) and **Glossary**. Open a tab from a link:
+  `trail.html#map3d`, `#graph`.
+- **Nothing checked never reads as clean.** A session with no checked turn
+  says "Not checked" in the header, the file list, the Report tab and the
+  Dashboard; it used to say "looks clean".
+- **The judge's report groups repeats.** A finding the judge made many times
+  shows once, with its count; the JSON for the agent keeps every one.
 - **Dashboard default port → 3773.** `node bin/dashboard.js` now serves on
   `http://localhost:3773` by default (was 3000). Override with
   `PORT=… node bin/dashboard.js` if you need something else.

@@ -234,12 +234,51 @@ function buildReport({ header, marks, odus, verdicts, quarantined = 0, judgedNow
   };
 }
 
+/**
+ * HTML1 (LD306): identical findings (same verdict, rule and sentence) shown as one line with their count, in the
+ * order they first come. 860f51e9's report listed one sentence 89 times. Only the text and HTML group; the JSON for
+ * the agent keeps every finding (its contract is unchanged).
+ */
+function grouped(findings) {
+  const out = [];
+  const at = new Map();
+  for (const f of findings) {
+    const key = `${f.verdict}|${f.rule || ''}|${f.sentence}`;
+    const ids = f.odu_ids ? f.odu_ids : f.odu_id ? [f.odu_id] : [];
+    if (at.has(key)) {
+      const g = at.get(key);
+      g.count++;
+      g.ids.push(...ids);
+      continue;
+    }
+    const g = { f, count: 1, ids: ids.slice() };
+    at.set(key, g);
+    out.push(g);
+  }
+  return out;
+}
+const idsWords = (ids) => (ids.length > 6 ? `${ids.slice(0, 3).join(', ')} ... ${ids[ids.length - 1]}, ${ids.length} records` : ids.join(', '));
+const countWords = (g) => (g.count > 1 ? `${g.count}× ` : '');
+
+/** Every kind of finding counted: "89 violations, 2 things to look at". */
+function summaryWords(findings) {
+  const n = (k) => findings.filter((f) => f.verdict === k).length;
+  const parts = [];
+  if (n('incomplete')) parts.push(plural(n('incomplete'), 'reason the record is incomplete', 'reasons the record is incomplete'));
+  if (n('violation')) parts.push(plural(n('violation'), 'violation', 'violations'));
+  if (n('look_at_this')) parts.push(plural(n('look_at_this'), 'thing to look at', 'things to look at'));
+  return parts.join(', ');
+}
+
 function lines(rep) {
   const out = [rep.top_line];
   if (rep.judged_now) out.push('(judged now: this session has no verdict log, so nothing here is recorded; the judge was off when it closed)');
   if (rep.experimental) out.push(`This session's agent (${rep.experimental}) is experimental: built, tested only with sample data; results may be wrong.`);
-  if (rep.findings.length) out.push('');
-  for (const f of rep.findings) out.push(`- ${LABEL[f.verdict]}: ${f.sentence}${f.odu_id ? ` (${f.odu_ids ? f.odu_ids.join(', ') : f.odu_id}, ${f.rule})` : f.rule ? ` (${f.rule})` : ''}`);
+  if (rep.findings.length) out.push(`In all: ${summaryWords(rep.findings)}.`, '');
+  for (const g of grouped(rep.findings)) {
+    const f = g.f;
+    out.push(`- ${LABEL[f.verdict]}: ${countWords(g)}${f.sentence}${g.ids.length ? ` (${idsWords(g.ids)}, ${f.rule})` : f.rule ? ` (${f.rule})` : ''}`);
+  }
   out.push('');
   const lg = rep.law_gate;
   out.push(`Law gate: ${plural(lg.checked, 'turn', 'turns')} checked, ${lg.skipped} skipped, ${lg.blocked} blocked${lg.warned ? `, ${lg.warned} warned` : ''}; skip rate ${lg.skip_rate}%.`);
@@ -254,12 +293,14 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 
 /** One self-contained HTML file: inline styles, no script, nothing loaded (line 693, test 46). */
 function renderHtml(rep) {
-  const items = rep.findings.map((f) => `<li class="${esc(f.verdict)}"><b>${esc(LABEL[f.verdict])}</b> ${esc(f.sentence)}${f.odu_id ? ` <small>${esc(f.odu_ids ? f.odu_ids.join(', ') : f.odu_id)}, ${esc(f.rule)}</small>` : ''}</li>`).join('\n');
+  const items = grouped(rep.findings)
+    .map((g) => `<li class="${esc(g.f.verdict)}"><b>${esc(LABEL[g.f.verdict])}</b> ${g.count > 1 ? `<span class="n">${g.count}×</span> ` : ''}${esc(g.f.sentence)}${g.ids.length ? ` <small>${esc(idsWords(g.ids))}, ${esc(g.f.rule)}</small>` : ''}</li>`)
+    .join('\n');
   const rest = lines(rep).slice(1).filter((l) => l && !l.startsWith('- '));
   return [
     '<!doctype html>',
     `<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Orunmila session report: ${esc(rep.session_id)}</title>`,
-    '<style>body{font:15px/1.5 -apple-system,Segoe UI,Helvetica,Arial,sans-serif;max-width:860px;margin:24px auto;padding:0 16px;background:#fff;color:#1b1f24}h1{font-size:22px}li{margin:8px 0}li.violation b{color:#b3261e}li.look_at_this b{color:#8a5a00}li.incomplete b{color:#5b3fa8}small{color:#57606a}@media (prefers-color-scheme:dark){body{background:#0d1117;color:#e6edf3}small{color:#8b949e}}</style></head><body>',
+    '<style>body{font:15px/1.5 -apple-system,Segoe UI,Helvetica,Arial,sans-serif;max-width:860px;margin:24px auto;padding:0 16px;background:#fff;color:#1b1f24}h1{font-size:22px}li{margin:8px 0}li.violation b{color:#b3261e}li.look_at_this b{color:#8a5a00}li.incomplete b{color:#5b3fa8}.n{font-weight:700;font-variant-numeric:tabular-nums}small{color:#57606a}@media (prefers-color-scheme:dark){body{background:#0d1117;color:#e6edf3}small{color:#8b949e}}</style></head><body>',
     `<h1>${esc(rep.top_line)}</h1>`,
     `<p>Session ${esc(rep.session_id)}</p>`,
     items ? `<ul>\n${items}\n</ul>` : '',

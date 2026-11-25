@@ -316,9 +316,11 @@ it('html: renderSessionHtml (no trail) produces a self-contained document', () =
   assert.ok(html.includes('untracked write'), 'the untracked sneaky.js surfaces as a finding');
 });
 
-it('html: renderSessionHtml with no reports shows the empty-grid message', () => {
+// HTML1 (F17, LD303): with no reports the grid says it was not checked; "No file writes captured yet" was false
+// whenever the trail held writes, and the header beside it read "looks clean".
+it('html: renderSessionHtml with no reports says the files were not checked', () => {
   const html = renderSessionHtml('S', []);
-  assert.ok(html.includes('No file writes captured yet'));
+  assert.ok(html.includes('Not checked: no turn of this session has a report'));
 });
 
 it('html: renderSessionHtml with a trail model renders the tabbed visual + trail', () => {

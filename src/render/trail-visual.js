@@ -3,28 +3,32 @@
 const graph3d = require('./graph3d');
 const graph2d = require('./graph2d');
 
+// HTML1 (LD305): one palette for the whole page (html.js reads it too), calmer than the first neon one: colour is
+// for what needs a look, so the reds and ambers stand out and the rest recedes.
 const STAIN_COLORS = {
-  untracked_write: '#ff1744',
-  phantom_verification: '#d50000',
-  phantom: '#ff5252',
-  silently_dropped: '#aa00ff',
-  undisclosed: '#d500f9',
-  partial: '#ffd600',
-  unverifiable: '#9e9e9e',
-  verified: '#00e676',
-  clean: '#00e676',
+  untracked_write: '#ff5c5c',
+  phantom_verification: '#f2545b',
+  phantom: '#f47c7c',
+  silently_dropped: '#b39ddb',
+  undisclosed: '#ce93d8',
+  partial: '#e6c35c',
+  unverifiable: '#9aa4ae',
+  verified: '#5cc38a',
+  clean: '#5cc38a',
 };
 
 const CHANNEL_COLORS = {
-  read: '#40c4ff',
-  write: '#69f0ae',
-  disk: '#1de9b6',
-  command: '#ffab40',
-  network: '#e040fb',
-  tool: '#b0bec5',
+  read: '#64b5f6',
+  write: '#81c995',
+  disk: '#4db6ac',
+  command: '#e0a458',
+  network: '#ba8fd6',
+  tool: '#9aa4ae',
 };
 
-const CHANNEL_GLYPH = { read: '\u{1F441}', write: '✎', disk: '\u{1F4BE}', command: '$', network: '\u{1F310}', tool: '⚙' };
+// Plain symbols, not emoji: an emoji draws in colour on one OS, as a box or not at all on another (Windows and Linux
+// fonts differ), so the same page read differently by OS.
+const CHANNEL_GLYPH = { read: '○', write: '✎', disk: '▣', command: '$', network: '⇄', tool: '◇' };
 
 const EXPLAIN = {
   verified: 'The agent said it did this, and the evidence backs it up.',
@@ -33,7 +37,7 @@ const EXPLAIN = {
   phantom_verification: 'Claimed it was tested/works, but no passing check ran.',
   unverifiable: 'The claim was too vague to check.',
   undisclosed: 'This file changed but no claim or request mentioned it.',
-  silently_dropped: 'Part of your request that was never done or mentioned again.',
+  silently_dropped: 'Part of your request no later message seems to cover. Often wrong: pasted text can look like a request.',
   untracked_write: 'The disk changed but no tool call ever disclosed it.',
   clean: 'Touched during the session; nothing flagged.',
   read: 'A file the agent read (a source of information).',
@@ -158,6 +162,9 @@ function buildVizData(model, stainByKey, reports) {
 
   return {
     session: model.session_id,
+    // F17 (LD303): whether any turn was checked; the tabs say "Not checked" rather than "clean" when none was.
+    checked: !!(reports && reports.length),
+    checkedTurns: (reports || []).length,
     totals: model.totals || { turns: turns.length, artifacts: nodes.length, touches: trail.length },
     nodes, edges: [...edgeSet.values()], trail, turns,
     channelTally, stainTally, findings,
@@ -184,7 +191,7 @@ function renderTrailVisual(vizData) {
   .gv-seg button.on { background:#1c2530; color:#fff; }
   .gv-tabs { display:flex; gap:6px; padding:10px 18px 0; flex-wrap:wrap; }
   .gv-tab { background:#11151c; color:#9aa6b2; border:1px solid #1f2630; border-bottom:none; border-radius:9px 9px 0 0; padding:9px 16px; cursor:pointer; font-weight:600; font-size:.86rem; }
-  .gv-tab.on { background:#161c25; color:#fff; box-shadow:inset 0 2px 0 #00e676; }
+  .gv-tab.on { background:#161c25; color:#fff; box-shadow:inset 0 2px 0 #64b5f6; }
   .gv-stage { background:#0a0c10; min-height:440px; padding:16px 18px; position:relative; }
   .gv-view { display:none; }
   .gv-view.on { display:block; }
@@ -200,7 +207,7 @@ function renderTrailVisual(vizData) {
   /* legend */
   .gv-legend { display:flex; gap:14px; flex-wrap:wrap; margin:4px 0 14px; font-size:.78rem; color:#aeb8c4; }
   .gv-legend .it { display:flex; align-items:center; gap:6px; }
-  .gv-dot { width:11px; height:11px; border-radius:50%; box-shadow:0 0 8px currentColor; }
+  .gv-dot { width:10px; height:10px; border-radius:50%; }
   .gv-hint { color:#7d8694; font-size:.82rem; margin:0 0 12px; }
   .gv-explainable .gv-hint { display:block; }
   .gv-power .gv-hint { display:none; }
@@ -288,7 +295,7 @@ function renderTrailVisual(vizData) {
   .gv-tree { font-family:ui-monospace,Menlo,monospace; font-size:.86rem; line-height:1.7; }
   .gv-tree .row { display:flex; align-items:center; gap:8px; padding:1px 0; cursor:pointer; border-radius:4px; }
   .gv-tree .row:hover { background:#11151c; }
-  .gv-tree .bar { height:9px; border-radius:5px; box-shadow:0 0 8px currentColor; }
+  .gv-tree .bar { height:8px; border-radius:4px; opacity:.85; }
   .gv-tree .nm { color:#cfd8e3; } .gv-tree .dir { color:#6f7b88; }
 
   /* timeline */
@@ -302,15 +309,19 @@ function renderTrailVisual(vizData) {
   .gv-tcol .prompt { color:#6f7b88; font-size:.72rem; margin-bottom:8px; min-height:2.2em; }
   .gv-tdot { display:flex; align-items:center; gap:7px; padding:4px 7px; border-radius:7px; background:#0e1219; margin:3px 0; font-size:.76rem; cursor:pointer; transition:background .1s; }
   .gv-tdot:hover { background:#161c25; }
-  .gv-tdot .pip { width:9px; height:9px; border-radius:50%; box-shadow:0 0 7px currentColor; flex:0 0 auto; }
+  .gv-tdot .pip { width:8px; height:8px; border-radius:50%; flex:0 0 auto; }
   .gv-tdot .tx { color:#c4cdd8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .gv-tdot .cnt { color:#7d8694; font-size:.7rem; margin-left:auto; padding-left:6px; }
+  .gv-tmore { margin-top:8px; }
+  .gv-unchecked { color:#8b96a3; font-size:.86rem; line-height:1.5; }
+  .gv-nothing.gv-unchecked { color:#8b96a3; }
 
   /* dashboard */
   .gv-dash { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:18px; }
   .gv-card { background:#0e1219; border:1px solid #1f2630; border-radius:12px; padding:16px; }
   .gv-card h5 { margin:0 0 12px; font-size:.82rem; color:#aeb8c4; text-transform:uppercase; letter-spacing:.04em; }
   .gv-bars .b { display:flex; align-items:center; gap:8px; margin:5px 0; font-size:.8rem; }
-  .gv-bars .b .fill { height:14px; border-radius:4px; box-shadow:0 0 8px currentColor; }
+  .gv-bars .b .fill { height:12px; border-radius:3px; opacity:.9; }
   .gv-bars .b .v { color:#9aa6b2; min-width:1.6em; }
   .gv-kpi { display:flex; gap:22px; }
   .gv-kpi .k { text-align:center; } .gv-kpi .k .n { font-size:1.9rem; font-weight:800; } .gv-kpi .k .l { font-size:.72rem; color:#7d8694; text-transform:uppercase; }
@@ -435,7 +446,7 @@ function renderTrailVisual(vizData) {
     tree: 'Your project as folders. Each bar glows by how the agent touched that file. Click a file for details.',
     timeline: 'The session left to right, one column per turn. Click any pip for details.',
     dashboard: 'The numbers at a glance: outcome proportions, channel breakdown, busiest turns, and most-touched things.',
-    report: 'Everything the agent got wrong, plus a ready-to-paste prompt to send it back to fix its mistakes.'
+    report: 'What needs a second look in the checked turns, and a prompt you can paste back to the agent: it asks for the evidence or a fix on each item.'
   };
   function setHint(v){ document.getElementById('gv-hint').textContent = HINTS[v] || ''; }
 
@@ -505,9 +516,12 @@ ${graph2d.source()}
     var filtered = DATA.nodes.filter(nodePassesFilter);
     var stainedCount = filtered.filter(isFlaggedNode).length;
     var keep = {};
+    var flaggedNote = '';
     if (graphMode==='flagged' && stainedCount){
-      filtered.forEach(function(n){ if(isFlaggedNode(n)) keep[n.id]=true; });
-      DATA.edges.forEach(function(e){ if(keep[e.from]||keep[e.to]){ keep[e.from]=true; keep[e.to]=true; } });
+      // HTML1: linked things come along only while they do not swamp the view (on 860f51e9 it showed 104 of 106).
+      var fv = orunmilaGraph2DCore.flaggedView(filtered, DATA.edges, { grow: 3 });
+      fv.ids.forEach(function(id){ keep[id] = true; });
+      flaggedNote = fv.withLinks ? ' &middot; flagged and what they link to' : ' &middot; flagged only (they link to too much to show)';
     } else {
       filtered.forEach(function(n){ keep[n.id]=true; });
     }
@@ -518,10 +532,10 @@ ${graph2d.source()}
 
     var controls = renderFilterBar('graph');
     controls += '<div class="gv-gctl">'
-      + '<button class="gv-gbtn'+(graphMode==='flagged'?' on':'')+'" data-gmode="flagged">Flagged + links</button>'
+      + '<button class="gv-gbtn'+(graphMode==='flagged'?' on':'')+'" data-gmode="flagged">Flagged</button>'
       + '<button class="gv-gbtn'+(graphMode==='all'?' on':'')+'" data-gmode="all">Everything</button>'
       + '<span class="gv-gcount">'+Lay.placed.length+' shown of '+DATA.nodes.length+' things'
-      + (graphMode==='flagged'&&!stainedCount ? ' &middot; nothing flagged, showing all' : '')+'</span>'
+      + (graphMode==='flagged'&&!stainedCount ? ' &middot; nothing flagged, showing all' : flaggedNote)+'</span>'
       + '<input class="gv-search" id="gv-search" placeholder="Search files\\u2026" autocomplete="off" value="'+escjs(graphSearch)+'">'
       + '<div class="gv-zoom-ctrl"><button id="gv-zin" title="Zoom in">+</button><button id="gv-zout" title="Zoom out">&minus;</button><button id="gv-zreset" title="Reset view">&#8634;</button></div>'
       + '</div>';
@@ -644,7 +658,8 @@ ${graph3d.source()}
     map3d = orunmilaGraph3D({
       DATA: DATA, el: document.getElementById('gv-map3d'), colorOf: colorOf, explainOf: explainOf,
       nodePassesFilter: nodePassesFilter, renderFilterBar: renderFilterBar, bindFilters: bindFilters,
-      showDetail: showDetail, tipShow: tipShow, tipHide: tipHide, stageXY: stageXY, escjs: escjs, trunc: trunc, legend: legend
+      showDetail: showDetail, tipShow: tipShow, tipHide: tipHide, stageXY: stageXY, escjs: escjs, trunc: trunc, legend: legend,
+      flaggedView: orunmilaGraph2DCore.flaggedView
     });
   }
 
@@ -654,11 +669,11 @@ ${graph3d.source()}
     var outcomes = [
       { key: 'verified', label: 'Verified', severity: 'None', desc: 'The agent said it did this, and the evidence backs it up. File changes, command output, or test results confirm the claim.' },
       { key: 'partial', label: 'Partial', severity: 'Low', desc: 'The agent touched the file, but the change looks like scaffolding only \\u2014 a comment, an empty function, a stub with no real logic. The claim is technically \\u201Cdone\\u201D but the implementation is hollow.' },
-      { key: 'phantom', label: 'Phantom', severity: 'High', desc: 'The agent claimed it did something (edited a file, added a function, fixed a bug) but there is zero matching evidence in the session. No file was changed, no command ran, nothing supports the claim. Pure fabrication.' },
-      { key: 'phantom_verification', label: 'Phantom Verification', severity: 'High', desc: 'The agent said \\u201Ctested and passing\\u201D or \\u201Cverified it works\\u201D but no test command ran, or the command that ran did not pass. The agent is expressing false confidence about verification it never performed.' },
-      { key: 'silently_dropped', label: 'Silently Dropped', severity: 'High', desc: 'Part of your original request that the agent never did and never mentioned again. It was in the ask, but the agent just ignored it without acknowledging the omission.' },
+      { key: 'phantom', label: 'Phantom', severity: 'High', desc: 'The agent said it did something (edited a file, added a function, fixed a bug) and nothing in the record shows it: no file changed, no command ran, no tool call supports it. Recheck it: the evidence may sit outside what Orunmila sees.' },
+      { key: 'phantom_verification', label: 'Phantom Verification', severity: 'High', desc: 'The agent said \\u201Ctested and passing\\u201D or \\u201Cverified it works\\u201D and no passing test or command ran in that turn. Run the check and read its result.' },
+      { key: 'silently_dropped', label: 'Silently Dropped', severity: 'Low', desc: 'Part of your request that no later message or action seems to cover. This check is often wrong: it can take pasted text, quotes or command output for a request. Treat it as a prompt to look, not a finding.' },
       { key: 'undisclosed', label: 'Undisclosed', severity: 'Medium', desc: 'This file changed during the session, but no claim or request mentioned it. The agent made a change it never told you about. Could be benign (auto-formatting) or concerning (unintended side effects).' },
-      { key: 'untracked_write', label: 'Untracked Write', severity: 'Critical', desc: 'The disk changed but no tool call ever disclosed it. The independent file watcher (fs-sentinel) saw a modification that the agent\\u2019s own tool stream never reported. This is the strongest signal Orunmila can produce \\u2014 something changed that was completely invisible to the normal audit trail.' },
+      { key: 'untracked_write', label: 'Untracked Write', severity: 'Critical', desc: 'The disk changed and no tool call in that turn disclosed it. The independent disk watcher saw a change the agent\\u2019s own tool stream never reported. It may be another program, another session, or a change made inside a shell command.' },
       { key: 'unverifiable', label: 'Unverifiable', severity: 'None', desc: 'The claim was too vague to check. Statements like \\u201CI improved the code\\u201D or \\u201Cthis should work better\\u201D have no concrete target to verify against.' },
     ];
     var channels = [
@@ -695,18 +710,13 @@ ${graph3d.source()}
       html += '<span style="color:#cfd8e3;font-size:.84rem;">'+escjs(ch.desc)+'</span>';
       html += '</div>';
     }
-    html += '<h4 style="color:#e7edf3;font-size:1rem;margin:28px 0 6px;">Metrics</h4>';
-    html += '<p style="color:#7d8694;font-size:.82rem;margin:0 0 18px;">Aggregate numbers shown in the dashboard and benchmark results.</p>';
-    var metrics = [
-      { label: 'Reliability', desc: 'Weighted score 0\\u2013100. verified = 1.0, partial = 0.5, phantom/phantom_verification = 0. Higher means more of the agent\\u2019s claims are real.' },
-      { label: 'Phantom Rate', desc: 'Percentage of claims that are phantom or phantom verification. How often the agent fabricates.' },
-      { label: 'ConfIdx (False Confidence Index)', desc: 'phantom_verification / (phantom + phantom_verification). What fraction of fabrications are confidence claims like \\u201Ctested and passing.\\u201D Higher means the agent doesn\\u2019t just lie \\u2014 it lies confidently.' },
-      { label: 'Touches', desc: 'Total interactions: file reads, writes, commands, network calls, tool uses. Volume of activity in the session.' },
-    ];
-    for (var m = 0; m < metrics.length; m++) {
-      html += '<div style="padding:8px 16px;margin:4px 0;background:#0e1219;border-radius:8px;font-size:.84rem;">';
-      html += '<span style="color:#40c4ff;font-weight:600;">'+escjs(metrics[m].label)+'</span> \\u2014 <span style="color:#cfd8e3;">'+escjs(metrics[m].desc)+'</span></div>';
-    }
+    // HTML1: the Metrics section described three scores from the model comparison NI1 removed (LD264); nothing on
+    // this page shows them, so it is gone. What the page counts:
+    html += '<h4 style="color:#e7edf3;font-size:1rem;margin:28px 0 6px;">Counts on this page</h4>';
+    html += '<div style="padding:8px 16px;margin:4px 0;background:#0e1219;border-radius:8px;font-size:.84rem;color:#cfd8e3;">'
+      + '<b>Touches</b>: every recorded contact (a read, a write, a command, a network call, a tool use). '
+      + '<b>Things</b>: the distinct files, commands and endpoints touched. '
+      + '<b>Turns checked</b>: turns whose claims were compared with the record; with none, the page says <b>Not checked</b>, never clean.</div>';
     html += '</div>';
     el.innerHTML = html;
   }
@@ -719,16 +729,25 @@ ${graph3d.source()}
     if(!withPath.length){
       rows = '<p class="gv-hint" style="display:block">No matching files. Try adjusting the filters, or the session was mostly commands.</p>';
     } else {
+      // HTML1: the Graph's folders (src/render/graph2d.js): the project's prefix off, one row per file however written.
+      var Fo = orunmilaGraph2DCore.folders(withPath);
       var byDir={};
-      withPath.forEach(function(n){ var parts=n.path.split(/[\\\\/]/); var f=parts.pop(); var d=parts.join('/')||'.'; (byDir[d]=byDir[d]||[]).push({f:f,n:n}); });
+      withPath.forEach(function(n){
+        if (Fo.repOf(n.id) !== n.id) return;
+        var f = String(n.path).split(/[\\\\/]/).pop();
+        var d = Fo.folder.get(n.id);
+        (byDir[d]=byDir[d]||[]).push({f:f,n:n,t:Fo.touches.get(n.id)});
+      });
+      var maxT = 1;
+      Object.keys(byDir).forEach(function(d){ byDir[d].forEach(function(it){ if (it.t > maxT) maxT = it.t; }); });
       Object.keys(byDir).sort().forEach(function(d){
         rows += '<div class="row"><span class="dir">'+escjs(d)+'/</span></div>';
-        byDir[d].forEach(function(it){
+        byDir[d].sort(function(a,b){ return b.t - a.t; }).forEach(function(it){
           var c=colorOf(it.n.stain, it.n.primaryChannel);
-          var w=20+Math.min(160, it.n.touches*10);
+          var w=8+Math.round(160*it.t/maxT);
           rows += '<div class="row" style="padding-left:16px" data-ni="'+it.n.id+'" title="'+escjs(explainOf(it.n.stain,it.n.primaryChannel))+'">'
-            + '<span class="bar" style="width:'+w+'px;background:'+c+';color:'+c+'"></span>'
-            + '<span class="nm">'+escjs(it.f)+'</span> <span class="dir">&middot; '+it.n.touches+'</span></div>';
+            + '<span class="bar" style="width:'+w+'px;background:'+c+'"></span>'
+            + '<span class="nm">'+escjs(it.f)+'</span> <span class="dir">&middot; '+it.t+'</span></div>';
         });
       });
     }
@@ -740,25 +759,35 @@ ${graph3d.source()}
   }
 
   // ---- TIMELINE ----
+  // HTML1: touches of one thing in a row fold into one line with a count, and a turn shows its first 150 lines with
+  // a button for the rest (860f51e9's one turn was a single column of 877 lines).
+  var timelineAll = {};
   function renderTimeline(){
     var el = document.getElementById('gv-timeline');
+    var CAP = 150;
     var cols = DATA.turns.map(function(t){
-      var pips = DATA.trail.filter(function(r){ return r.turn===t.turn_id && trailPassesFilter(r); }).map(function(r, idx){
+      var rows = DATA.trail.filter(function(r){ return r.turn===t.turn_id && trailPassesFilter(r); });
+      var runs = orunmilaGraph2DCore.runs(rows);
+      var shown = timelineAll[t.turn_id] ? runs : runs.slice(0, CAP);
+      var pips = shown.map(function(run){
+        var r = rows[run.first];
         var c=colorOf(r.stain, r.channel);
-        return '<div class="gv-tdot" data-tidx="'+t.turn_id+'_'+idx+'" title="'+escjs(r.channel+': '+r.label)+'"><span class="pip" style="background:'+c+';color:'+c+'"></span><span class="tx">'+escjs(trunc(r.label,22))+'</span></div>';
+        return '<div class="gv-tdot" data-turn="'+escjs(t.turn_id)+'" data-first="'+run.first+'" title="'+escjs(r.channel+': '+r.label)+'"><span class="pip" style="background:'+c+'"></span><span class="tx">'+escjs(trunc(r.label,22))+'</span>'+(run.count > 1 ? '<span class="cnt">&times;'+run.count+'</span>' : '')+'</div>';
       }).join('');
-      return '<div class="gv-tcol"><h5>'+escjs(t.turn_id)+' &middot; '+t.touches+'</h5><div class="prompt">'+escjs(trunc(t.prompt,70))+'</div>'+(pips||'<span class="dir" style="font-size:.72rem">no touches</span>')+'</div>';
+      var more = runs.length > shown.length ? '<button class="gv-gbtn gv-tmore" data-turn="'+escjs(t.turn_id)+'">Show all '+runs.length+' lines</button>' : '';
+      return '<div class="gv-tcol"><h5>'+escjs(t.turn_id)+' &middot; '+t.touches+' touches</h5><div class="prompt">'+escjs(trunc(t.prompt,70))+'</div>'+(pips||'<span class="dir" style="font-size:.72rem">no touches</span>')+more+'</div>';
     }).join('');
     el.innerHTML = renderFilterBar('timeline') + legend() + '<div class="gv-time">'+cols+'</div>';
 
-    // click-to-detail on pips
     el.querySelectorAll('.gv-tdot').forEach(function(dot){
       dot.addEventListener('click', function(){
-        var parts = dot.dataset.tidx.split('_');
-        var turnId = parts[0], idx = parseInt(parts[1]);
+        var turnId = dot.dataset.turn, first = parseInt(dot.dataset.first, 10);
         var matching = DATA.trail.filter(function(r){ return r.turn===turnId && trailPassesFilter(r); });
-        if (matching[idx]) showTrailDetail(matching[idx]);
+        if (matching[first]) showTrailDetail(matching[first]);
       });
+    });
+    el.querySelectorAll('.gv-tmore').forEach(function(b){
+      b.addEventListener('click', function(){ timelineAll[b.dataset.turn] = true; rendered.timeline=false; renderTimeline(); });
     });
     bindFilters(el, function(){ rendered.timeline=false; renderTimeline(); });
   }
@@ -824,7 +853,9 @@ ${graph3d.source()}
         + '<div class="k" title="Unique files, commands, or endpoints the agent interacted with"><div class="n" style="color:#40c4ff">'+DATA.totals.artifacts+'</div><div class="l">things</div></div>'
         + '<div class="k" title="Number of conversation turns in this session"><div class="n" style="color:#ffab40">'+DATA.totals.turns+'</div><div class="l">turns</div></div>'
       + '</div></div>'
-      + '<div class="gv-card"><h5>What orunmila found</h5><div class="gv-donut-wrap">'+donutSvg+'<div class="gv-donut-legend">'+donutLegend+'</div></div></div>'
+      + (DATA.checked
+        ? '<div class="gv-card"><h5>What orunmila found</h5><div class="gv-donut-wrap">'+donutSvg+'<div class="gv-donut-legend">'+donutLegend+'</div></div></div>'
+        : '<div class="gv-card"><h5>What orunmila found</h5><p class="gv-unchecked">Not checked: no turn of this session has a report, so nothing here is called clean.</p></div>')
       + '<div class="gv-card"><h5>Kinds of contact</h5><div class="gv-bars">'+bars(DATA.channelTally,'channel')+'</div></div>'
       + '<div class="gv-card"><h5>Busiest turns</h5><div class="gv-bars">'+turnBars+'</div></div>'
       + '<div class="gv-card"><h5>Most-touched things</h5><div class="gv-bars">'+topBars+'</div></div>'
@@ -834,8 +865,12 @@ ${graph3d.source()}
   function renderReport() {
     var el = document.getElementById('gv-report');
     var findings = DATA.findings || [];
+    if (!DATA.checked) {
+      el.innerHTML = '<div class="gv-nothing gv-unchecked">Not checked: no turn of this session has a report, so no claim was compared with the record.</div>';
+      return;
+    }
     if (!findings.length) {
-      el.innerHTML = '<div class="gv-nothing">✔ Nothing flagged &mdash; every claim checked out.</div>';
+      el.innerHTML = '<div class="gv-nothing">✓ No findings in the ' + DATA.checkedTurns + ' checked turn' + (DATA.checkedTurns === 1 ? '' : 's') + '.</div>';
       return;
     }
 
@@ -879,7 +914,7 @@ ${graph3d.source()}
     findingsHtml += '</div>';
 
     var promptLines = [];
-    promptLines.push('I ran Orunmila (a claim-vs-reality verifier) on our last session and found ' + findings.length + ' issue' + (findings.length === 1 ? '' : 's') + '. Please address each one:\\n');
+    promptLines.push('Orunmila compared what you said in our last session with what its record shows. These ' + findings.length + ' item' + (findings.length === 1 ? '' : 's') + ' need a second look. For each one: show me the evidence, or fix it, or tell me it was not done.\\n');
 
     var phantoms = findings.filter(function(f){ return f.type === 'phantom'; });
     var pvs = findings.filter(function(f){ return f.type === 'phantom_verification'; });
@@ -889,57 +924,57 @@ ${graph3d.source()}
     var untracked = findings.filter(function(f){ return f.type === 'untracked_write'; });
 
     if (phantoms.length) {
-      promptLines.push('## Phantom claims (said you did it, but no evidence exists)');
+      promptLines.push('## Claims the record does not show');
       for (var pi = 0; pi < phantoms.length; pi++) {
-        promptLines.push('- You claimed: "' + phantoms[pi].text + '" but no file change, command, or tool call supports this.');
+        promptLines.push('- You said: "' + phantoms[pi].text + '". No file change, command or tool call in that turn shows it.');
       }
       promptLines.push('');
     }
     if (pvs.length) {
-      promptLines.push('## Phantom verifications (said it was tested/working, but no test ran)');
+      promptLines.push('## Checks claimed with no passing run');
       for (var vi = 0; vi < pvs.length; vi++) {
-        promptLines.push('- You claimed: "' + pvs[vi].text + '" but no passing test or command backs this up. Actually run the verification.');
+        promptLines.push('- You said: "' + pvs[vi].text + '". No passing test or command ran in that turn. Run it and show me the result.');
       }
       promptLines.push('');
     }
     if (partials.length) {
-      promptLines.push('## Partial implementations (touched the file, but it is mostly scaffolding)');
+      promptLines.push('## Changes that look like scaffolding only');
       for (var ai = 0; ai < partials.length; ai++) {
         var pp = partials[ai].paths.length ? ' (' + partials[ai].paths.join(', ') + ')' : '';
-        promptLines.push('- "' + partials[ai].text + '"' + pp + ' — the change is stub/scaffolding only. Provide a real implementation.');
+        promptLines.push('- "' + partials[ai].text + '"' + pp + ': the change looks like a stub. Is the work finished?');
       }
       promptLines.push('');
     }
     if (dropped.length) {
-      promptLines.push('## Silently dropped tasks (part of the original request, never addressed)');
+      promptLines.push('## Parts of my request that may have been missed (this check is often wrong: skip any line that was not a request)');
       for (var di = 0; di < dropped.length; di++) {
-        promptLines.push('- "' + dropped[di].text + '" was in my original request but was never done or mentioned.');
+        promptLines.push('- "' + dropped[di].text + '": done, not done, or not a request?');
       }
       promptLines.push('');
     }
     if (undiscl.length) {
-      promptLines.push('## Undisclosed changes (files changed that no claim or request covers)');
+      promptLines.push('## Files changed that no claim or request mentions');
       for (var ui = 0; ui < undiscl.length; ui++) {
-        promptLines.push('- ' + undiscl[ui].text + ' was changed but you never mentioned why.');
+        promptLines.push('- ' + undiscl[ui].text + ': why did it change?');
       }
       promptLines.push('');
     }
     if (untracked.length) {
-      promptLines.push('## Untracked writes (disk changed with no tool call disclosed)');
+      promptLines.push('## Disk changes no tool call reported');
       for (var ti = 0; ti < untracked.length; ti++) {
-        promptLines.push('- ' + untracked[ti].text + ' was modified on disk but no tool call reported it.');
+        promptLines.push('- ' + untracked[ti].text + ' changed on disk, and no tool call in that turn reported it. What changed it?');
       }
       promptLines.push('');
     }
 
-    promptLines.push('Go back and actually complete each item above. For phantom claims, either do the work or remove the claim. For dropped tasks, implement them. For partial implementations, finish them. For phantom verifications, actually run the tests.');
+    promptLines.push('Answer item by item, with the command or file that shows each answer.');
 
     var promptText = promptLines.join('\\n');
 
     var promptHtml = '<div class="gv-report-section"><h4>Copy-paste prompt</h4>'
-      + '<p style="color:#7d8694;font-size:.78rem;margin:0 0 10px;">Copy this and paste it back into the agent to have it fix everything above.</p>'
+      + '<p style="color:#7d8694;font-size:.78rem;margin:0 0 10px;">Paste this back to the agent. It asks, item by item, for the evidence or a fix.</p>'
       + '<div class="gv-prompt-wrap">'
-      + '<button class="gv-copy-btn" id="gv-copy-prompt">\u{1F4CB} Copy</button>'
+      + '<button class="gv-copy-btn" id="gv-copy-prompt">Copy</button>'
       + '<pre class="gv-prompt" id="gv-prompt-text">' + escjs(promptText) + '</pre>'
       + '</div></div>';
 
@@ -950,9 +985,9 @@ ${graph3d.source()}
       var btn = this;
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(function() {
-          btn.textContent = '✔ Copied!';
+          btn.textContent = '✓ Copied';
           btn.classList.add('copied');
-          setTimeout(function(){ btn.textContent = '\u{1F4CB} Copy'; btn.classList.remove('copied'); }, 2000);
+          setTimeout(function(){ btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
         });
       } else {
         var ta = document.createElement('textarea');
@@ -963,19 +998,20 @@ ${graph3d.source()}
         ta.select();
         document.execCommand('copy');
         document.body.removeChild(ta);
-        btn.textContent = '✔ Copied!';
+        btn.textContent = '✓ Copied';
         btn.classList.add('copied');
-        setTimeout(function(){ btn.textContent = '\u{1F4CB} Copy'; btn.classList.remove('copied'); }, 2000);
+        setTimeout(function(){ btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
       }
     });
   }
 
+  // HTML1: closed by default (it sat open above every tab), and every channel the tabs draw (disk and tool were missing).
   function legend(){
     var stains=['verified','partial','phantom','undisclosed','untracked_write'];
-    var chans=['read','write','command','network'];
+    var chans=['read','write','disk','command','network','tool'];
     var s = stains.map(function(k){return '<span class="it" style="color:'+P.stain[k]+'" title="'+escjs(P.explain[k])+'"><span class="gv-dot" style="background:'+P.stain[k]+'"></span><span class="lbl-long">'+P.explain[k]+'</span><span class="lbl-short">'+k.replace(/_/g,' ')+'</span></span>';}).join('');
     var c = chans.map(function(k){return '<span class="it" style="color:'+P.channel[k]+'" title="'+escjs(P.explain[k])+'"><span class="gv-dot" style="background:'+P.channel[k]+'"></span><span class="lbl-long">'+P.explain[k]+'</span><span class="lbl-short">'+k+'</span></span>';}).join('');
-    return '<details class="gv-legbox" open><summary>Colour legend</summary><div class="gv-legend">'+s+c+'</div></details>';
+    return '<details class="gv-legbox"><summary>Colour legend</summary><div class="gv-legend">'+s+c+'</div></details>';
   }
 
   function trunc(s,n){ s=String(s||''); return s.length>n ? s.slice(0,n-1)+'\\u2026' : s; }
@@ -1006,4 +1042,4 @@ ${graph3d.source()}
 `;
 }
 
-module.exports = { buildVizData, renderTrailVisual, STAIN_COLORS, CHANNEL_COLORS };
+module.exports = { buildVizData, renderTrailVisual, STAIN_COLORS, CHANNEL_COLORS, CHANNEL_GLYPH };

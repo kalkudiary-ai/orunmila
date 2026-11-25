@@ -41,7 +41,7 @@ execFileSync('node', [path.join(__dirname, '..', 'bin', 'orunmila.js'), 'trail',
 const html = fs.readFileSync(page, 'utf8');
 const scrub = "<script>window.addEventListener('load',function(){setTimeout(function(){var s=document.getElementById('g3-scrub');s.value=String(Math.floor(+s.max/3));s.dispatchEvent(new Event('input'));},200);});</script>";
 const replayPage = path.join(out, 'trail-replay.html');
-fs.writeFileSync(replayPage, html.replace('</body>', scrub + '</body>'));
+fs.writeFileSync(replayPage, html.replace('</body>', () => scrub + '</body>'));
 
 const browsers = [
   {

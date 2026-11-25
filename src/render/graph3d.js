@@ -589,7 +589,7 @@ function main(env) {
     env.legend() +
     env.renderFilterBar('map3d') +
     '<div class="gv-gctl">' +
-    '<button class="gv-gbtn" data-g3mode="flagged">Flagged + links</button>' +
+    '<button class="gv-gbtn" data-g3mode="flagged">Flagged</button>' +
     '<button class="gv-gbtn on" data-g3mode="all">Everything</button>' +
     '<span class="gv-gcount" id="g3-count"></span>' +
     '<input class="gv-search" id="g3-search" placeholder="Search files…" autocomplete="off">' +
@@ -656,12 +656,12 @@ function main(env) {
     const pass = D.nodes.map((n) => env.nodePassesFilter(n));
     const keep = new Uint8Array(N);
     const stained = D.nodes.some((n, i) => pass[i] && flagged[i]);
-    if (opt.mode === 'flagged' && stained) {
+    if (opt.mode === 'flagged' && stained && env.flaggedView) {
+      // The Graph tab's rule (HTML1): linked things come along only while they do not swamp the view.
+      for (const id of env.flaggedView(D.nodes.filter((n, i) => pass[i]), D.edges, { grow: 3 }).ids) keep[id] = 1;
+    } else if (opt.mode === 'flagged' && stained) {
       D.nodes.forEach((n, i) => {
-        if (pass[i] && flagged[i]) {
-          keep[i] = 1;
-          for (const j of neighbours[i]) keep[j] = 1;
-        }
+        if (pass[i] && flagged[i]) keep[i] = 1;
       });
     } else D.nodes.forEach((n, i) => (keep[i] = pass[i] ? 1 : 0));
     visible = [];

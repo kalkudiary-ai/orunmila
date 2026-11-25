@@ -68,6 +68,76 @@ function core() {
   }
 
   /**
+   * Each thing's folder as the page shows it, and one row per file however it was written (the Graph and the Tree
+   * share this). The project's own prefix comes off (`~/proj/src/x` shows as `src/x`); one file written two ways in
+   * one level is one: the most touched spelling stands for the others (`also`), with their touches added (`touches`),
+   * and `repOf` sends a merged id to it.
+   */
+  function folders(nodes) {
+    const prefix = projectPrefix(nodes.filter((n) => n.path).map(folderOf));
+    const folder = new Map();
+    for (const n of nodes) {
+      let f = folderOf(n);
+      if (prefix && n.path) {
+        if (f === prefix) f = '.';
+        else if (f.startsWith(prefix + '/')) f = f.slice(prefix.length + 1);
+      }
+      folder.set(n.id, f);
+    }
+    const alias = new Map();
+    const also = new Map();
+    const touches = new Map(nodes.map((n) => [n.id, n.touches || 0]));
+    const byKey = new Map();
+    for (const n of nodes) {
+      if (!n.path) continue;
+      const key = levelOf(n) + '|' + folder.get(n.id) + '/' + String(n.path).split(/[\\/]/).pop();
+      if (!byKey.has(key)) byKey.set(key, []);
+      byKey.get(key).push(n);
+    }
+    for (const list of byKey.values()) {
+      if (list.length < 2) continue;
+      const rep = list.slice().sort((a, b) => (b.touches || 0) - (a.touches || 0) || a.id - b.id)[0];
+      const rest = list.filter((n) => n !== rep).map((n) => n.id).sort((a, b) => a - b);
+      also.set(rep.id, rest);
+      touches.set(rep.id, list.reduce((s, n) => s + (n.touches || 0), 0));
+      for (const id of rest) alias.set(id, rep.id);
+    }
+    return { prefix, folder, alias, also, touches, repOf: (id) => (alias.has(id) ? alias.get(id) : id) };
+  }
+
+  /**
+   * The "Flagged" view: the flagged things, and the things linked to them only while those stay few (on a dense
+   * session nearly everything links to something flagged, and the view showed 104 of 106).
+   */
+  function flaggedView(nodes, edges, opts) {
+    const grow = (opts && opts.grow) || 3;
+    const flagged = nodes.filter(isFlagged).map((n) => n.id);
+    if (!flagged.length) return { ids: [], withLinks: false };
+    const isF = new Set(flagged);
+    const known = new Set(nodes.map((n) => n.id));
+    const near = new Set();
+    for (const e of edges || []) {
+      if (isF.has(e.from) && known.has(e.to) && !isF.has(e.to)) near.add(e.to);
+      if (isF.has(e.to) && known.has(e.from) && !isF.has(e.from)) near.add(e.from);
+    }
+    // Both limits: at most `grow` linked things per flagged one, and the view at most half of everything (12 things
+    // always allowed), so "Flagged" never turns back into "Everything".
+    const withLinks = near.size <= grow * flagged.length && flagged.length + near.size <= Math.max(12, nodes.length / 2);
+    return { ids: (withLinks ? flagged.concat([...near]) : flagged).sort((a, b) => a - b), withLinks };
+  }
+
+  /** The Timeline's lines: touches of one thing in a row, in one turn, folded into one line with a count. */
+  function runs(trail) {
+    const out = [];
+    (trail || []).forEach((r, i) => {
+      const last = out[out.length - 1];
+      if (last && last.turn === r.turn && last.node === r.node) last.count++;
+      else out.push({ turn: r.turn, node: r.node, count: 1, first: i });
+    });
+    return out;
+  }
+
+  /**
    * nodes: [{ id, label, path, primaryChannel, touches, stain }]; edges: [{ from, to, kind }] by id.
    * opts: { cap (rows per level, 60), search (text), width (960) }.
    */
@@ -83,35 +153,9 @@ function core() {
     const headH = 18;
     const gap = 10;
     const matches = (n) => !!q && (String(n.label || '').toLowerCase().indexOf(q) >= 0 || String(n.path || '').toLowerCase().indexOf(q) >= 0);
-    const prefix = projectPrefix(nodes.filter((n) => n.path).map(folderOf));
-    const folder = (n) => {
-      const f = folderOf(n);
-      if (!prefix || !n.path) return f;
-      if (f === prefix) return '.';
-      return f.startsWith(prefix + '/') ? f.slice(prefix.length + 1) : f;
-    };
-
-    // One file written two ways in one level (src/x.js and ~/proj/src/x.js) is one row: the most touched spelling
-    // stands for the others (`also`), with their touches added, and their links come to it.
-    const alias = new Map();
-    const also = new Map();
-    const touches = new Map(nodes.map((n) => [n.id, n.touches || 0]));
-    const byKey = new Map();
-    for (const n of nodes) {
-      if (!n.path) continue;
-      const key = levelOf(n) + '|' + folder(n) + '/' + String(n.path).split(/[\\/]/).pop();
-      if (!byKey.has(key)) byKey.set(key, []);
-      byKey.get(key).push(n);
-    }
-    for (const list of byKey.values()) {
-      if (list.length < 2) continue;
-      const rep = list.slice().sort((a, b) => (b.touches || 0) - (a.touches || 0) || a.id - b.id)[0];
-      const rest = list.filter((n) => n !== rep).map((n) => n.id).sort((a, b) => a - b);
-      also.set(rep.id, rest);
-      touches.set(rep.id, list.reduce((s, n) => s + (n.touches || 0), 0));
-      for (const id of rest) alias.set(id, rep.id);
-    }
-    const repOf = (id) => (alias.has(id) ? alias.get(id) : id);
+    const F = folders(nodes);
+    const folder = (n) => F.folder.get(n.id);
+    const { alias, also, touches, repOf } = F;
 
     const placed = [];
     const levels = LEVELS.map((L, lv) => {
@@ -188,7 +232,7 @@ function core() {
     return { width: W, height, levels, placed, links };
   }
 
-  return { layered, levelOf, folderOf, isFlagged, LEVELS };
+  return { layered, folders, flaggedView, runs, levelOf, folderOf, isFlagged, LEVELS };
 }
 
 /** The layout as page source. */

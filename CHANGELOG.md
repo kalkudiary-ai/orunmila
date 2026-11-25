@@ -8,8 +8,40 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ## [Unreleased]
 
+### Added
+
+- **The trail page's 3D Map.** The same map in 3D, drawn by Orunmila's own
+  WebGL2 code in the package, with nothing loaded from the network: glowing
+  spheres, links with sparkles, a replay that follows the agent from file to
+  file, and a Calm (the default) or Vivid look. Without WebGL2 it says so and
+  points to the Graph tab.
+- **The Graph tab reads left to right.** Three levels (what the agent read, ran
+  and changed), each in its folders, flagged things first; links curve between
+  the columns instead of through one centre point. A folder or file written
+  two ways (`src/x.js` and `~/proj/src/x.js`) is one.
+
+### Changed
+
+- **The trail page says what it checked.** With no checked turn, the header,
+  the file list, the Report tab, the Dashboard and the claim-vs-record section
+  say "Not checked"; before, the page read "looks clean". Turns checked with no
+  checkable claim say so. Undisclosed changes make the header "Worth a look".
+- **Calmer, one palette, no emoji.** One set of outcome colours across the
+  page (the header and the tabs used two), no glow on every dot, and plain
+  symbols in place of emoji, which drew differently by operating system.
+- **Neutral words.** The Glossary and the copy-paste prompt ask for evidence or
+  a fix instead of calling a claim a fabrication; the dropped-ask finding is
+  marked as often wrong; the Glossary no longer describes scores the page
+  does not show.
+- **"Flagged" stays flagged.** It adds linked things only while they stay few;
+  on a dense session it showed nearly everything.
+- **The judge's report groups repeated findings** with their count (the JSON
+  for the agent keeps every one).
+
 ### Fixed
 
+- **The file bars in "Files worth a look" draw.** Their fill was an inline
+  element, so its width did nothing and no bar ever showed.
 - **A secret used as an object key no longer reaches the event log.** Capture
   redacted every string value in an event but copied object keys as written,
   so a tool input such as `{"<token>": "v"}` stored the token. A key is now

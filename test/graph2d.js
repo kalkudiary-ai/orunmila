@@ -116,6 +116,40 @@ it("G2D: a link leaves from its column's right edge, past the labels, and enters
   assert.ok(Math.abs(end - (b.x - b.r)) < 0.11, `ends at the dot's left edge: ${end} vs ${b.x - b.r}`);
 });
 
+it('HTML1: "Flagged" adds linked things only while they do not swamp it (860f51e9: 104 of 106 shown)', () => {
+  const many = [node(0, 'write', 'src/f.js', 1, 'undisclosed')];
+  const links = [];
+  for (let i = 1; i < 40; i++) { many.push(node(i, 'read', `src/r${i}.js`, 1)); links.push({ from: i, to: 0 }); }
+  const dense = core.flaggedView(many, links, { grow: 3 });
+  assert.deepStrictEqual(dense.ids, [0], 'flagged only: its 39 links would swamp it');
+  assert.strictEqual(dense.withLinks, false);
+  const small = core.flaggedView(many.slice(0, 3), links.slice(0, 2), { grow: 3 });
+  assert.deepStrictEqual(small.ids, [0, 1, 2], 'a few linked things come along');
+  assert.strictEqual(small.withLinks, true);
+  assert.deepStrictEqual(core.flaggedView([node(0, 'read', 'a.js', 1)], [], {}).ids, [], 'nothing flagged, nothing in the view');
+  // 860f51e9's shape: 38 of 106 flagged, the other 68 each linked to one of them: within 3x, but the whole graph.
+  const big = [];
+  const bigLinks = [];
+  for (let i = 0; i < 106; i++) big.push(node(i, i < 38 ? 'write' : 'read', `src/f${i}.js`, 1, i < 38 ? 'undisclosed' : null));
+  for (let i = 38; i < 106; i++) bigLinks.push({ from: i, to: i % 38 });
+  const v = core.flaggedView(big, bigLinks, { grow: 3 });
+  assert.strictEqual(v.withLinks, false, 'flagged and linked would be 106 of 106');
+  assert.strictEqual(v.ids.length, 38);
+});
+
+it('HTML1: the Tree shares the Graph\'s folders: one folder and one file, however each was written', () => {
+  const two = [node(0, 'write', '~/tools/proj/test/c.js', 1), node(1, 'write', 'test/c.js', 4), node(2, 'read', '~/tools/proj/README.md', 1)];
+  const f = core.folders(two);
+  assert.strictEqual(f.folder.get(0), 'test');
+  assert.strictEqual(f.folder.get(2), '.');
+  assert.strictEqual(f.repOf(0), 1, 'the most touched spelling stands for both');
+});
+
+it('HTML1: the Timeline folds touches of one thing in a row into one line with a count', () => {
+  const trail = [{ turn: 't1', node: 3 }, { turn: 't1', node: 3 }, { turn: 't1', node: 4 }, { turn: 't1', node: 3 }, { turn: 't2', node: 3 }];
+  assert.deepStrictEqual(core.runs(trail).map((r) => [r.turn, r.node, r.count, r.first]), [['t1', 3, 2, 0], ['t1', 4, 1, 2], ['t1', 3, 1, 3], ['t2', 3, 1, 4]]);
+});
+
 it('G2D: the same input gives the same picture', () => {
   assert.deepStrictEqual(core.layered(nodes, edges, { cap: 50 }), core.layered(nodes, edges, { cap: 50 }));
 });

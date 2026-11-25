@@ -322,7 +322,17 @@ function core() {
     return mul(perspective(fovy, aspect, near, far), view(cam));
   }
 
-  return { rng, hashString, repulse, createLayout, layout, replaySteps, mul, transform, perspective, view, viewProj, eye };
+  // The two looks (O, 2026-11-25: the default "looks too much, blinding infact, can that also be toggle controlled?").
+  // Calm is the default: every source of light turned down together. Vivid is the first build's look.
+  const DEFAULT_LOOK = 'calm';
+  function looks() {
+    return {
+      calm: { glow: 0.3, light: 0.5, sparkle: 0.45, dust: 0.5, exposure: 0.9 },
+      vivid: { glow: 1.15, light: 1, sparkle: 1, dust: 1, exposure: 1.05 },
+    };
+  }
+
+  return { rng, hashString, repulse, createLayout, layout, replaySteps, mul, transform, perspective, view, viewProj, eye, looks, DEFAULT_LOOK };
 }
 
 function shaders() {
@@ -351,7 +361,7 @@ function shaders() {
       F +
       [
         'in vec2 vUV; in vec3 vColor; in vec4 vParams; in float vDepth;',
-        'uniform float uPass; uniform float uTime; uniform float uMotion; uniform vec3 uFog; uniform vec2 uFogRange;',
+        'uniform float uPass; uniform float uTime; uniform float uMotion; uniform vec3 uFog; uniform vec2 uFogRange; uniform float uLight;',
         'out vec4 o;',
         'void main(){',
         '  float r2 = dot(vUV, vUV);',
@@ -365,14 +375,14 @@ function shaders() {
         '    float diff = max(dot(n, L), 0.0);',
         '    float rim = pow(1.0 - n.z, 2.4);',
         '    float spec = pow(max(dot(n, normalize(L + vec3(0.0, 0.0, 1.0))), 0.0), 56.0);',
-        '    vec3 col = vColor * (0.14 + 0.5 * diff) + vColor * rim * (1.5 + 1.6 * hl) + vec3(spec) * 0.85;',
-        '    col += vColor * (0.32 + 1.1 * pulse + 0.9 * hl) * smoothstep(1.0, 0.0, r2);',
+        '    vec3 col = vColor * (0.14 + 0.5 * diff) + (vColor * rim * (1.5 + 1.6 * hl) + vec3(spec) * 0.85) * uLight;',
+        '    col += vColor * (0.32 * uLight + 1.1 * pulse * uLight + 0.9 * hl) * smoothstep(1.0, 0.0, r2);',
         '    col *= 1.0 - 0.84 * dim;',
         '    o = vec4(mix(col, uFog, fog * 0.85), 1.0);',
         '  } else {',
         '    float r = sqrt(r2);',
         '    if (r < 0.97) discard;',
-        '    float glow = exp(-(r - 1.0) * 3.2) * (0.2 + 0.55 * pulse + 0.45 * hl);',
+        '    float glow = exp(-(r - 1.0) * 3.2) * ((0.2 + 0.55 * pulse) * uLight + 0.45 * hl);',
         '    float ring = hl * smoothstep(0.1, 0.0, abs(r - 1.55)) * 1.7;',
         '    float a = (glow + ring) * (1.0 - 0.86 * dim) * (1.0 - fog);',
         '    if (a < 0.003) discard;',
@@ -417,21 +427,21 @@ function shaders() {
         'layout(location=0) in float aZero;',
         'layout(location=1) in vec3 iA; layout(location=2) in vec3 iB; layout(location=3) in vec3 iC;',
         'layout(location=4) in vec4 iP;',
-        'uniform mat4 uViewProj; uniform float uTime; uniform float uScale;',
+        'uniform mat4 uViewProj; uniform float uTime; uniform float uScale; uniform float uSparkle;',
         'out vec3 vColor; out float vI;',
         'void main(){',
         '  float t = fract(iP.x + uTime * iP.y);',
         '  vec4 c = uViewProj * vec4(mix(iA, iB, t), 1.0);',
         '  gl_Position = c + vec4(aZero);',
         '  gl_PointSize = clamp(iP.z * uScale / max(c.w, 1e-3), 1.5, 48.0);',
-        '  vColor = iC; vI = iP.w * smoothstep(0.0, 0.12, t) * smoothstep(1.0, 0.82, t);',
+        '  vColor = iC; vI = iP.w * uSparkle * smoothstep(0.0, 0.12, t) * smoothstep(1.0, 0.82, t);',
         '}',
       ].join('\n'),
     motesVS:
       V +
       [
         'layout(location=0) in vec4 aPos;',
-        'uniform mat4 uViewProj; uniform float uTime; uniform float uScale; uniform float uMotion;',
+        'uniform mat4 uViewProj; uniform float uTime; uniform float uScale; uniform float uMotion; uniform float uDust;',
         'out vec3 vColor; out float vI;',
         'void main(){',
         '  float s = aPos.w;',
@@ -440,7 +450,7 @@ function shaders() {
         '  gl_Position = c;',
         '  gl_PointSize = clamp(2.4 * uScale / max(c.w, 1e-3), 1.0, 6.0);',
         '  vColor = mix(vec3(0.35, 0.55, 1.0), vec3(0.75, 0.6, 1.0), fract(s * 7.31));',
-        '  vI = (0.16 + 0.12 * sin(uTime * 1.7 * uMotion + s * 10.0)) * smoothstep(9000.0, 200.0, c.w);',
+        '  vI = (0.16 + 0.12 * sin(uTime * 1.7 * uMotion + s * 10.0)) * uDust * smoothstep(9000.0, 200.0, c.w);',
         '}',
       ].join('\n'),
     pointsVS:
@@ -555,6 +565,24 @@ function main(env) {
   const reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const FOV = 0.9;
   const opt = { mode: 'all', glow: 1, sparks: true, motes: true, spin: !reduced, labels: true, follow: true, search: '' };
+  // The look: Calm by default, Vivid on the switch; the choice is remembered in this browser (and only there).
+  const LOOKS = C.looks();
+  let saved;
+  try {
+    saved = window.localStorage.getItem('orunmila.g3.look');
+  } catch {
+    saved = null;
+  }
+  function setLook(name) {
+    opt.look = LOOKS[name] ? name : C.DEFAULT_LOOK;
+    const L = LOOKS[opt.look];
+    opt.glow = L.glow;
+    opt.light = L.light;
+    opt.sparkle = L.sparkle;
+    opt.dust = L.dust;
+    opt.exposure = L.exposure;
+  }
+  setLook(saved);
 
   // ---- the controls ----
   el.innerHTML =
@@ -571,7 +599,11 @@ function main(env) {
     '<canvas class="g3-canvas" id="g3-canvas"></canvas>' +
     '<div class="g3-labels" id="g3-labels"></div>' +
     '<div class="g3-hud">' +
-    '<label>Glow <input type="range" id="g3-glow" min="0" max="250" value="100"></label>' +
+    '<span class="gv-seg g3-look" role="group" aria-label="Look">' +
+    '<button data-g3look="calm"' + (opt.look === 'calm' ? ' class="on"' : '') + '>Calm</button>' +
+    '<button data-g3look="vivid"' + (opt.look === 'vivid' ? ' class="on"' : '') + '>Vivid</button>' +
+    '</span>' +
+    '<label>Glow <input type="range" id="g3-glow" min="0" max="250" value="' + Math.round(opt.glow * 100) + '"></label>' +
     '<label><input type="checkbox" id="g3-sparks" checked> Sparkles</label>' +
     '<label><input type="checkbox" id="g3-motes" checked> Dust</label>' +
     '<label><input type="checkbox" id="g3-spin"' + (opt.spin ? ' checked' : '') + '> Spin</label>' +
@@ -1017,6 +1049,7 @@ function main(env) {
     gl.uniform3fv(G.node.u.uUp, up);
     gl.uniform1f(G.node.u.uTime, t);
     gl.uniform1f(G.node.u.uMotion, motion);
+    gl.uniform1f(G.node.u.uLight, opt.light);
     gl.uniform3fv(G.node.u.uFog, fog);
     gl.uniform2fv(G.node.u.uFogRange, fogRange);
     gl.bindBuffer(gl.ARRAY_BUFFER, G.nodeBuf);
@@ -1038,6 +1071,7 @@ function main(env) {
       gl.uniform1f(G.motes.u.uTime, t);
       gl.uniform1f(G.motes.u.uScale, scale);
       gl.uniform1f(G.motes.u.uMotion, motion);
+      gl.uniform1f(G.motes.u.uDust, opt.dust);
       gl.bindVertexArray(G.motesVAO);
       gl.drawArrays(gl.POINTS, 0, G.motesCount);
     }
@@ -1058,6 +1092,7 @@ function main(env) {
       gl.uniformMatrix4fv(G.spark.u.uViewProj, false, vp);
       gl.uniform1f(G.spark.u.uTime, t);
       gl.uniform1f(G.spark.u.uScale, scale / 100);
+      gl.uniform1f(G.spark.u.uSparkle, opt.sparkle);
       gl.bindBuffer(gl.ARRAY_BUFFER, G.sparkBuf);
       gl.bufferData(gl.ARRAY_BUFFER, sparkData.subarray(0, counts.ns * 13), gl.DYNAMIC_DRAW);
       gl.bindVertexArray(G.sparkVAO);
@@ -1120,8 +1155,8 @@ function main(env) {
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, lv.length ? lv[0].tex : scene.tex);
     gl.uniform1i(G.comp.u.uBloom, 1);
-    gl.uniform1f(G.comp.u.uBloomStrength, lv.length ? opt.glow * 1.15 : 0);
-    gl.uniform1f(G.comp.u.uExposure, 1.05);
+    gl.uniform1f(G.comp.u.uBloomStrength, lv.length ? opt.glow : 0);
+    gl.uniform1f(G.comp.u.uExposure, opt.exposure);
     gl.uniform1f(G.comp.u.uTime, t);
     gl.uniform2f(G.comp.u.uRes, w, h);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -1324,6 +1359,19 @@ function main(env) {
   $('g3-follow').addEventListener('change', (e) => (opt.follow = e.target.checked));
 
   // ---- the other controls ----
+  el.querySelectorAll('[data-g3look]').forEach((b) =>
+    b.addEventListener('click', () => {
+      setLook(b.dataset.g3look);
+      el.querySelectorAll('[data-g3look]').forEach((x) => x.classList.toggle('on', x === b));
+      $('g3-glow').value = String(Math.round(opt.glow * 100));
+      try {
+        window.localStorage.setItem('orunmila.g3.look', opt.look);
+      } catch {
+        /* a browser that keeps nothing still switches; it just opens Calm next time */
+      }
+      dirty = true;
+    })
+  );
   $('g3-glow').addEventListener('input', (e) => {
     opt.glow = +e.target.value / 100;
     dirty = true;

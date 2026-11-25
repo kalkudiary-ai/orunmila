@@ -1,6 +1,7 @@
 'use strict';
 
 const graph3d = require('./graph3d');
+const graph2d = require('./graph2d');
 
 const STAIN_COLORS = {
   untracked_write: '#ff1744',
@@ -212,8 +213,20 @@ function renderTrailVisual(vizData) {
   .gv-node { cursor:pointer; }
   .gv-node circle { transition:r .12s, filter .12s; }
   .gv-node:hover circle { filter:brightness(1.4); }
-  .gv-edge { stroke-opacity:.06; transition:stroke-opacity .1s, stroke-width .1s; }
-  .gv-edge.hot { stroke-opacity:.85; stroke-width:2.1; }
+  .gv-edge { stroke-opacity:var(--o,.06); transition:stroke-opacity .1s, stroke-width .1s; }
+  .gv-edge.hot { stroke-opacity:.9; stroke-width:2.1; }
+  /* the Graph tab's levels (G2D) */
+  svg.gv-levels { background:#0a0d12; cursor:default; }
+  .gv-lvl-band { fill:#0e1219; stroke:#1a212b; }
+  .gv-lvl-title { fill:#cfd8e3; font-size:13px; font-weight:700; letter-spacing:.02em; }
+  .gv-lvl-count { fill:#6f7b88; font-size:10.5px; }
+  .gv-folder { fill:#5b6672; font-size:10px; font-family:ui-monospace,Menlo,monospace; }
+  .gv-nlabel { fill:#aeb8c4; font-size:11px; }
+  .gv-node.flagged .gv-nlabel { font-weight:700; }
+  .gv-node.match circle { stroke:#ffffff; stroke-width:2.2; }
+  .gv-levels .gv-node { transition:opacity .12s; }
+  .gv-levels.focus .gv-node { opacity:.2; }
+  .gv-levels.focus .gv-node.near { opacity:1; }
   .gv-gctl { display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
   .gv-gbtn { background:#11151c; color:#9aa6b2; border:1px solid #28313d; border-radius:8px; padding:5px 11px; font-size:.78rem; cursor:pointer; font-weight:600; }
   .gv-gbtn.on { background:#1c2530; color:#fff; }
@@ -238,6 +251,7 @@ function renderTrailVisual(vizData) {
   .g3-hud { position:absolute; left:12px; bottom:12px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; background:rgba(8,11,16,.66); border:1px solid #1f2630; border-radius:10px; padding:7px 12px; font-size:.74rem; color:#aeb8c4; backdrop-filter:blur(6px); }
   .g3-hud label { display:flex; align-items:center; gap:5px; cursor:pointer; }
   .g3-hud input[type=range] { width:92px; accent-color:#40c4ff; }
+  .g3-look button { padding:4px 10px; font-size:.72rem; }
   .g3-hud input[type=checkbox], .g3-replay input[type=checkbox] { accent-color:#40c4ff; }
   .g3-msg[hidden] { display:none; }
   .g3-msg { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; padding:40px; color:#9aa6b2; font-size:.9rem; background:#070809; }
@@ -415,7 +429,7 @@ function renderTrailVisual(vizData) {
   }
 
   var HINTS = {
-    graph: 'Each dot is something the agent touched. Hover to light up connections, click for details. Scroll to zoom, drag to pan. Filter by channel or outcome above.',
+    graph: 'The session left to right: what the agent read, what it ran, what it changed, each in its folders, flagged things first. Hover to follow a thing\\u2019s links, click for details. Scroll to zoom, drag to pan.',
     map3d: 'The same map in 3D, drawn on this computer with no internet. Drag to turn it, right-drag or Shift-drag to move, scroll or pinch to zoom, click a sphere to fly to it. Flagged things pulse. Replay plays the session in order, the camera following the agent from file to file.',
     glossary: 'What every color, label, and metric means.',
     tree: 'Your project as folders. Each bar glows by how the agent touched that file. Click a file for details.',
@@ -477,63 +491,62 @@ function renderTrailVisual(vizData) {
     document.getElementById('gv-detail-close').addEventListener('click', function(){ detailSlot.innerHTML = ''; });
   }
 
-  // ---- GRAPH (2D radial + zoom/pan) ----
+  // ---- GRAPH (G2D: levels left to right, links as curves; the layout is src/render/graph2d.js) ----
+  // The ring it replaces drew every link through one centre point, so a busy session became one knot.
   var graphMode = 'flagged';
-  var vb = { x:0, y:0, w:900, h:520 };
+  var graphSearch = '';
+  var vb = { x:0, y:0, w:960, h:520 };
+${graph2d.source()}
+  function isFlaggedNode(n){ return !!(n.stain && n.stain !== 'verified' && n.stain !== 'clean'); }
 
   function renderGraph(){
     var el = document.getElementById('gv-graph');
-    var W=900, H=520, cx=W/2, cy=H/2;
-    vb = { x:0, y:0, w:W, h:H };
 
     var filtered = DATA.nodes.filter(nodePassesFilter);
-    var stainedCount = filtered.filter(function(n){return n.stain;}).length;
+    var stainedCount = filtered.filter(isFlaggedNode).length;
     var keep = {};
     if (graphMode==='flagged' && stainedCount){
-      filtered.forEach(function(n){ if(n.stain) keep[n.id]=true; });
+      filtered.forEach(function(n){ if(isFlaggedNode(n)) keep[n.id]=true; });
       DATA.edges.forEach(function(e){ if(keep[e.from]||keep[e.to]){ keep[e.from]=true; keep[e.to]=true; } });
     } else {
       filtered.forEach(function(n){ keep[n.id]=true; });
     }
     var visible = DATA.nodes.filter(function(n){ return keep[n.id] && nodePassesFilter(n); });
-    var m = visible.length || 1;
-
-    var maxT = Math.max.apply(null, visible.map(function(x){return x.touches;}).concat([1]));
-    var positions = {};
-    visible.forEach(function(nd, k){
-      var ang = (k / m) * Math.PI * 2 - Math.PI/2;
-      var rad = 70 + (1 - nd.touches/maxT) * 150;
-      positions[nd.id] = { x: cx + Math.cos(ang)*rad, y: cy + Math.sin(ang)*rad };
-    });
+    var Lay = orunmilaGraph2DCore.layered(visible, DATA.edges, { cap: 60, search: graphSearch, width: 960 });
+    var W = Lay.width, H = Lay.height;
+    vb = { x:0, y:0, w:W, h:H };
 
     var controls = renderFilterBar('graph');
     controls += '<div class="gv-gctl">'
-      + '<button class="gv-gbtn'+(graphMode==='flagged'?' on':'')+'" data-gmode="flagged">Flagged only</button>'
+      + '<button class="gv-gbtn'+(graphMode==='flagged'?' on':'')+'" data-gmode="flagged">Flagged + links</button>'
       + '<button class="gv-gbtn'+(graphMode==='all'?' on':'')+'" data-gmode="all">Everything</button>'
-      + '<span class="gv-gcount">'+visible.length+' of '+DATA.nodes.length+' things'
+      + '<span class="gv-gcount">'+Lay.placed.length+' shown of '+DATA.nodes.length+' things'
       + (graphMode==='flagged'&&!stainedCount ? ' &middot; nothing flagged, showing all' : '')+'</span>'
-      + '<input class="gv-search" id="gv-search" placeholder="Search files\\u2026" autocomplete="off">'
+      + '<input class="gv-search" id="gv-search" placeholder="Search files\\u2026" autocomplete="off" value="'+escjs(graphSearch)+'">'
       + '<div class="gv-zoom-ctrl"><button id="gv-zin" title="Zoom in">+</button><button id="gv-zout" title="Zoom out">&minus;</button><button id="gv-zreset" title="Reset view">&#8634;</button></div>'
       + '</div>';
 
-    var svg = '<svg class="gv-svg" id="gv-svg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet">';
-    DATA.edges.forEach(function(e){
-      if(!keep[e.from]||!keep[e.to]) return;
-      if(!nodePassesFilter(DATA.nodes[e.from]) || !nodePassesFilter(DATA.nodes[e.to])) return;
-      var a=positions[e.from], b=positions[e.to]; if(!a||!b) return;
-      var c = colorOf(DATA.nodes[e.to].stain, DATA.nodes[e.to].channels[0]);
-      svg += '<path class="gv-edge" data-from="'+e.from+'" data-to="'+e.to+'" data-kind="'+escjs(e.kind)+'" d="M'+a.x.toFixed(1)+' '+a.y.toFixed(1)+' Q '+cx+' '+cy+' '+b.x.toFixed(1)+' '+b.y.toFixed(1)+'" fill="none" stroke="'+c+'" stroke-width="1.3"/>';
-      var mx = (a.x+b.x)/2*0.5 + cx*0.5, my = (a.y+b.y)/2*0.5 + cy*0.5;
-      svg += '<text class="gv-edge-label" x="'+mx.toFixed(1)+'" y="'+my.toFixed(1)+'" text-anchor="middle">'+escjs(e.kind)+'</text>';
+    // A dense session's links would cover everything: each link's ink scales with the square root of their count.
+    var density = Math.min(1, 21 / Math.sqrt(Math.max(Lay.links.length, 1)));
+    // Full width at its natural height: a long session makes a long picture, and the page scrolls.
+    var svg = '<svg class="gv-svg gv-levels" id="gv-svg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMin meet" style="height:auto;aspect-ratio:'+W+' / '+H+'">';
+    Lay.levels.forEach(function(L, i){
+      svg += '<rect class="gv-lvl-band" x="'+(L.x+2).toFixed(1)+'" y="8" width="'+(L.width-4).toFixed(1)+'" height="'+(H-16)+'" rx="10"/>';
+      svg += '<text class="gv-lvl-title" x="'+(L.x+16).toFixed(1)+'" y="30">'+(i+1)+' &middot; '+escjs(L.title)+'</text>';
+      svg += '<text class="gv-lvl-count" x="'+(L.x+16).toFixed(1)+'" y="45">'+L.shown+' shown'+(L.hidden ? ' &middot; '+L.hidden+' more: search to find one' : '')+'</text>';
+      L.groups.forEach(function(g){ svg += '<text class="gv-folder" x="'+(L.x+16).toFixed(1)+'" y="'+g.y.toFixed(1)+'">'+escjs(trunc(g.folder, 44))+'</text>'; });
     });
-    visible.forEach(function(nd){
-      var p=positions[nd.id]; var c=colorOf(nd.stain, nd.primaryChannel);
-      var r = 6 + Math.min(18, nd.touches*1.4);
-      var g = P.glyph[nd.primaryChannel] || '';
-      svg += '<g class="gv-node" data-i="'+nd.id+'" transform="translate('+p.x.toFixed(1)+','+p.y.toFixed(1)+')">';
-      svg += '<circle r="'+r+'" fill="'+c+'" fill-opacity="0.28" stroke="'+c+'" stroke-width="1.8" style="filter:drop-shadow(0 0 6px '+c+')"/>';
-      svg += '<text text-anchor="middle" dy="3" font-size="11" fill="#dfe7ef">'+g+'</text>';
-      svg += '<text text-anchor="middle" y="'+(r+12)+'" font-size="9.5" fill="#8d99a6">'+escjs(trunc(nd.label,16))+'</text>';
+    Lay.links.forEach(function(l){
+      var t = DATA.nodes[l.to];
+      var c = colorOf(t.stain, t.primaryChannel);
+      svg += '<path class="gv-edge" data-from="'+l.from+'" data-to="'+l.to+'" d="'+l.d+'" fill="none" stroke="'+c+'" stroke-width="1.1" style="--o:'+(0.2*density).toFixed(3)+'"/>';
+    });
+    Lay.placed.forEach(function(p){
+      var nd = DATA.nodes[p.id];
+      var c = colorOf(nd.stain, nd.primaryChannel);
+      svg += '<g class="gv-node'+(p.flagged?' flagged':'')+(p.match?' match':'')+'" data-i="'+p.id+'" transform="translate('+p.x.toFixed(1)+','+p.y.toFixed(1)+')">';
+      svg += '<circle r="'+p.r.toFixed(1)+'" fill="'+c+'" fill-opacity="'+(p.flagged?'0.9':'0.5')+'" stroke="'+c+'" stroke-width="'+(p.flagged?'2':'1')+'"/>';
+      svg += '<text class="gv-nlabel" x="'+(p.r+6).toFixed(1)+'" dy="3.5"'+(p.flagged?' fill="'+c+'"':'')+'>'+escjs(trunc(nd.label, 34))+'</text>';
       svg += '</g>';
     });
     svg += '</svg>';
@@ -578,30 +591,37 @@ function renderTrailVisual(vizData) {
     document.getElementById('gv-zreset').addEventListener('click', function(){ vb={x:0,y:0,w:W,h:H}; svgEl.setAttribute('viewBox','0 0 '+W+' '+H); });
     function applyZoom(s){ var mx=vb.x+vb.w/2, my=vb.y+vb.h/2; vb.w*=s; vb.h*=s; vb.x=mx-vb.w/2; vb.y=my-vb.h/2; svgEl.setAttribute('viewBox',vb.x+' '+vb.y+' '+vb.w+' '+vb.h); }
 
-    // search: highlight matching nodes, dim everything else
+    // search: lay the levels out again with the matches ringed, and brought in when a level was full
     var searchEl = document.getElementById('gv-search');
     if (searchEl) searchEl.addEventListener('input', function(){
-      var q = searchEl.value.toLowerCase();
-      el.querySelectorAll('.gv-node').forEach(function(g){
-        var nd = DATA.nodes[+g.dataset.i];
-        var match = !q || (nd.label||'').toLowerCase().includes(q) || (nd.path||'').toLowerCase().includes(q);
-        g.style.opacity = match ? '1' : '0.15';
-      });
+      graphSearch = searchEl.value;
+      var at = searchEl.selectionStart;
+      rendered.graph = false; renderGraph();
+      var again = document.getElementById('gv-search');
+      if (again) { again.focus(); try { again.setSelectionRange(at, at); } catch (e) { /* not a text field */ } }
     });
 
-    // node interaction
+    // node interaction: hovering a thing lights its links and its neighbours and dims the rest
     var paths = el.querySelectorAll('.gv-edge');
+    var nodesEls = el.querySelectorAll('.gv-node');
     el.querySelectorAll('.gv-node').forEach(function(g){
       g.addEventListener('mouseenter', function(){
         var i = +g.dataset.i;
-        paths.forEach(function(p){ p.classList.toggle('hot', +p.dataset.from===i || +p.dataset.to===i); });
+        var near = {}; near[i] = true;
+        paths.forEach(function(p){
+          var hot = +p.dataset.from===i || +p.dataset.to===i;
+          p.classList.toggle('hot', hot);
+          if (hot) { near[+p.dataset.from] = true; near[+p.dataset.to] = true; }
+        });
+        nodesEls.forEach(function(n){ n.classList.toggle('near', !!near[+n.dataset.i]); });
+        svgEl.classList.add('focus');
       });
       g.addEventListener('mousemove', function(ev){
         var nd = DATA.nodes[+g.dataset.i]; var xy=stageXY(ev);
         var label = (nd.stain ? nd.stain.replace(/_/g,' ') : nd.primaryChannel);
         tipShow('<b>'+escjs(nd.label)+'</b> &mdash; '+escjs(label)+'<br>'+nd.touches+' touches'+(nd.tainted_by?(' &middot; stained by '+nd.tainted_by):'')+'<span class="ex">'+escjs(explainOf(nd.stain,nd.primaryChannel))+'</span>', xy[0], xy[1]);
       });
-      g.addEventListener('mouseleave', function(){ paths.forEach(function(p){ p.classList.remove('hot'); }); tipHide(); });
+      g.addEventListener('mouseleave', function(){ paths.forEach(function(p){ p.classList.remove('hot'); }); svgEl.classList.remove('focus'); tipHide(); });
       g.addEventListener('click', function(e){
         e.stopPropagation();
         showDetail(DATA.nodes[+g.dataset.i]);

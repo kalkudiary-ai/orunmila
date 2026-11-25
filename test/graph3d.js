@@ -107,6 +107,18 @@ it('V3D: the camera looks at its target, and the target lands in the middle of t
   assert.ok(behind[3] > 0, 'in front of the camera');
 });
 
+it('V3D2: the map opens calm (O: "the default ... looks too much, blinding"), and Vivid is a switch away', () => {
+  const looks = core.looks();
+  assert.strictEqual(core.DEFAULT_LOOK, 'calm');
+  assert.deepStrictEqual(Object.keys(looks).sort(), ['calm', 'vivid']);
+  for (const k of ['glow', 'light', 'sparkle', 'dust', 'exposure']) {
+    assert.ok(looks.calm[k] < looks.vivid[k], `${k}: calm ${looks.calm[k]} below vivid ${looks.vivid[k]}`);
+  }
+  assert.ok(looks.calm.glow <= 0.4, `calm glow ${looks.calm.glow}`);
+  const src = g3.source();
+  assert.ok(src.includes('data-g3look="calm"') && src.includes('data-g3look="vivid"'), 'the switch is on the page');
+});
+
 it('V3D: every shader is GLSL ES 3.00 with a main()', () => {
   const shaders = g3.shaders();
   const names = Object.keys(shaders);

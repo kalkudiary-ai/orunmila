@@ -2841,6 +2841,32 @@ const MUTANTS = [
   { id: 'V3D-8 the tab is not on the page', file: 'src/render/trail-visual.js', test: 'test/graph3d.js',
     from: '    <div class="gv-view" data-view="map3d" id="gv-map3d"></div>\n', to: '',
     fails: ['V3D: the trail page has the 3D Map tab'] },
+  // V3D2 (LD304): the 3D Map opens calm.
+  { id: 'V3D2-1 the map opens vivid', file: 'src/render/graph3d.js', test: 'test/graph3d.js',
+    from: "const DEFAULT_LOOK = 'calm';", to: "const DEFAULT_LOOK = 'vivid';",
+    fails: ['V3D2: the map opens calm'] },
+  // G2D (LD304): the Graph tab as levels.
+  { id: 'G2D-1 reads sit in the middle level', file: 'src/render/graph2d.js', test: 'test/graph2d.js',
+    from: "if (ch === 'read') return 0;", to: "if (ch === 'read') return 1;",
+    fails: ['G2D: three levels by what the agent did'] },
+  { id: 'G2D-2 no cap on a level', file: 'src/render/graph2d.js', test: 'test/graph2d.js',
+    from: '        .slice(0, cap);', to: '        ;',
+    fails: ['G2D: a level holds at most `cap` rows'] },
+  { id: 'G2D-3 no project prefix', file: 'src/render/graph2d.js', test: 'test/graph2d.js',
+    from: 'const prefix = projectPrefix(nodes.filter((n) => n.path).map(folderOf));', to: 'const prefix = null;',
+    fails: ['G2D: one folder written two ways'] },
+  { id: 'G2D-4 no merge of one file written two ways', file: 'src/render/graph2d.js', test: 'test/graph2d.js',
+    from: '      if (list.length < 2) continue;', to: '      continue;',
+    fails: ['G2D: one file written two ways in one level'] },
+  { id: 'G2D-5 links start at the dot, over the names', file: 'src/render/graph2d.js', test: 'test/graph2d.js',
+    from: 'const x1 = port(s),', to: 'const x1 = s.x + s.r,',
+    fails: ["G2D: a link leaves from its column's right edge"] },
+  { id: 'G2D-6 flagged things not first in their folder', file: 'src/render/graph2d.js', test: 'test/graph2d.js',
+    from: 'list: list.sort((a, b) => Number(isFlagged(b)) - Number(isFlagged(a)) || ', to: 'list: list.sort((a, b) => ',
+    fails: ['G2D: inside a level, grouped by folder'] },
+  { id: 'G2D-7 the Graph tab keeps the ring', file: 'src/render/trail-visual.js', test: 'test/graph2d.js',
+    from: 'var Lay = orunmilaGraph2DCore.layered(visible,', to: 'var Lay = orunmilaGraph2DCore.ring(visible,',
+    fails: ["G2D: the trail page's Graph tab uses the levels"] },
 ];
 
 function copyRepo(root) {

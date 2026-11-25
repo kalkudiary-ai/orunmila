@@ -672,7 +672,8 @@ Recent additions to The Diviner:
   folder), **Graph** (three levels left to right: what the agent read, what it
   ran, what it changed, each in its folders, flagged things first; search,
   filter by channel or outcome), **3D Map** (the same map in 3D, drawn by
-  Orunmila's own code: orbit and zoom, a replay that follows the agent from
+  Orunmila's own code: orbit and zoom, a replay that starts from a blank
+  canvas and builds the map in the order the agent worked, following it from
   file to file, a Calm or Vivid look), **Dashboard**, **Report** (what needs a
   second look, and a prompt you can paste back to the agent asking for the
   evidence or a fix on each item) and **Glossary**. Open a tab from a link:

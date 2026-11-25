@@ -2841,6 +2841,13 @@ const MUTANTS = [
   { id: 'V3D-8 the tab is not on the page', file: 'src/render/trail-visual.js', test: 'test/graph3d.js',
     from: '    <div class="gv-view" data-view="map3d" id="gv-map3d"></div>\n', to: '',
     fails: ['V3D: the trail page has the 3D Map tab'] },
+  // V3D3 (LD307): the replay builds from a blank canvas.
+  { id: 'V3D3-1 links grow from either end', file: 'src/render/graph3d.js', test: 'test/graph3d.js',
+    from: '      const older = first[a] <= first[b] ? a : b;', to: '      const older = a;',
+    fails: ['V3D3: the replay builds from a blank canvas'] },
+  { id: 'V3D3-2 a link appears with its first end', file: 'src/render/graph3d.js', test: 'test/graph3d.js',
+    from: 'step: Math.max(first[a], first[b]) });', to: 'step: Math.min(first[a], first[b]) });',
+    fails: ['V3D3: the replay builds from a blank canvas'] },
   // V3D2 (LD304): the 3D Map opens calm.
   { id: 'V3D2-1 the map opens vivid', file: 'src/render/graph3d.js', test: 'test/graph3d.js',
     from: "const DEFAULT_LOOK = 'calm';", to: "const DEFAULT_LOOK = 'vivid';",

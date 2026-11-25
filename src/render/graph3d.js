@@ -274,6 +274,35 @@ function core() {
     return out;
   }
 
+  /** V3D3: the step at which each thing is first touched (-1: never, so the replay never shows it). */
+  function firstSeen(n, steps) {
+    const f = new Array(n).fill(-1);
+    (steps || []).forEach((s, k) => {
+      if (s.node >= 0 && s.node < n && f[s.node] < 0) f[s.node] = k;
+    });
+    return f;
+  }
+
+  /**
+   * V3D3 (O, 2026-11-25: "the replay to start from a blank canvas and visually create those connections"): each link
+   * between two touched things, once per pair, appearing at the step its second end appears and growing from the
+   * end that appeared first.
+   */
+  function revealLinks(edges, first) {
+    const out = [];
+    const seen = new Set();
+    for (const e of edges || []) {
+      const a = e.from, b = e.to;
+      if (a === b || !(first[a] >= 0) || !(first[b] >= 0)) continue;
+      const key = a < b ? a + '-' + b : b + '-' + a;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const older = first[a] <= first[b] ? a : b;
+      out.push({ a: older, b: older === a ? b : a, step: Math.max(first[a], first[b]) });
+    }
+    return out;
+  }
+
   // Column-major 4x4 matrices, as WebGL reads them.
   function mul(a, b) {
     const o = new Array(16);
@@ -332,7 +361,7 @@ function core() {
     };
   }
 
-  return { rng, hashString, repulse, createLayout, layout, replaySteps, mul, transform, perspective, view, viewProj, eye, looks, DEFAULT_LOOK };
+  return { rng, hashString, repulse, createLayout, layout, replaySteps, firstSeen, revealLinks, mul, transform, perspective, view, viewProj, eye, looks, DEFAULT_LOOK };
 }
 
 function shaders() {
@@ -902,12 +931,23 @@ function main(env) {
   let selected = -1;
   const replay = { steps: C.replaySteps(D.trail), cur: D.trail.length, playing: false, t0: 0, speed: 1, trail: [] };
   const seen = new Float64Array(N);
-  function touchedUpTo(k) {
+  // V3D3: when each thing appeared in the replay, for its pop-in and its links' growth (NaN: not yet; a scrub jump
+  // shows things at once, with no animation).
+  const appear = new Float64Array(N).fill(NaN);
+  function touchedUpTo(k, animateAt) {
     seen.fill(-1);
     for (let s = 0; s < k && s < replay.steps.length; s++) seen[replay.steps[s].node] = s;
+    for (let i = 0; i < N; i++) {
+      if (seen[i] < 0) appear[i] = NaN;
+      else if (Number.isNaN(appear[i])) appear[i] = animateAt === undefined ? -1e12 : animateAt;
+    }
   }
   touchedUpTo(replay.cur);
   const replaying = () => replay.cur < replay.steps.length;
+  // The replay starts from a blank canvas: a thing not yet touched is not drawn at all.
+  const hiddenNow = (i) => replaying() && seen[i] < 0;
+  const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
+  const popIn = (x) => 1 + 2.70158 * Math.pow(x - 1, 3) + 1.70158 * Math.pow(x - 1, 2);
 
   function nodeState(i, now) {
     let hl = 0, dim = 0;
@@ -948,38 +988,59 @@ function main(env) {
     return k % every === 0 ? 1 : 0;
   }
   function fill(now) {
-    const nv = visible.length;
-    if (nodeData.length < nv * 10) nodeData = new Float32Array(nv * 10);
-    for (let k = 0; k < nv; k++) {
+    if (nodeData.length < visible.length * 10) nodeData = new Float32Array(visible.length * 10);
+    let nv = 0;
+    for (let k = 0; k < visible.length; k++) {
       const i = visible[k];
+      if (hiddenNow(i)) continue;
       const s = nodeState(i, now);
       const c = color[i];
-      nodeData.set([P[i * 3], P[i * 3 + 1], P[i * 3 + 2], c[0], c[1], c[2], radius[i] * (1 + 0.25 * s[0]), s[0], s[1], s[2]], k * 10);
+      // V3D3: a thing that just appeared pops in, and flashes as it does
+      const p = replaying() ? clamp01((now - appear[i]) / 450) : 1;
+      const hl = Math.max(s[0], (1 - p) * 0.9);
+      nodeData.set([P[i * 3], P[i * 3 + 1], P[i * 3 + 2], c[0], c[1], c[2], radius[i] * Math.max(0.01, popIn(p)) * (1 + 0.25 * hl), hl, s[1], s[2]], nv * 10);
+      nv++;
     }
-    const ne = visEdges.length;
-    if (lineData.length < ne * 14) lineData = new Float32Array(ne * 14);
+    const allE = visEdges.length;
+    if (lineData.length < allE * 14) lineData = new Float32Array(allE * 14);
     const focus = selected >= 0 ? selected : hovered;
     const dprPx = G.dpr || 1;
     // Links add light, so a dense graph (860f51e9: 5,490 links on 124 things) would burn to white: each link's
     // light and its sparkles scale down with the square root of the link count.
-    const density = Math.min(1, 21 / Math.sqrt(Math.max(ne, 1)));
+    const density = Math.min(1, 21 / Math.sqrt(Math.max(allE, 1)));
+    // V3D3: in the replay a link shows once both its ends have appeared, growing from the end that came first.
+    const grow = (a, b) => {
+      if (!replaying()) return { from: a, to: b, g: 1 };
+      const born = Math.max(appear[a], appear[b]);
+      const older = appear[a] <= appear[b] ? a : b;
+      const t = clamp01((now - born) / 600);
+      return { from: older, to: older === a ? b : a, g: t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2 };
+    };
+    let ne = 0;
     let sparks = 0;
-    for (let k = 0; k < ne; k++) {
+    for (let k = 0; k < allE; k++) {
       const e = visEdges[k];
-      const a = e.from, b = e.to;
+      if (hiddenNow(e.from) || hiddenNow(e.to)) continue;
+      const gr = grow(e.from, e.to);
+      const a = gr.from, b = gr.to, g = gr.g;
       const hot = focus >= 0 && (a === focus || b === focus);
-      const cold = (focus >= 0 && !hot) || (replaying() && (seen[a] < 0 || seen[b] < 0));
-      const alpha = hot ? 0.9 : cold ? 0.03 * density : 0.26 * density;
-      lineData.set([P[a * 3], P[a * 3 + 1], P[a * 3 + 2], P[b * 3], P[b * 3 + 1], P[b * 3 + 2], ...color[a], ...color[b], alpha, (hot ? 2.6 : 1.3) * dprPx], k * 14);
-      if (!cold) sparks += hot ? 5 : sparkCount(k);
+      const cold = focus >= 0 && !hot;
+      const alpha = (hot ? 0.9 : cold ? 0.03 * density : 0.26 * density) + (1 - g) * 0.45;
+      const bx = P[a * 3] + (P[b * 3] - P[a * 3]) * g, by = P[a * 3 + 1] + (P[b * 3 + 1] - P[a * 3 + 1]) * g, bz = P[a * 3 + 2] + (P[b * 3 + 2] - P[a * 3 + 2]) * g;
+      lineData.set([P[a * 3], P[a * 3 + 1], P[a * 3 + 2], bx, by, bz, ...color[a], ...color[b], alpha, (hot ? 2.6 : 1.3) * dprPx], ne * 14);
+      ne++;
+      if (!cold && g >= 1) sparks += hot ? 5 : sparkCount(k);
     }
     if (sparkData.length < sparks * 13) sparkData = new Float32Array(sparks * 13);
     let s = 0;
-    for (let k = 0; k < ne; k++) {
+    for (let k = 0; k < allE; k++) {
       const e = visEdges[k];
-      const a = e.from, b = e.to;
+      if (hiddenNow(e.from) || hiddenNow(e.to)) continue;
+      const gr = grow(e.from, e.to);
+      if (gr.g < 1) continue;
+      const a = gr.from, b = gr.to;
       const hot = focus >= 0 && (a === focus || b === focus);
-      const cold = (focus >= 0 && !hot) || (replaying() && (seen[a] < 0 || seen[b] < 0));
+      const cold = focus >= 0 && !hot;
       if (cold) continue;
       const count = hot ? 5 : sparkCount(k);
       for (let j = 0; j < count; j++) {
@@ -1180,7 +1241,7 @@ function main(env) {
     for (const i of [hovered, selected, replaying() && replay.cur > 0 ? replay.steps[replay.cur - 1].node : -1]) if (i >= 0 && isVis[i] && want.indexOf(i) < 0) want.push(i);
     const pinned = want.length;
     if (opt.labels) {
-      const ranked = visible.slice().sort((a, b) => flagged[b] - flagged[a] || isFile[b] - isFile[a] || D.nodes[b].touches - D.nodes[a].touches).slice(0, 40);
+      const ranked = visible.filter((i) => !hiddenNow(i)).sort((a, b) => flagged[b] - flagged[a] || isFile[b] - isFile[a] || D.nodes[b].touches - D.nodes[a].touches).slice(0, 40);
       for (const i of ranked) if (want.indexOf(i) < 0) want.push(i);
     }
     while (labelPool.length < want.length) {
@@ -1221,6 +1282,7 @@ function main(env) {
   function pick(mx, my) {
     let best = -1, bestW = Infinity;
     for (const i of visible) {
+      if (hiddenNow(i)) continue;
       const p = screenOf(i);
       if (!p) continue;
       const d = Math.hypot(p.x - mx, p.y - my);
@@ -1289,7 +1351,7 @@ function main(env) {
         } else {
           replay.cur++;
           replay.t0 = now;
-          touchedUpTo(replay.cur);
+          touchedUpTo(replay.cur, now);
           showStep();
         }
       }

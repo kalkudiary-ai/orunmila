@@ -441,7 +441,7 @@ function renderTrailVisual(vizData) {
 
   var HINTS = {
     graph: 'The session left to right: what the agent read, what it ran, what it changed, each in its folders, flagged things first. Hover to follow a thing\\u2019s links, click for details. Scroll to zoom, drag to pan.',
-    map3d: 'The same map in 3D, drawn on this computer with no internet. Drag to turn it, right-drag or Shift-drag to move, scroll or pinch to zoom, click a sphere to fly to it. Flagged things pulse. Replay plays the session in order, the camera following the agent from file to file.',
+    map3d: 'The same map in 3D, drawn on this computer with no internet. Drag to turn it, right-drag or Shift-drag to move, scroll or pinch to zoom, click a sphere to fly to it. Flagged things pulse. Replay starts from a blank canvas and builds the map in the order the agent worked: each thing appears when first touched, each link grows when both its ends are there, the camera following the agent from file to file.',
     glossary: 'What every color, label, and metric means.',
     tree: 'Your project as folders. Each bar glows by how the agent touched that file. Click a file for details.',
     timeline: 'The session left to right, one column per turn. Click any pip for details.',

@@ -12,8 +12,10 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 - **The trail page's 3D Map.** The same map in 3D, drawn by Orunmila's own
   WebGL2 code in the package, with nothing loaded from the network: glowing
-  spheres, links with sparkles, a replay that follows the agent from file to
-  file, and a Calm (the default) or Vivid look. Without WebGL2 it says so and
+  spheres, links with sparkles, a replay that starts from a blank canvas and
+  builds the map in the order the agent worked (each thing appears when first
+  touched, each link grows once both its ends are there), following the agent
+  from file to file, and a Calm (the default) or Vivid look. Without WebGL2 it says so and
   points to the Graph tab.
 - **The Graph tab reads left to right.** Three levels (what the agent read, ran
   and changed), each in its folders, flagged things first; links curve between

@@ -98,6 +98,14 @@ it('V3D: the replay walks every touch in order and marks each new turn', () => {
   assert.deepStrictEqual(core.replaySteps([]), []);
 });
 
+it('V3D3: the replay builds from a blank canvas: a link appears when its second end does, growing from the older end', () => {
+  const steps = core.replaySteps([{ turn: 't1', node: 2 }, { turn: 't1', node: 0 }, { turn: 't1', node: 2 }, { turn: 't2', node: 1 }]);
+  const first = core.firstSeen(4, steps);
+  assert.deepStrictEqual(first, [1, 3, 0, -1], 'node 3 is never touched, so never shown');
+  const links = core.revealLinks([{ from: 0, to: 2 }, { from: 2, to: 0 }, { from: 1, to: 0 }, { from: 3, to: 0 }, { from: 1, to: 1 }], first);
+  assert.deepStrictEqual(links, [{ a: 2, b: 0, step: 1 }, { a: 0, b: 1, step: 3 }], 'one link per pair, none to an untouched thing or to itself; each from its older end, at its newer end\'s step');
+});
+
 it('V3D: the camera looks at its target, and the target lands in the middle of the screen', () => {
   const m = core.viewProj({ target: [10, -4, 3], yaw: 0.7, pitch: 0.3, dist: 200 }, 1.6, 0.9);
   const [x, y, z, w] = core.transform(m, [10, -4, 3, 1]);

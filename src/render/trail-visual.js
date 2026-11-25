@@ -1,5 +1,7 @@
 'use strict';
 
+const graph3d = require('./graph3d');
+
 const STAIN_COLORS = {
   untracked_write: '#ff1744',
   phantom_verification: '#d50000',
@@ -225,6 +227,27 @@ function renderTrailVisual(vizData) {
   .gv-edge-label { font-size:8px; fill:#6f7b88; pointer-events:none; opacity:0; transition:opacity .1s; }
   .gv-edge.hot + .gv-edge-label, .gv-svg:hover .gv-edge-label { opacity:1; }
 
+  /* 3D map (V3D, LD300): Orunmila's own WebGL2 engine, src/render/graph3d.js */
+  .g3-wrap { position:relative; width:100%; height:560px; border-radius:12px; overflow:hidden; background:#05070b; outline:none; cursor:grab; touch-action:none; box-shadow:inset 0 0 0 1px #1a212b; }
+  .g3-wrap:focus-visible { box-shadow:inset 0 0 0 2px #40c4ff; }
+  .g3-wrap:fullscreen { height:100vh; border-radius:0; }
+  .g3-canvas { display:block; width:100%; height:100%; }
+  .g3-labels { position:absolute; inset:0; pointer-events:none; overflow:hidden; }
+  .g3-label { position:absolute; left:0; top:0; font:600 11px/1.2 ui-sans-serif,-apple-system,"Segoe UI",sans-serif; color:#dfe7ef; background:rgba(8,11,16,.62); border:1px solid rgba(120,150,190,.18); padding:2px 7px; border-radius:6px; white-space:nowrap; backdrop-filter:blur(4px); transition:opacity .2s; }
+  .g3-label.on { color:#fff; border-color:#40c4ff; box-shadow:0 0 12px rgba(64,196,255,.45); }
+  .g3-hud { position:absolute; left:12px; bottom:12px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; background:rgba(8,11,16,.66); border:1px solid #1f2630; border-radius:10px; padding:7px 12px; font-size:.74rem; color:#aeb8c4; backdrop-filter:blur(6px); }
+  .g3-hud label { display:flex; align-items:center; gap:5px; cursor:pointer; }
+  .g3-hud input[type=range] { width:92px; accent-color:#40c4ff; }
+  .g3-hud input[type=checkbox], .g3-replay input[type=checkbox] { accent-color:#40c4ff; }
+  .g3-msg[hidden] { display:none; }
+  .g3-msg { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; padding:40px; color:#9aa6b2; font-size:.9rem; background:#070809; }
+  .g3-replay { display:flex; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap; font-size:.78rem; color:#9aa6b2; }
+  .g3-replay input[type=range] { flex:1; min-width:160px; accent-color:#00e676; }
+  .g3-replay select { background:#11151c; color:#cfd8e3; border:1px solid #28313d; border-radius:7px; padding:4px 6px; font-size:.76rem; }
+  .g3-replay label { display:flex; align-items:center; gap:5px; cursor:pointer; }
+  .g3-step { color:#cfd8e3; font-family:ui-monospace,Menlo,monospace; font-size:.74rem; min-width:220px; }
+  .g3-step.turn { color:#00e676; }
+
   /* detail panel */
   .gv-detail { background:#0e1219; border:1px solid #1f2630; border-radius:10px; padding:14px 18px; margin:12px 0 0; animation:gv-slide .15s ease-out; }
   @keyframes gv-slide { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:none; } }
@@ -318,6 +341,7 @@ function renderTrailVisual(vizData) {
     <button class="gv-tab on" data-view="timeline">Timeline</button>
     <button class="gv-tab" data-view="tree">Tree</button>
     <button class="gv-tab" data-view="graph">Graph</button>
+    <button class="gv-tab" data-view="map3d">3D Map</button>
     <button class="gv-tab" data-view="dashboard">Dashboard</button>
     <button class="gv-tab" data-view="report">Report</button>
     <button class="gv-tab" data-view="glossary">Glossary</button>
@@ -327,6 +351,7 @@ function renderTrailVisual(vizData) {
     <div class="gv-view on" data-view="timeline" id="gv-timeline"></div>
     <div class="gv-view" data-view="tree" id="gv-tree"></div>
     <div class="gv-view" data-view="graph" id="gv-graph"></div>
+    <div class="gv-view" data-view="map3d" id="gv-map3d"></div>
     <div class="gv-view" data-view="dashboard" id="gv-dashboard"></div>
     <div class="gv-view" data-view="report" id="gv-report"></div>
     <div class="gv-view" data-view="glossary" id="gv-glossary"></div>
@@ -391,6 +416,7 @@ function renderTrailVisual(vizData) {
 
   var HINTS = {
     graph: 'Each dot is something the agent touched. Hover to light up connections, click for details. Scroll to zoom, drag to pan. Filter by channel or outcome above.',
+    map3d: 'The same map in 3D, drawn on this computer with no internet. Drag to turn it, right-drag or Shift-drag to move, scroll or pinch to zoom, click a sphere to fly to it. Flagged things pulse. Replay plays the session in order, the camera following the agent from file to file.',
     glossary: 'What every color, label, and metric means.',
     tree: 'Your project as folders. Each bar glows by how the agent touched that file. Click a file for details.',
     timeline: 'The session left to right, one column per turn. Click any pip for details.',
@@ -589,7 +615,18 @@ function renderTrailVisual(vizData) {
     bindFilters(el, function(){ rendered.graph=false; renderGraph(); });
   }
 
-  // NI1 (LD264): the 3D graph is gone: it loaded a library from a CDN, and the free version makes no internet call.
+  // ---- 3D MAP (V3D, LD300) ----
+  // NI1 (LD264) removed the old 3D graph, which loaded a library from a CDN. This one is Orunmila's own WebGL2 code,
+  // put into the page whole (src/render/graph3d.js): no library, no internet.
+${graph3d.source()}
+  var map3d = null;
+  function renderMap3D(){
+    map3d = orunmilaGraph3D({
+      DATA: DATA, el: document.getElementById('gv-map3d'), colorOf: colorOf, explainOf: explainOf,
+      nodePassesFilter: nodePassesFilter, renderFilterBar: renderFilterBar, bindFilters: bindFilters,
+      showDetail: showDetail, tipShow: tipShow, tipHide: tipHide, stageXY: stageXY, escjs: escjs, trunc: trunc, legend: legend
+    });
+  }
 
   // ---- GLOSSARY ----
   function renderGlossary(){
@@ -924,11 +961,12 @@ function renderTrailVisual(vizData) {
   function trunc(s,n){ s=String(s||''); return s.length>n ? s.slice(0,n-1)+'\\u2026' : s; }
   function escjs(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 
-  var RENDERERS = { graph:renderGraph, tree:renderTree, timeline:renderTimeline, dashboard:renderDashboard, report:renderReport, glossary:renderGlossary };
+  var RENDERERS = { graph:renderGraph, map3d:renderMap3D, tree:renderTree, timeline:renderTimeline, dashboard:renderDashboard, report:renderReport, glossary:renderGlossary };
   var rendered = {};
   function show(view){
     document.querySelectorAll('.gv-tab').forEach(function(t){ t.classList.toggle('on', t.dataset.view===view); });
     document.querySelectorAll('.gv-view').forEach(function(v){ v.classList.toggle('on', v.dataset.view===view); });
+    if (map3d) { if (view === 'map3d') map3d.resume(); else map3d.pause(); }
     if(!rendered[view]){ RENDERERS[view](); rendered[view]=true; }
     setHint(view); tipHide(); detailSlot.innerHTML='';
   }
@@ -940,7 +978,9 @@ function renderTrailVisual(vizData) {
     root.classList.toggle('gv-power', e.target.dataset.aud==='power');
   });
 
-  show('timeline');
+  // A link may name the tab to open (#map3d, #graph, ...); anything else opens the timeline.
+  var asked = String(location.hash || '').slice(1);
+  show(Object.prototype.hasOwnProperty.call(RENDERERS, asked) ? asked : 'timeline');
 })();
 </script>
 `;

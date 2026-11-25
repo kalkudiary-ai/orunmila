@@ -136,4 +136,14 @@ it('LIC2: the dependency checks refuse what they are meant to (planted in memory
   assert.strictEqual(section('# a\n## License\ntext\n## Next\n', 'License'), '## License\ntext');
 });
 
+// --- LIC3: SECURITY.md is held to the network promise too ------------------------------------------------------------
+
+/** Words SECURITY.md must not say: no-network.js's DOC1 list, which reads only shipped docs (SECURITY.md is not one). */
+const STALE = ['3D Graph', 'bin/bench.js', 'from a CDN', 'unpkg', 'jsdelivr', 'cdnjs', 'googleapis'];
+
+it('LIC3: SECURITY.md makes no network claim the package no longer matches (no 3D Graph, no CDN, no bin/bench.js)', () => {
+  const text = read('SECURITY.md');
+  assert.deepStrictEqual(STALE.filter((w) => text.includes(w)), []);
+});
+
 runAll('license-files');

@@ -63,6 +63,11 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ### Fixed
 
+- **SECURITY.md no longer describes network use the package does not have.**
+  It said the report's 3D Graph tab loaded a script from a CDN and named a
+  `bin/bench.js`; neither exists. It now says the pages Orunmila renders load
+  nothing from the network, and that the benchmark runner `scripts/bench.js`,
+  which can call AI models, is not in the npm package.
 - **The file bars in "Files worth a look" draw.** Their fill was an inline
   element, so its width did nothing and no bar ever showed.
 - **A secret used as an object key no longer reaches the event log.** Capture

@@ -40,7 +40,9 @@
     "CHANGELOG.md",
     "SKILL.md",
     "LICENSE",
-    "NOTICE"
+    "NOTICE",
+    "TRADEMARKS.md",
+    "THIRD_PARTY_LICENSES"
   ],
   "engines": {
     "node": ">=18"

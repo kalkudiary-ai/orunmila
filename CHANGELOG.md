@@ -10,6 +10,14 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ### Added
 
+- **The licence and trademark files a release carries.** `TRADEMARKS.md` says
+  how the Orunmila name may be used (the Apache License grants no rights to
+  it, and a changed version needs a new name). `THIRD_PARTY_LICENSES` says the
+  package has no runtime dependency to credit. NOTICE points to the trademark
+  policy, and every JavaScript file opens with its SPDX licence identifier and
+  copyright line. `test/license-files.js` keeps each of these true, and also
+  fails if LICENSE stops matching the Apache 2.0 text or a locked package is
+  not permissively licensed.
 - **The trail page's 3D Map.** The same map in 3D, drawn by Orunmila's own
   WebGL2 code in the package, with nothing loaded from the network: glowing
   spheres, links with sparkles, a replay that starts from a blank canvas and

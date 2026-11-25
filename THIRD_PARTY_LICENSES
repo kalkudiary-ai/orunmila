@@ -1,0 +1,26 @@
+Third-party licences for Orunmila
+================================
+
+Orunmila has no runtime dependencies. The `dependencies` field in package.json
+is empty, and the npm package contains only Orunmila's own files. There is no
+third-party licence text or NOTICE file to carry forward with it.
+
+If a runtime dependency is ever added, its name, licence and copyright notice
+go in this file. The test suite (test/license-files.js) fails until it is
+named here.
+
+Development tools
+-----------------
+
+These are installed by `npm ci` in a git clone, to lint, format and measure
+test coverage. They are never part of the npm package.
+
+  @eslint/js   MIT
+  c8           ISC
+  eslint       MIT
+  prettier     MIT
+
+Each of their own dependencies is listed with its licence in
+package-lock.json. All are under permissive licences (MIT, ISC, Apache-2.0,
+BlueOak-1.0.0, BSD-2-Clause, BSD-3-Clause, 0BSD). The test suite fails if a
+locked package has any other licence, or none.

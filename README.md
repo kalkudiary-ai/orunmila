@@ -1003,3 +1003,10 @@ said it did.
 
 Apache License 2.0 (`LICENSE`), copyright KALKU DIGITAL SOLUTIONS LIMITED (`NOTICE`). Free,
 forever, no catch. Versions up to 0.2.1 were released under MIT and stay MIT.
+
+The licence covers everything in this repository: the code, the agent skills,
+the task corpus, the benchmark results and the test fixtures. It grants **no
+rights to the Orunmila name or any Orunmila logo** (its section 6). How you may
+use the name, and why a changed version needs a new one, is in
+[`TRADEMARKS.md`](TRADEMARKS.md). Third-party licences:
+[`THIRD_PARTY_LICENSES`](THIRD_PARTY_LICENSES).

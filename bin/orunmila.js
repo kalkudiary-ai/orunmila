@@ -310,8 +310,21 @@ function installJudge(on) {
   }
 }
 
+/** PM2c2 (LD333): `install --with-updates | --without-updates`, the daily update check's switch in Orunmila's home. */
+function installUpdates(on) {
+  const { setUpdates } = require('../src/opon/intake/switches');
+  const file = setUpdates(orunmilaHome(), on);
+  if (on) {
+    console.log(`Daily updates are on (${file}).`);
+    console.log("Once a day the intake, or a hook where no intake runs, asks the npm registry for the latest orunmila, sending only the package's name,");
+    console.log('and switches to it once it is checked and no session is being recorded. Each switch is in ~/.orunmila/updates.jsonl.');
+  } else console.log(`Daily updates are off (${file}). Update by hand with: orunmila update`);
+  if (process.env.ORUNMILA_UPDATES === '1' || process.env.ORUNMILA_UPDATES === '0') console.log(`Note: ORUNMILA_UPDATES=${process.env.ORUNMILA_UPDATES} is set in this shell, and wins over the switch where it is set.`);
+}
+
 function cmdInstall() {
   if (args.includes('--with-judge') || args.includes('--without-judge')) return installJudge(args.includes('--with-judge'));
+  if (args.includes('--with-updates') || args.includes('--without-updates')) return installUpdates(args.includes('--with-updates'));
   const root = path.resolve(__dirname, '..');
   const agentId = flag('agent', 'claude-code');
   const adapter = getAdapter(agentId);
@@ -1619,6 +1632,19 @@ async function cmdIntake() {
     const why = judge.from === 'environment' ? `ORUNMILA_JUDGE_LIVE=${judge.on ? 1 : 0}` : judge.from === 'switch' ? `the switch in ${switchesFile(home)}` : 'turn it on with: orunmila install --with-judge';
     console.log(`orunmila intake: the judge is ${judge.on ? 'on' : 'off'} (${why})`);
     console.log(process.env.ORUNMILA_PEER_BUSY === '1' ? "orunmila intake: each session's log notes when a peer sharing its folder is working (ORUNMILA_PEER_BUSY=1)" : "orunmila intake: a peer's busy time is not noted; ORUNMILA_PEER_BUSY=1 turns it on");
+    // PM2c2 (LD333): the daily update check, read at each tick so the switch takes effect without a restart; the update
+    // runs as its own process (src/runtime/daily.js), never in the intake's. ORUNMILA_UPDATE_POLL_MS is for tests.
+    const { updatesOn } = require('../src/opon/intake/switches');
+    const daily = require('../src/runtime/daily');
+    const upd = updatesOn(process.env, home);
+    console.log(`orunmila intake: the daily update check is ${upd.on ? 'on' : 'off'} (${upd.from === 'environment' ? `ORUNMILA_UPDATES=${upd.on ? 1 : 0}` : upd.from === 'switch' ? `the switch in ${switchesFile(home)}` : 'turn it on with: orunmila install --with-updates'})`);
+    setInterval(() => {
+      try {
+        if (updatesOn(process.env, home).on && daily.due(home)) daily.startUpdate(home);
+      } catch (e) {
+        console.error(`orunmila intake: the daily update check could not start (${e.code || e.message})`);
+      }
+    }, Number(process.env.ORUNMILA_UPDATE_POLL_MS) > 0 ? Number(process.env.ORUNMILA_UPDATE_POLL_MS) : 60 * 60 * 1000).unref();
     for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) {
       process.on(sig, async () => {
         if (stopping) return;
@@ -1891,6 +1917,23 @@ function cmdTrailer() {
 async function cmdUpdate() {
   const { statusOf, intakePaths } = require('../src/opon/intake/server');
   const home = orunmilaHome();
+  // PM2c2 (LD333): `--auto`, started by the daily check: only with the switch on, one at a time (runtime/update.lock,
+  // taken over after 30 minutes), its answer in runtime/last-update; it prints nothing (no one reads a detached run).
+  let lock = null;
+  if (args.includes('--auto')) {
+    if (!require('../src/opon/intake/switches').updatesOn(process.env, home).on) return;
+    lock = path.join(home, 'runtime', 'update.lock');
+    try {
+      fs.writeFileSync(lock, String(process.pid), { flag: 'wx', mode: 0o600 });
+    } catch {
+      try {
+        if (Date.now() - fs.statSync(lock).mtimeMs < 30 * 60 * 1000) return; // another update runs
+        fs.writeFileSync(lock, String(process.pid), { mode: 0o600 });
+      } catch {
+        return;
+      }
+    }
+  }
   const registry = process.env.ORUNMILA_REGISTRY || process.env.npm_config_registry || 'https://registry.npmjs.org';
   const held = async () => {
     const st = await statusOf(intakePaths(home).sock, 1000);
@@ -1902,6 +1945,17 @@ async function cmdUpdate() {
       return false; // no held list: nothing to resume
     }
   };
+  if (lock) {
+    try {
+      const r = await require('../src/runtime/update').updateNow({ home, registry, held });
+      const file = path.join(home, 'runtime', 'last-update');
+      fs.writeFileSync(`${file}.${process.pid}.tmp`, `${new Date().toISOString()} ${r.status}: ${r.words}\n`, { mode: 0o600 });
+      fs.renameSync(`${file}.${process.pid}.tmp`, file);
+    } finally {
+      fs.rmSync(lock, { force: true });
+    }
+    return;
+  }
   console.log(`orunmila update: asking ${registry} for the latest orunmila (only the package's name is sent)`);
   const r = await require('../src/runtime/update').updateNow({ home, registry, held });
   console.log(`orunmila update: ${r.words}`);
@@ -1964,6 +2018,7 @@ Install
   orunmila install --gate-only                    add the Closeout Gate to an existing Stain Map install
   orunmila install --intake                       send every hook payload to the intake too (claude-code; start it first)
   orunmila install --with-judge | --without-judge  the Babaláwo on or off (from the intake's next start)
+  orunmila install --with-updates | --without-updates  the daily update check on or off (orunmila update by hand, always)
   orunmila lenses [--agent ID] [--global]         the three lenses side by side + which are installed right now
   orunmila agents                                 list supported agents and their config locations
   orunmila --version                              the installed version

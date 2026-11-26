@@ -27,8 +27,9 @@
  * retried every ThrottleInterval seconds. Only ORUNMILA_HOME,
  * ORUNMILA_INTAKE_PORT, ORUNMILA_OPON_LIVE (LA2, LD219), ORUNMILA_JUDGE_LIVE,
  * ORUNMILA_LOG_GUARD and ORUNMILA_WATCH_EXTRA (LA3, LD290), ORUNMILA_ASYNC_START
- * (SN1) and ORUNMILA_PEER_BUSY (AT1b, LD330) are copied from the installing
- * environment, and only when set.
+ * (SN1), ORUNMILA_PEER_BUSY (AT1b, LD330), and ORUNMILA_UPDATES and
+ * ORUNMILA_REGISTRY (PM2c2, LD333: the daily update check the intake starts) are
+ * copied from the installing environment, and only when set.
  */
 
 const fs = require('fs');
@@ -36,7 +37,7 @@ const path = require('path');
 
 const LABEL = 'dev.orunmila.intake';
 // LA2 (LD219): the live flag kept across restarts; LA3 (LD290): every other flag the intake reads, too.
-const ENV_KEYS = ['ORUNMILA_HOME', 'ORUNMILA_INTAKE_PORT', 'ORUNMILA_OPON_LIVE', 'ORUNMILA_JUDGE_LIVE', 'ORUNMILA_LOG_GUARD', 'ORUNMILA_WATCH_EXTRA', 'ORUNMILA_ASYNC_START', 'ORUNMILA_PEER_BUSY'];
+const ENV_KEYS = ['ORUNMILA_HOME', 'ORUNMILA_INTAKE_PORT', 'ORUNMILA_OPON_LIVE', 'ORUNMILA_JUDGE_LIVE', 'ORUNMILA_LOG_GUARD', 'ORUNMILA_WATCH_EXTRA', 'ORUNMILA_ASYNC_START', 'ORUNMILA_PEER_BUSY', 'ORUNMILA_UPDATES', 'ORUNMILA_REGISTRY'];
 const THROTTLE_S = 10;
 
 const xml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

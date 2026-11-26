@@ -2769,7 +2769,7 @@ const MUTANTS = [
     fails: ['SN2 (LD295)'] },
   // LA3 (LD290): the launch agent keeps every flag the intake reads.
   { id: "LA3-1 the plist drops the judge's, the guard's and the extra folders' flags", file: 'src/opon/intake/launch-agent.js', test: 'test/launch-agent.js',
-    from: ", 'ORUNMILA_JUDGE_LIVE', 'ORUNMILA_LOG_GUARD', 'ORUNMILA_WATCH_EXTRA', 'ORUNMILA_ASYNC_START', 'ORUNMILA_PEER_BUSY'];", to: ", 'ORUNMILA_PEER_BUSY'];", // SN1 and AT1b (LD330) added keys
+    from: ", 'ORUNMILA_JUDGE_LIVE', 'ORUNMILA_LOG_GUARD', 'ORUNMILA_WATCH_EXTRA', 'ORUNMILA_ASYNC_START', 'ORUNMILA_PEER_BUSY', 'ORUNMILA_UPDATES', 'ORUNMILA_REGISTRY'];", to: ", 'ORUNMILA_PEER_BUSY', 'ORUNMILA_UPDATES', 'ORUNMILA_REGISTRY'];", // SN1, AT1b (LD330) and PM2c2 (LD333) added keys
     fails: ['LA3 (LD290)'] },
   // Q12 (a) (LD289): extra folders the Sentinel watches.
   { id: 'Q12-1 the extra folders are not watched', file: 'src/opon/intake/router.js', test: 'test/intake-sentinel.js',
@@ -3349,8 +3349,8 @@ MUTANTS.push(
     id: 'AT1b-8 the launch agent does not keep ORUNMILA_PEER_BUSY',
     file: 'src/opon/intake/launch-agent.js',
     test: 'test/launch-agent.js',
-    from: ", 'ORUNMILA_ASYNC_START', 'ORUNMILA_PEER_BUSY'];",
-    to: ", 'ORUNMILA_ASYNC_START'];",
+    from: ", 'ORUNMILA_ASYNC_START', 'ORUNMILA_PEER_BUSY', 'ORUNMILA_UPDATES'",
+    to: ", 'ORUNMILA_ASYNC_START', 'ORUNMILA_UPDATES'", // PM2c2 (LD333) added keys after it
     fails: ['LA3 (LD290)'],
   },
   // PM2b (LD331): the starter in Orunmila's home, and the copy of the package it runs.
@@ -3450,6 +3450,63 @@ MUTANTS.push(
     from: "if (rel.split('/').some((seg) => seg === '..' || seg === '.')) throw",
     to: 'if (false) throw',
     fails: ['PM2c1: the unpacker'],
+  },
+  // PM2c2 (LD333): the daily update check and its switch.
+  {
+    id: 'PM2c2-1 the starter checks every hook, not once a day',
+    file: 'src/runtime/orunmila-start.js',
+    test: 'test/update-auto.js',
+    from: '    if (Date.now() - last < 24 * 60 * 60 * 1000) return;\n',
+    to: '',
+    fails: ['PM2c2: with the switch on, a hook through the starter'],
+  },
+  {
+    id: 'PM2c2-2 the starter checks with the switch off',
+    file: 'src/runtime/orunmila-start.js',
+    test: 'test/update-auto.js',
+    from: '    if (!on) return;\n',
+    to: '',
+    fails: ['PM2c2: with the switch on, a hook through the starter'],
+  },
+  {
+    id: 'PM2c2-3 update --auto runs with the switch off',
+    file: 'bin/orunmila.js',
+    test: 'test/update-auto.js',
+    from: "    if (!require('../src/opon/intake/switches').updatesOn(process.env, home).on) return;\n",
+    to: '',
+    fails: ['PM2c2: update --auto does nothing'],
+  },
+  {
+    id: 'PM2c2-4 update --auto runs beside another',
+    file: 'bin/orunmila.js',
+    test: 'test/update-auto.js',
+    from: '        if (Date.now() - fs.statSync(lock).mtimeMs < 30 * 60 * 1000) return; // another update runs\n',
+    to: '',
+    fails: ['PM2c2: update --auto does nothing'],
+  },
+  {
+    id: 'PM2c2-5 the intake never starts the daily check',
+    file: 'bin/orunmila.js',
+    test: 'test/update-auto.js',
+    from: 'if (updatesOn(process.env, home).on && daily.due(home)) daily.startUpdate(home);',
+    to: 'void 0;',
+    fails: ['PM2c2: intake run says whether'],
+  },
+  {
+    id: 'PM2c2-6 the environment does not win over the updates switch',
+    file: 'src/opon/intake/switches.js',
+    test: 'test/update-auto.js',
+    from: "  if (v === '0' || v === '1') return { on: v === '1', from: 'environment' };\n  const { obj, problem } = readObject(home);\n  if (!problem && typeof obj.updates === 'boolean')",
+    to: "  const { obj, problem } = readObject(home);\n  if (!problem && typeof obj.updates === 'boolean')",
+    fails: ['PM2c2: the updates switch is off'],
+  },
+  {
+    id: 'PM2c2-7 the launch agent drops the update keys',
+    file: 'src/opon/intake/launch-agent.js',
+    test: 'test/launch-agent.js',
+    from: ", 'ORUNMILA_UPDATES', 'ORUNMILA_REGISTRY'];",
+    to: '];',
+    fails: ['LA3 (LD290)'],
   },
 );
 

@@ -71,4 +71,29 @@ function judgeOn(env, home) {
   return { on: false, from: 'default' };
 }
 
-module.exports = { switchesFile, readSwitches, setJudge, judgeOn };
+/**
+ * PM2c2 (LD333): the daily update check, `{"updates": true | false}` in the same file, written by `orunmila install
+ * --with-updates | --without-updates`; ORUNMILA_UPDATES=1 or 0 wins where set. Off by default while the build runs
+ * (Leopard rule 2: the live intake runs this code); the starter reads the same key itself (src/runtime/orunmila-start.js).
+ */
+function setUpdates(home, on) {
+  const file = switchesFile(home);
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  const { obj, problem } = readObject(home);
+  const next = { ...(problem ? {} : obj), updates: on === true };
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(next) + '\n', { mode: 0o600 });
+  fs.chmodSync(tmp, 0o600);
+  fs.renameSync(tmp, file);
+  return file;
+}
+
+function updatesOn(env, home) {
+  const v = env && env.ORUNMILA_UPDATES;
+  if (v === '0' || v === '1') return { on: v === '1', from: 'environment' };
+  const { obj, problem } = readObject(home);
+  if (!problem && typeof obj.updates === 'boolean') return { on: obj.updates, from: 'switch' };
+  return { on: false, from: 'default' };
+}
+
+module.exports = { switchesFile, readSwitches, setJudge, judgeOn, setUpdates, updatesOn };

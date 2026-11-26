@@ -44,8 +44,10 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   switches to it only while no session is being recorded (it waits, checked,
   until then), keeping the version it ran as `runtime/previous`. Each switch and
   each failed self-check goes into `~/.orunmila/updates.jsonl`. This is the
-  package's one network call; it sends only the package's name. Run by hand
-  for now; a daily check comes next.
+  package's one network call; it sends only the package's name. With
+  `orunmila install --with-updates` (or `ORUNMILA_UPDATES=1`) it also runs by
+  itself, at most once a day, started by the intake or, where none runs, by a
+  hook, in the background, so nothing waits for it; off by default for now.
 - **A second session that sits idle no longer blocks credit**
   (`ORUNMILA_PEER_BUSY=1`, off by default). The intake notes in each session's
   record when another session in the same folder is working (the `overlapped`

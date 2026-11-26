@@ -61,7 +61,8 @@
  *   watchExtra          Q12 (a) (LD289): extra folders the Sentinel watches for every
  *                       held session (none by default); a mark there names its file's
  *                       absolute path (outside the project); one that holds the
- *                       project, or lies inside it, is skipped
+ *                       project, or lies inside it, is skipped; the ones a session's
+ *                       Sentinel watches are in its header, config.watch_extra (Q42)
  *   router.watching()   the folders the Sentinel watches, sorted (slice
  *                       B4, LD145): with `sentinel: true`, each session's root
  *                       is watched from its first payload until it is released,
@@ -449,6 +450,9 @@ function createRouter(o) {
     const entries = readEnvEntries(root).entries;
     const now = at;
     const ci = isCaseInsensitive(root);
+    // Q42 (LD299, LD328): the extra folders this session's Sentinel watches, as an outside mark's path is written (the real
+    // path, `/` separators), so replay reads a file there it saw no change to as saw_nothing; no field when there are none.
+    const extras = sentinels ? extrasFor(root).map((x) => x.split(path.sep).join('/')).sort() : [];
     const header = buildHeader({
       sessionId: id,
       root,
@@ -458,7 +462,7 @@ function createRouter(o) {
       codeRoot: o.codeRoot,
       lawPacks: lawPacksFor(root),
       hookSettings: hookSettingsFor(root),
-      config: sentinels ? { ...(o.config || {}), exclusions: sentinels.ignoreFor(root) } : o.config,
+      config: sentinels ? { ...(o.config || {}), exclusions: sentinels.ignoreFor(root), ...(extras.length ? { watch_extra: extras } : {}) } : o.config,
       observedAt: now.wall,
       monoNs: now.mono,
       envValues: entries.map((e) => e.value),

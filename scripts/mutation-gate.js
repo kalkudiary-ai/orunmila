@@ -1296,7 +1296,7 @@ const MUTANTS = [
     from: "if (t.kind === 'dir' && typeof t.path === 'string') return m.cause_hint ? `dir:${t.path}|${m.cause_hint}` : alone;", to: "if (t.kind === 'dir' && typeof t.path === 'string') return `dir:${t.path}`;",
     fails: ['test 70:'] },
   { id: 'G1-2 a write outside the root: the Sentinel saw nothing', file: 'src/opon/settle/engine.js', test: 'test/group.js',
-    from: "      if (g.target && g.target.outside) return { status: 'out_of_scope', scope: 'outside_root' };\n", to: "",
+    from: "      if (g.target && g.target.outside && !inWatchedExtra(g.target.path)) return { status: 'out_of_scope', scope: 'outside_root' };\n", to: "",
     fails: ['test 67 (group half)'] },
   { id: "G1-3 the header's exclusions are not read", file: 'src/opon/settle/engine.js', test: 'test/group.js',
     from: "if (g.target && isIgnored(g.target.path, exclusions)) return", to: "if (false) return",
@@ -1669,7 +1669,7 @@ const MUTANTS = [
     from: 'if (s.watched && s.root === root) engine.receive(normalise(s, { ...mark, session_id: id }), {}, keep);', to: 'if (s.watched && s.root === root) { engine.receive(normalise(s, { ...mark, session_id: id }), {}, keep); break; }',
     fails: ['B4: two sessions on one root'] },
   { id: "B4-8 the header does not list what the Sentinel does not watch", file: 'src/opon/intake/router.js', test: 'test/intake-sentinel.js',
-    from: 'exclusions: sentinels.ignoreFor(root) }', to: 'exclusions: [] }',
+    from: 'exclusions: sentinels.ignoreFor(root), ', to: 'exclusions: [], ',
     fails: ["B4 (N3): a write in the project's .orunmila/"] },
   // Slice B2: the hooks' sender and install --intake (LD133).
   { id: 'B2-1 the sender has no deadline', file: 'src/capture/claude-code/intake-send.js', test: 'test/intake-send.js',
@@ -3194,6 +3194,31 @@ MUTANTS.push(
     from: '      judge: judge.on, //',
     to: "      judge: process.env.ORUNMILA_JUDGE_LIVE === '1', //",
     fails: ['BJ1: intake run follows the switch'],
+  },
+  // Q42 (LD328): the header's extra watched folders, written by the router and read by the engine's witness status.
+  {
+    id: 'Q42-1 the engine ignores the watched extra folders',
+    file: 'src/opon/settle/engine.js',
+    test: 'test/watch-extra.js',
+    from: 'if (g.target && g.target.outside && !inWatchedExtra(g.target.path)) return',
+    to: 'if (g.target && g.target.outside) return',
+    fails: ['Q42: replay reads an outside file'],
+  },
+  {
+    id: 'Q42-2 a folder name that only starts the same counts as inside',
+    file: 'src/opon/settle/engine.js',
+    test: 'test/watch-extra.js',
+    from: "p.startsWith(x.endsWith('/') ? x : x + '/')",
+    to: 'p.startsWith(x)',
+    fails: ['Q42: replay reads an outside file'],
+  },
+  {
+    id: 'Q42-3 the header never names the extra folders',
+    file: 'src/opon/intake/router.js',
+    test: 'test/watch-extra.js',
+    from: '...(extras.length ? { watch_extra: extras } : {})',
+    to: '...{}',
+    fails: ['Q42: the header lists the extra folders'],
   },
 );
 

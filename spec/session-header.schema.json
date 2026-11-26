@@ -112,6 +112,12 @@
           "description": "The rules file (`.orunmila/rules`) as it was at session start, its text whole, so the judge and any re-judgement read the session's rules from the header and never from current settings. Its fingerprint is `frozen.rules`, of the same bytes. Absent when the file did not exist (the default rules judge the session) or the judge was off.",
           "$comment": "brief v4 lines 283, 664, 684; agent's proposal, Q34 (approved by O 2026-11-24, LD262): copied by the intake, parsed only by the judge",
           "type": "string"
+        },
+        "watch_extra": {
+          "description": "The folders outside the project that this session's Sentinel also watched (ORUNMILA_WATCH_EXTRA), each its real absolute path with `/` separators, as an outside mark's path is written, sorted. A file there with no Sentinel mark is `saw_nothing`, not `out_of_scope`. Absent when the Sentinel watched no extra folder (the default).",
+          "$comment": "brief v4 lines 283, 347; agent's proposal, Q42 (approved by O 2026-11-25, LD299; LD289, LD328)",
+          "type": "array",
+          "items": { "type": "string", "pattern": "^(/|[A-Za-z]:/)" }
         }
       }
     },

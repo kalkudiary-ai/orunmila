@@ -189,6 +189,73 @@
       "baseline": {
         "fingerprint": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
       }
+    },
+    "header_watch_extra": {
+      "schema_version": 1,
+      "record": "session_header",
+      "session_id": "ses_test_0001",
+      "seq": 0,
+      "observed_at": "2026-11-16T08:59:59.000Z",
+      "mono_ns": "4900000000",
+      "orunmila": {
+        "version": "0.3.0",
+        "code_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "agent": {
+        "name": "claude-code",
+        "version": "2.1.0"
+      },
+      "os": {
+        "platform": "darwin",
+        "release": "25.2.0"
+      },
+      "accounts": {
+        "agent_user": "dev",
+        "orunmila_user": "dev"
+      },
+      "project_root": "/Users/dev/proj",
+      "config": {
+        "quiet_window_ms": 1500,
+        "ceiling_ms": 30000,
+        "lag_grace_ms": 3000,
+        "exclusions": [
+          "node_modules"
+        ],
+        "diff_size_limit_bytes": 10485760,
+        "watch_extra": [
+          "/made/up/notes",
+          "C:/made/up/docs"
+        ]
+      },
+      "frozen": {
+        "rules": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "byproducts": null,
+        "ignore": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "law_packs": {
+          "canon": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        "hook_settings": {
+          ".claude/settings.local.json": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      },
+      "hooks_report": {
+        "before": [
+          "*"
+        ],
+        "after": [
+          "*"
+        ]
+      },
+      "test_command": {
+        "text": "node test/all.js",
+        "source": {
+          "path": "package.json",
+          "key": "scripts.test"
+        },
+        "scripts_fingerprint": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "prev_hash": null,
+      "hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
     }
   },
   "bad": [
@@ -1622,6 +1689,46 @@
       "error": {
         "path": "/config/case_insensitive",
         "keyword": "type"
+      }
+    },
+    {
+      "name": "watch_extra not a list (Q42)",
+      "from": "header",
+      "set": {
+        "/config/watch_extra": "/made/up/notes"
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/watch_extra",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "watch_extra holding an entry that is not a string (Q42)",
+      "from": "header",
+      "set": {
+        "/config/watch_extra": [
+          7
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/watch_extra/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "watch_extra holding a relative folder (Q42)",
+      "from": "header",
+      "set": {
+        "/config/watch_extra": [
+          "notes"
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/watch_extra/0",
+        "keyword": "pattern"
       }
     }
   ]

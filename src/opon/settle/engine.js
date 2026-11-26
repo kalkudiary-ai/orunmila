@@ -78,7 +78,8 @@
  * `hook` and `agent_claim` marks, the Sentinel the `sentinel` marks. A witness
  * with no marks is, from recorded facts only: for the Sentinel, `out_of_scope`
  * when the group is no disk event (`not_a_disk_event`), its path is outside the
- * project (`outside_root`) or among the header's exclusions (`excluded`); for
+ * project and outside every extra folder the header says it watched
+ * (`outside_root`; Q42, config.watch_extra) or among the header's exclusions (`excluded`); for
  * either, `down` when a recorded gap covers the group's time (the intake's
  * downtime for both, a Sentinel watch gap for the Sentinel, any other capture
  * gap for the Glove); otherwise `saw_nothing`, which does not say it was
@@ -284,6 +285,10 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
   const waiting = []; // closed groups whose seal waits for their turns or a group they name, in the order they closed (C3d2)
   const freedAt = new Map(); // a waiting group's id -> when it sealed (C3d2)
   const exclusions = Array.isArray(config.exclusions) ? config.exclusions : [];
+  // Q42 (LD328): the extra folders outside the project the session's Sentinel watched (the header's), so an outside file
+  // there with no Sentinel mark is saw_nothing, not out_of_scope; a header without the field watched none.
+  const watchExtra = Array.isArray(config.watch_extra) ? config.watch_extra.filter((x) => typeof x === 'string' && x) : [];
+  const inWatchedExtra = (p) => typeof p === 'string' && watchExtra.some((x) => p === x || p.startsWith(x.endsWith('/') ? x : x + '/'));
   const due = []; // L1b: the paths of settled file changes due a fingerprint, in the order they settled
   let sweepKey = null; // K2: the key of the closeout sweep's own group, once it has begun
   const awaiting = []; // K7 (LD216): phantom file claims waiting for the closeout's rescan, each { make, path }
@@ -349,7 +354,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     const disk = ((g.key.startsWith('file:') || g.key.startsWith('dirchange:')) && g.says.some((v) => DISK.has(v))) || Boolean(g.missed);
     if (name === 'sentinel') {
       if (!disk) return { status: 'out_of_scope', scope: 'not_a_disk_event' };
-      if (g.target && g.target.outside) return { status: 'out_of_scope', scope: 'outside_root' };
+      if (g.target && g.target.outside && !inWatchedExtra(g.target.path)) return { status: 'out_of_scope', scope: 'outside_root' };
       if (g.target && isIgnored(g.target.path, exclusions)) return { status: 'out_of_scope', scope: 'excluded' };
     }
     if (gaps.some((x) => (x.who === 'both' || x.who === name) && x.from <= g.last && x.to >= g.first)) return { status: 'down' };

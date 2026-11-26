@@ -3592,6 +3592,15 @@ MUTANTS.push(
     to: 'return at >= 0;',
     fails: ["F19 (LD336): an install refused because another copy's hooks"],
   },
+  // PM4 (LD337): the README gives every route's install line.
+  {
+    id: 'PM4-1 the README drops the dev-dependency route',
+    file: 'README.md',
+    test: 'test/install-routes.js',
+    from: 'npm install -D orunmila                  # then: npx orunmila install\n',
+    to: '',
+    fails: ['PM4 (LD337)'],
+  },
 );
 
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };

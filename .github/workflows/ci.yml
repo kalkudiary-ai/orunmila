@@ -53,6 +53,24 @@ jobs:
       - name: The hooks, run as written
         run: node scripts/smoke-hooks.js ${{ matrix.shell == 'bash' && '--bash' || '' }}
 
+  # PM1, PM4 (LD335, LD337): every install route (npm i -g, npx, npm i -D, pnpm dlx, pnpm add -g, pnpm add -D) into a
+  # throwaway machine: every hook names the starter in Orunmila's home, runs, and still runs once the route's copy is
+  # removed. pnpm comes through corepack. (npm test runs the npm routes on every OS through test/install-routes.js.)
+  routes:
+    name: install routes (npm and pnpm / ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Every route, run and checked
+        run: node scripts/install-routes.js
+
   # The coverage gate (c8 check-coverage in .c8rc.json) and the detection
   # accuracy gate are the two quality bars. They are deterministic on Linux;
   # we run them once on the primary OS/Node to keep the matrix fast and the

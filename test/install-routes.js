@@ -21,4 +21,13 @@ it('PM1 (LD335): every npm route writes hooks that name the starter, and they ru
   assert.strictEqual(r.status, 0, r.stdout + r.stderr);
 });
 
+it('PM4 (LD337): the README gives the install line of every route the script checks, and what every route leaves behind', () => {
+  const { fs, path, ROOT } = require('./helpers');
+  const { ROUTES } = require('../scripts/install-routes');
+  const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+  const missing = Object.entries(ROUTES).filter(([, r]) => !readme.includes(r.readme)).map(([n, r]) => `${n}: ${r.readme}`);
+  assert.deepStrictEqual(missing, []);
+  assert.ok(readme.includes('~/.orunmila/bin/orunmila-start.js'), 'it says what every route leaves behind: hooks that run the starter');
+});
+
 runAll('install-routes');

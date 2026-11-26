@@ -99,23 +99,43 @@ gate with nothing to judge rather than looking successful and sitting silent.
 
 ## Quickstart
 
-Two install routes. **Both carry both lenses** — the route only changes how you
-get the code, never what you get.
+Install it with npm or pnpm, globally, in one project, or with nothing
+installed at all. **Every route carries every lens** — the route only changes
+how you get the code, never what you get.
 
-### From npm
+### From npm or pnpm
 
 ```bash
-npm install -g orunmila                  # or use npx and skip the global install
+npm install -g orunmila                  # or: pnpm add -g orunmila
 orunmila install --with-gate             # both lenses
 orunmila trail                           # the report, after you've worked a session
 ```
 
-With `npx` and nothing installed globally:
+With nothing installed globally:
 
 ```bash
-npx orunmila install --with-gate
+npx orunmila install --with-gate         # or: pnpm dlx orunmila install --with-gate
 npx orunmila trail
 ```
+
+In one project only, as a dev dependency:
+
+```bash
+npm install -D orunmila                  # then: npx orunmila install
+pnpm add -D orunmila                     # then: pnpm exec orunmila install
+```
+
+**What every route leaves behind.** `orunmila install` keeps a copy of
+Orunmila in its own home (`~/.orunmila/runtime/`, the version in use named in
+`~/.orunmila/runtime/current`), and every hook it writes runs that copy through
+one fixed starter, `~/.orunmila/bin/orunmila-start.js`. So the hooks keep
+working when npx's or pnpm's cache is cleared, or the global or project copy is
+removed. The package itself stays where the route put it. To move to a newer
+version, run `orunmila update` (or install the newer package and run
+`orunmila install` again: the hooks stay, and run the new copy);
+`orunmila install --with-updates` checks once a day by itself. Hooks written by
+an Orunmila from before the starter name that version's own copy: `orunmila
+install` refuses over them and names each one; remove those, then install.
 
 ### From a git clone
 
@@ -129,6 +149,9 @@ cd orunmila
 node bin/orunmila.js install --with-gate   # run from the project you want to watch
 node bin/orunmila.js trail
 ```
+
+`install` copies the clone into `~/.orunmila/runtime/` too, so after you edit
+the clone, run it again for the hooks to run your edits.
 
 `npm test`, `npm run lint` and `npm run accuracy` all work from a clone with zero
 dependencies installed — the runtime has none, and the dev tooling is only

@@ -76,13 +76,14 @@ function pnpmCommand(env) {
   return null;
 }
 
+// `readme`: the line README.md gives for the route (PM4, LD337; test/install-routes.js holds that it is there).
 const ROUTES = {
-  'npm-global': { tool: 'npm', install: (m, tgz) => [['npm', ['install', '-g', tgz]], ['orunmila', ['install']]], clear: (m) => [path.join(m.prefix, win ? '' : 'lib', 'node_modules', 'orunmila')] },
-  npx: { tool: 'npm', install: (m, tgz) => [['npx', ['--yes', '--package', tgz, 'orunmila', 'install']]], clear: (m) => [path.join(m.cache, '_npx')] },
-  'npm-dev': { tool: 'npm', install: (m, tgz) => [['npm', ['install', '-D', tgz]], ['npx', ['--no-install', 'orunmila', 'install']]], clear: (m) => [path.join(m.project, 'node_modules')] },
-  'pnpm-dlx': { tool: 'pnpm', install: (m, tgz, p) => [[p[0], [...p.slice(1), '--package', tgz, 'dlx', 'orunmila', 'install']]], clear: (m) => [m.pcache, m.store] },
-  'pnpm-global': { tool: 'pnpm', install: (m, tgz, p) => [[p[0], [...p.slice(1), 'add', '-g', tgz]], ['orunmila', ['install']]], clear: (m) => [path.join(m.pnpmHome, 'global'), m.store] },
-  'pnpm-dev': { tool: 'pnpm', install: (m, tgz, p) => [[p[0], [...p.slice(1), 'add', '-D', tgz]], [p[0], [...p.slice(1), 'exec', 'orunmila', 'install']]], clear: (m) => [path.join(m.project, 'node_modules'), m.store] },
+  'npm-global': { tool: 'npm', readme: 'npm install -g orunmila', install: (m, tgz) => [['npm', ['install', '-g', tgz]], ['orunmila', ['install']]], clear: (m) => [path.join(m.prefix, win ? '' : 'lib', 'node_modules', 'orunmila')] },
+  npx: { tool: 'npm', readme: 'npx orunmila install', install: (m, tgz) => [['npx', ['--yes', '--package', tgz, 'orunmila', 'install']]], clear: (m) => [path.join(m.cache, '_npx')] },
+  'npm-dev': { tool: 'npm', readme: 'npm install -D orunmila', install: (m, tgz) => [['npm', ['install', '-D', tgz]], ['npx', ['--no-install', 'orunmila', 'install']]], clear: (m) => [path.join(m.project, 'node_modules')] },
+  'pnpm-dlx': { tool: 'pnpm', readme: 'pnpm dlx orunmila install', install: (m, tgz, p) => [[p[0], [...p.slice(1), '--package', tgz, 'dlx', 'orunmila', 'install']]], clear: (m) => [m.pcache, m.store] },
+  'pnpm-global': { tool: 'pnpm', readme: 'pnpm add -g orunmila', install: (m, tgz, p) => [[p[0], [...p.slice(1), 'add', '-g', tgz]], ['orunmila', ['install']]], clear: (m) => [path.join(m.pnpmHome, 'global'), m.store] },
+  'pnpm-dev': { tool: 'pnpm', readme: 'pnpm add -D orunmila', install: (m, tgz, p) => [[p[0], [...p.slice(1), 'add', '-D', tgz]], [p[0], [...p.slice(1), 'exec', 'orunmila', 'install']]], clear: (m) => [path.join(m.project, 'node_modules'), m.store] },
 };
 
 function hooksOf(m) {

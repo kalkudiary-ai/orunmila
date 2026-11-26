@@ -1427,6 +1427,15 @@ function cmdFeedbackImport() {
  * (`orunmila intake`, `install --intake`).
  */
 function cmdVerify() {
+  if (args.includes('--updates')) {
+    // PM2a (Q44 (a), LD329): the update log in Orunmila's home, hash-chained, each record against its schema.
+    const { readUpdatesLog, updatesFile } = require('../src/opon/ledger/updates');
+    const home = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
+    const r = readUpdatesLog(home);
+    console.log(`${updatesFile(home)}: ${r.words}`);
+    process.exitCode = r.ok ? 0 : 1;
+    return;
+  }
   const dir = args[1] && !args[1].startsWith('--') ? args[1] : null;
   if (!dir) {
     console.error('Usage: orunmila verify <session-folder> [--json]');
@@ -1946,6 +1955,7 @@ Both lenses
   orunmila debug-transcript <path>                inspect why transcript parsing isn't matching your install
   orunmila verify <session-folder> [--json]       check a session log folder's hash chains, records and kept files
                                                   (the per-session logs the intake writes, in ~/.orunmila/sessions/)
+  orunmila verify --updates                       check the update log (~/.orunmila/updates.jsonl): each update, chained
   orunmila intake run|start|status|stop           the intake server, one per machine (install --intake sends to it)
   orunmila intake agent install|uninstall|status  keep the intake running at login with a launch agent (macOS)
   orunmila replay <session-folder> [--expect file]  the Opon's settled groups for a session log, replayed (Phase 2)

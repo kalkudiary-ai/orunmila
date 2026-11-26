@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:orunmila:spec:v1:update",
+  "title": "Orunmila update record, schema version 1: DRAFT",
+  "description": "One update of Orunmila by itself: the version it ran and the one it was offered, npm's integrity hash of the package it checked, the result of the new version's self-check, and whether it switched. A failed self-check keeps the version it ran, and is recorded too. Follows the update log's header (updates-header.schema.json) in one hash chain.",
+  "$comment": "agent's proposal Q44 (a), approved by O 2026-11-25 (LD299): \"the version from and to, npm's integrity hash, the self-check's result, the time\"; `switched` and the field names are the agent's choice (LD329). Unknown fields are allowed (LD17).",
+  "type": "object",
+  "required": ["schema_version", "record", "seq", "at", "from", "to", "integrity", "self_check", "switched", "prev_hash", "hash"],
+  "properties": {
+    "schema_version": { "description": "All carry a `schema_version`.", "$comment": "brief v4 line 209", "const": 1 },
+    "record": { "description": "Marks this line as an update record.", "$comment": "agent's choice, LD329", "const": "update" },
+    "seq": { "description": "Its place in the update log, from 1.", "$comment": "brief v4 line 237; agent's choice, LD329", "type": "integer", "minimum": 1 },
+    "at": {
+      "description": "Wall-clock time of the switch, or of the refusal.",
+      "$comment": "agent's proposal Q44 (a), approved by O (LD299): the time; the form of the session header's observed_at",
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$"
+    },
+    "from": {
+      "description": "The version Orunmila ran before; null when no version was installed in its home yet (the first one).",
+      "$comment": "agent's proposal Q44 (a), approved by O (LD299): the version from",
+      "type": ["string", "null"],
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$"
+    },
+    "to": {
+      "description": "The version it was offered and checked.",
+      "$comment": "agent's proposal Q44 (a), approved by O (LD299): the version to",
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$"
+    },
+    "integrity": {
+      "description": "npm's integrity hash of the package checked, in the registry's own form (Subresource Integrity: the algorithm, a dash, the digest in base64).",
+      "$comment": "agent's proposal Q44 (a), approved by O (LD299): npm's integrity hash",
+      "type": "string",
+      "pattern": "^sha(256|384|512)-[A-Za-z0-9+/]+=*$"
+    },
+    "self_check": { "description": "The new version's self-check: pass, or fail (it is then not switched to).", "$comment": "agent's proposal Q44 (a), approved by O (LD299): the self-check's result", "enum": ["pass", "fail"] },
+    "switched": { "description": "Whether Orunmila now runs the new version.", "$comment": "agent's choice, LD329", "type": "boolean" },
+    "prev_hash": { "description": "The previous record's hash.", "$comment": "brief v4 line 248; spec/hash-chain.md", "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "hash": { "description": "This record's own hash.", "$comment": "brief v4 line 248; spec/hash-chain.md", "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

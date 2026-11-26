@@ -62,6 +62,9 @@ const FORMATS = [
   { name: 'verdict header', schema: 'verdict-header.schema.json', cases: 'verdict-headers.json', sweep: true },
   { name: 'verdict', schema: 'verdict.schema.json', cases: 'verdicts.json', sweep: true },
   { name: 'session verdict', schema: 'session-verdict.schema.json', cases: 'session-verdicts.json', sweep: true },
+  // PM2a (Q44 (a), LD299, LD329): the update log's two records.
+  { name: 'update log header', schema: 'updates-header.schema.json', cases: 'updates-headers.json', sweep: true },
+  { name: 'update', schema: 'update.schema.json', cases: 'updates.json', sweep: true },
 ];
 
 // --- the deletion sweep (NF85, LD79) ----------------------------------------------

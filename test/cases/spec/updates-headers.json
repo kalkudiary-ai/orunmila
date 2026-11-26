@@ -1,0 +1,182 @@
+{
+  "good": {
+    "first_line": {
+      "schema_version": 1,
+      "record": "updates_header",
+      "seq": 0,
+      "created_at": "2026-11-26T09:00:00.000Z",
+      "prev_hash": null,
+      "hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  },
+  "bad": [
+    {
+      "name": "the header is the log's first line, seq 0",
+      "from": "first_line",
+      "set": {
+        "/seq": 1
+      },
+      "unset": [],
+      "error": {
+        "path": "/seq",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "an update record in the header's place",
+      "from": "first_line",
+      "set": {
+        "/record": "update"
+      },
+      "unset": [],
+      "error": {
+        "path": "/record",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "a later schema version",
+      "from": "first_line",
+      "set": {
+        "/schema_version": 2
+      },
+      "unset": [],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "a creation time of the wrong type",
+      "from": "first_line",
+      "set": {
+        "/created_at": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/created_at",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a creation time not in UTC ISO form",
+      "from": "first_line",
+      "set": {
+        "/created_at": "2026-11-26 09:00"
+      },
+      "unset": [],
+      "error": {
+        "path": "/created_at",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "the chain starts at the header, so it follows nothing",
+      "from": "first_line",
+      "set": {
+        "/prev_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "unset": [],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a hash of the wrong type",
+      "from": "first_line",
+      "set": {
+        "/hash": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/hash",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a hash not a whole sha256 hash",
+      "from": "first_line",
+      "set": {
+        "/hash": "sha256:0123"
+      },
+      "unset": [],
+      "error": {
+        "path": "/hash",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/schema_version missing",
+      "from": "first_line",
+      "set": {},
+      "unset": [
+        "/schema_version"
+      ],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/record missing",
+      "from": "first_line",
+      "set": {},
+      "unset": [
+        "/record"
+      ],
+      "error": {
+        "path": "/record",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/seq missing",
+      "from": "first_line",
+      "set": {},
+      "unset": [
+        "/seq"
+      ],
+      "error": {
+        "path": "/seq",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/created_at missing",
+      "from": "first_line",
+      "set": {},
+      "unset": [
+        "/created_at"
+      ],
+      "error": {
+        "path": "/created_at",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/prev_hash missing",
+      "from": "first_line",
+      "set": {},
+      "unset": [
+        "/prev_hash"
+      ],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/hash missing",
+      "from": "first_line",
+      "set": {},
+      "unset": [
+        "/hash"
+      ],
+      "error": {
+        "path": "/hash",
+        "keyword": "required"
+      }
+    }
+  ]
+}

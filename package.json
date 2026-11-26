@@ -35,6 +35,7 @@
   "files": [
     "bin/",
     "src/",
+    "spec/",
     "skills/",
     "README.md",
     "CHANGELOG.md",

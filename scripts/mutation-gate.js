@@ -3220,6 +3220,39 @@ MUTANTS.push(
     to: '...{}',
     fails: ['Q42: the header lists the extra folders'],
   },
+  // PM2a (LD329): the update log; F18: the schemas it and verify read ship with the package.
+  {
+    id: 'PM2a-1 the update log is read without its schemas',
+    file: 'src/opon/ledger/updates.js',
+    test: 'test/updates-log.js',
+    from: 'const errors = s[want](r);',
+    to: 'const errors = [];',
+    fails: ['PM2a: an edited line breaks the chain'],
+  },
+  {
+    id: 'PM2a-2 an update that breaks its schema is written',
+    file: 'src/opon/ledger/updates.js',
+    test: 'test/updates-log.js',
+    from: 'if (errors.length) return { ok: false, reason: `the update record',
+    to: 'if (false) return { ok: false, reason: `the update record',
+    fails: ['PM2a: an update that does not fit its schema'],
+  },
+  {
+    id: 'PM2a-3 a broken update log is extended',
+    file: 'src/opon/ledger/updates.js',
+    test: 'test/updates-log.js',
+    from: 'if (!log.ok) throw new Error(`the update log',
+    to: 'if (false) throw new Error(`the update log',
+    fails: ['PM2a: an edited line breaks the chain'],
+  },
+  {
+    id: 'F18-1 the package ships without the schemas',
+    file: 'package.json',
+    test: 'test/updates-log.js',
+    from: '    "spec/",\n',
+    to: '',
+    fails: ['F18 (LD329)'],
+  },
 );
 
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };

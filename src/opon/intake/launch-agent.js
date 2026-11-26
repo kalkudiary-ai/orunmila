@@ -128,4 +128,4 @@ function createLaunchAgent({ platform = process.platform, uid, dir, run }) {
   return { install, uninstall, status, plist, service };
 }
 
-module.exports = { createLaunchAgent, plistFor, LABEL };
+module.exports = { createLaunchAgent, plistFor, LABEL, ENV_KEYS }; // ENV_KEYS: W2b's Startup script keeps the same (LD338)

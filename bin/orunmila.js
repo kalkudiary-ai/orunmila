@@ -1592,10 +1592,10 @@ function leakCheck() {
  * PM2c3 (LD334): what node runs for `intake run`: the starter and the current version's CLI, when `install` made them
  * (so a restart runs the version an update switched to), else this copy.
  */
-function intakeArgv(home) {
+function intakeArgv(home, sub = 'run') {
   const starter = path.join(home, 'bin', 'orunmila-start.js');
   const { starterTarget } = require('../src/runtime/install');
-  return fs.existsSync(starter) && starterTarget(starter, 'bin/orunmila.js').ok ? [starter, 'bin/orunmila.js', 'intake', 'run'] : [__filename, 'intake', 'run'];
+  return fs.existsSync(starter) && starterTarget(starter, 'bin/orunmila.js').ok ? [starter, 'bin/orunmila.js', 'intake', sub] : [__filename, 'intake', sub];
 }
 
 async function cmdIntake() {
@@ -1709,13 +1709,29 @@ async function cmdIntake() {
         const to = cur.split('_')[0];
         console.log(`orunmila intake: moving onto ${to} (an update switched to it, and no session is held)`);
         await server.stop(`moving onto Orunmila ${to}: an update switched to it while no session was held`);
-        if (process.env.XPC_SERVICE_NAME === require('../src/opon/intake/launch-agent').LABEL) process.exit(75);
+        if (process.env.XPC_SERVICE_NAME === require('../src/opon/intake/launch-agent').LABEL || process.env.ORUNMILA_KEPT === '1') process.exit(75); // launchd, or W2b's keeper, starts it again
         const out = fs.openSync(p.out, 'a', 0o600);
         require('child_process').spawn(process.execPath, [path.join(home, 'bin', 'orunmila-start.js'), 'bin/orunmila.js', 'intake', 'run'], { detached: true, stdio: ['ignore', out, out], env: process.env, windowsHide: true }).unref();
         process.exit(0);
       }, pollMs).unref();
     }
     return;
+  }
+  if (sub === 'keep') {
+    // W2b (LD338): the intake kept running, as launchd's KeepAlive keeps the launch agent's: started (through the
+    // starter when installed, so each start runs the current version), and started again after a failed exit (a crash,
+    // a stop no one asked for, a move onto an update); a stop asked for (exit 0) ends it. Another intake already
+    // running (exit 3): tried again every 10 s, as the launch agent's ThrottleInterval.
+    for (;;) {
+      const r = require('child_process').spawnSync(process.execPath, intakeArgv(home, 'run'), { stdio: 'inherit', env: { ...process.env, ORUNMILA_KEPT: '1' }, windowsHide: true });
+      if (r.status === 0) {
+        console.log('orunmila intake keep: the intake stopped as asked; keeping it ends');
+        return;
+      }
+      const wait = r.status === 3 ? 10000 : 1000;
+      console.log(`orunmila intake keep: the intake exited ${r.status === null ? `on ${r.signal}` : r.status}; starting it again in ${wait / 1000} s`);
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    }
   }
   if (sub === 'start') {
     const st = await statusOf(p.sock);
@@ -1776,6 +1792,29 @@ async function cmdIntake() {
     if (!gone) process.exitCode = 1;
     return;
   }
+  if (sub === 'agent' && (process.env.ORUNMILA_AGENT_PLATFORM || process.platform) === 'win32') {
+    // W2b (LD338): on Windows, a script in the user's Startup folder that runs `intake keep` hidden at each login.
+    // ORUNMILA_AGENT_PLATFORM and ORUNMILA_STARTUP_DIR exist for tests: they never touch a real Startup folder.
+    const { createStartup } = require('../src/opon/intake/startup-win');
+    const dir = process.env.ORUNMILA_STARTUP_DIR || path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
+    const s = createStartup({ platform: 'win32', dir });
+    const act = args[2];
+    if (act === 'install') {
+      const r = s.install({ node: process.execPath, args: intakeArgv(home, 'keep'), env: process.env });
+      console.log(`orunmila intake agent: installed ${r.file}; at each login it starts the intake, hidden, and keeps it running (remove with: orunmila intake agent uninstall)`);
+    } else if (act === 'uninstall') {
+      const r = s.uninstall();
+      console.log(r.removed ? `orunmila intake agent: removed ${r.removed}` : `orunmila intake agent: none installed (${s.file} is absent)`);
+    } else if (act === 'status') {
+      const r = s.status();
+      console.log(r.installed ? `orunmila intake agent: installed (${r.file}): the intake starts at each login` : `orunmila intake agent: not installed (${r.file} is absent)`);
+      if (!r.installed) process.exitCode = 1;
+    } else {
+      console.log('Usage: orunmila intake agent install|uninstall|status');
+      process.exitCode = 2;
+    }
+    return;
+  }
   if (sub === 'agent') {
     // The per-user launch agent (slice LA, LD143). ORUNMILA_LAUNCH_AGENTS_DIR and
     // ORUNMILA_LAUNCHCTL exist for tests: they never touch the real launchd.
@@ -1809,7 +1848,7 @@ async function cmdIntake() {
     }
     return;
   }
-  console.log('Usage: orunmila intake run|start|status|stop|agent');
+  console.log('Usage: orunmila intake run|start|status|stop|keep|agent');
   process.exitCode = 2;
 }
 
@@ -2127,7 +2166,8 @@ Both lenses
   orunmila update                                 bring the copy in ~/.orunmila up to npm's latest; switched only while
                                                   no session is held (the one network call: the package's name is sent)
   orunmila intake run|start|status|stop           the intake server, one per machine (install --intake sends to it)
-  orunmila intake agent install|uninstall|status  keep the intake running at login with a launch agent (macOS)
+  orunmila intake agent install|uninstall|status  keep the intake running at login: a launch agent on macOS, a script
+                                                  in the Startup folder on Windows (it runs orunmila intake keep)
   orunmila replay <session-folder> [--expect file]  the Opon's settled groups for a session log, replayed (Phase 2)
   orunmila judge --session ID [--rules file]      judge a session's odù log again; new verdicts supersede, old ones stay
   orunmila report --verdicts --session ID [--html FILE] [--json]

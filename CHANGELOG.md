@@ -51,6 +51,11 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   The intake runs the copy in Orunmila's home too (`orunmila intake start` and
   the launch agent start it through the starter), moves onto a new version once
   it holds no session, and names the version it runs in `orunmila intake status`.
+- **The intake starts at login on Windows.** `orunmila intake agent install`
+  writes `orunmila-intake.vbs` into your Startup folder (no administrator
+  rights), which starts the intake hidden through `orunmila intake keep`; the
+  keeper starts it again after a crash or a stop no one asked for, as the
+  launch agent does on macOS. Not yet run on a real Windows login.
 - **A second session that sits idle no longer blocks credit**
   (`ORUNMILA_PEER_BUSY=1`, off by default). The intake notes in each session's
   record when another session in the same folder is working (the `overlapped`

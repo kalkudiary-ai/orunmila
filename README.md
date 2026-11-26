@@ -839,7 +839,8 @@ its own **Look at this**, never Incomplete).
 ### Switches for the intake (each off unless set to `1`)
 
 Set them where the intake starts (`orunmila intake agent install` copies each one
-that is set into the launch agent, so it survives restarts and logins).
+that is set into the launch agent on macOS, or into the Startup-folder script on
+Windows, so it survives restarts and logins).
 
 | Variable | What it does when on |
 |---|---|

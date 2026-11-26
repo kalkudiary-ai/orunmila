@@ -1257,7 +1257,7 @@ const MUTANTS = [
     fails: ['LA: on another platform'] },
   { id: 'LA-6 the CLI installs a plist for another script', file: 'bin/orunmila.js', test: 'test/launch-agent.js',
     // PM2c3 (LD334): the plist takes intakeArgv's list; with no starter in the home, this copy's own script.
-    from: ": [__filename, 'intake', 'run'];", to: ": ['orunmila', 'intake', 'run'];",
+    from: ": [__filename, 'intake', sub];", to: ": ['orunmila', 'intake', sub];", // W2b gave intakeArgv its subcommand
     fails: ['LA CLI: intake agent install'] },
   // Slice LC3: a file put back to its committed bytes starts its slice's count again (LD150).
   { id: 'LC3-1 a restore is never seen', file: 'scripts/leopard-check.js', test: 'test/leopard-check.js',
@@ -3600,6 +3600,48 @@ MUTANTS.push(
     from: 'npm install -D orunmila                  # then: npx orunmila install\n',
     to: '',
     fails: ['PM4 (LD337)'],
+  },
+  // W2b (LD338): the intake kept running, and started at login on Windows. (No mutant makes the keeper restart after a
+  // stop asked for: it would never end, and its suite would only time out.)
+  {
+    id: 'W2b-1 the keeper ends after any exit',
+    file: 'bin/orunmila.js',
+    test: 'test/intake-keep.js',
+    from: '      if (r.status === 0) {\n        console.log(\'orunmila intake keep: the intake stopped as asked; keeping it ends\');',
+    to: '      if (true) {\n        console.log(\'orunmila intake keep: the intake stopped as asked; keeping it ends\');',
+    fails: ['W2b: intake keep starts the intake again'],
+  },
+  {
+    id: 'W2b-2 the Startup script shows a console window',
+    file: 'src/opon/intake/startup-win.js',
+    test: 'test/intake-keep.js',
+    from: '`sh.Run ${vb(command)}, 0, False`',
+    to: '`sh.Run ${vb(command)}, 1, False`',
+    fails: ['W2b: the Startup script runs node'],
+  },
+  {
+    id: "W2b-3 the Startup script drops the intake's switches",
+    file: 'src/opon/intake/startup-win.js',
+    test: 'test/intake-keep.js',
+    from: '    ...set.map((k) => `env(${vb(k)}) = ${vb(env[k])}`),\n',
+    to: '',
+    fails: ['W2b: the Startup script runs node', 'W2b: intake agent install on Windows'],
+  },
+  {
+    id: 'W2b-4 intake agent install on Windows takes the macOS path',
+    file: 'bin/orunmila.js',
+    test: 'test/intake-keep.js',
+    from: "if (sub === 'agent' && (process.env.ORUNMILA_AGENT_PLATFORM || process.platform) === 'win32') {",
+    to: 'if (false) {',
+    fails: ['W2b: intake agent install on Windows'],
+  },
+  {
+    id: 'W2b-5 a kept intake moving onto an update starts its own copy instead of exiting 75',
+    file: 'bin/orunmila.js',
+    test: 'test/intake-keep.js',
+    from: " || process.env.ORUNMILA_KEPT === '1') process.exit(75);",
+    to: ') process.exit(75);',
+    fails: ['W2b with PM2c3: a kept intake moving onto an update'],
   },
 );
 

@@ -296,4 +296,12 @@ it('the checker: allOf, anyOf, oneOf, not, if/then/else and $ref', () => {
   assert.ok(SUPPORTED.includes('if') && !SUPPORTED.includes('format'));
 });
 
+it('DOC3 (LD340): spec/README.md lists every file in spec/ in its table, and no longer says nothing reads them or that they do not ship', () => {
+  const readme = fs.readFileSync(path.join(SPEC, 'README.md'), 'utf8');
+  const files = fs.readdirSync(SPEC).filter((f) => f !== 'README.md').sort();
+  const missing = files.filter((f) => !readme.includes('| `' + f + '` |'));
+  assert.deepStrictEqual(missing, [], 'each spec file has its row');
+  for (const stale of ['Nothing writes or reads these formats yet', 'The verdict record comes later', 'is not in the npm package yet']) assert.ok(!readme.includes(stale), stale);
+});
+
 runAll('spec');

@@ -1,8 +1,8 @@
 # Orunmila record formats, v1 (draft)
 
-**Status: draft.** Nothing writes or reads these formats yet. They are the contract Orunmila's parts
-will share (the build brief, "The contract: the record formats"). Until v1 ships, any field can
-still change. After that, fields may be added but never renamed or removed without a version bump.
+**Status: draft.** These are the formats Orunmila's intake writes and `orunmila verify`, replay
+and the judge read (the build brief, "The contract: the record formats"). Until v1 ships, any field
+can still change. After that, fields may be added but never renamed or removed without a version bump.
 
 | File | Format |
 |---|---|
@@ -16,10 +16,14 @@ still change. After that, fields may be added but never renamed or removed witho
 | `odu-header.schema.json` | The odù log's header: its first line, naming the raw log it came from |
 | `baseline.schema.json` | One line of `baseline.jsonl`, the baseline snapshot at session start; the header's `baseline.fingerprint` covers the file (Phase 3) |
 | `session-footer.schema.json` | `footer.json`, written at the closeout's end: the last line of the raw and odù logs by seq and hash, `orunmila verify` checking each (Phase 4, provisional) |
+| `verdict-header.schema.json` | The verdict log's header: its first line, naming the odù log line it judged up to and the judge (Phase 6) |
+| `verdict.schema.json` | The verdict record: one verdict on one sealed odù, Clean, Look at this or Violation, with the rule and the marks behind it (Phase 6) |
+| `session-verdict.schema.json` | The session verdict: the verdict log's last record, Incomplete, Clean, Look at this or Violation, with its reasons and the law gate's counts (Phase 6) |
+| `updates-header.schema.json` | The update log's header: the first line of `updates.jsonl` in Orunmila's home (PM2a) |
+| `update.schema.json` | One update of Orunmila by itself: from and to, npm's integrity hash, the self-check, whether it switched (PM2a, PM2c) |
 | `claims-block.md` | The claims block: the fenced `orunmila-claims` block an agent may end a turn with (`changed:`, `proved:`, `not done:`), read by `src/reconcile/claims-block.js` (MR1, brief v4 line 443) |
 
-The verdict record comes later (Phase 6). The odù record follows the G2b amendment (open question
-5, approved 2026-11-16).
+The odù record follows the G2b amendment (open question 5, approved 2026-11-16).
 
 Each field in a schema carries the brief's own wording in `description` and its source in
 `$comment`. That source is a line of the build brief, or "agent's choice" where the brief names
@@ -31,7 +35,7 @@ The schemas are JSON Schema draft-07. Orunmila checks them with its own small ch
 `src/verify/schema.js` (no dependencies). It refuses any schema keyword it does not implement,
 so a misspelt keyword cannot check nothing.
 
-From the repository root (`spec/` is not in the npm package yet):
+From the repository root, or from the installed package (`spec/` ships with it):
 
 ```js
 const { compile } = require('./src/verify/schema');

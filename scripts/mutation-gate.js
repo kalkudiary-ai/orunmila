@@ -3710,6 +3710,31 @@ MUTANTS.push(
     to: 'if (false) out.push(',
     fails: ['MR1b3 (LD339)'],
   },
+  // DOC3 (LD340): the phase's surfaces brought up to date, each held by a test.
+  {
+    id: 'DOC3-1 the dashboard card drops the witness gap',
+    file: 'bin/dashboard.js',
+    test: 'test/dashboard.js',
+    from: "        ${s.witnesses ? `<div class=\"s-narrative\">${esc(s.witnesses.sentence)}</div>` : ''}\n",
+    to: '',
+    fails: ['DOC3 (LD340)'],
+  },
+  {
+    id: 'DOC3-2 spec/README.md drops a schema row',
+    file: 'spec/README.md',
+    test: 'test/spec.js',
+    from: '| `update.schema.json` |',
+    to: '| update schema |',
+    fails: ['DOC3 (LD340)'],
+  },
+  {
+    id: 'DOC3-3 SKILL.md drops the Babaláwo',
+    file: 'SKILL.md',
+    test: 'test/docs-surfaces.js',
+    from: '| install | `npx orunmila install` | `npx orunmila install --with-gate` | `npx orunmila install --with-judge` |',
+    to: '| install | `npx orunmila install` | `npx orunmila install --with-gate` | |',
+    fails: ['DOC3 (LD340)'],
+  },
 );
 
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };

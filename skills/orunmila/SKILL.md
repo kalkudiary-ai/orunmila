@@ -73,7 +73,8 @@ nothing touched in their real log.
   looking.
 - **Nothing leaves their machine.** No telemetry, no account, no AI model; the
   event log is a local append-only `~/.orunmila/events.jsonl`, and no session
-  content is ever transmitted. The HTML report loads nothing from the internet,
+  content is ever transmitted. The one network call is `orunmila update`, which
+  asks the npm registry for Orunmila's latest version, sending only its name. The HTML report loads nothing from the internet,
   so opening or sharing it reveals nothing to a third party.
 - **Detection accuracy is 100% on a labelled set of 17 turns / 38 assertions**
   (`npm run accuracy` in a clone reproduces it). Say "100% on our labelled set",
@@ -91,7 +92,9 @@ nothing touched in their real log.
 - Lineage (read→write) is a turn-scoped heuristic, stamped `inferred`, not proven
   data flow.
 - Claim extraction is regex and keyword heuristics, not NLP.
-- The disk observer's writes carry no session id, so with two concurrent sessions
-  on one tree each adopts the other's writes. Read a touch list as "what changed
-  on this machine while I worked", never as authorship.
+- The standalone disk observer's writes (`watch`) carry no session id, so with
+  two concurrent sessions on one tree each adopts the other's writes. Read its
+  touch list as "what changed on this machine while I worked", never as
+  authorship. The intake's record (`orunmila install --intake`) names the
+  sessions that overlapped and credits a change only to the one that made it.
 - Every known issue, open and closed, with status: `review/ISSUES.md` in the repo.

@@ -18,6 +18,21 @@ const { redactForRender } = require('../src/render/redact');
 const PORT = process.env.PORT || 3773;
 const ORUNMILA_HOME = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
 
+/**
+ * DOC3 (LD340; MR3, LD316): a session's witness gap from its odù log in <home>/sessions/<id>/, as `orunmila trail` and
+ * the session report give it, or null when it has none that verifies (the trail page then says the gap is not shown).
+ */
+function witnessGapOf(sessionId) {
+  try {
+    const { sessionFolderName } = require('../src/opon/intake/paths');
+    const text = fs.readFileSync(path.join(ORUNMILA_HOME, 'sessions', sessionFolderName(sessionId), 'odu.jsonl'), 'utf8');
+    if (!require('../src/verify/chain').verifyText(text).ok) return null;
+    return require('../src/babalawo/report').witnessGap(text.split('\n').slice(0, -1).map((l) => JSON.parse(l)));
+  } catch {
+    return null;
+  }
+}
+
 function esc(s) { return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
 function loadSessions() {
@@ -68,7 +83,7 @@ function loadSessions() {
     sessions.push({ id, agent: s.agent, firstTs: s.firstTs, lastTs: s.lastTs,
       eventCount: s.events, turnCount: s.turns.size, reportedTurns: turnReports.length,
       turnReports, verified: totV, partial: totPa, phantom: totPh, phv: totPhv,
-      dropped: totDr, wild: totWild, claims: totClaims, reliability, phRate });
+      dropped: totDr, wild: totWild, claims: totClaims, reliability, phRate, witnesses: witnessGapOf(id) });
   }
   return sessions.sort((a, b) => (b.lastTs || '').localeCompare(a.lastTs || ''));
 }
@@ -291,13 +306,13 @@ function narrativeFor(s) {
   const parts = [];
   const phantoms = s.phantom + s.phv;
   if (phantoms > 0) {
-    parts.push(`fabricated ${phantoms} claim${phantoms === 1 ? '' : 's'} with zero evidence`);
+    parts.push(`${phantoms} claim${phantoms === 1 ? '' : 's'} with no evidence behind ${phantoms === 1 ? 'it' : 'them'}`);
   }
   if (s.phv > 0) {
     parts.push(`claimed "tested and works" ${s.phv} time${s.phv === 1 ? '' : 's'} without running a test`);
   }
   if (s.dropped > 0) {
-    parts.push(`silently ignored ${s.dropped} task${s.dropped === 1 ? '' : 's'} from the original request`);
+    parts.push(`${s.dropped} part${s.dropped === 1 ? '' : 's'} of the original request with no evidence and not mentioned again`);
   }
   if (s.wild > 0) {
     parts.push(`${s.wild} file${s.wild === 1 ? '' : 's'} changed on disk without disclosure`);
@@ -323,6 +338,7 @@ function renderSessionRow(s, activeSessions) {
         <div class="s-agent">${esc(s.agent)}</div>
         <div class="s-id">${esc(s.id)}</div>
         ${narrative ? `<div class="s-narrative">${esc(narrative)}</div>` : ''}
+        ${s.witnesses ? `<div class="s-narrative">${esc(s.witnesses.sentence)}</div>` : ''}
       </div>
     </div>
     <div class="s-card-right">
@@ -360,7 +376,7 @@ const server = http.createServer((req, res) => {
       const { reports, trail } = redactForRender(liveReports, rawTrail, { home: true, root: process.cwd() });
       if (!reports.length) { res.writeHead(404); return res.end('No reports for session ' + sessionId + (stamp ? ` (archive ${stamp})` : '')); }
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      return res.end(renderSessionHtml(sessionId, reports, trail));
+      return res.end(renderSessionHtml(sessionId, reports, trail, { witnesses: witnessGapOf(sessionId) })); // DOC3: as orunmila trail
     } catch (e) { res.writeHead(500); return res.end('Error: ' + e.message); }
   }
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -370,4 +386,4 @@ const server = http.createServer((req, res) => {
 // Loopback only (0.2.2). With no host, Node listens on every interface, which
 // served session ids, prompts and reports to anyone on the same network.
 const HOST = '127.0.0.1';
-server.listen(PORT, HOST, () => { console.log(`Orunmila dashboard → http://${HOST}:${PORT}`); });
+server.listen(PORT, HOST, () => { console.log(`Orunmila dashboard → http://${HOST}:${server.address().port}`); }); // the port it got (PORT=0: any free one)

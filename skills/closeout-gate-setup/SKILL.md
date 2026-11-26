@@ -10,9 +10,10 @@ Most verification tooling tells you afterwards. The Closeout Gate runs on the
 Stop hook, **before a turn is allowed to end**, and can refuse it — the agent
 must fix what was flagged and respond again.
 
-This is the second of orunmila's two lenses. The first, the Stain Map, records
-and reports and never refuses (that's the free `orunmila` skill). The gate needs
-the Stain Map underneath it, because it judges the events the Stain Map records.
+This is one of orunmila's three lenses. The Stain Map records and reports and
+never refuses (that's the free `orunmila` skill); the Babaláwo judges a whole
+session's record at its end and never refuses either. The gate needs the Stain
+Map underneath it, because it judges the events the Stain Map records.
 
 **Claude Code only.** No other agent currently exposes a hook that can refuse a
 turn. Say this up front — do not install and let them discover it.
@@ -66,6 +67,12 @@ still read as a claim. It accepts any command in the turn that did not fail,
 even one that tested nothing. Setting expectations wrongly here is
 worse than the limits themselves: someone who believes a turn the gate let
 through was tested will stop checking for it.
+
+**The claims block makes the check exact** (`ORUNMILA_CLAIMS_BLOCK=1`, off by
+default). The agent is asked to end each turn with a fenced `orunmila-claims`
+block; each `proved: <command>` line must name a command that ran in the turn
+and passed with its own exit status (`npm test; echo done` does not prove `npm
+test`). A miss is `no-green-without-command`'s finding. Prose is still read.
 
 ## Tuning block vs advise
 

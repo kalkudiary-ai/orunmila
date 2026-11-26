@@ -118,7 +118,13 @@ for (const [name, test, cut, planned] of [
       if (planned) assert.deepStrictEqual([last.says, last.target.name], ['exited', 'intake'], 'the closing note comes first');
       else assert.ok(g.detail.since.observed_at <= cutAt, `the gap starts before the kill: ${JSON.stringify(g.detail)}`);
       assert.ok(g.detail.until.observed_at > cutAt, `the gap ends after the cut: ${JSON.stringify(g.detail)}`);
-      assert.strictEqual(g.detail.since.mono_ns, last.mono_ns, `from the last record before it: ${JSON.stringify({ since: g.detail.since, last: { seq: last.seq, says: last.says, mono_ns: last.mono_ns, target: last.target }, gap_seq: g.seq })}`);
+      // The gap starts at the intake's last write (LD56), in any session it served: never before this session's last
+      // record, and at a time one of the two logs holds. Whether this session or the other got that last write is a race
+      // (seen on Windows CI, run 45834849615: the other session's write 62 ms later).
+      const recorded = new Set([...raw, ...doneRaw].filter((m) => m.says !== 'gap').map((m) => m.mono_ns));
+      const why = JSON.stringify({ since: g.detail.since, last: { seq: last.seq, says: last.says, mono_ns: last.mono_ns }, gap_seq: g.seq });
+      assert.ok(BigInt(g.detail.since.mono_ns) >= BigInt(last.mono_ns), `not before this session's last record: ${why}`);
+      assert.ok(recorded.has(g.detail.since.mono_ns), `from a record the intake wrote: ${why}`);
       assert.deepStrictEqual(raw.filter((m) => m.seq > g.seq && m.says === 'prompted').length, 2, 'the two later turns after it');
       assert.strictEqual(fs.readFileSync(path.join(dir, 'odu.jsonl'), 'utf8'), replayFolder(dir).odu, 'live equals replay');
       const v = verifySession(dir);

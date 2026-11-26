@@ -3253,6 +3253,39 @@ MUTANTS.push(
     to: '',
     fails: ['F18 (LD329)'],
   },
+  // AT1a (LD330): a peer's busy notes on the overlapped mark, read by overlap.js and the engine.
+  {
+    id: 'AT1-1 the engine reads busy windows with no lag grace',
+    file: 'src/opon/settle/engine.js',
+    test: 'test/attribute-overlap.js',
+    from: 'concurrent(others, root, seen, grace)',
+    to: 'concurrent(others, root, seen)',
+    fails: ['AT1 (LD330): while B is busy, or inside the grace'],
+  },
+  {
+    id: 'AT1-2 a first note of idle counts the peer idle from the start',
+    file: 'src/opon/intake/overlap.js',
+    test: 'test/overlap.js',
+    from: "if (span.busy === null) span.busy = [{ from: '0', to: d.busy ? null : at }];",
+    to: "if (span.busy === null) span.busy = d.busy ? [{ from: '0', to: null }] : [];",
+    fails: ['AT1 (LD330): a peer whose overlapped marks carry busy'],
+  },
+  {
+    id: 'AT1-3 busy notes are ignored (every peer busy all along, as before AT1)',
+    file: 'src/opon/intake/overlap.js',
+    test: 'test/attribute-overlap.js',
+    from: '&& busyAt(s, t, BigInt(grace)))',
+    to: '&& true)',
+    fails: ['AT1 (LD330; LD300 (3)): a change while B is open but idle'],
+  },
+  {
+    id: 'AT1-4 a mark without a busy note forgets the windows',
+    file: 'src/opon/intake/overlap.js',
+    test: 'test/overlap.js',
+    from: 'span.busy = i >= 0 ? spans[i].busy : null;',
+    to: 'span.busy = null;',
+    fails: ['AT1 (LD330): a note repeating the state changes nothing'],
+  },
 );
 
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };

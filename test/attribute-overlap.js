@@ -11,7 +11,7 @@
  */
 
 const { assert, fs, path, tmpDir, rmrf, it, runAll } = require('./helpers');
-const { makeLog, M, SID, as } = require('./helpers-opon');
+const { makeLog, M, SID, as, ns } = require('./helpers-opon');
 const { replayFolder } = require('../src/opon/replay');
 const { compile } = require('../src/verify/schema');
 
@@ -198,6 +198,59 @@ it('A2 LD179: a session folder beside this one whose log does not verify is lost
   const o = of(a, 'src/b.ts');
   assert.deepStrictEqual(blame(o), ['unexplained', null]);
   assert.deepStrictEqual(o.conflicts, [overlap]);
+});
+
+/**
+ * AT1 (LD330): session A's own log names B (the intake's `overlapped` marks, L2), with B's busy notes as given;
+ * A runs a long command (4 s to 8 s) and a change is seen inside it at 5 s. Returns A's odùs; B has no folder.
+ */
+function replayNoted(notes) {
+  const base = tmpDir();
+  try {
+    const a = makeLog(base, {});
+    const named = (ms, extra) => ({ ...M.tick(ms), target: { kind: 'process', name: 'intake' }, says: 'overlapped', detail: { session: B, root: a.root, from: ns(0), ended: false, ...extra } });
+    for (const [ms, extra] of notes) a.append(named(ms, extra));
+    a.append(M.started(4000, 'b1', cmd('npm run long'), 'Bash'));
+    a.append(M.disk(5000, 'src/b.ts'));
+    a.append(M.exited(8000, 'b1', 'npm run long'));
+    a.append(M.turnEnded(8000));
+    a.append(M.tick(20000));
+    const r = replayFolder(a.dir);
+    assert.strictEqual(r.ok, true, r.words);
+    const odus = r.odu.split('\n').slice(1, -1).map((l) => JSON.parse(l));
+    for (const o of odus) assert.deepStrictEqual(checkOdu(o), [], JSON.stringify(o));
+    return odus;
+  } finally {
+    rmrf(base);
+  }
+}
+
+it('AT1 (LD330; LD300 (3)): a change while B is open but idle goes to the session whose command was running: credited by step 3, medium, no conflict; both witnesses joined', () => {
+  const o = of(replayNoted([[0, { busy: false }]]), 'src/b.ts');
+  assert.deepStrictEqual(blame(o), ['explained', { kind: 'agent_command', ref: 'b1' }]);
+  assert.deepStrictEqual([o.conflicts, 'not_credited' in o, o.confidence], [[], false, 'medium']);
+  assert.deepStrictEqual([o.witness_status.glove.status, o.witness_status.sentinel.status], ['saw_nothing', 'saw'], 'the Sentinel saw it; A\'s Glove has no edit of it, only the command');
+});
+
+it('AT1 (LD330): while B is busy, or inside the grace after its turn ended, or with no busy note at all, the change is not credited to A (test 37\'s rule)', () => {
+  for (const [why, notes] of [
+    ['B busy since 4.5 s', [[0, { busy: false }], [4500, { busy: true }]]],
+    ['B\'s turn ended at 3 s, inside the 3 s grace', [[0, { busy: true }], [3000, { busy: false }]]],
+    ['no busy note: the reading before AT1', [[0, {}]]],
+  ]) {
+    const o = of(replayNoted(notes), 'src/b.ts');
+    assert.deepStrictEqual(blame(o), ['unexplained', null], why);
+    assert.deepStrictEqual(o.conflicts, [overlap], why);
+    assert.deepStrictEqual(o.not_credited, [{ kind: 'agent_command', ref: 'b1', seen: 'while_running' }], why);
+  }
+});
+
+it('AT1 (LD330): the busy note is part of the overlapped mark\'s schema: true or false, nothing else', () => {
+  const checkMark = compile(JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'spec', 'mark.schema.json'), 'utf8')));
+  const m = { ...M.tick(0), seq: 1, hash: 'sha256:' + '0'.repeat(64), prev_hash: 'sha256:' + '0'.repeat(64), target: { kind: 'process', name: 'intake' }, says: 'overlapped', detail: { session: B, root: '/r', from: ns(0), ended: false } };
+  const errs = (detail) => checkMark({ ...m, detail: { ...m.detail, ...detail } });
+  assert.deepStrictEqual([errs({}), errs({ busy: true }), errs({ busy: false })], [[], [], []]);
+  assert.ok(errs({ busy: 'yes' }).length > 0, 'a busy note that is not true or false is refused');
 });
 
 it('A2 test 13: two sessions replayed twice give byte-identical odù logs', () => {

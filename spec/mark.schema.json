@@ -234,7 +234,7 @@
       }
     },
     {
-      "$comment": "brief v4 lines 344, 402-405, guarantee 3; the agent's proposal, Q11 (2) (a), adopted LD184, LD202: the intake names in this session's own log another session sharing its folder (its id, root and start), and later its end, so replay reads overlap from this log alone",
+      "$comment": "brief v4 lines 344, 402-405, guarantee 3; the agent's proposal, Q11 (2) (a), adopted LD184, LD202: the intake names in this session's own log another session sharing its folder (its id, root and start), and later its end, so replay reads overlap from this log alone; AT1 (LD330, O approved Q45): `busy`, when present, says whether the session named was working at this mark (from its prompt to its turn's end, or with work left running), so a peer idle then is not counted as overlapping",
       "if": { "properties": { "says": { "const": "overlapped" } } },
       "then": {
         "properties": {
@@ -626,6 +626,11 @@
         "restored": {
           "description": "On a tampered mark for one of Orunmila's own logs: true when Orunmila put the log back from its own copy; false when its copy had been changed too, so nothing was put back.",
           "$comment": "agent's proposal (TE1, LD279), approved by O as Q41 (2026-11-24, LD282)",
+          "type": "boolean"
+        },
+        "busy": {
+          "description": "On an overlapped mark: whether the session it names was working at this mark's mono_ns (from its prompt to its turn's end, or with work it left running). A session never given this note counts as working all along.",
+          "$comment": "agent's proposal (AT1, LD327), approved by O as Q45 (2026-11-26, LD330)",
           "type": "boolean"
         }
       },

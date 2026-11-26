@@ -141,7 +141,10 @@
  * session sharing this folder (overlap.js `concurrent`) was active at the
  * change's first sighting, only steps 1 and 4 credit; otherwise the change is
  * unexplained with a `concurrent_sessions` conflict naming every session active
- * then, this one included (LD180). Its `not_credited` then also names a tool
+ * then, this one included (LD180). AT1 (LD330; LD300 (3)): a peer the log's
+ * `overlapped` marks say was idle then (its busy windows, each end plus the lag
+ * grace) is not active, so a change while every peer is idle is read as with no
+ * peer at all; a log with no busy note reads as before. Its `not_credited` then also names a tool
  * call the change fell `inside` and the commands running at it
  * (`while_running`): the agent was there, and so was another session.
  *
@@ -941,7 +944,7 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
         g.atChange = runningAt(seen).map((c) => c.key.slice('command:'.length));
         // A1c: the commands that exited within one quiet window before it, for an unexplained change's `not_credited`.
         // A2: the other sessions sharing this folder that were active when the change was first seen.
-        g.overlap = others && root !== null ? concurrent(others, root, seen).filter((s) => s !== sessionId) : [];
+        g.overlap = others && root !== null ? concurrent(others, root, seen, grace).filter((s) => s !== sessionId) : []; // AT1 (LD330): only peers busy then
         g.besideExit = [...unsealed.values()].filter((c) => c.isCommand && !c.lost && c.exitAt !== null && c.exitAt < seen && seen - c.exitAt <= quiet).map((c) => ({ ref: c.key.slice('command:'.length), gap: seen - c.exitAt }));
       }
     }

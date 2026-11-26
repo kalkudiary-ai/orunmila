@@ -18,15 +18,21 @@
  *                    it last held it. A mark after the end mark is a late
  *                    delivery and does not extend the span. Records with no
  *                    mono_ns (a continuation, LD57) are skipped.
- *   concurrent(spans, root, mono)
+ *   concurrent(spans, root, mono, grace?)
  *                    the ids, sorted, of the sessions whose root shares files
  *                    with `root` (the same folder, or one inside the other, by
  *                    whole folder names: NF80, LD69) and whose span holds
- *                    `mono` (both ends included). mono_ns is compared as an
+ *                    `mono` (both ends included), and, for a span with busy
+ *                    notes (AT1, LD330), that was busy then: inside one of its
+ *                    busy windows, each end extended by `grace` (ns, the lag
+ *                    grace; 0 when not given). mono_ns is compared as an
  *                    integer.
  *   applyOverlapped(spans, mark)
  *                    an `overlapped` mark (L2, LD202) applied to a session's
- *                    own list: the session it names begins, or ends
+ *                    own list: the session it names begins, or ends; its
+ *                    `busy` note, when it has one (AT1), opens or closes a busy
+ *                    window at the mark's mono_ns. A session never given a note
+ *                    is busy all along; one is busy before its first note
  *   sharesFiles(a, b) whether two roots share files
  *
  * Limits: a session whose agent died with no end mark counts as active while
@@ -75,14 +81,28 @@ function applyOverlapped(spans, mark) {
   const d = isObject(mark.detail) ? mark.detail : {};
   const span = { id: d.session, root: d.root, from: d.from, to: d.ended === true ? d.to : OPEN, ended: d.ended === true };
   const i = spans.findIndex((s) => s.id === span.id);
+  // AT1 (LD330): the peer's busy windows, from the marks' `busy` notes; null while none has said (busy all along).
+  span.busy = i >= 0 ? spans[i].busy : null;
+  if (typeof d.busy === 'boolean') {
+    const at = String(mark.mono_ns);
+    if (span.busy === null) span.busy = [{ from: '0', to: d.busy ? null : at }]; // busy before its first note
+    else {
+      const last = span.busy[span.busy.length - 1];
+      if (d.busy && last.to !== null) span.busy.push({ from: at, to: null });
+      else if (!d.busy && last.to === null) last.to = at;
+    }
+  }
   if (i >= 0) spans[i] = span;
   else spans.push(span);
 }
 
-function concurrent(spans, root, mono) {
+/** AT1 (LD330): whether a span's session was busy at `t`: with no busy note, always; else inside a window, its end plus `grace`. */
+const busyAt = (s, t, grace) => !Array.isArray(s.busy) || s.busy.some((w) => BigInt(w.from) <= t && (w.to === null || t <= BigInt(w.to) + grace));
+
+function concurrent(spans, root, mono, grace = 0n) {
   const t = BigInt(mono);
   return spans
-    .filter((s) => sharesFiles(s.root, root) && BigInt(s.from) <= t && t <= BigInt(s.to))
+    .filter((s) => sharesFiles(s.root, root) && BigInt(s.from) <= t && t <= BigInt(s.to) && busyAt(s, t, BigInt(grace)))
     .map((s) => s.id)
     .sort();
 }

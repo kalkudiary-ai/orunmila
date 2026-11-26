@@ -10,7 +10,7 @@
 
 const { assert, it, runAll } = require('./helpers');
 
-const { spanOf, concurrent } = require('../src/opon/intake/overlap');
+const { spanOf, concurrent, applyOverlapped } = require('../src/opon/intake/overlap');
 
 const ROOT_A = '/work/a';
 const ROOT_B = '/work/b';
@@ -119,6 +119,38 @@ it('concurrent: a header-only session is active only at its start', () => {
   const spans = [spanOf([header('s1', ROOT_A, 100)])];
   assert.deepStrictEqual(concurrent(spans, ROOT_A, '100'), ['s1']);
   assert.deepStrictEqual(concurrent(spans, ROOT_A, '101'), []);
+});
+
+// AT1 (LD330): the overlapped mark's `busy` note, the peer's working time as the intake saw it.
+const om = (mono, detail) => ({ says: 'overlapped', mono_ns: String(mono), detail: { root: ROOT_A, from: '100', ended: false, ...detail } });
+
+it('AT1 (LD330): a peer whose overlapped marks carry busy is active only inside its busy windows, each end extended by the grace; before its first note, and with no note at all, it is active as before', () => {
+  const spans = [];
+  applyOverlapped(spans, om(200, { session: 'p', busy: false }));
+  applyOverlapped(spans, om(500, { session: 'p', busy: true }));
+  applyOverlapped(spans, om(800, { session: 'p', busy: false }));
+  applyOverlapped(spans, om(100, { session: 'q' }));
+  const at = (t, grace) => concurrent(spans, ROOT_A, String(t), grace);
+  assert.deepStrictEqual(at(150, 50n), ['p', 'q'], 'before its first note');
+  assert.deepStrictEqual(at(250, 50n), ['p', 'q'], 'a first note saying idle: busy until that note plus the grace');
+  assert.deepStrictEqual(at(251, 50n), ['q'], 'idle; q, with no note, as before');
+  assert.deepStrictEqual(at(499, 50n), ['q']);
+  assert.deepStrictEqual(at(500, 50n), ['p', 'q'], 'busy from its note');
+  assert.deepStrictEqual(at(850, 50n), ['p', 'q'], 'its turn ended at 800: busy for the grace after');
+  assert.deepStrictEqual(at(851, 50n), ['q']);
+  assert.deepStrictEqual(at(801), ['q'], 'no grace given: none');
+});
+
+it('AT1 (LD330): a note repeating the state changes nothing, and a later mark without busy (the end notice) keeps the windows', () => {
+  const spans = [];
+  applyOverlapped(spans, om(200, { session: 'p', busy: true }));
+  applyOverlapped(spans, om(300, { session: 'p', busy: true }));
+  applyOverlapped(spans, om(400, { session: 'p', busy: false }));
+  applyOverlapped(spans, om(450, { session: 'p', busy: false }));
+  applyOverlapped(spans, om(600, { session: 'p', busy: true }));
+  applyOverlapped(spans, om(900, { session: 'p', ended: true, to: '900' }));
+  const at = (t) => concurrent(spans, ROOT_A, String(t), 0n);
+  assert.deepStrictEqual([at(350), at(400), at(420), at(599), at(600), at(900), at(901)], [['p'], ['p'], [], [], ['p'], ['p'], []]);
 });
 
 runAll('overlap');

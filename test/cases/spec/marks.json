@@ -967,6 +967,32 @@
       "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
       "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
     },
+    "process_overlapped_busy": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 8,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.223Z",
+      "mono_ns": "5100000000",
+      "target": {
+        "kind": "process",
+        "name": "intake"
+      },
+      "says": "overlapped",
+      "detail": {
+        "session": "ses_test_0002",
+        "root": "/r/project",
+        "from": "4000000000",
+        "ended": false,
+        "busy": true
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+    },
     "process_fingerprinted_rescan": {
       "schema_version": 1,
       "session_id": "ses_test_0001",
@@ -3492,6 +3518,7 @@
     {"name": "added text that is not text (Q41)", "from": "process_tampered_log", "set": {"/detail/added": ["x"]}, "unset": [], "error": {"path": "/detail/added", "keyword": "type"}},
     {"name": "added text over 2,000 characters (Q41)", "from": "process_tampered_log", "set": {"/detail/added": {"$repeat": "y", "times": 2001}}, "unset": [], "error": {"path": "/detail/added", "keyword": "maxLength"}},
     {"name": "restored that is not a boolean (Q41)", "from": "process_tampered_log", "set": {"/detail/restored": "yes"}, "unset": [], "error": {"path": "/detail/restored", "keyword": "type"}},
+    {"name": "an overlapped busy note that is not a boolean (AT1, LD330)", "from": "process_overlapped", "set": {"/detail/busy": "yes"}, "unset": [], "error": {"path": "/detail/busy", "keyword": "type"}},
     {"name": "an intake stop by a signal Orunmila does not catch (TE2, LD283)", "from": "process_tampered_intake_stop", "set": {"/detail/signal": "SIGKILL"}, "unset": [], "error": {"path": "/detail/signal", "keyword": "enum"}}
   ]
 }

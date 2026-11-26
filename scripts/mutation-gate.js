@@ -2670,8 +2670,8 @@ const MUTANTS = [
     fails: ['TE1, TE4: the raw log appended', 'TE1, TE4: the raw log cut', 'TE1, TE4: the raw log deleted then rewritten'] },
   // TE2 (LD283): a stop of the intake no one asked for.
   { id: 'TE2-1 a stop no one asked for exits 0', file: 'bin/orunmila.js', test: 'test/intake-stop.js',
-    from: "fs.writeFileSync(lastStop, JSON.stringify({ signal: sig, at: new Date().toISOString() }) + '\\n', { mode: 0o600 });\n        process.exit(1);",
-    to: "fs.writeFileSync(lastStop, JSON.stringify({ signal: sig, at: new Date().toISOString() }) + '\\n', { mode: 0o600 });\n        process.exit(0);",
+    from: "        ranOut();\n        process.exit(1);", // W4a: the run note cleared between the note and the exit
+    to: "        ranOut();\n        process.exit(0);",
     fails: ['TE2 (LD283): a SIGTERM no one asked for'] },
   { id: 'TE2-2 the router forgets the signal', file: 'src/opon/intake/router.js', test: 'test/intake-stop.js',
     from: 'return engine.stop(reason, { first });', to: 'return engine.stop(reason, {});',
@@ -2745,8 +2745,21 @@ const MUTANTS = [
     fails: ['PM3 (LD291)'] },
   // W2a (LD298): the intake's address on Windows, a named pipe, named alike by the intake and both senders.
   { id: 'W2a-1 the intake listens on a socket file on Windows too', file: 'src/opon/intake/server.js', test: 'test/intake-windows.js',
-    from: "const sockFor = (home, platform) =>\n  platform === 'win32'", to: "const sockFor = (home, platform) =>\n  platform === 'never'",
+    from: "  if (platform !== 'win32') return path.join(home, 'intake', 'intake.sock');\n  const base = pipeBase(home);", to: "  if (platform !== 'never') return path.join(home, 'intake', 'intake.sock');\n  const base = pipeBase(home);", // W4b: sockFor
     fails: ['W2a (LD298)', 'W2a: the command-hook sender'] },
+  // W4a, W4b (LD343): how the last intake ended; a fresh pipe name each start, published.
+  { id: 'W4a-1 a reboot is read as a kill', file: 'src/opon/intake/prior-end.js', test: 'test/crash.js',
+    from: 'Math.abs(bootNow - run.boot) > toleranceMs', to: 'false',
+    fails: ['W4a (LD343)'] },
+  { id: 'W4a-2 a crash is read as a kill', file: 'src/opon/intake/prior-end.js', test: 'test/crash.js',
+    from: "  if (lastStop && typeof lastStop.crash === 'string')", to: '  if (false)',
+    fails: ['W4a (LD343)'] },
+  { id: "W4b-1 the intake takes another home's published pipe", file: 'src/opon/intake/server.js', test: 'test/intake-windows.js',
+    from: "    if (a.startsWith(base + '-') && /^[0-9a-f]{32}$/.test(a.slice(base.length + 1))) return a;\n  } catch {\n    /* none published */\n  }\n  return base;\n}\n\nfunction intakePaths", to: "    if (a) return a;\n  } catch {\n    /* none published */\n  }\n  return base;\n}\n\nfunction intakePaths",
+    fails: ['W4b (LD343)'] },
+  { id: "W4b-2 the hooks' sender ignores the published pipe", file: 'src/capture/claude-code/intake-send.js', test: 'test/intake-windows.js',
+    from: "    if (a.startsWith(base + '-') && /^[0-9a-f]{32}$/.test(a.slice(base.length + 1))) return a;", to: '    void a;',
+    fails: ['W4b (LD343)'] },
   { id: "W2a-2 the hooks' sender names another pipe", file: 'src/capture/claude-code/intake-send.js', test: 'test/intake-windows.js',
     from: ".digest('hex').slice(0, 16)}`;", to: ".digest('hex').slice(0, 12)}`;",
     fails: ['W2a: the command-hook sender'] },

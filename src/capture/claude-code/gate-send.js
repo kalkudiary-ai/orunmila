@@ -11,6 +11,7 @@
  * prints nothing: the gate's answer to the agent is already written.
  */
 
+const fs = require('fs');
 const net = require('net');
 const os = require('os');
 const path = require('path');
@@ -18,10 +19,20 @@ const crypto = require('crypto');
 
 const DEADLINE_MS = 1000;
 
-/** W2a (LD298): the intake's address, by server.js intakePaths's rule (Node's own modules only, LD133). */
+/**
+ * W2a (LD298), W4b (LD343): the intake's address, by server.js sockFor's rule (Node's own modules only, LD133): on
+ * Windows the pipe name the running intake published in <home>/intake/address, else the home's name.
+ */
 function sockPath(home, platform = process.platform) {
-  if (platform === 'win32') return `\\\\?\\pipe\\orunmila-intake-${crypto.createHash('sha256').update(path.resolve(home)).digest('hex').slice(0, 16)}`;
-  return path.join(home, 'intake', 'intake.sock');
+  if (platform !== 'win32') return path.join(home, 'intake', 'intake.sock');
+  const base = `\\\\?\\pipe\\orunmila-intake-${crypto.createHash('sha256').update(path.resolve(home)).digest('hex').slice(0, 16)}`;
+  try {
+    const a = fs.readFileSync(path.join(home, 'intake', 'address'), 'utf8').trim();
+    if (a.startsWith(base + '-') && /^[0-9a-f]{32}$/.test(a.slice(base.length + 1))) return a;
+  } catch {
+    /* none published */
+  }
+  return base;
 }
 
 function send(payload, done) {

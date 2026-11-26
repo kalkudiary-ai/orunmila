@@ -123,18 +123,8 @@ it(
     const squatter = net.createServer((c) => c.end());
     await new Promise((res) => squatter.listen(p.sock, res));
     try {
-      if (p.pipe) {
-        // W3e (Windows): a named pipe's name cannot be taken back while the squatter listens: the squat is written as
-        // what it is, the start refuses (code squat), and no session is resumed, so no gap claims an address taken back.
-        const r = await serve({ statusTimeoutMs: 200 }).start();
-        assert.deepStrictEqual([r.ok, r.code], [false, 'squat'], JSON.stringify(r));
-        const errs = lines(p.errors);
-        assert.strictEqual(errs.length, 1, JSON.stringify(errs));
-        assert.ok(errs[0].reason.startsWith('squat:') && errs[0].reason.includes('cannot be taken back'), errs[0].reason);
-        assert.ok(!raw(home, 'ses_s1').some((m) => m.says === 'gap'), 'nothing resumed while the intake did not start');
-        assert.ok(!fs.existsSync(p.lock), 'the lock is released');
-        return;
-      }
+      // W4b: on Windows the squatter holds the pipe's name, so the intake takes a fresh one (p.sock follows it); the rest
+      // is as on POSIX, where the path is removed and taken back.
       const r = await serve({ statusTimeoutMs: 200 }).start();
       assert.strictEqual(r.ok, true, JSON.stringify(r));
       assert.strictEqual(r.squat, true);

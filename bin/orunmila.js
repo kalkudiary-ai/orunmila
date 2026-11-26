@@ -1634,20 +1634,27 @@ async function cmdIntake() {
     // TE2 (LD283): a stop asked for comes over the socket (`orunmila intake stop`) and exits 0; a signal with no ask is
     // a tampered mark in every held session, kept in last-stop.json for the next start's gap, and exits 1, so the
     // launch agent (KeepAlive SuccessfulExit false) starts the intake again.
-    const lastStop = path.join(p.dir, 'last-stop.json');
-    let resumeAlso = null;
-    try {
-      const k = JSON.parse(fs.readFileSync(lastStop, 'utf8'));
-      if (k && typeof k.signal === 'string') resumeAlso = `the intake was stopped by ${k.signal}, which no one asked for through \`orunmila intake stop\` (at ${k.at})`;
-    } catch {
-      /* none kept: the last stop was asked for, or a kill no handler sees */
-    }
+    // W4a (LD343): a kill no handler sees, a crash and a reboot are told apart at this start, from the notes the last run
+    // left (src/opon/intake/prior-end.js): run.json while it ran, last-stop.json for a handled signal or a crash.
+    const ends = require('../src/opon/intake/prior-end');
+    const lastStop = ends.lastStopFile(p.dir);
+    const runFile = ends.runNote(p.dir);
+    const readNote = (f) => {
+      try {
+        return JSON.parse(fs.readFileSync(f, 'utf8'));
+      } catch {
+        return null; // none kept
+      }
+    };
+    const resumeAlso = ends.priorEnd({ lastStop: readNote(lastStop), run: readNote(runFile), bootNow: ends.bootTime() });
     let stopping = false;
     let server = null;
+    const ranOut = () => fs.rmSync(runFile, { force: true }); // a stop this intake makes itself: nothing to tell at the next start
     const onStop = async (reason) => {
       if (stopping) return;
       stopping = true;
       await server.stop(`stopped as asked: ${reason}`);
+      ranOut();
       process.exit(0);
     };
     server = createServer({ home, router, httpPort: intakePort(), onStop, resumeAlso, version: require('../package.json').version });
@@ -1657,6 +1664,17 @@ async function cmdIntake() {
       process.exit(r.code === 'running' ? 3 : 1);
     }
     fs.rmSync(lastStop, { force: true }); // named once, in this start's gaps
+    fs.writeFileSync(runFile, JSON.stringify({ pid: process.pid, boot: ends.bootTime(), started_at: new Date().toISOString() }) + '\n', { mode: 0o600 }); // W4a
+    process.on('uncaughtException', (e) => {
+      // W4a: a crash leaves its own note, so the next start says it crashed, never that it was killed.
+      try {
+        fs.writeFileSync(lastStop, JSON.stringify({ crash: String((e && e.message) || e).slice(0, 300), at: new Date().toISOString() }) + '\n', { mode: 0o600 });
+        ranOut();
+      } finally {
+        console.error(e);
+        process.exit(1);
+      }
+    });
     console.log(`orunmila intake: listening on ${r.sock} (pid ${process.pid})` + (r.squat ? `; another process held the socket: recorded in ${p.errors}` : ''));
     console.log(r.http.listening ? `orunmila intake: HTTP on 127.0.0.1:${r.http.port}` : `orunmila intake: HTTP port 127.0.0.1:${r.http.port} is held by another process (recorded in ${p.errors}); tried again every second`);
     const why = judge.from === 'environment' ? `ORUNMILA_JUDGE_LIVE=${judge.on ? 1 : 0}` : judge.from === 'switch' ? `the switch in ${switchesFile(home)}` : 'turn it on with: orunmila install --with-judge';
@@ -1675,12 +1693,14 @@ async function cmdIntake() {
         console.error(`orunmila intake: the daily update check could not start (${e.code || e.message})`);
       }
     }, Number(process.env.ORUNMILA_UPDATE_POLL_MS) > 0 ? Number(process.env.ORUNMILA_UPDATE_POLL_MS) : 60 * 60 * 1000).unref();
-    for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) {
+    // W4a: SIGBREAK (Ctrl+Break) is the one more signal Windows lets a console process handle.
+    for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP', ...(process.platform === 'win32' ? ['SIGBREAK'] : [])]) {
       process.on(sig, async () => {
         if (stopping) return;
         stopping = true;
         await server.stop(`stopped by ${sig}, which no one asked for through orunmila intake stop`, { signal: sig });
         fs.writeFileSync(lastStop, JSON.stringify({ signal: sig, at: new Date().toISOString() }) + '\n', { mode: 0o600 });
+        ranOut();
         process.exit(1);
       });
     }
@@ -1709,6 +1729,7 @@ async function cmdIntake() {
         const to = cur.split('_')[0];
         console.log(`orunmila intake: moving onto ${to} (an update switched to it, and no session is held)`);
         await server.stop(`moving onto Orunmila ${to}: an update switched to it while no session was held`);
+        ranOut(); // W4a: a planned move, not a kill
         if (process.env.XPC_SERVICE_NAME === require('../src/opon/intake/launch-agent').LABEL || process.env.ORUNMILA_KEPT === '1') process.exit(75); // launchd, or W2b's keeper, starts it again
         const out = fs.openSync(p.out, 'a', 0o600);
         require('child_process').spawn(process.execPath, [path.join(home, 'bin', 'orunmila-start.js'), 'bin/orunmila.js', 'intake', 'run'], { detached: true, stdio: ['ignore', out, out], env: process.env, windowsHide: true }).unref();

@@ -32,4 +32,29 @@ it("W2a: the command-hook sender and the gate's sender name the same address as 
   }
 });
 
+it('W4b (LD343): on Windows a published pipe name (the home\'s, plus 32 hex) is the address for the intake and both senders; one for another home, or of another shape, is ignored', () => {
+  const fs = require('fs');
+  const { tmpDir, rmrf } = require('./helpers');
+  const gate = require('../src/capture/claude-code/gate-send').sockPath;
+  const home = tmpDir();
+  try {
+    const base = intakePaths(home, 'win32').sock;
+    fs.mkdirSync(path.join(home, 'intake'));
+    const file = path.join(home, 'intake', 'address');
+    const fresh = `${base}-${'ab'.repeat(16)}`;
+    fs.writeFileSync(file, fresh + '\n');
+    const paths = intakePaths(home, 'win32');
+    for (const [who, got] of [['intake', paths.sock], ['intake-send', sockPath(home, 'win32')], ['gate-send', gate(home, 'win32')]]) assert.strictEqual(got, fresh, who);
+    assert.strictEqual(paths.address, file);
+    const other = intakePaths(path.resolve('/Users/other/.orunmila'), 'win32').sock;
+    for (const bad of [`${other}-${'ab'.repeat(16)}`, `${base}-xyz`, `${base}-${'AB'.repeat(16)}`, '\\\\?\\pipe\\anything', '']) {
+      fs.writeFileSync(file, bad + '\n');
+      for (const [who, got] of [['intake', paths.sock], ['intake-send', sockPath(home, 'win32')], ['gate-send', gate(home, 'win32')]]) assert.strictEqual(got, base, `${who}: ${JSON.stringify(bad)} ignored`);
+    }
+    assert.strictEqual(intakePaths(home, 'darwin').sock, path.join(home, 'intake', 'intake.sock'), 'elsewhere the socket file, whatever is published');
+  } finally {
+    rmrf(home);
+  }
+});
+
 runAll('intake-windows');

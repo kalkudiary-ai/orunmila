@@ -34,9 +34,9 @@
  *               taken under the takeover lock; no pid refuses, code `error`); the
  *               socket (an intake already answering refuses; any other listener
  *               is a squat (test 83): written to the error log, the path removed
- *               and the address taken back (on Windows, W3e: a named pipe cannot be
- *               taken back while it listens, so the squat is written and the start
- *               refuses, code `squat`); a path nobody listens on is removed
+ *               and the address taken back (on Windows, W4b: a named pipe cannot be
+ *               taken back while it listens, so every start takes a fresh pipe
+ *               name, published in <home>/intake/address); a path nobody listens on is removed
  *               quietly); router.resume() (test 84; a squat named in each gap);
  *               listen; router.poll() every pollMs.
  *     .stop(reason) -> the router's stop (LD56), then the socket and the lock
@@ -72,14 +72,34 @@ const KEY_BYTES = 32;
  * SHA-256 of its resolved path), since a Unix socket file is not how Windows processes meet; elsewhere the socket file.
  * The command-hook sender (intake-send.js sockPath) names it by the same rule.
  */
-const sockFor = (home, platform) =>
-  platform === 'win32' ? `\\\\?\\pipe\\orunmila-intake-${crypto.createHash('sha256').update(path.resolve(home)).digest('hex').slice(0, 16)}` : path.join(home, 'intake', 'intake.sock');
+const pipeBase = (home) => `\\\\?\\pipe\\orunmila-intake-${crypto.createHash('sha256').update(path.resolve(home)).digest('hex').slice(0, 16)}`;
+
+/**
+ * W4b (LD343): on Windows each start listens on a fresh pipe name, the home's name plus 32 random hex, published in
+ * <home>/intake/address, so no other process can hold the intake's name before it (a named pipe cannot be taken back
+ * while another process listens on it, W3e). Every client reads the published name; with none published yet, the
+ * home's name. The senders (intake-send.js, gate-send.js) keep their own copy of this rule (LD122, LD133).
+ */
+function sockFor(home, platform) {
+  if (platform !== 'win32') return path.join(home, 'intake', 'intake.sock');
+  const base = pipeBase(home);
+  try {
+    const a = fs.readFileSync(path.join(home, 'intake', 'address'), 'utf8').trim();
+    if (a.startsWith(base + '-') && /^[0-9a-f]{32}$/.test(a.slice(base.length + 1))) return a;
+  } catch {
+    /* none published */
+  }
+  return base;
+}
 
 function intakePaths(home, platform = process.platform) {
   const dir = path.join(home, 'intake');
   return {
     dir,
-    sock: sockFor(home, platform),
+    get sock() {
+      return sockFor(home, platform); // W4b: read at each use, so a client holding these paths follows a new start
+    },
+    address: path.join(dir, 'address'),
     pipe: platform === 'win32', // W2a: a named pipe has no file to remove or protect by mode
     lock: path.join(dir, 'intake.lock'),
     takeover: path.join(dir, 'intake.lock.takeover'),
@@ -437,19 +457,28 @@ function createServer({ home, router, pollMs = 100, statusTimeoutMs = 1000, maxL
       }
       const squat = pr.listening;
       if (squat && p.pipe) {
-        // W3e (Windows): while another process listens on a named pipe its name cannot be taken (the first instance owns
-        // it), so the address is not taken back: the squat is written as what it is, and the start refuses, resuming nothing.
-        router.error(`squat: another process is listening on the intake's named pipe ${p.sock}; on Windows a pipe's name cannot be taken back while it listens, so the intake did not start: end that process and start the intake again`, null);
-        releaseLock();
-        return { ok: false, code: 'squat', reason: `another process is listening on the intake's named pipe ${p.sock}; the intake did not start` };
-      }
-      if (squat) {
+        // W4b (Windows): a named pipe cannot be taken back while another process listens on it, so the intake takes a
+        // fresh name below, which that process could not know; the squat is written as what it is.
+        router.error(`squat: another process was listening on the intake's address ${p.sock} when the intake started; its pid is not known; the intake took a fresh named pipe, published in ${p.address}`, null);
+      } else if (squat) {
         router.error(
           `squat: another process was listening on the intake's socket ${p.sock} when the intake started; its pid is not known (Node cannot read a Unix socket's peer); the intake removed the path and took the address back`,
           null,
         );
       }
       if (!p.pipe) fs.rmSync(p.sock, { force: true }); // W2a: a named pipe leaves no file behind
+      if (p.pipe) {
+        // W4b: a fresh name, published whole (written beside, then renamed over the last), before anything listens on it.
+        const fresh = `${pipeBase(home)}-${crypto.randomBytes(16).toString('hex')}`;
+        const tmp = `${p.address}.${process.pid}.tmp`;
+        fs.writeFileSync(tmp, fresh + '\n', { mode: 0o600 });
+        try {
+          fs.renameSync(tmp, p.address);
+        } catch {
+          fs.rmSync(tmp, { force: true }); // a sender reading the last one at that moment (Windows refuses the rename): written in place
+          fs.writeFileSync(p.address, fresh + '\n', { mode: 0o600 });
+        }
+      }
       const also = [squat ? "another process was listening on the intake's socket when it started (its pid is not known), so marks sent before then may have gone to it" : null, resumeAlso].filter(Boolean);
       const resumed = router.resume(also.length ? { also: also.join('; ') } : {});
       const s = net.createServer(onConnection);

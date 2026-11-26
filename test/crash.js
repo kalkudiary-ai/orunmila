@@ -106,6 +106,8 @@ for (const [name, test, cut, planned] of [
       const gaps = downtime(raw);
       assert.strictEqual(gaps.length, 1, JSON.stringify(gaps));
       const g = gaps[0];
+      // W4a (LD343): the restart says how the intake ended: a handled signal by its name; a kill no handler sees as a kill.
+      assert.ok(g.detail.lost.includes(planned ? 'stopped by SIGTERM, which no one asked for' : 'ended from outside, with no stop asked for and no crash recorded'), g.detail.lost);
       // Test 84 (line 851): the gap names the sessions active at the intake's last tick: this one, never one that had ended.
       assert.deepStrictEqual(g.detail.sessions, [sid], JSON.stringify(g.detail));
       assert.deepStrictEqual(downtime(doneRaw), [], 'a session that ended before the cut gets no downtime gap');
@@ -116,7 +118,7 @@ for (const [name, test, cut, planned] of [
       if (planned) assert.deepStrictEqual([last.says, last.target.name], ['exited', 'intake'], 'the closing note comes first');
       else assert.ok(g.detail.since.observed_at <= cutAt, `the gap starts before the kill: ${JSON.stringify(g.detail)}`);
       assert.ok(g.detail.until.observed_at > cutAt, `the gap ends after the cut: ${JSON.stringify(g.detail)}`);
-      assert.strictEqual(g.detail.since.mono_ns, last.mono_ns, 'from the last record before it');
+      assert.strictEqual(g.detail.since.mono_ns, last.mono_ns, `from the last record before it: ${JSON.stringify({ since: g.detail.since, last: { seq: last.seq, says: last.says, mono_ns: last.mono_ns, target: last.target }, gap_seq: g.seq })}`);
       assert.deepStrictEqual(raw.filter((m) => m.seq > g.seq && m.says === 'prompted').length, 2, 'the two later turns after it');
       assert.strictEqual(fs.readFileSync(path.join(dir, 'odu.jsonl'), 'utf8'), replayFolder(dir).odu, 'live equals replay');
       const v = verifySession(dir);
@@ -142,6 +144,19 @@ it('CR1 (LD250): verify counts a capture gap that is not the intake\'s downtime,
   } finally {
     rmrf(base);
   }
+});
+
+it('W4a (LD343): how the last intake ended, from the notes it left: a handled signal, a crash, a reboot while it ran, a kill no handler sees, or nothing to say', () => {
+  const { priorEnd } = require('../src/opon/intake/prior-end');
+  const run = { pid: 4242, boot: 1_000_000, started_at: '2026-11-26T10:00:00.000Z' };
+  const at = '2026-11-26T11:00:00.000Z';
+  assert.ok(priorEnd({ lastStop: { signal: 'SIGBREAK', at }, run, bootNow: run.boot }).startsWith('the intake was stopped by SIGBREAK, which no one asked for'), 'a handled signal wins over the run note');
+  assert.ok(priorEnd({ lastStop: { crash: 'boom', at }, run, bootNow: run.boot }).startsWith('the intake crashed (boom)'), 'a crash is never read as a kill');
+  assert.ok(priorEnd({ run, bootNow: run.boot + 30 * 60 * 1000 }).startsWith('the machine restarted while the intake ran'), 'booted since: a reboot');
+  const kill = priorEnd({ run, bootNow: run.boot + 1500 }); // os.uptime() is in seconds: a boot time a second or two off is the same boot
+  assert.ok(kill.startsWith('the intake was ended from outside, with no stop asked for and no crash recorded') && kill.includes('pid 4242'), kill);
+  assert.strictEqual(priorEnd({ bootNow: run.boot }), null, 'no note: a stop asked for, or a first start');
+  assert.strictEqual(priorEnd({ run: { pid: 'x' }, bootNow: 1 }), null, 'a damaged note says nothing');
 });
 
 runAll('crash');

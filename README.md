@@ -533,6 +533,7 @@ test`; `npm test; echo done`, a pipe, or `|| true` do not. Otherwise it is the
 `no-green-without-command` law's finding. Each `changed:` file is checked in the
 session's record (with the intake): one the turn never changed is a claim with
 nothing behind it, and a change the block lists is never counted as unmentioned.
+Each `not done:` line is shown in the session report (`orunmila report --verdicts`).
 Sentences are still read as before, so a block cannot hide a claim made in
 prose. The format is [`spec/claims-block.md`](spec/claims-block.md).
 

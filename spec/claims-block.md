@@ -19,7 +19,7 @@ not done: the Windows run (no Windows machine here)
 |---|---|---|
 | `changed: <path>, <path>` | the files the agent changed this turn; one or more lines | the record's changes in the turn: the Ọpọ́n reads them as file claims of the turn (a file the turn never changed is a phantom file claim) and as files the agent mentioned (MR1b2) |
 | `proved: <command>` | one command that shows the work passes; one per line | a run in the turn that passed and whose exit status is that command's: the command is one of the `&&` steps of the run's last segment (`cd web && npm test` and `cd web; npm test` prove `npm test`; `npm test; echo done` does not, its status is echo's), with no unguarded pipe and no `\|\|` there |
-| `not done: <text>` | something asked for and not done | nothing: it is the agent's own disclosure, shown with its report |
+| `not done: <text>` | something asked for and not done | nothing: it is the agent's own disclosure, shown in its session report (`orunmila report --verdicts`) |
 
 Rules:
 

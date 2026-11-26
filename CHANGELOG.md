@@ -35,9 +35,11 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   report says when that turn's claim says the tests pass.
 - **`orunmila trailer`.** A session's verdict as git trailers on a commit
   message (`--append` for a `commit-msg` hook). A convenience, not evidence.
-- **The claims block** (`ORUNMILA_CLAIMS_BLOCK=1`, off by default). An agent
-  may end a turn with an `orunmila-claims` block; each `proved:` command must
-  have run in the turn and passed. Format: `spec/claims-block.md`.
+- **The claims block** (`ORUNMILA_CLAIMS_BLOCK=1`, off by default). Claude Code's
+  agent is asked, with each prompt, to end its turn with an `orunmila-claims`
+  block: each `proved:` command must have run in the turn and passed; each
+  `changed:` file is checked in the session's record; `not done:` lines are
+  shown in the session report. Format: `spec/claims-block.md`.
 - **`orunmila update`.** Brings the copy in Orunmila's home up to the npm
   registry's latest `orunmila`: the download is checked against the registry's
   integrity hash, the new version must pass its own self-check, and Orunmila

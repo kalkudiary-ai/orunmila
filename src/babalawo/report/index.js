@@ -300,6 +300,14 @@ function buildReport({ header, marks, odus, verdicts, quarantined = 0, judgedNow
           : 'Clean session';
   const overlapped = [...new Set(marks.filter((m) => m.says === 'overlapped' && m.detail).map((m) => m.detail.session))].sort();
   const agent = header && header.agent ? header.agent.name : null;
+  // MR1b3 (LD339): what the agent said it did not do, from the claims block of each claim whose text was confirmed (N10).
+  const { parseClaimsBlock } = require('../../reconcile/claims-block');
+  const not_done = [];
+  for (const m of marks) {
+    if (m.source !== 'agent_claim' || m.says !== 'claimed' || !m.detail || typeof m.detail.text !== 'string' || m.detail.claim_unconfirmed === true) continue;
+    const b = parseClaimsBlock(m.detail.text);
+    for (const text of b ? b.not_done : []) not_done.push({ turn: m.turn, text });
+  }
   return {
     session_id: header ? header.session_id : null,
     verdict,
@@ -313,6 +321,7 @@ function buildReport({ header, marks, odus, verdicts, quarantined = 0, judgedNow
     counts: session ? session.counts : null,
     quarantined,
     overlapped,
+    not_done,
     experimental: agent !== null && agent !== 'claude-code' ? agent : null,
     rules_source: session ? session.rules_source : null,
   };
@@ -369,6 +378,7 @@ function lines(rep) {
   out.push(`Law gate: ${plural(lg.checked, 'turn', 'turns')} checked, ${lg.skipped} skipped, ${lg.blocked} blocked${lg.warned ? `, ${lg.warned} warned` : ''}; skip rate ${lg.skip_rate}%.`);
   if (rep.quarantined) out.push(`${plural(rep.quarantined, 'badly formatted mark was', 'badly formatted marks were')} kept in the quarantine log, nothing dropped.`);
   if (rep.overlapped.length) out.push(`Sessions overlapped with this one in the same folder: ${rep.overlapped.join(', ')}.`);
+  if (rep.not_done && rep.not_done.length) out.push(`The agent said it did not do: ${rep.not_done.map((x) => `"${x.text}" (turn ${x.turn})`).join('; ')}.`); // MR1b3
   out.push(`${rep.hidden} Clean ${rep.hidden === 1 ? 'event is' : 'events are'} hidden; the verdict log holds every one.`);
   return out;
 }

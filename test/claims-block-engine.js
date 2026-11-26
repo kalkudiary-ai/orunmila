@@ -63,4 +63,19 @@ it('MR1b2: replayed, a changed: path the turn changed is backed, one it did not 
   assert.deepStrictEqual(silent(without), ['README.md', 'src/a.ts'], 'with no block and no mention, both are silent, as before MR1b2');
 });
 
+it('MR1b3 (LD339): the session report gives each not done: line of the agent\'s blocks, with its turn, in text, HTML and JSON; none from text that could not be confirmed', () => {
+  const { buildReport, renderText, renderHtml, renderJson } = require('../src/babalawo/report');
+  const mk = (seq, turn, text, extra = {}) => ({ ...M.claimed(seq), seq, turn, detail: { text, ...extra } });
+  const marks = [mk(1, 't1', block(['not done: the Windows run', 'not done: the <docs>'])), mk(2, 't2', 'All done.'), mk(3, 't3', block(['not done: hidden']), { claim_unconfirmed: true })];
+  const rep = buildReport({ header: { session_id: 's', agent: { name: 'claude-code' } }, marks, odus: [], verdicts: [] });
+  assert.deepStrictEqual(rep.not_done, [{ turn: 't1', text: 'the Windows run' }, { turn: 't1', text: 'the <docs>' }]);
+  const line = 'The agent said it did not do: "the Windows run" (turn t1); "the <docs>" (turn t1).';
+  assert.ok(renderText(rep).includes(line), renderText(rep));
+  assert.ok(renderHtml(rep).includes('the &lt;docs&gt;') && !renderHtml(rep).includes('the <docs>'), 'escaped in the page');
+  assert.deepStrictEqual(JSON.parse(renderJson(rep)).not_done, rep.not_done);
+  const none = buildReport({ header: { session_id: 's' }, marks: [mk(2, 't2', 'All done.')], odus: [], verdicts: [] });
+  assert.deepStrictEqual(none.not_done, []);
+  assert.ok(!renderText(none).includes('did not do'));
+});
+
 runAll('claims-block-engine');

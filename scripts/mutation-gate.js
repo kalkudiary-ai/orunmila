@@ -3685,6 +3685,31 @@ MUTANTS.push(
     to: "if (process.env.ORUNMILA_CLAIMS_BLOCK !== 'x') answer.hookSpecificOutput =",
     fails: ['MR1b1 (LD339'],
   },
+  // MR1b3 (LD339): the agent's not done: lines in the session report.
+  {
+    id: 'MR1b3-1 the report lists no not done: line',
+    file: 'src/babalawo/report/index.js',
+    test: 'test/claims-block-engine.js',
+    from: '    for (const text of b ? b.not_done : []) not_done.push({ turn: m.turn, text });\n',
+    to: '',
+    fails: ['MR1b3 (LD339)'],
+  },
+  {
+    id: 'MR1b3-2 a claim that could not be confirmed is read for the report',
+    file: 'src/babalawo/report/index.js',
+    test: 'test/claims-block-engine.js',
+    from: " || m.detail.claim_unconfirmed === true) continue;\n    const b = parseClaimsBlock",
+    to: ') continue;\n    const b = parseClaimsBlock',
+    fails: ['MR1b3 (LD339)'],
+  },
+  {
+    id: 'MR1b3-3 the text report leaves the not done: line out',
+    file: 'src/babalawo/report/index.js',
+    test: 'test/claims-block-engine.js',
+    from: 'if (rep.not_done && rep.not_done.length) out.push(',
+    to: 'if (false) out.push(',
+    fails: ['MR1b3 (LD339)'],
+  },
 );
 
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };

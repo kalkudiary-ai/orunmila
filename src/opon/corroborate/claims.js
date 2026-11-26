@@ -39,6 +39,7 @@ const { extractClaims } = require('../../reconcile/claim-extractor');
 const { findExecutionClaims } = require('../../reconcile/verification-claim');
 const { extractTargets } = require('../../reconcile/task-extractor');
 const { stripWrapperTags, stripCodeFences } = require('../../reconcile/sanitize');
+const { parseClaimsBlock } = require('../../reconcile/claims-block');
 
 /** A `claimed` mark's text, or null for one that could not be confirmed (N10) or is not a claim. */
 function confirmedText(mark) {
@@ -54,6 +55,17 @@ function readClaims(mark, strictProof) {
 /** A claim's path targets, as written. */
 const pathsOf = (c) => c.targets.filter((t) => t.kind === 'path').map((t) => t.raw);
 
+/**
+ * MR1b2 (LD339; spec/claims-block.md): the `changed:` paths of the claims block the text ends with, as written, or [].
+ * Read whenever the text holds a block: an agent writes one only when asked (MR1b1, ORUNMILA_CLAIMS_BLOCK=1), and the
+ * Ọpọ́n takes no setting from the environment (guarantee 3), so it needs no switch of its own.
+ */
+function blockChanged(mark) {
+  const text = confirmedText(mark);
+  const block = text === null ? null : parseClaimsBlock(text);
+  return block ? [...new Set(block.changed)] : [];
+}
+
 function claimsOf(mark, { strictProof = false } = {}) {
   const out = [];
   for (const c of readClaims(mark, strictProof)) {
@@ -61,6 +73,9 @@ function claimsOf(mark, { strictProof = false } = {}) {
     const commands = [...new Set(findExecutionClaims(c.text))];
     if (files.length || commands.length) out.push({ claim: c.id, text: c.text, files, commands, hedged: c.hedged });
   }
+  // MR1b2: the block's changed: lines, one file claim of the turn, checked as "I updated <path>" is (C3d1).
+  const changed = blockChanged(mark);
+  if (changed.length) out.push({ claim: 'block', text: `changed: ${changed.join(', ')}`, files: changed, commands: [], hedged: false });
   return out;
 }
 
@@ -74,7 +89,7 @@ function mentionsOf(mark) {
   const own = stripWrapperTags(text);
   const pathsIn = (t) => extractTargets(t).filter((x) => x.kind === 'path').map((x) => x.raw);
   const fenced = (own.match(FENCE) || []).flatMap(pathsIn).filter((p) => p.replace(/^\.\//, '').includes('/'));
-  return [...new Set([...pathsIn(stripCodeFences(own)), ...fenced])];
+  return [...new Set([...pathsIn(stripCodeFences(own)), ...fenced, ...blockChanged(mark)])]; // MR1b2: a path the block lists, a bare name too
 }
 
 module.exports = { claimsOf, mentionsOf };

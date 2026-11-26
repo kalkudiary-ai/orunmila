@@ -3643,6 +3643,31 @@ MUTANTS.push(
     to: ') process.exit(75);',
     fails: ['W2b with PM2c3: a kept intake moving onto an update'],
   },
+  // MR1b2 (LD339): the claims block's changed: lines, file claims and mentions in the Ọpọ́n.
+  {
+    id: "MR1b2-1 the block's changed: lines are not file claims",
+    file: 'src/opon/corroborate/claims.js',
+    test: 'test/claims-block-engine.js',
+    from: "if (changed.length) out.push({ claim: 'block',",
+    to: "if (false) out.push({ claim: 'block',",
+    fails: ["MR1b2: a claimed mark's block", 'MR1b2: replayed'],
+  },
+  {
+    id: "MR1b2-2 the block's paths are not mentions",
+    file: 'src/opon/corroborate/claims.js',
+    test: 'test/claims-block-engine.js',
+    from: ', ...blockChanged(mark)])]; // MR1b2',
+    to: '])]; // MR1b2',
+    fails: ["MR1b2: a claimed mark's block", 'MR1b2: replayed'],
+  },
+  {
+    id: 'MR1b2-3 a block in text that could not be confirmed is read',
+    file: 'src/opon/corroborate/claims.js',
+    test: 'test/claims-block-engine.js',
+    from: 'const block = text === null ? null : parseClaimsBlock(text);',
+    to: 'const block = parseClaimsBlock(mark.detail.text);',
+    fails: ["MR1b2: a claimed mark's block"],
+  },
 );
 
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };

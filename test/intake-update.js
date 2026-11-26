@@ -105,7 +105,12 @@ it('PM2c3: the launch agent runs the intake through the starter when one is inst
     installRuntime({ home, from: ROOT });
     const agents = path.join(base, 'agents');
     // launchctl replaced by a program that does nothing and exits 0: the real launchd is never touched
-    const r = run('bin/orunmila.js', { args: ['intake', 'agent', 'install'], env: { ...env(home), ORUNMILA_LAUNCH_AGENTS_DIR: agents, ORUNMILA_LAUNCHCTL: '/usr/bin/true' } });
+    // CI2 (LD341): the Startup folder fenced too: on Windows the agent is W2b's Startup script, tested in intake-keep.js
+    const r = run('bin/orunmila.js', { args: ['intake', 'agent', 'install'], env: { ...env(home), ORUNMILA_LAUNCH_AGENTS_DIR: agents, ORUNMILA_LAUNCHCTL: '/usr/bin/true', ORUNMILA_STARTUP_DIR: path.join(base, 'Startup') } });
+    if (process.platform === 'win32') {
+      assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+      return;
+    }
     if (process.platform !== 'darwin') {
       assert.strictEqual(r.status, 1, 'the launch agent is macOS only');
       return;

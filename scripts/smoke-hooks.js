@@ -28,8 +28,11 @@ const ROOT = path.resolve(__dirname, '..');
 const win = process.platform === 'win32';
 const npm = win ? 'npm.cmd' : 'npm';
 
+/** CI2 (LD341): through cmd.exe each argument is quoted, so a path with a space stays one argument (Node joins them as they are). */
+const quoted = (a) => (/[\s"&|<>^()]/.test(a) ? `"${String(a).replace(/"/g, '""')}"` : a);
 function run(cmd, args, opts = {}) {
-  return spawnSync(cmd, args, { encoding: 'utf8', shell: win && cmd.endsWith('.cmd'), ...opts });
+  const shell = win && cmd.endsWith('.cmd');
+  return spawnSync(cmd, shell ? args.map(quoted) : args, { encoding: 'utf8', shell, ...opts });
 }
 
 function main() {

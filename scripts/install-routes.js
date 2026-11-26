@@ -31,7 +31,9 @@ const { spawnSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..');
 const win = process.platform === 'win32';
-const sh = (cmd, args, opts) => spawnSync(cmd, args, { encoding: 'utf8', shell: win, timeout: 300000, ...opts });
+// CI2 (LD341): through cmd.exe each argument is quoted, so a path with a space stays one argument.
+const quoted = (a) => (/[\s"&|<>^()]/.test(a) ? `"${String(a).replace(/"/g, '""')}"` : a);
+const sh = (cmd, args, opts) => spawnSync(cmd, win ? args.map(quoted) : args, { encoding: 'utf8', shell: win, timeout: 300000, ...opts });
 
 function pack(base, env, version) {
   const src = path.join(base, `src-${version}`);

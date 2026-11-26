@@ -1256,7 +1256,8 @@ const MUTANTS = [
     from: "    if (platform !== 'darwin') return refuse();\n    fs.mkdirSync", to: "    fs.mkdirSync",
     fails: ['LA: on another platform'] },
   { id: 'LA-6 the CLI installs a plist for another script', file: 'bin/orunmila.js', test: 'test/launch-agent.js',
-    from: "r = agent.install({ node: process.execPath, script: __filename, home, env: process.env });", to: "r = agent.install({ node: process.execPath, script: 'orunmila', home, env: process.env });",
+    // PM2c3 (LD334): the plist takes intakeArgv's list; with no starter in the home, this copy's own script.
+    from: ": [__filename, 'intake', 'run'];", to: ": ['orunmila', 'intake', 'run'];",
     fails: ['LA CLI: intake agent install'] },
   // Slice LC3: a file put back to its committed bytes starts its slice's count again (LD150).
   { id: 'LC3-1 a restore is never seen', file: 'scripts/leopard-check.js', test: 'test/leopard-check.js',
@@ -3507,6 +3508,47 @@ MUTANTS.push(
     from: ", 'ORUNMILA_UPDATES', 'ORUNMILA_REGISTRY'];",
     to: '];',
     fails: ['LA3 (LD290)'],
+  },
+  // PM2c3 (LD334): the intake through the starter, and its move onto a switched version.
+  {
+    id: 'PM2c3-1 the intake moves while a session is held',
+    file: 'bin/orunmila.js',
+    test: 'test/intake-update.js',
+    from: " || router.held().length) return;",
+    to: ') return;',
+    fails: ['PM2c3: once current names a new version'],
+  },
+  {
+    id: 'PM2c3-2 the intake never moves onto a switched version',
+    file: 'bin/orunmila.js',
+    test: 'test/intake-update.js',
+    from: 'if (cur === ownFolder || ',
+    to: 'if (true || ',
+    fails: ['PM2c3: once current names a new version'],
+  },
+  {
+    id: 'PM2c3-3 intake start runs the copy that started it',
+    file: 'bin/orunmila.js',
+    test: 'test/intake-update.js',
+    from: 'spawn(process.execPath, intakeArgv(home), {',
+    to: "spawn(process.execPath, [__filename, 'intake', 'run'], {",
+    fails: ['PM2c3: once current names a new version'],
+  },
+  {
+    id: 'PM2c3-4 the plist ignores the arguments it is given',
+    file: 'src/opon/intake/launch-agent.js',
+    test: 'test/intake-update.js',
+    from: "[node, ...(Array.isArray(args) && args.length ? args : [script, 'intake', 'run'])]",
+    to: "[node, script, 'intake', 'run']",
+    fails: ['PM2c3: the launch agent runs the intake through the starter'],
+  },
+  {
+    id: 'PM2c3-5 intake agent install does not name the starter',
+    file: 'bin/orunmila.js',
+    test: 'test/intake-update.js',
+    from: 'args: intakeArgv(home) }); // PM2c3 (LD334)',
+    to: '}); // PM2c3 (LD334)',
+    fails: ['PM2c3: the launch agent runs the intake through the starter'],
   },
 );
 

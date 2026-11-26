@@ -48,6 +48,9 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   `orunmila install --with-updates` (or `ORUNMILA_UPDATES=1`) it also runs by
   itself, at most once a day, started by the intake or, where none runs, by a
   hook, in the background, so nothing waits for it; off by default for now.
+  The intake runs the copy in Orunmila's home too (`orunmila intake start` and
+  the launch agent start it through the starter), moves onto a new version once
+  it holds no session, and names the version it runs in `orunmila intake status`.
 - **A second session that sits idle no longer blocks credit**
   (`ORUNMILA_PEER_BUSY=1`, off by default). The intake notes in each session's
   record when another session in the same folder is working (the `overlapped`

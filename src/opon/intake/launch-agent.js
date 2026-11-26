@@ -19,7 +19,9 @@
  *     .uninstall() -> { ok, removed: <plist path> | null }: boots it out, removes the plist
  *     .status()    -> { ok, loaded, state, pid, plist }: from `launchctl print`
  *
- * The agent runs `<node> <script> intake run`, at load, and launchd restarts it
+ * The agent runs `<node> <script> intake run` (with PM2c3, LD334, the starter in
+ * Orunmila's home and `bin/orunmila.js intake run`, so a restart runs the
+ * version an update switched to), at load, and launchd restarts it
  * only after a failed exit (KeepAlive SuccessfulExit false): a crash, an
  * uncaught error, or a signal no one asked for (TE2, LD283: recorded as
  * tampering, exit 1); `orunmila intake stop` asks over the socket and exits 0
@@ -43,7 +45,8 @@ const THROTTLE_S = 10;
 const xml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const str = (s, pad) => `${pad}<string>${xml(s)}</string>`;
 
-function plistFor({ node, script, home, env = {} }) {
+/** `args`: what node runs (PM2c3, LD334: the starter and `bin/orunmila.js intake run`); `script intake run` by default. */
+function plistFor({ node, script, home, env = {}, args = null }) {
   const out = path.join(home, 'intake', 'intake.out');
   const lines = [
     '<?xml version="1.0" encoding="UTF-8"?>',
@@ -54,7 +57,7 @@ function plistFor({ node, script, home, env = {} }) {
     str(LABEL, '  '),
     '  <key>ProgramArguments</key>',
     '  <array>',
-    ...[node, script, 'intake', 'run'].map((a) => str(a, '    ')),
+    ...[node, ...(Array.isArray(args) && args.length ? args : [script, 'intake', 'run'])].map((a) => str(a, '    ')),
     '  </array>',
     '  <key>RunAtLoad</key>',
     '  <true/>',

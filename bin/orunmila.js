@@ -1568,6 +1568,16 @@ function leakCheck() {
  * waits for it to go. A signal no one asked for is recorded as tampering and exits 1, so the launch agent restarts it.
  * Nothing sends to it yet: the hooks' sender is slice B2.
  */
+/**
+ * PM2c3 (LD334): what node runs for `intake run`: the starter and the current version's CLI, when `install` made them
+ * (so a restart runs the version an update switched to), else this copy.
+ */
+function intakeArgv(home) {
+  const starter = path.join(home, 'bin', 'orunmila-start.js');
+  const { starterTarget } = require('../src/runtime/install');
+  return fs.existsSync(starter) && starterTarget(starter, 'bin/orunmila.js').ok ? [starter, 'bin/orunmila.js', 'intake', 'run'] : [__filename, 'intake', 'run'];
+}
+
 async function cmdIntake() {
   const { createServer, intakePaths, readInstallKey, statusOf, intakePort, oponLive } = require('../src/opon/intake/server');
   const home = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
@@ -1620,7 +1630,7 @@ async function cmdIntake() {
       await server.stop(`stopped as asked: ${reason}`);
       process.exit(0);
     };
-    server = createServer({ home, router, httpPort: intakePort(), onStop, resumeAlso });
+    server = createServer({ home, router, httpPort: intakePort(), onStop, resumeAlso, version: require('../package.json').version });
     const r = await server.start();
     if (!r.ok) {
       console.error(`orunmila intake: ${r.reason}`);
@@ -1654,6 +1664,37 @@ async function cmdIntake() {
         process.exit(1);
       });
     }
+    // PM2c3 (LD334): an intake run from the copy in Orunmila's home moves onto the version an update switched to, once
+    // it holds no session (so no session's record sees its code change): a stop as asked, then a start through the
+    // starter; under the launch agent, exit 75 and launchd starts it again (KeepAlive after a failed exit).
+    const runtimeDir = path.join(home, 'runtime');
+    let ownFolder = null;
+    try {
+      if (path.dirname(fs.realpathSync(path.join(__dirname, '..'))) === fs.realpathSync(runtimeDir)) ownFolder = path.basename(fs.realpathSync(path.join(__dirname, '..')));
+    } catch {
+      ownFolder = null; // no runtime in the home: this intake runs from another copy, and stays on it
+    }
+    if (ownFolder) {
+      const pollMs = Number(process.env.ORUNMILA_UPDATE_POLL_MS) > 0 ? Number(process.env.ORUNMILA_UPDATE_POLL_MS) : 60 * 1000;
+      setInterval(async () => {
+        if (stopping) return;
+        let cur;
+        try {
+          cur = fs.readFileSync(path.join(runtimeDir, 'current'), 'utf8').trim();
+        } catch {
+          return;
+        }
+        if (cur === ownFolder || !/^[0-9A-Za-z][0-9A-Za-z._+-]*$/.test(cur) || router.held().length) return;
+        stopping = true;
+        const to = cur.split('_')[0];
+        console.log(`orunmila intake: moving onto ${to} (an update switched to it, and no session is held)`);
+        await server.stop(`moving onto Orunmila ${to}: an update switched to it while no session was held`);
+        if (process.env.XPC_SERVICE_NAME === require('../src/opon/intake/launch-agent').LABEL) process.exit(75);
+        const out = fs.openSync(p.out, 'a', 0o600);
+        require('child_process').spawn(process.execPath, [path.join(home, 'bin', 'orunmila-start.js'), 'bin/orunmila.js', 'intake', 'run'], { detached: true, stdio: ['ignore', out, out], env: process.env, windowsHide: true }).unref();
+        process.exit(0);
+      }, pollMs).unref();
+    }
     return;
   }
   if (sub === 'start') {
@@ -1664,13 +1705,15 @@ async function cmdIntake() {
     }
     fs.mkdirSync(p.dir, { recursive: true, mode: 0o700 });
     const out = fs.openSync(p.out, 'a', 0o600);
-    const child = require('child_process').spawn(process.execPath, [__filename, 'intake', 'run'], { detached: true, stdio: ['ignore', out, out], env: process.env });
+    // PM2c3 (LD334): through the starter when `install` made one, so the intake is the starter's child and has a pid of
+    // its own; none answered before this start, so the one that answers now is this one.
+    const child = require('child_process').spawn(process.execPath, intakeArgv(home), { detached: true, stdio: ['ignore', out, out], env: process.env, windowsHide: true });
     child.unref();
     fs.closeSync(out);
     let seen = null;
-    await waitFor(async () => (seen = await statusOf(p.sock, 300)) !== null && seen.pid === child.pid);
-    if (seen && seen.pid === child.pid) {
-      console.log(`orunmila intake: started (pid ${child.pid}) on ${p.sock}`);
+    await waitFor(async () => (seen = await statusOf(p.sock, 300)) !== null);
+    if (seen) {
+      console.log(`orunmila intake: started (pid ${seen.pid}${seen.version ? `, Orunmila ${seen.version}` : ''}) on ${p.sock}`);
       return;
     }
     console.log(`orunmila intake: did not start within 5 s; its output is in ${p.out}`);
@@ -1725,7 +1768,7 @@ async function cmdIntake() {
     });
     const act = args[2];
     let r;
-    if (act === 'install') r = agent.install({ node: process.execPath, script: __filename, home, env: process.env });
+    if (act === 'install') r = agent.install({ node: process.execPath, script: __filename, home, env: process.env, args: intakeArgv(home) }); // PM2c3 (LD334)
     else if (act === 'uninstall') r = agent.uninstall();
     else if (act === 'status') r = agent.status();
     else {

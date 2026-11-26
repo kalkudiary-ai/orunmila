@@ -198,7 +198,7 @@ function alive(pid) {
   }
 }
 
-function createServer({ home, router, pollMs = 100, statusTimeoutMs = 1000, maxLine = MAX_LINE, httpPort = null, httpRetryMs = 1000, lookups = peer, onStop = null, resumeAlso = null }) {
+function createServer({ home, router, pollMs = 100, statusTimeoutMs = 1000, maxLine = MAX_LINE, httpPort = null, httpRetryMs = 1000, lookups = peer, onStop = null, resumeAlso = null, version = null }) {
   const p = intakePaths(home);
   let server = null;
   let timer = null;
@@ -358,7 +358,8 @@ function createServer({ home, router, pollMs = 100, statusTimeoutMs = 1000, maxL
     if (lockPid(p.lock) === process.pid) fs.rmSync(p.lock, { force: true });
   }
 
-  const status = () => ({ intake: 'orunmila', pid: process.pid, started_at: startedAt, held: router.held(), socket: p.sock, http: httpState && { ...httpState } });
+  // PM2c3 (LD334): `version`, the version of Orunmila this intake runs, when its starter gave one.
+  const status = () => ({ intake: 'orunmila', pid: process.pid, started_at: startedAt, held: router.held(), socket: p.sock, http: httpState && { ...httpState }, ...(version ? { version } : {}) });
 
   function handle(line, c) {
     if (!line.trim()) return;

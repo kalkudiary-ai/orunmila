@@ -999,14 +999,23 @@ it('lenses: --with-gate over an existing Stain Map adds the gate without duplica
   rmrf(work);
 });
 
-it('lenses: a duplicate plain install is still refused with a non-zero exit', () => {
+it('lenses: a second plain install never doubles a hook: over this home\'s starter it is an upgrade (F19, LD336); from another copy it is refused with a non-zero exit', () => {
   const home = tmpHome();
   const work = tmpDir();
   run('bin/orunmila.js', { args: ['install'], env: { ORUNMILA_HOME: home }, cwd: work });
-  const r = run('bin/orunmila.js', { args: ['install'], env: { ORUNMILA_HOME: home }, cwd: work });
-  assert.notStrictEqual(r.status, 0, 'a second capture install must fail loudly');
+  const settings = () => fs.readFileSync(path.join(work, '.claude', 'settings.json'), 'utf8');
+  const once = settings();
+  const same = run('bin/orunmila.js', { args: ['install'], env: { ORUNMILA_HOME: home }, cwd: work });
+  assert.strictEqual(same.status, 0, same.stdout + same.stderr);
+  assert.ok(same.stdout.includes('already installed'), same.stdout);
+  assert.strictEqual(settings(), once, 'no hook added: one registration');
+  const other = tmpHome(); // another Orunmila home: its starter is another copy, as two installs of two copies are
+  const r = run('bin/orunmila.js', { args: ['install'], env: { ORUNMILA_HOME: other }, cwd: work });
+  assert.notStrictEqual(r.status, 0, 'a second capture install of another copy must fail loudly');
   assert.ok(r.stderr.includes('Refusing to install'), 'and say why');
+  assert.strictEqual(settings(), once, 'and add nothing');
   rmrf(home);
+  rmrf(other);
   rmrf(work);
 });
 

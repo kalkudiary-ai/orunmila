@@ -3567,6 +3567,31 @@ MUTANTS.push(
     to: "const hookFor = (rel) => `node \"${path.join(__dirname, '..', ...rel.split('/'))}\"`;",
     fails: ['PM1 (LD335)'],
   },
+  // F19 (LD336): install over this home's starter hooks is an upgrade; over another copy's, it refuses first.
+  {
+    id: 'F19-1 installing over this home\'s starter hooks is refused as a second install',
+    file: 'bin/orunmila.js',
+    test: 'test/starter.js',
+    from: 'if (capturing && existing.length && !upgrade) {',
+    to: 'if (capturing && existing.length) {',
+    fails: ['F19 (LD336): install again, from a newer copy'],
+  },
+  {
+    id: 'F19-2 a refused install copies and switches first (as before F19)',
+    file: 'bin/orunmila.js',
+    test: 'test/starter.js',
+    from: 'if (capturing && existing.length && !upgrade) {',
+    to: 'if (false) {',
+    fails: ["F19 (LD336): an install refused because another copy's hooks"],
+  },
+  {
+    id: "F19-3 any copy's hooks count as this home's starter",
+    file: 'bin/orunmila.js',
+    test: 'test/starter.js',
+    from: 'return at >= 0 && words[at] === thisStarter;',
+    to: 'return at >= 0;',
+    fails: ["F19 (LD336): an install refused because another copy's hooks"],
+  },
 );
 
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };

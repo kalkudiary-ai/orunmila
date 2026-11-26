@@ -73,8 +73,11 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   installed through `npx` or `pnpm dlx` used to name a file in that tool's
   cache, and recorded nothing once the cache was cleared. `orunmila status`
   follows the starter to the script it runs and names one that is missing.
-  Each hook takes about 20 ms longer (one more Node start). An install made
-  before this one keeps its old hooks until it is installed again.
+  Each hook takes about 20 ms longer (one more Node start). Installing again
+  over hooks that already run the starter is an upgrade: the new copy becomes
+  current and no hook is added. Hooks written by an earlier version name that
+  version's copy, so `orunmila install` refuses over them and changes nothing:
+  remove the hooks it names, then install again.
 - **The trail page says what it checked.** With no checked turn, the header,
   the file list, the Report tab, the Dashboard and the claim-vs-record section
   say "Not checked"; before, the page read "looks clean". Turns checked with no

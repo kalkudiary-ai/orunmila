@@ -338,11 +338,31 @@ function cmdInstall() {
   const p = configPath(adapter, { global, home: os.homedir(), cwd: process.cwd() });
   fs.mkdirSync(path.dirname(p), { recursive: true });
 
+  // F19 (LD336): Orunmila's capture hooks already here. Each runs this home's starter: installing again is an upgrade
+  // (the copy and `current` below, no hook added). Any names another copy: a plain install refuses, before it touches
+  // Orunmila's home, so a refusal changes nothing.
+  const capturing = !args.includes('--intake') && !args.includes('--gate-only') && !args.includes('--with-gate') && !args.includes('--with-laws');
+  const thisStarter = path.join(orunmilaHome(), 'bin', require('../src/runtime/install').STARTER);
+  const existing = adapter.id === 'claude-code' ? findExistingClaudeHooks(readJson(p, {})) : [];
+  const upgrade = existing.length > 0 && existing.every((e) => {
+    const { words, at } = scriptOf(e.command);
+    return at >= 0 && words[at] === thisStarter;
+  });
+  if (capturing && existing.length && !upgrade) {
+    installClaudeCode(root, p); // prints the refusal and where the other hooks are; writes nothing
+    process.exitCode = 1;
+    return;
+  }
+
   // PM2b (LD331): this copy kept in Orunmila's home, so every hook below runs it through the starter, whatever
   // happens to the copy that ran `install` (npx's or pnpm's cache cleared, a global folder moved).
   const rt = require('../src/runtime/install').installRuntime({ home: orunmilaHome(), from: root });
   console.log(`Orunmila ${rt.version} is kept in ${rt.dir}${rt.fresh ? '' : ' (already there)'}; every hook runs it through ${rt.starter},`);
   console.log('so the hooks keep working if the copy that ran this install is removed.\n');
+  if (capturing && upgrade) {
+    console.log(`Orunmila is already installed in ${p}: its hooks run that starter, which now runs ${rt.version}. No hook was added.`);
+    return;
+  }
 
   // The Closeout Gate is a SEPARATE registration from the Stain Map, so it must
   // be installable on its own. Someone who set capture up months ago and now

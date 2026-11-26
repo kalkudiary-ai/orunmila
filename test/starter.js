@@ -168,4 +168,41 @@ it('PM2b: orunmila status names a hook whose starter is gone, or whose current v
   }
 });
 
+it('F19 (LD336): install again, from a newer copy, over hooks that already run this home\'s starter is an upgrade: exit 0, the new version current, no hook added', () => {
+  const base = fs.realpathSync(tmpDir());
+  try {
+    const { project, home } = installed(base);
+    const hooks = commands(project);
+    const next = path.join(base, 'next');
+    for (const f of [...SHIPPED, 'package.json']) fs.cpSync(path.join(ROOT, f), path.join(next, f), { recursive: true });
+    const pkg = JSON.parse(fs.readFileSync(path.join(next, 'package.json'), 'utf8'));
+    fs.writeFileSync(path.join(next, 'package.json'), JSON.stringify({ ...pkg, version: '9.9.9' }));
+    const r = spawnSync(process.execPath, [path.join(next, 'bin', 'orunmila.js'), 'install'], { env: env(base), cwd: project, encoding: 'utf8' });
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    assert.ok(r.stdout.includes('already installed') && r.stdout.includes('9.9.9'), r.stdout);
+    assert.ok(!r.stdout.includes('Refusing') && !r.stderr.includes('Refusing'), r.stdout + r.stderr);
+    assert.deepStrictEqual(commands(project), hooks, 'the same hooks, none added');
+    assert.ok(/^9\.9\.9_/.test(fs.readFileSync(path.join(home, 'runtime', 'current'), 'utf8')), 'the new version is current');
+  } finally {
+    rmrf(base);
+  }
+});
+
+it('F19 (LD336): an install refused because another copy\'s hooks are registered changes nothing in Orunmila\'s home', () => {
+  const base = fs.realpathSync(tmpDir());
+  try {
+    const project = path.join(base, 'a project');
+    fs.mkdirSync(path.join(project, '.claude'), { recursive: true });
+    for (const d of ['user', 'orunmila home']) fs.mkdirSync(path.join(base, d), { recursive: true });
+    const other = { hooks: { Stop: [{ matcher: '*', hooks: [{ type: 'command', command: 'node "/elsewhere/orunmila/src/capture/claude-code/stop.js"' }] }] } };
+    fs.writeFileSync(path.join(project, '.claude', 'settings.json'), JSON.stringify(other));
+    const r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'orunmila.js'), 'install'], { env: env(base), cwd: project, encoding: 'utf8' });
+    assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+    assert.ok(r.stderr.includes('Refusing to install'), r.stderr);
+    assert.deepStrictEqual(fs.readdirSync(path.join(base, 'orunmila home')), [], 'no copy made, no current switched, no starter written');
+  } finally {
+    rmrf(base);
+  }
+});
+
 runAll('starter');

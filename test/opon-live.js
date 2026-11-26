@@ -231,7 +231,9 @@ it('L1c line 386: a file\'s state now is streamed when it is a regular file; no 
   assert.deepStrictEqual(fingerprintNow(path.join(base, 'f'), 'f', KEY), { exists: true, size: 3, fingerprint: 'sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad' });
   assert.deepStrictEqual(fingerprintNow(path.join(base, 'none'), 'none', KEY), { exists: false });
   for (const n of ['d', 'l']) assert.deepStrictEqual(fingerprintNow(path.join(base, n), n, KEY), { exists: true, size: null, fingerprint: null }, n);
-  assert.deepStrictEqual(fingerprintNow(path.join(base, 'f', 'under'), 'f/under', KEY), { exists: true, size: null, fingerprint: null }, 'a path through a file: ENOTDIR, unknown');
+  // A path through a file: POSIX says ENOTDIR (unknown, never guessed); Windows says ENOENT, no entry (W3c).
+  const through = process.platform === 'win32' ? { exists: false } : { exists: true, size: null, fingerprint: null };
+  assert.deepStrictEqual(fingerprintNow(path.join(base, 'f', 'under'), 'f/under', KEY), through, 'a path through a file: ENOTDIR unknown, or ENOENT absent on Windows');
 }));
 
 it(

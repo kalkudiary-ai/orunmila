@@ -2,6 +2,8 @@
 // Copyright 2026 KALKU DIGITAL SOLUTIONS LIMITED
 'use strict';
 
+require('./helpers').buildMachineOnly('turbo', 'scripts/turbo, the TURBO harness'); // W3g (LD342)
+
 /**
  * test/turbo.js — scripts/turbo/, the TURBO harness: an outer driver that runs
  * Leopard slice by slice in fresh headless sessions, queues what needs O, and

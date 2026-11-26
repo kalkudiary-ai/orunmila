@@ -14,7 +14,7 @@
 
 const net = require('net');
 const { spawn } = require('child_process');
-const { assert, fs, path, ROOT, tmpDir, rmrf, run, sleep, it, runAll } = require('./helpers');
+const { assert, fs, path, ROOT, tmpDir, rmrf, run, sleep, it, runAll, notOnWindows } = require('./helpers');
 const { intakePaths, statusOf } = require('../src/opon/intake/server');
 const { verifySession } = require('../src/verify/session');
 const { replayFolder } = require('../src/opon/replay');
@@ -68,24 +68,30 @@ it('TE2 (LD283): a SIGTERM no one asked for is a tampered mark (intake_stop) bef
     await send(paths.sock, req({ ...p, hook_event_name: 'SessionStart', source: 'startup' }) + req({ ...p, hook_event_name: 'UserPromptSubmit', prompt: 'go' }));
     assert.ok(await until(() => lines(raw).some((m) => m.says === 'prompted')), 'the prompt is written');
 
-    live.child.kill('SIGTERM');
-    const first = await live.exited;
-    assert.strictEqual(first.code, 1, 'a stop no one asked for exits 1, so launchd restarts it');
-    const recs = lines(raw);
-    const t = recs.findIndex((m) => m.says === 'tampered');
-    assert.ok(t > 0, 'a tampered mark');
-    const m = recs[t];
-    assert.deepStrictEqual([m.source, m.target, m.detail.what, m.detail.signal], ['process', { kind: 'process', name: 'intake' }, 'intake_stop', 'SIGTERM']);
-    assert.deepStrictEqual(markSchema(m), [], 'a valid mark naming only fields the spec declares');
-    assert.deepStrictEqual([recs[t + 1].says, recs[t + 1].target.name], ['exited', 'intake'], 'the closing note follows it');
-    assert.ok(fs.existsSync(path.join(paths.dir, 'last-stop.json')), 'the stop is kept for the next start');
+    // W3f: on Windows a SIGTERM ends the process at once and no handler runs (a kill: CR1 test 18 asserts what it leaves
+    // there), so the half below that needs the intake to handle it is skipped there, named; the asked-for stop runs everywhere.
+    const posix = !notOnWindows('intake-stop TE2: a SIGTERM no one asked for, recorded by the intake (Windows ends the process at once: no handler runs)');
+    let m = null;
+    if (posix) {
+      live.child.kill('SIGTERM');
+      const first = await live.exited;
+      assert.strictEqual(first.code, 1, 'a stop no one asked for exits 1, so launchd restarts it');
+      const recs = lines(raw);
+      const t = recs.findIndex((x) => x.says === 'tampered');
+      assert.ok(t > 0, 'a tampered mark');
+      m = recs[t];
+      assert.deepStrictEqual([m.source, m.target, m.detail.what, m.detail.signal], ['process', { kind: 'process', name: 'intake' }, 'intake_stop', 'SIGTERM']);
+      assert.deepStrictEqual(markSchema(m), [], 'a valid mark naming only fields the spec declares');
+      assert.deepStrictEqual([recs[t + 1].says, recs[t + 1].target.name], ['exited', 'intake'], 'the closing note follows it');
+      assert.ok(fs.existsSync(path.join(paths.dir, 'last-stop.json')), 'the stop is kept for the next start');
 
-    live = runIntake(env);
-    assert.ok(await until(async () => (await statusOf(paths.sock, 300)) !== null), 'the intake answers again');
-    const gap = lines(raw).find((x) => x.says === 'gap' && x.detail && x.detail.since);
-    assert.ok(gap, 'the restart writes a downtime gap');
-    assert.ok(gap.detail.lost.includes('stopped by SIGTERM, which no one asked for through `orunmila intake stop`'), gap.detail.lost);
-    assert.ok(!fs.existsSync(path.join(paths.dir, 'last-stop.json')), 'named once, then gone');
+      live = runIntake(env);
+      assert.ok(await until(async () => (await statusOf(paths.sock, 300)) !== null), 'the intake answers again');
+      const gap = lines(raw).find((x) => x.says === 'gap' && x.detail && x.detail.since);
+      assert.ok(gap, 'the restart writes a downtime gap');
+      assert.ok(gap.detail.lost.includes('stopped by SIGTERM, which no one asked for through `orunmila intake stop`'), gap.detail.lost);
+      assert.ok(!fs.existsSync(path.join(paths.dir, 'last-stop.json')), 'named once, then gone');
+    }
 
     const r = run('bin/orunmila.js', { args: ['intake', 'stop'], env });
     assert.strictEqual(r.status, 0, r.stdout + r.stderr);
@@ -93,14 +99,14 @@ it('TE2 (LD283): a SIGTERM no one asked for is a tampered mark (intake_stop) bef
     live = null;
     assert.strictEqual(second.code, 0, 'a stop asked for exits 0');
     const after = lines(raw);
-    assert.strictEqual(after.filter((x) => x.says === 'tampered').length, 1, 'no tampered mark for the stop asked for');
+    assert.strictEqual(after.filter((x) => x.says === 'tampered').length, posix ? 1 : 0, 'no tampered mark for the stop asked for');
     const note = after[after.length - 1];
     assert.deepStrictEqual([note.says, note.target.name], ['exited', 'intake']);
     assert.ok(note.detail.reason.includes('asked'), note.detail.reason);
     assert.ok(!fs.existsSync(path.join(paths.dir, 'last-stop.json')), 'a stop asked for is not kept as one no one asked for');
     const v = verifySession(path.join(home, 'sessions', sid));
     assert.ok(v.ok, v.words);
-    assert.ok(v.words.includes(`the intake was stopped by SIGTERM, which no one asked for (line ${m.seq + 1} of the raw log)`), v.words);
+    if (posix) assert.ok(v.words.includes(`the intake was stopped by SIGTERM, which no one asked for (line ${m.seq + 1} of the raw log)`), v.words);
   } finally {
     if (live) {
       live.child.kill('SIGKILL');

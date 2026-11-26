@@ -9,7 +9,7 @@
  * launch agent is touched.
  */
 
-const { assert, fs, path, tmpDir, rmrf, it, runAll } = require('./helpers');
+const { assert, fs, path, tmpDir, rmrf, it, runAll, notOnWindows } = require('./helpers');
 const { createLaunchAgent, plistFor, LABEL } = require('../src/opon/intake/launch-agent');
 
 function fake(answers = {}) {
@@ -77,7 +77,7 @@ it(
     const p = path.join(dir, `${LABEL}.plist`);
     assert.strictEqual(r.plist, p);
     assert.strictEqual(fs.readFileSync(p, 'utf8'), plistFor({ ...BASE, env: {} }));
-    assert.strictEqual(fs.statSync(p).mode & 0o777, 0o644);
+    if (!notOnWindows('launch-agent: the plist is written 0644; Windows has no POSIX modes')) assert.strictEqual(fs.statSync(p).mode & 0o777, 0o644);
     assert.deepStrictEqual(f.calls, [
       ['bootout', `gui/501/${LABEL}`],
       ['bootstrap', 'gui/501', p],

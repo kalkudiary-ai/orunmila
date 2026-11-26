@@ -94,6 +94,32 @@ function runUntil(relScript, { env = {}, args = [], cwd, ms = 1200 } = {}) {
   return { stdout: res.stdout || '', stderr: res.stderr || '', signal: res.signal };
 }
 
+/** A path with `/` separators, as Orunmila records every path (paths.js, overlap.js): the same string on every OS. */
+const slash = (p) => String(p).split(path.sep).join('/');
+
+// --- what cannot be checked on this OS (W3d) ---------------------------------
+// Windows has no POSIX file modes, no SIGTERM a process can handle, and no Unix socket files. A check that depends
+// on one of those is skipped there, never passed: notOnWindows(what) records it and returns true, and runAll prints
+// every skipped check by name, so the count of what did not run is in the output (as secure.js has done since 0.2.2).
+const WINDOWS = process.platform === 'win32';
+const skipped = [];
+function notOnWindows(what) {
+  if (!WINDOWS) return false;
+  skipped.push(what);
+  return true;
+}
+
+/**
+ * W3g (LD342): a suite of a developer tool of the build machine (scripts/, which ships to no user: package.json
+ * `files`), built on POSIX (process groups, setsid, sandbox-exec, launchd, git hooks). On Windows it does not run,
+ * and says so with its suite header and why; on macOS and Linux this returns and the suite runs whole.
+ */
+function buildMachineOnly(suite, what) {
+  if (!WINDOWS) return;
+  console.log(`\n# ${suite}\n      (not run on Windows: ${what} is a developer tool of the build machine, POSIX by design, and ships to no user: LD342)\n\n0 passed, 0 failed`);
+  process.exit(0);
+}
+
 // --- tiny test collector ----------------------------------------------------
 
 const tests = [];
@@ -116,6 +142,11 @@ async function runAll(suiteName) {
       console.log(`      ${err && err.stack ? err.stack.split('\n').slice(0, 4).join('\n      ') : err}`);
       fail++;
     }
+  }
+  if (skipped.length) {
+    console.log(`      (not run on Windows, ${skipped.length} checks:`);
+    for (const s of skipped) console.log(`        - ${s}`);
+    console.log('      )');
   }
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
@@ -152,4 +183,15 @@ async function awaitWatching(dir, isSeen, { everyMs = 250, deadlineMs = 5000 } =
   return seenOne();
 }
 
-module.exports = { assert, fs, os, path, ROOT, tmpHome, tmpDir, rmrf, run, runUntil, sleep, awaitWatching, it, runAll };
+/**
+ * W3e: wait until the intake of `home` answers its status on its own address (intakePaths: the socket file, or on
+ * Windows a named pipe, which has no file to wait for). True when it answers, false at `deadlineMs`.
+ */
+async function intakeAnswers(home, deadlineMs = 8000) {
+  const { intakePaths, statusOf } = require('../src/opon/intake/server');
+  const sock = intakePaths(home).sock;
+  for (const end = Date.now() + deadlineMs; Date.now() < end; await sleep(50)) if (await statusOf(sock, 300)) return true;
+  return Boolean(await statusOf(sock, 300));
+}
+
+module.exports = { assert, fs, os, path, ROOT, tmpHome, tmpDir, rmrf, run, runUntil, sleep, awaitWatching, it, runAll, slash, WINDOWS, notOnWindows, intakeAnswers, buildMachineOnly };

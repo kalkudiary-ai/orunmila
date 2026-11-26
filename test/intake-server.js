@@ -11,7 +11,7 @@
  */
 
 const net = require('net');
-const { assert, fs, path, tmpDir, rmrf, run, sleep, it, runAll } = require('./helpers');
+const { assert, fs, path, tmpDir, rmrf, run, sleep, it, runAll, notOnWindows } = require('./helpers');
 const { createRouter } = require('../src/opon/intake/router');
 const { createServer, intakePaths, statusOf, readInstallKey } = require('../src/opon/intake/server');
 const { nowMono } = require('../src/opon/intake/mono');
@@ -89,7 +89,7 @@ it(
     const [header, mark] = raw(home, 'ses_s1');
     assert.strictEqual(header.record, 'session_header');
     assert.deepStrictEqual([mark.says, mark.detail.channel, mark.detail.prompt], ['prompted', 'command', 'hello']);
-    assert.strictEqual(fs.statSync(path.dirname(p.sock)).mode & 0o777, 0o700, 'the intake folder is private');
+    if (!notOnWindows('intake-server B1e: the intake folder is private (0700)')) assert.strictEqual(fs.statSync(p.dir).mode & 0o777, 0o700, 'the intake folder is private');
   }),
 );
 
@@ -119,10 +119,22 @@ it(
     const before = routerFor(home);
     before.payload(cc(project).start(), { channel: 'command' });
     before.payload(cc(project).prompt('one'), { channel: 'command' });
-    fs.mkdirSync(path.dirname(p.sock), { recursive: true, mode: 0o700 });
+    fs.mkdirSync(p.dir, { recursive: true, mode: 0o700 });
     const squatter = net.createServer((c) => c.end());
     await new Promise((res) => squatter.listen(p.sock, res));
     try {
+      if (p.pipe) {
+        // W3e (Windows): a named pipe's name cannot be taken back while the squatter listens: the squat is written as
+        // what it is, the start refuses (code squat), and no session is resumed, so no gap claims an address taken back.
+        const r = await serve({ statusTimeoutMs: 200 }).start();
+        assert.deepStrictEqual([r.ok, r.code], [false, 'squat'], JSON.stringify(r));
+        const errs = lines(p.errors);
+        assert.strictEqual(errs.length, 1, JSON.stringify(errs));
+        assert.ok(errs[0].reason.startsWith('squat:') && errs[0].reason.includes('cannot be taken back'), errs[0].reason);
+        assert.ok(!raw(home, 'ses_s1').some((m) => m.says === 'gap'), 'nothing resumed while the intake did not start');
+        assert.ok(!fs.existsSync(p.lock), 'the lock is released');
+        return;
+      }
       const r = await serve({ statusTimeoutMs: 200 }).start();
       assert.strictEqual(r.ok, true, JSON.stringify(r));
       assert.strictEqual(r.squat, true);
@@ -143,12 +155,12 @@ it(
 it(
   'B1e: a stale lock (a dead pid) and a socket file with no listener are taken quietly: no squat, no error',
   withHome(async ({ serve, p }) => {
-    fs.mkdirSync(path.dirname(p.sock), { recursive: true, mode: 0o700 });
+    fs.mkdirSync(p.dir, { recursive: true, mode: 0o700 });
     fs.writeFileSync(p.lock, '999999999\n');
     const dead = net.createServer();
     await new Promise((res) => dead.listen(p.sock, res));
     await new Promise((res) => dead.close(res));
-    fs.writeFileSync(p.sock, ''); // what a crash leaves: the path, nobody listening
+    if (!p.pipe) fs.writeFileSync(p.sock, ''); // what a crash leaves: the path, nobody listening (a named pipe leaves no file: W2a)
     const r = await serve().start();
     assert.strictEqual(r.ok, true, JSON.stringify(r));
     assert.strictEqual(r.squat, false);
@@ -187,7 +199,7 @@ it('B1e: the install key is made once, 32 bytes, private, and read back the same
     const b = readInstallKey(home);
     assert.strictEqual(a.length, 32);
     assert.ok(a.equals(b));
-    assert.strictEqual(fs.statSync(intakePaths(home).key).mode & 0o777, 0o600);
+    if (!notOnWindows('intake-server B1e: the install key is private (0600)')) assert.strictEqual(fs.statSync(intakePaths(home).key).mode & 0o777, 0o600);
   } finally {
     rmrf(base);
   }
@@ -374,6 +386,35 @@ function postFromChild(port, body) {
 
 const mine = { checkSender: (pid) => pid === process.pid };
 
+/**
+ * A program named as Claude Code's is (node under that name): a link `claude` on POSIX; on Windows a copy named
+ * `claude.exe`, since Windows starts only a file with its program extension (W3e).
+ */
+function agentProgram(base) {
+  if (process.platform === 'win32') {
+    const exe = path.join(base, 'claude.exe');
+    fs.copyFileSync(process.execPath, exe);
+    return exe;
+  }
+  const link = path.join(base, 'claude');
+  fs.symlinkSync(process.execPath, link);
+  return link;
+}
+
+it('W3e: the Windows lookups read netstat and tasklist rows: the client end of a loopback connection, a listening row by its 0.0.0.0:0, a program name less .exe (made-up output)', () => {
+  const { netstatRows, tasklistName } = require('../src/opon/intake/peer');
+  const netstat = ['', 'Active Connections', '', '  Proto  Local Address          Foreign Address        State           PID', '  TCP    0.0.0.0:135            0.0.0.0:0              LISTENING       988', '  TCP    127.0.0.1:47391        0.0.0.0:0              ABHÖREN         4100', '  TCP    127.0.0.1:52344        127.0.0.1:47391        ESTABLISHED     1234', '  TCP    127.0.0.1:47391        127.0.0.1:52344        ESTABLISHED     4100', '  TCP    [::]:135               [::]:0                 LISTENING       988', '  UDP    0.0.0.0:500            *:*                                    3000', ''].join('\r\n');
+  const rows = netstatRows(netstat);
+  assert.deepStrictEqual(rows.find((r) => r.local === '127.0.0.1:52344' && r.foreign === '127.0.0.1:47391'), { local: '127.0.0.1:52344', foreign: '127.0.0.1:47391', pid: 1234 }, 'the client end of the connection');
+  assert.strictEqual(rows.find((r) => r.local === '127.0.0.1:47391' && r.foreign === '0.0.0.0:0').pid, 4100, 'the listener, whatever the state word says');
+  assert.ok(!rows.some((r) => r.pid === 3000), 'UDP rows are not read');
+  assert.deepStrictEqual(netstatRows('garbage\nTCP x'), [], 'a short or foreign row is no row');
+  assert.strictEqual(tasklistName('"claude.exe","4242","Console","1","123,456 K"\r\n', 4242), 'claude');
+  assert.strictEqual(tasklistName('"Claude.EXE","4242","Console","1","1 K"', 4242), 'Claude', 'only the extension is dropped; the name is compared as it is');
+  assert.strictEqual(tasklistName('"node.exe","4243","Console","1","1 K"', 4242), null, 'another pid');
+  assert.strictEqual(tasklistName('INFO: No tasks are running which match the specified criteria.', 4242), null);
+});
+
 it(
   'H1: a POST to the HTTP port reaches the session log on channel http, pinned to the posting process, with a 200 and an empty body',
   withHome(async ({ home, project, serve }) => {
@@ -456,8 +497,7 @@ it('H1: the agent-program check accepts a process whose program is named claude 
   assert.strictEqual(isAgentProgram(999999999), false, 'a dead pid is not the agent');
   const base = tmpDir();
   const { spawn } = require('child_process');
-  const link = path.join(base, 'claude');
-  fs.symlinkSync(process.execPath, link);
+  const link = agentProgram(base);
   const k = spawn(link, ['-e', 'setTimeout(()=>{},3000)']);
   try {
     await sleep(300);
@@ -495,8 +535,7 @@ it(
     try {
       const st = run('bin/orunmila.js', { args: ['intake', 'status'], env });
       assert.ok(st.stdout.includes(`http 127.0.0.1:${free}`), st.stdout);
-      const link = path.join(base, 'claude');
-      fs.symlinkSync(process.execPath, link);
+      const link = agentProgram(base);
       const body = JSON.stringify(cc(project).prompt('from claude'));
       const code = `const h=require('http');const d=process.argv[1];const r=h.request({host:'127.0.0.1',port:${free},path:'/hook',method:'POST',headers:{'content-length':Buffer.byteLength(d)}},(s)=>{s.resume();s.on('end',()=>process.stdout.write(String(process.pid)))});r.end(d);`;
       const { spawn } = require('child_process');

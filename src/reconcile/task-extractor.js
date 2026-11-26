@@ -111,7 +111,10 @@ function extractSubtasks(promptText) {
 // class of fault as P1-2 (extension-vs-basename) one level up.
 // `(?:\.[\w-]+)*` lets the basename span inner dots; the trailing extension
 // group still anchors the match, and backtracking hands `.js` back to it.
-const PATH_RE = /(?:[\w./-]*\/)?[\w-]+(?:\.[\w-]+)*\.(?:js|ts|jsx|tsx|py|rb|go|rs|java|json|md|yml|yaml|css|html|sql|sh|toml)\b/gi;
+// W3b: a Windows drive letter is kept when a `/` follows it (C:/proj/src/a.ts), so the path is read as written; without
+// it the reader took /proj/src/a.ts, which is under no Windows root. `\b` keeps a letter inside a word (file:/x.js) out.
+// A path written with `\` is still read as its file name (basename(), below), as before.
+const PATH_RE = /(?:\b[A-Za-z]:(?=\/))?(?:[\w./-]*\/)?[\w-]+(?:\.[\w-]+)*\.(?:js|ts|jsx|tsx|py|rb|go|rs|java|json|md|yml|yaml|css|html|sql|sh|toml)\b/gi;
 const CODESPAN_RE = /`([^`]+)`/g;
 const DQUOTE_RE = /"([^"]+)"/g;
 // A single quote is a quote mark only where a quote can open or close: not

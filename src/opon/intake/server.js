@@ -34,7 +34,9 @@
  *               taken under the takeover lock; no pid refuses, code `error`); the
  *               socket (an intake already answering refuses; any other listener
  *               is a squat (test 83): written to the error log, the path removed
- *               and the address taken back; a path nobody listens on is removed
+ *               and the address taken back (on Windows, W3e: a named pipe cannot be
+ *               taken back while it listens, so the squat is written and the start
+ *               refuses, code `squat`); a path nobody listens on is removed
  *               quietly); router.resume() (test 84; a squat named in each gap);
  *               listen; router.poll() every pollMs.
  *     .stop(reason) -> the router's stop (LD56), then the socket and the lock
@@ -434,6 +436,13 @@ function createServer({ home, router, pollMs = 100, statusTimeoutMs = 1000, maxL
         return { ok: false, code: 'running', reason: `an intake (pid ${pr.status.pid}) already answers on ${p.sock} without holding the lock` };
       }
       const squat = pr.listening;
+      if (squat && p.pipe) {
+        // W3e (Windows): while another process listens on a named pipe its name cannot be taken (the first instance owns
+        // it), so the address is not taken back: the squat is written as what it is, and the start refuses, resuming nothing.
+        router.error(`squat: another process is listening on the intake's named pipe ${p.sock}; on Windows a pipe's name cannot be taken back while it listens, so the intake did not start: end that process and start the intake again`, null);
+        releaseLock();
+        return { ok: false, code: 'squat', reason: `another process is listening on the intake's named pipe ${p.sock}; the intake did not start` };
+      }
       if (squat) {
         router.error(
           `squat: another process was listening on the intake's socket ${p.sock} when the intake started; its pid is not known (Node cannot read a Unix socket's peer); the intake removed the path and took the address back`,

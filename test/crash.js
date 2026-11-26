@@ -95,7 +95,9 @@ const downtime = (raw) => raw.filter((m) => m.says === 'gap' && m.detail && m.de
 
 for (const [name, test, cut, planned] of [
   ['test 12', 'killed with SIGKILL', (pid) => process.kill(pid, 'SIGKILL'), false],
-  ['test 18', 'stopped (SIGTERM)', (pid) => process.kill(pid, 'SIGTERM'), true],
+  // W3f: on Windows a SIGTERM ends the process at once, no handler runs (Node's process.kill), so it leaves what a kill
+  // leaves: no closing note, and the gap from the last record before the cut. Asserted as such there, never skipped.
+  ['test 18', 'stopped (SIGTERM)', (pid) => process.kill(pid, 'SIGTERM'), process.platform !== 'win32'],
 ]) {
   it(`CR1 ${name} (LD250): the intake ${test} mid-session and started again: one gap covering the downtime, the live odù log equal to replay of the raw log, and verify reports the gap`, async () => {
     const base = tmpDir();

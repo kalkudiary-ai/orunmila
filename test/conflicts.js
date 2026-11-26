@@ -11,9 +11,10 @@
  * made-up paths. Quiet window 1,500 ms, lag grace 3,000 ms.
  */
 
-const { assert, fs, path, tmpDir, rmrf, it, runAll } = require('./helpers');
+const { assert, fs, path, tmpDir, rmrf, it, runAll, slash } = require('./helpers');
 const { makeLog, M, ns, wall, FP } = require('./helpers-opon');
 const { replayFolder } = require('../src/opon/replay');
+const { claimPath } = require('../src/opon/settle/engine');
 const { compile } = require('../src/verify/schema');
 
 const checkOdu = compile(JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'spec', 'odu.schema.json'), 'utf8')));
@@ -350,7 +351,7 @@ it('C3d1: a change this session\'s turn made backs the claim, written as the rep
   const odus = replay((append, log) => {
     append(M.edited(0, 'e1', 'src/config.ts'));
     append(M.disk(50, 'src/config.ts'));
-    s.t1 = append(claimed(1000, 't1', `I updated src/config.ts. I updated config.ts. I updated ./src/config.ts. I updated ${log.root}/src/config.ts.`));
+    s.t1 = append(claimed(1000, 't1', `I updated src/config.ts. I updated config.ts. I updated ./src/config.ts. I updated ${slash(log.root)}/src/config.ts.`)); // W3b: C:/... on Windows
     append(M.turnEnded(1000));
     s.t2 = append(claimed(10000, 't2', 'I updated src/late.ts.'));
     append(M.edited(10000, 'e2', 'src/late.ts', 'modified', 't2'));
@@ -362,6 +363,23 @@ it('C3d1: a change this session\'s turn made backs the claim, written as the rep
   backed(odus, 't2', s.t2);
   const edit = of(odus, file('src/config.ts'));
   assert.deepStrictEqual([witnesses(edit), edit.conflicts], [['saw', 'saw'], []], 'the change\'s own odù is unchanged');
+});
+
+it('W3b: a claim path is matched on a Windows root: either separator, the root ignoring case where it folds; the reader keeps the drive; POSIX paths as before', () => {
+  const win = 'C:\\Users\\me\\proj';
+  assert.deepStrictEqual(
+    ['C:/Users/me/proj/src/a.ts', 'C:\\Users\\me\\proj\\src\\a.ts', 'c:/users/ME/proj/src/A.ts', './src/a.ts', 'src\\a.ts'].map((w) => claimPath(w, win, true)),
+    ['src/a.ts', 'src/a.ts', 'src/a.ts', 'src/a.ts', 'src/a.ts'],
+  );
+  assert.strictEqual(claimPath('/Users/me/proj/src/a.ts', win, true), '/Users/me/proj/src/a.ts', 'no drive: not under a root that has one');
+  assert.strictEqual(claimPath('D:/Users/me/proj/src/a.ts', win, true), 'D:/Users/me/proj/src/a.ts', 'another drive: outside, kept as written (intake records outside paths unfolded)');
+  const { extractTargets } = require('../src/reconcile/task-extractor');
+  const raws = (t) => extractTargets(t).filter((x) => x.kind === 'path').map((x) => x.raw);
+  assert.deepStrictEqual(raws('I updated C:/Users/me/proj/src/a.ts and file:/x/b.ts.'), ['C:/Users/me/proj/src/a.ts', '/x/b.ts'], 'the drive kept only as a word of its own before /');
+  assert.strictEqual(claimPath('C:/Users/me/proj/src/A.ts', win, false), 'src/A.ts', 'case kept where the root does not fold it');
+  assert.strictEqual(claimPath('c:/users/me/proj/src/a.ts', win, false), 'c:/users/me/proj/src/a.ts', 'and then another spelling is another path');
+  assert.deepStrictEqual(['/r/p/src/a.ts', './src/a.ts', 'src/a.ts', '/r/pq/a.ts'].map((w) => claimPath(w, '/r/p', false)), ['src/a.ts', 'src/a.ts', 'src/a.ts', '/r/pq/a.ts'], 'POSIX as before');
+  assert.strictEqual(claimPath('/src/a.ts', '/', false), '/src/a.ts', 'a root of / changes nothing, as before');
 });
 
 it('C3d1 line 432: a file claim whose only change of this turn has a net change of false is phantom, unchanged, citing it; a change only the Sentinel saw is not this session\'s and gives not_credited, medium; an earlier turn\'s change does not back this turn\'s claim', () => {
@@ -434,7 +452,7 @@ it('C3d2 test 5: an agent edit its turn\'s claims never mention is 1 odù, expla
 
 it('C3d2: a change its turn\'s claims mention is not silent: the repo path, a bare name, ./path, an absolute path under the root, or a path in a claim with no action verb', () => {
   const odus = replay((append, log) => {
-    const texts = ['I updated src/a.ts.', 'I updated b.ts.', 'I updated ./src/c.ts.', `I updated ${log.root}/src/d.ts.`, 'All tests pass in src/e.ts.'];
+    const texts = ['I updated src/a.ts.', 'I updated b.ts.', 'I updated ./src/c.ts.', `I updated ${slash(log.root)}/src/d.ts.`, 'All tests pass in src/e.ts.']; // W3b: C:/... on Windows
     for (const [i, f] of ['src/a.ts', 'src/deep/b.ts', 'src/c.ts', 'src/d.ts', 'src/e.ts'].entries()) {
       const t = `t${i + 1}`;
       append(M.edited(i * 10000, `e${i + 1}`, f, 'modified', t));

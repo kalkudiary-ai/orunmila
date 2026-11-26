@@ -9,7 +9,7 @@
  * homes; made-up paths and contents only.
  */
 
-const { assert, fs, path, tmpDir, rmrf, it, runAll, run } = require('./helpers');
+const { assert, fs, path, tmpDir, rmrf, it, runAll, run, slash } = require('./helpers');
 const crypto = require('crypto');
 const { createRouter } = require('../src/opon/intake/router');
 const { nowMono } = require('../src/opon/intake/mono');
@@ -70,7 +70,7 @@ it('test 64: a Glove write the Sentinel also saw shows both on its row; one outs
     const rows = trail.turns.flatMap((x) => x.trail);
     const hookEdit = rows.find((r) => r.type === 'file_write' && r.source === 'hook' && r.path === 'src/a.js');
     const disk = rows.find((r) => r.source === 'fs-sentinel' && r.path === 'src/a.js');
-    const far = rows.find((r) => r.type === 'file_write' && r.source === 'hook' && r.path === path.join(t.outside, 'notes.txt'));
+    const far = rows.find((r) => r.type === 'file_write' && r.source === 'hook' && r.path === slash(path.join(t.outside, 'notes.txt'))); // recorded with `/` on every OS
     assert.ok(hookEdit && disk && far, JSON.stringify(rows.map((r) => [r.type, r.source, r.path])));
     assert.deepStrictEqual(hookEdit.witnesses, { glove: { status: 'saw' }, sentinel: { status: 'saw' } });
     assert.deepStrictEqual(disk.witnesses, { glove: { status: 'saw' }, sentinel: { status: 'saw' } });

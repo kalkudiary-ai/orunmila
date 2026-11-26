@@ -2,6 +2,8 @@
 // Copyright 2026 KALKU DIGITAL SOLUTIONS LIMITED
 'use strict';
 
+require('./helpers').buildMachineOnly('leopard-check', 'scripts/leopard-check.js, the Leopard checker'); // W3g (LD342)
+
 /**
  * test/leopard-check.js — scripts/leopard-check.js, the Leopard protocol's
  * checker (rules doc, overrides block, "The checker").

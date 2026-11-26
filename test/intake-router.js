@@ -10,7 +10,7 @@
  * Orunmila's home are throwaway folders. Nothing here reads recorded data.
  */
 
-const { assert, fs, path, tmpDir, rmrf, it, runAll } = require('./helpers');
+const { assert, fs, path, tmpDir, rmrf, it, runAll, slash } = require('./helpers');
 const { createRouter } = require('../src/opon/intake/router');
 const { verifySessionLog } = require('../src/opon/ledger/session-log');
 const { isCaseInsensitive } = require('../src/opon/intake/paths');
@@ -157,7 +157,7 @@ it(
     const [a, b, o] = marks(dir('ses_r1'));
     const want = isCaseInsensitive(project) ? 'src/a.ts' : 'src/A.ts';
     assert.deepStrictEqual([a.target.path, b.target.path], [want, want]);
-    assert.deepStrictEqual(o.target, { kind: 'file', path: fs.realpathSync(out), outside: true });
+    assert.deepStrictEqual(o.target, { kind: 'file', path: slash(fs.realpathSync(out)), outside: true }); // its real path, with `/` on every OS
   }),
 );
 

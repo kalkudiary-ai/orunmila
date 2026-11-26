@@ -8,7 +8,7 @@
  * on throwaway folders; made-up file contents only.
  */
 
-const { assert, fs, path, tmpDir, rmrf, it, runAll, sleep, awaitWatching } = require('./helpers');
+const { assert, fs, path, tmpDir, rmrf, it, runAll, sleep, awaitWatching, slash, notOnWindows, intakeAnswers } = require('./helpers');
 const crypto = require('crypto');
 const { createRouter } = require('../src/opon/intake/router');
 const { checkLog, verifySession } = require('../src/verify/session');
@@ -57,7 +57,7 @@ it("Q12 (a) (LD212, LD289): with extra folders named (ORUNMILA_WATCH_EXTRA, off 
     try {
       router.payload({ session_id: 'sx', hook_event_name: 'SessionStart', cwd: root }, { channel: 'command' });
       assert.deepStrictEqual(router.watching(), on ? [extra, root].sort() : [root]);
-      const outside = (p) => marks().some((m) => m.target.path === p && m.target.outside === true);
+      const outside = (p) => marks().some((m) => m.target.path === slash(p) && m.target.outside === true); // recorded with `/` on every OS
       if (on) {
         assert.ok(await awaitWatching(extra, outside), 'a write in the extra folder became a sentinel mark naming its absolute path, outside');
         const m = marks().find((x) => x.target.outside);
@@ -142,6 +142,7 @@ it("B4 (N3): a write in the project's .orunmila/ is seen; node_modules stays out
 
 it('B4 (N2): a folder the Sentinel cannot watch is a gap mark naming it, never only printed', async () => {
   if (process.getuid && process.getuid() === 0) return; // root reads a 000 folder
+  if (notOnWindows('intake-sentinel B4 (N2): chmod 000 cannot shut a folder on Windows')) return;
   const t = setup();
   const shut = path.join(t.root, 'shut');
   fs.mkdirSync(shut);
@@ -213,9 +214,9 @@ it('B4 CLI: intake run watches a session\'s root, so a write there reaches its l
   const root = fs.realpathSync(tmpDir());
   const env = { ...process.env, ORUNMILA_HOME: home, ORUNMILA_INTAKE_PORT: '0' };
   const child = spawn(process.execPath, [path.join(__dirname, '..', 'bin', 'orunmila.js'), 'intake', 'run'], { env, stdio: 'ignore' });
-  const sock = path.join(home, 'intake', 'intake.sock');
+  const sock = require('../src/opon/intake/server').intakePaths(home).sock; // W3e: a named pipe on Windows
   try {
-    assert.ok(await until(() => fs.existsSync(sock)), 'the intake listens');
+    assert.ok(await intakeAnswers(home), 'the intake listens');
     await new Promise((resolve, reject) => {
       const c = net.createConnection(sock, () => c.end(JSON.stringify({ op: 'payload', payload: { session_id: 'cli1', hook_event_name: 'SessionStart', cwd: root } }) + '\n'));
       c.on('close', resolve);

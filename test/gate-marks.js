@@ -16,6 +16,7 @@ const { spawn } = require('child_process');
 const { createRouter } = require('../src/opon/intake/router');
 const { checkLog } = require('../src/verify/session');
 const { nowMono } = require('../src/opon/intake/mono');
+const { intakePaths } = require('../src/opon/intake/server');
 
 const SRC = path.join(__dirname, '..', 'src');
 const HOOK = path.join(SRC, 'capture', 'claude-code', 'law-gate.js');
@@ -74,7 +75,7 @@ it('B5 (NF6): a check made over a malformed law file records the loader\'s words
 /** Run the gate hook with a fake intake listening; returns { stdout, lines }. */
 async function runHook({ flag, payload, home, cwd, args = [] }) {
   fs.mkdirSync(path.join(home, 'intake'), { recursive: true });
-  const sock = path.join(home, 'intake', 'intake.sock');
+  const sock = intakePaths(home).sock; // W3e: the intake's own address, a named pipe on Windows (W2a)
   const lines = [];
   const server = net.createServer((c) => {
     let buf = '';

@@ -2,6 +2,8 @@
 // Copyright 2026 KALKU DIGITAL SOLUTIONS LIMITED
 'use strict';
 
+require('./helpers').buildMachineOnly('mutation-gate', 'scripts/mutation-gate.js, the publish-time mutation gate'); // W3g (LD342)
+
 /**
  * test/mutation-gate.js — the mutation gate itself (scripts/mutation-gate.js),
  * and NF72: the gate must reach Phase 1's new modules, not only 0.2.2's files.

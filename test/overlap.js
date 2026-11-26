@@ -113,6 +113,10 @@ it('concurrent: Windows roots nest by whole folder names too (NF80)', () => {
   assert.deepStrictEqual(concurrent(spans, 'C:\\work\\a', '500'), ['w1', 'w2', 'w4']);
   assert.deepStrictEqual(concurrent(spans, 'C:\\work\\ab', '500'), ['w3', 'w4']);
   assert.deepStrictEqual(concurrent(spans, 'D:\\work\\a', '500'), [], 'another drive is another folder');
+  // W3b: replay counts a session whose log does not verify as active in every folder, with root '/' (LD179); a Windows
+  // root does not start with '/', and was left out of "every folder" until W3b (attribute-overlap's A2 LD179, on Windows).
+  assert.deepStrictEqual(concurrent([...spans, at('lost', '/')], 'D:\\work\\a', '500'), ['lost'], "'/' holds a Windows folder too");
+  assert.deepStrictEqual(concurrent([...spans, at('lost', '/')], 'C:\\work\\ab', '500'), ['lost', 'w3', 'w4']);
 });
 
 it('concurrent: a header-only session is active only at its start', () => {

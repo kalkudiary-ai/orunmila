@@ -256,6 +256,24 @@ function explained(kind, ids) {
   return { attribution: 'explained', cause: ids.length > 1 ? { kind, ref: ids[0], also: ids.slice(1) } : { kind, ref: ids[0] } };
 }
 const UNEXPLAINED = { attribution: 'unexplained', cause: null };
+
+/**
+ * C3d1 (LD192 (2)): a path as the agent wrote it, made comparable with targets: less a leading ./, an absolute path under
+ * the root relative. Q25 (LD233): on a root the header says folds case (`ci` true), the root is matched ignoring case and
+ * a path inside it lower-cased, as intake names every mark's target there. W3b (Windows): `\` is read as `/` in both the
+ * path and the root, as intake records every path, so C:/proj/src/a.ts (the claim reader keeps the drive) is under a root
+ * recorded as C:\proj.
+ */
+function claimPath(w, root, ci) {
+  const fwd = (s) => String(s).replace(/\\/g, '/');
+  let p = fwd(w).replace(/^\.\//, '');
+  if (root) {
+    const r = fwd(root).replace(/(.)\/+$/, '$1'); // C:\ is C:; a lone / stays /
+    if (ci === true ? p.toLowerCase().startsWith(r.toLowerCase() + '/') : p.startsWith(r + '/')) p = p.slice(r.length + 1);
+  }
+  if (ci === true && !p.startsWith('/') && !/^[A-Za-z]:\//.test(p)) p = p.toLowerCase(); // a path still absolute is outside: as written
+  return p;
+}
 /** A conflict's copy, its lists copied too (C3a). */
 const copyConflict = (c) => ({ ...c, sources: [...c.sources], said: Object.fromEntries(Object.entries(c.said).map(([k, v]) => [k, [...v]])), ...(c.sessions ? { sessions: [...c.sessions] } : {}) });
 const CHANGES_A_FILE = new Set(['created', 'modified', 'deleted']);
@@ -458,17 +476,8 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
     return record(cg);
   }
 
-  /**
-   * C3d1 (LD192 (2)): a path as the agent wrote it, made comparable with targets: less a leading ./, an absolute path under the root
-   * relative. Q25 (LD233): on a root the header says folds case, the root is matched ignoring case and a path inside it lower-cased,
-   * as intake names every mark's target there.
-   */
-  function asWritten(w) {
-    let p = w.replace(/^\.\//, '');
-    if (root && (ci === true ? p.toLowerCase().startsWith(root.toLowerCase() + '/') : p.startsWith(root + '/'))) p = p.slice(root.length + 1);
-    if (ci === true && !p.startsWith('/')) p = p.toLowerCase();
-    return p;
-  }
+  /** C3d1, Q25, W3b: a path as the agent wrote it, made comparable with targets (claimPath, above). */
+  const asWritten = (w) => claimPath(w, root, ci);
   /** C3d1: target path `t` is the path written as `p`, or ends with `/` and it (a bare name matches every file of that name). */
   const named = (t, p) => typeof t === 'string' && (t === p || t.endsWith('/' + p));
 
@@ -1084,4 +1093,4 @@ function createOpon({ sessionId, config, baseline = null, byproducts = null, roo
   return { push, end, fingerprintsDue, lastStates };
 }
 
-module.exports = { createOpon, actionOf };
+module.exports = { createOpon, actionOf, claimPath };

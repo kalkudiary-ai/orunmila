@@ -44,7 +44,8 @@ function tinyCode() {
  * callback (L1c), so a test can feed a live engine; `sealedHeader` is the header as written.
  */
 function makeLog(base, config = {}, { baseline = null, byproducts = null, sessionId = SID, root: rootIn = null, startMs = 0, onRecord = null, guard = null } = {}) {
-  const root = rootIn || fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'orunmila-root-')));
+  // .native: on Windows the long name (CI's temp folder is RUNNER~1, and a claim reader's path ends at a `~`); elsewhere as realpathSync.
+  const root = rootIn || fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'orunmila-root-')));
   const dir = path.join(base, sessionId);
   if (byproducts) {
     fs.mkdirSync(path.join(root, '.orunmila'));

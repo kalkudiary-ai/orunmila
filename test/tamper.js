@@ -9,7 +9,7 @@
  * made-up contents only.
  */
 
-const { assert, fs, path, tmpDir, rmrf, it, runAll, awaitWatching } = require('./helpers');
+const { assert, fs, path, tmpDir, rmrf, it, runAll, awaitWatching, slash } = require('./helpers');
 const crypto = require('crypto');
 const { createRouter } = require('../src/opon/intake/router');
 const { checkLog } = require('../src/verify/session');
@@ -123,9 +123,13 @@ it("A3 (NF41): Orunmila's own code changed mid-session is a tampered mark (orunm
     const m = t.tampered();
     assert.strictEqual(m.length, 1);
     assert.strictEqual(m[0].detail.what, 'orunmila_code');
-    assert.deepStrictEqual(m[0].target, { kind: 'dir', path: t.code, outside: true });
+    assert.deepStrictEqual(m[0].target, { kind: 'dir', path: slash(t.code), outside: true }); // recorded with `/` on every OS
     const header = checkLog(path.join(t.home, 'sessions', 's1'), 'raw').records[0].rec;
     assert.strictEqual(m[0].detail.fingerprint_before, header.orunmila.code_fingerprint);
+    // W3b: after a restart the change already recorded is not recorded again (the outside path read back, C:/ on Windows).
+    t.again();
+    t.send();
+    assert.strictEqual(t.tampered().length, 1, 'not recorded again after a restart');
   } finally {
     t.done();
   }
@@ -151,7 +155,7 @@ it("test 10: with the Sentinel watching, any write in the project's .orunmila/ i
   try {
     t.send();
     const dir = path.join(t.root, '.orunmila');
-    const seen = (p) => t.tampered().some((m) => m.target.path === path.relative(t.root, p));
+    const seen = (p) => t.tampered().some((m) => m.target.path === slash(path.relative(t.root, p)));
     assert.ok(await awaitWatching(dir, seen), 'a probe write in .orunmila/ became a tampered mark');
     // Wait for this write's own mark, then for any probe still in its debounce,
     // so the count below is not moved by a late probe (seen once: B3b).

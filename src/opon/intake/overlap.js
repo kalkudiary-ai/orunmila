@@ -44,9 +44,13 @@
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
-/** A root with `/` separators and no trailing one (`/` becomes '', which holds every absolute path). */
+/**
+ * A root with `/` separators and no trailing one. `/` becomes '', which holds every path: every POSIX absolute path, and
+ * (W3b) every Windows one too (C:/proj does not start with `/`), so replay's lost session, active "in every folder", is
+ * active in a Windows project as well.
+ */
 const folderOf = (root) => String(root).replace(/\\/g, '/').replace(/\/+$/, '');
-const within = (child, parent) => child === parent || child.startsWith(parent + '/');
+const within = (child, parent) => child === parent || parent === '' || child.startsWith(parent + '/');
 const sharesFiles = (a, b) => {
   const x = folderOf(a);
   const y = folderOf(b);

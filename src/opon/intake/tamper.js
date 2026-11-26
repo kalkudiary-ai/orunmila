@@ -64,7 +64,9 @@ function createTamperWatch({ header, codeRoot, lawPacks, prior = [], clock }) {
   const items = itemsOf(header, codeRoot, lawPacks);
   const last = new Map(items.map((i) => [i.abs, i.frozen])); // abs path -> the last fingerprint recorded
   const whatOf = new Map(items.map((i) => [i.abs, i.what]));
-  const absOf = (m) => (path.isAbsolute(m.target.path) ? m.target.path : path.join(header.project_root, m.target.path));
+  // W3b: a recorded path has `/` separators (an outside one is absolute: C:/x on Windows); path.resolve gives the native
+  // spelling the items are keyed by, so after a restart a change already recorded is not recorded again on Windows either.
+  const absOf = (m) => path.resolve(header.project_root, m.target.path);
   for (const m of prior) if (m && m.target && typeof m.target.path === 'string' && m.detail) last.set(absOf(m), m.detail.fingerprint);
 
   function mark(abs, what, before, after, dir) {

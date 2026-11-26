@@ -7,7 +7,7 @@
  * LD169; brief v4 lines 385, 387, 390, 250). Made-up files in a temp folder.
  */
 
-const { assert, fs, path, tmpDir, rmrf, it, runAll } = require('./helpers');
+const { assert, fs, path, tmpDir, rmrf, it, runAll, notOnWindows, intakeAnswers } = require('./helpers');
 const crypto = require('crypto');
 const { snapshot } = require('../src/opon/net/baseline');
 const { fingerprint } = require('../src/opon/intake/redact');
@@ -89,6 +89,7 @@ it('N1a: the snapshot file is canonical JSON lines, the same text twice, and its
 });
 
 it('N1c: a file or folder that cannot be read is listed as unreadable, with its error code, and the walk goes on (cold pass of N1b)', () => {
+  if (notOnWindows('baseline N1c: chmod 000 cannot make a file unreadable on Windows')) return;
   const root = tree();
   try {
     fs.writeFileSync(path.join(root, 'src', 'locked.txt'), 'x');
@@ -114,7 +115,7 @@ const { spawn } = require('child_process');
 const { createRouter } = require('../src/opon/intake/router');
 const { createSessionLog, openSessionLog, verifySessionLog } = require('../src/opon/ledger/session-log');
 const { buildHeader } = require('../src/opon/intake/header');
-const { oponLive } = require('../src/opon/intake/server');
+const { oponLive, intakePaths } = require('../src/opon/intake/server');
 const { nowMono } = require('../src/opon/intake/mono');
 const { compile } = require('../src/verify/schema');
 
@@ -163,7 +164,7 @@ it(
       for (const e of entries) assert.deepStrictEqual(checkEntry(e), [], JSON.stringify(e));
       assert.ok(!bytes.toString('utf8').includes(ENV_VALUE), 'the value is never written');
       assert.ok(entries[0].fingerprint.startsWith('hmac-sha256:'), 'the .env is keyed');
-      assert.strictEqual((fs.statSync(path.join(dir, 'baseline.jsonl')).mode & 0o777).toString(8), '600');
+      if (!notOnWindows('baseline N1b: baseline.jsonl is owner-only (0600); Windows has no POSIX modes')) assert.strictEqual((fs.statSync(path.join(dir, 'baseline.jsonl')).mode & 0o777).toString(8), '600');
       const v = verifySessionLog(dir);
       assert.strictEqual(v.ok, true, v.words);
       assert.match(v.words, /; the baseline snapshot of 3 entries matches the header\.$/);
@@ -176,6 +177,7 @@ it(
   'N1c: with the baseline on, a file that cannot be read never stops the session log being made',
   withProject(
     ({ router, start, project, dir }) => {
+      if (notOnWindows('baseline N1c (live): chmod 000 cannot make a file unreadable on Windows')) return;
       fs.writeFileSync(path.join(project, 'src', 'locked.txt'), 'x');
       fs.chmodSync(path.join(project, 'src', 'locked.txt'), 0o000);
       const r = router.payload(start, { channel: 'command' });
@@ -276,14 +278,14 @@ async function intakeRunFiles(env, last = 'raw.jsonl') {
     env: { ...process.env, ORUNMILA_HOME: home, ORUNMILA_INTAKE_PORT: '0', ORUNMILA_OPON_LIVE: '', ...env },
     stdio: 'ignore',
   });
-  const sock = path.join(home, 'intake', 'intake.sock');
+  const sock = intakePaths(home).sock; // W3e: a named pipe on Windows
   const dir = path.join(home, 'sessions', 'ses_b3');
   const until = async (cond) => {
     for (let end = Date.now() + 8000; Date.now() < end; await new Promise((r) => setTimeout(r, 50))) if (cond()) return true;
     return cond();
   };
   try {
-    assert.ok(await until(() => fs.existsSync(sock)), 'the intake did not start');
+    assert.ok(await intakeAnswers(home), 'the intake did not start');
     await new Promise((resolve, reject) => {
       const c = net.createConnection(sock, () => c.end(JSON.stringify({ op: 'payload', payload: { session_id: 'ses_b3', cwd: project, hook_event_name: 'SessionStart', source: 'startup' } }) + '\n'));
       c.on('error', reject);

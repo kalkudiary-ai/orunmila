@@ -11,7 +11,7 @@
  * labelled so (brief line 761): made-up paths. Quiet window 1,500 ms, lag grace 3,000 ms.
  */
 
-const { assert, fs, path, tmpDir, rmrf, it, runAll } = require('./helpers');
+const { assert, fs, path, tmpDir, rmrf, it, runAll, slash } = require('./helpers');
 const { makeLog, M, wall, ns } = require('./helpers-opon');
 const { replayFolder } = require('../src/opon/replay');
 const { compile } = require('../src/verify/schema');
@@ -341,7 +341,7 @@ it("F1 (LD226; Q24 checklist rows P-k7-*, W-*-baseline): a phantom file claim is
     const base = tmpDir();
     try {
       const log = makeLog(base, { exclusions: k.exclusions }, { baseline: [...[['r', '1'], ['h', '2'], ['a', '3']].map(([n, f]) => ({ path: `src/${n}.ts`, size: 4, fingerprint: FP(f) })), ...k.extra] });
-      const root = log.header.project_root;
+      const root = slash(log.header.project_root); // W3b: an absolute path as an agent writes it, C:/... on Windows
       const written = ['src/r.ts', './src/r.ts', `${root}/src/r.ts`, './src/h.ts', `${root}/src/h.ts`, 'h.ts', 'src/a.ts', 'src/l.ts', 'src/o.ts', 'src/u.ts', 'src/locked/new.ts', 'src/linkdir/new.ts', 'src/absent.ts', '/elsewhere/x.ts', '../x.ts', 'r.ts'];
       log.append(said(2000, written.map((w) => `I updated ${w}.`).join(' ')));
       log.append(M.turnEnded(2000));

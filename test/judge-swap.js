@@ -9,7 +9,7 @@
  * interface, at its two calls (the closeout and replay). Hand-built payloads in throwaway folders (brief line 761).
  */
 
-const { assert, fs, path, ROOT, tmpDir, rmrf, it, runAll } = require('./helpers');
+const { assert, fs, path, ROOT, tmpDir, rmrf, it, runAll, slash } = require('./helpers');
 const { createRouter } = require('../src/opon/intake/router');
 const iface = require('../src/babalawo/interface');
 const babalawo = require('../src/babalawo');
@@ -101,7 +101,7 @@ it('BB11, line 682: nothing under src/opon/ reaches src/babalawo/ except through
   for (const f of files) {
     for (const m of fs.readFileSync(f, 'utf8').matchAll(/\brequire\(\s*['"]([^'"]+)['"]\s*\)/g)) {
       const target = path.resolve(path.dirname(f), m[1]);
-      if (target.startsWith(path.join(ROOT, 'src', 'babalawo'))) reach.push(`${path.relative(ROOT, f)} -> ${path.relative(ROOT, target)}`);
+      if (target.startsWith(path.join(ROOT, 'src', 'babalawo'))) reach.push(`${slash(path.relative(ROOT, f))} -> ${slash(path.relative(ROOT, target))}`);
     }
   }
   assert.deepStrictEqual(reach.sort(), ['src/opon/intake/live.js -> src/babalawo/interface', 'src/opon/replay/index.js -> src/babalawo/interface']);

@@ -47,7 +47,7 @@ const str = (s, pad) => `${pad}<string>${xml(s)}</string>`;
 
 /** `args`: what node runs (PM2c3, LD334: the starter and `bin/orunmila.js intake run`); `script intake run` by default. */
 function plistFor({ node, script, home, env = {}, args = null }) {
-  const out = path.join(home, 'intake', 'intake.out');
+  const out = path.posix.join(home, 'intake', 'intake.out'); // W3c: a plist is launchd's, so macOS paths on every OS that writes one
   const lines = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',

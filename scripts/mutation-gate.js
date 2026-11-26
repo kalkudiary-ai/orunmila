@@ -2040,10 +2040,11 @@ const MUTANTS = [
     from: "if (rec.says === 'overlapped') applyOverlapped(st.others, rec);", to: 'void 0;',
     fails: ['L2 Q11 (2) (a)'] },
   { id: "L2-4 a session's end is not named to its peers", file: 'src/opon/intake/live.js', test: 'test/opon-live.js',
-    from: 'if (ended) for (const t of held.values())', to: 'if (false) for (const t of held.values())',
+    from: '    if (ended) {\n      for (const t of held.values())', to: '    if (false) {\n      for (const t of held.values())', // AT1b braced it
     fails: ['L2 Q11 (2) (a)', 'L2 through the router'] },
   { id: 'L2-5 a new session is not named to its peers', file: 'src/opon/intake/live.js', test: 'test/opon-live.js',
-    from: 'if (!st.others.some((s) => s.id === t.span.id)) receive(overlapMark(st, t));', to: 'void 0;',
+    // AT1b (LD330) folded the two directions into one loop: the new session's own log no longer names its peers.
+    from: 'if (!into.others.some((s) => s.id === about.span.id)) receive(overlapMark(into, about));', to: 'if (!into.others.some((s) => s.id === about.span.id) && into !== st) receive(overlapMark(into, about));',
     fails: ['L2 Q11 (2) (a)', 'L2 through the router'] },
   { id: 'L2-6 the router never pairs', file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
     from: 'if (s.lv) live.pair(s.lv); // L2 (LD202)', to: 'void 0; // L2 (LD202)', // SN1's finish pairs too, without the comment
@@ -2767,7 +2768,7 @@ const MUTANTS = [
     fails: ['SN2 (LD295)'] },
   // LA3 (LD290): the launch agent keeps every flag the intake reads.
   { id: "LA3-1 the plist drops the judge's, the guard's and the extra folders' flags", file: 'src/opon/intake/launch-agent.js', test: 'test/launch-agent.js',
-    from: ", 'ORUNMILA_JUDGE_LIVE', 'ORUNMILA_LOG_GUARD', 'ORUNMILA_WATCH_EXTRA', 'ORUNMILA_ASYNC_START'];", to: '];', // SN1 added a key
+    from: ", 'ORUNMILA_JUDGE_LIVE', 'ORUNMILA_LOG_GUARD', 'ORUNMILA_WATCH_EXTRA', 'ORUNMILA_ASYNC_START', 'ORUNMILA_PEER_BUSY'];", to: ", 'ORUNMILA_PEER_BUSY'];", // SN1 and AT1b (LD330) added keys
     fails: ['LA3 (LD290)'] },
   // Q12 (a) (LD289): extra folders the Sentinel watches.
   { id: 'Q12-1 the extra folders are not watched', file: 'src/opon/intake/router.js', test: 'test/intake-sentinel.js',
@@ -3285,6 +3286,71 @@ MUTANTS.push(
     from: 'span.busy = i >= 0 ? spans[i].busy : null;',
     to: 'span.busy = null;',
     fails: ['AT1 (LD330): a note repeating the state changes nothing'],
+  },
+  // AT1b (LD330): the live intake writes the busy notes, behind ORUNMILA_PEER_BUSY=1.
+  {
+    id: 'AT1b-1 a turn\'s end never makes a peer idle',
+    file: 'src/opon/intake/live.js',
+    test: 'test/peer-busy.js',
+    from: "else if (rec.says === 'ended' && t.kind === 'turn') w.busy = w.stays;",
+    to: "else if (rec.says === 'ended' && t.kind === 'turn') w.busy = true;",
+    fails: ["AT1b: B prompts and its turn ends before A's command"],
+  },
+  {
+    id: 'AT1b-2 work left running is not noticed',
+    file: 'src/opon/intake/live.js',
+    test: 'test/peer-busy.js',
+    from: '    if (leavesWorkRunning(rec)) w.stays = true;\n',
+    to: '',
+    fails: ['AT1b: B leaves a command running in the background'],
+  },
+  {
+    id: 'AT1b-3 a call after a turn ended counts only until the next turn ends',
+    file: 'src/opon/intake/live.js',
+    test: 'test/peer-busy.js',
+    from: '      if (w.seen) w.stays = true; // a call after its turn ended\n',
+    to: '',
+    fails: ['AT1b: B leaves a command running in the background'],
+  },
+  {
+    id: 'AT1b-4 a restart never tells a pair already named the state again',
+    file: 'src/opon/intake/live.js',
+    test: 'test/peer-busy.js',
+    from: '        else if (peerBusy && told(into, about) !== about.work.busy) receive(overlapMark(into, about));\n',
+    to: '',
+    fails: ["AT1b: after a restart, a pair already named is told the peer's state again"],
+  },
+  {
+    id: 'AT1b-5 a change of state is never told',
+    file: 'src/opon/intake/live.js',
+    test: 'test/peer-busy.js',
+    from: '} else if (moved && peerBusy) tell(st);',
+    to: '}',
+    fails: ["AT1b: B prompts and its turn ends before A's command"],
+  },
+  {
+    id: 'AT1b-6 the router drops its peerBusy option',
+    file: 'src/opon/intake/router.js',
+    test: 'test/peer-busy.js',
+    from: 'peerBusy: o.peerBusy === true,',
+    to: 'peerBusy: false,',
+    fails: ['AT1b: the router passes its peerBusy option'],
+  },
+  {
+    id: 'AT1b-7 intake run ignores ORUNMILA_PEER_BUSY',
+    file: 'bin/orunmila.js',
+    test: 'test/peer-busy.js',
+    from: "      peerBusy: process.env.ORUNMILA_PEER_BUSY === '1', //",
+    to: '      peerBusy: false, //',
+    fails: ['AT1b: intake run writes the busy notes'],
+  },
+  {
+    id: 'AT1b-8 the launch agent does not keep ORUNMILA_PEER_BUSY',
+    file: 'src/opon/intake/launch-agent.js',
+    test: 'test/launch-agent.js',
+    from: ", 'ORUNMILA_ASYNC_START', 'ORUNMILA_PEER_BUSY'];",
+    to: ", 'ORUNMILA_ASYNC_START'];",
+    fails: ['LA3 (LD290)'],
   },
 );
 

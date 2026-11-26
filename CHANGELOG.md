@@ -38,6 +38,13 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 - **The claims block** (`ORUNMILA_CLAIMS_BLOCK=1`, off by default). An agent
   may end a turn with an `orunmila-claims` block; each `proved:` command must
   have run in the turn and passed. Format: `spec/claims-block.md`.
+- **A second session that sits idle no longer blocks credit**
+  (`ORUNMILA_PEER_BUSY=1`, off by default). The intake notes in each session's
+  record when another session in the same folder is working (the `overlapped`
+  mark's new `busy` field). A change made during this session's command while
+  every other session is idle is credited to that command at medium
+  confidence, where before it was unexplained. Records without the note read
+  as before.
 - **The Graph tab reads left to right.** Three levels (what the agent read, ran
   and changed), each in its folders, flagged things first; links curve between
   the columns instead of through one centre point. A folder or file written

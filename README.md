@@ -823,6 +823,7 @@ that is set into the launch agent, so it survives restarts and logins).
 | `ORUNMILA_ASYNC_START` | Takes a new session's baseline snapshot, and the closeout's full rescan, off the intake's thread, so a project of 100,000 files does not stall every other session for seconds; the session's own payloads wait, with the time they arrived, until its log is ready. |
 | `ORUNMILA_WATCH_EXTRA` | Folders outside the project for the Sentinel to watch too (absolute paths, joined by `:` on macOS and Linux, `;` on Windows): a change there is recorded with its full path, outside the project. |
 | `ORUNMILA_EDIT_VERBS` | Reads "I edited X", "modified", "rewrote" and "patched" as claims of changed work, for the Closeout Gate and the judge (today's verbs: added, created, updated, fixed and others). |
+| `ORUNMILA_PEER_BUSY` | Notes in each session's record when another session in the same folder is working: from its prompt to the end of its turn, and for the rest of its session once it leaves work running in the background. A change made while this session's command runs and every other session is idle is then credited to that command (at medium confidence), not left unexplained. While another session is working, only a direct cause credits a change, as always. |
 
 Always on, no switch: `orunmila intake stop` asks the intake to stop over its own
 socket; a stop signal that comes without that ask (`kill`, a logout or shutdown)

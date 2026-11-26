@@ -25,6 +25,14 @@
  *              from its own log's `overlapped` marks, in seq order, as replay
  *              does, so the two agree and a peer's folder removed later changes
  *              nothing (LD181 (2))
+ *              AT1b (LD330), with `peerBusy` (ORUNMILA_PEER_BUSY=1, off by
+ *              default): each such mark notes whether the session it names is
+ *              working (`busy`); each change of that is one more mark in every
+ *              session it is named to; after a restart, a pair already named is
+ *              told again where its log last said otherwise. A session works
+ *              from its prompt (or first call) to its turn's end, and for good
+ *              once it leaves work running past a call or the Glove records it
+ *              after a turn ended. Off, no mark carries the note
  *   live.resume(dir, header, baseline, marks) -> the same for a session
  *              reopened after a restart (L1d): its marks so far replayed into a
  *              fresh engine, and its odù log continued only if it is the start
@@ -55,7 +63,13 @@ const { applyOverlapped, sharesFiles } = require('./overlap');
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
-function createLive({ key, clock, receive, error, judge = false }) {
+/** AT1b (LD330): a mark that leaves work running past its call: a background command, a call asking for the background, Monitor. */
+function leavesWorkRunning(rec) {
+  const d = isObject(rec.detail) ? rec.detail : {};
+  return d.background === true || (isObject(d.tool_input) && d.tool_input.run_in_background === true) || d.tool === 'Monitor';
+}
+
+function createLive({ key, clock, receive, error, judge = false, peerBusy = false }) {
   const held = new Map(); // session id -> its live state, for pairing (L2)
 
   function stop(st, why) {
@@ -88,9 +102,44 @@ function createLive({ key, clock, receive, error, judge = false }) {
       due: [],
       draining: false,
       on: true,
+      work: { busy: false, seen: false, stays: false }, // AT1b (LD330): whether it is working, as its own Glove marks show
     };
     held.set(id, st);
     return st;
+  }
+
+  /**
+   * AT1b (LD330): one of the session's own records moves its working state: busy from its prompt (or its first call)
+   * to its turn's end; busy for good once it leaves work running past a call, or the Glove records it after a turn has
+   * ended (a background agent's call): nothing then says when that work ends. True when the state changed.
+   */
+  function track(st, rec) {
+    if (rec.source !== 'hook' && rec.source !== 'agent_claim') return false;
+    const t = isObject(rec.target) ? rec.target : {};
+    if (t.kind === 'session') return false; // the session's end is named by its own notice (L2)
+    const w = st.work;
+    const was = w.busy;
+    if (leavesWorkRunning(rec)) w.stays = true;
+    if (rec.says === 'prompted') w.busy = true;
+    else if (rec.says === 'ended' && t.kind === 'turn') w.busy = w.stays;
+    else if (!w.busy) {
+      if (w.seen) w.stays = true; // a call after its turn ended
+      w.busy = true;
+    }
+    if (w.stays) w.busy = true;
+    w.seen = true;
+    return w.busy !== was;
+  }
+
+  /** AT1b: what `into`'s log last said of `about`'s work: true, false, or null for nothing yet. */
+  function told(into, about) {
+    const s = into.others.find((x) => x.id === about.span.id);
+    return s && Array.isArray(s.busy) ? s.busy[s.busy.length - 1].to === null : null;
+  }
+
+  /** AT1b: `st`'s new state, named in the log of each session it is named to and not ended. */
+  function tell(st) {
+    for (const t of held.values()) if (t !== st && !t.span.ended && t.others.some((s) => s.id === st.span.id && !s.ended)) receive(overlapMark(t, st));
   }
 
   /** L2 (LD202): the intake's note in `into`'s log of session `about`, as it stands. */
@@ -108,18 +157,23 @@ function createLive({ key, clock, receive, error, judge = false }) {
       mono_ns: now.mono,
       target: { kind: 'process', name: 'intake' },
       says: 'overlapped',
-      detail: { session: s.id, root: s.root, from: s.from, ended: s.ended, ...(s.ended ? { to: s.to } : {}) },
+      detail: { session: s.id, root: s.root, from: s.from, ended: s.ended, ...(s.ended ? { to: s.to } : {}), ...(peerBusy ? { busy: about.work.busy } : {}) },
       cause_hint: null,
     };
   }
 
-  /** L2: name each held session sharing st's folder, and st to it, where not yet named. */
+  /**
+   * L2: name each held session sharing st's folder, and st to it, where not yet named. AT1b (LD330): with the busy
+   * notes on, a pair already named (after a restart) is told the other's state again where its log last said otherwise.
+   */
   function pair(st) {
     if (st.span.ended) return;
     for (const t of held.values()) {
       if (t === st || t.span.ended || !sharesFiles(t.root, st.root)) continue;
-      if (!st.others.some((s) => s.id === t.span.id)) receive(overlapMark(st, t));
-      if (!t.others.some((s) => s.id === st.span.id)) receive(overlapMark(t, st));
+      for (const [into, about] of [[st, t], [t, st]]) {
+        if (!into.others.some((s) => s.id === about.span.id)) receive(overlapMark(into, about));
+        else if (peerBusy && told(into, about) !== about.work.busy) receive(overlapMark(into, about));
+      }
     }
   }
 
@@ -151,6 +205,7 @@ function createLive({ key, clock, receive, error, judge = false }) {
       const lines = [Buffer.from(canonicalize(st.odu.head) + '\n', 'utf8')];
       for (const rec of marks) {
         closes(st, rec);
+        track(st, rec); // AT1b: its working state as its marks leave it
         for (const r of step(st, rec)) lines.push(Buffer.from(canonicalize(r) + '\n', 'utf8'));
       }
       st.opon.fingerprintsDue();
@@ -294,6 +349,7 @@ function createLive({ key, clock, receive, error, judge = false }) {
 
   function feed(st, rec) {
     const ended = closes(st, rec); // kept even when this session's engine has stopped: the others' records depend on it
+    const moved = track(st, rec); // AT1b: so too its working state
     if (st.on) {
       try {
         for (const r of step(st, rec)) {
@@ -308,7 +364,9 @@ function createLive({ key, clock, receive, error, judge = false }) {
     }
     if (rec.says === 'exited' && rec.source === 'process' && isObject(rec.target) && rec.target.kind === 'process' && rec.target.name === 'closeout') writeFooter(st, rec); // K4
     // L2: the end of this session, named to each session it was named to.
-    if (ended) for (const t of held.values()) if (t !== st && t.others.some((s) => s.id === st.span.id && !s.ended)) receive(overlapMark(t, st));
+    if (ended) {
+      for (const t of held.values()) if (t !== st && t.others.some((s) => s.id === st.span.id && !s.ended)) receive(overlapMark(t, st));
+    } else if (moved && peerBusy) tell(st); // AT1b (LD330): its working state changed
     if (st.draining) return; // a fingerprint written below feeds back in: the loop below takes what it adds
     st.draining = true;
     try {

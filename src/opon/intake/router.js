@@ -10,10 +10,14 @@
  *
  *   createRouter({ home, clock, checkSender, codeRoot, orunmilaVersion,
  *                  installKey, hookSettingsFor?, lawPacksFor?, config?,
- *                  diff?, tickMs?, releaseMs?, sentinel?, baseline?, judge? })
+ *                  diff?, tickMs?, releaseMs?, sentinel?, baseline?, judge?,
+ *                  peerBusy? })
  *       judge (BB6, with baseline): the rules file's text in each new
  *       session's header, and the verdict log written at its closeout;
  *       true for the default judge, or a judge's name (BB11)
+ *       peerBusy (AT1b, LD330, with baseline): the `overlapped` marks note
+ *       whether the peer they name is working (live.js), so a change while
+ *       every peer is idle is read as with no peer
  *   router.payload(payload, { channel, pid, monoNs } = {})
  *       -> { ok, results: [the log's answer per mark], reason? }
  *       In order: the session's log is made at first contact, with its header
@@ -228,7 +232,8 @@ function createRouter(o) {
   const engine = createIntake({ openLog: (id) => states.get(id).log, clock, checkSender: o.checkSender, tickMs: o.tickMs, resumes: Boolean(o.judge) }); // LD286
   // The Ọpọ́n live (slice L1c, LD200), with the live path's flag only: one engine per session it starts.
   // BB6 (plan section 5): with `judge` too (ORUNMILA_JUDGE_LIVE=1, off by default), the closeout writes the verdict log.
-  const live = o.baseline ? createLive({ key: o.installKey, clock, judge: o.judge || false, receive: (m) => engine.receive(m, {}), error: (reason, payload) => error(reason, payload) }) : null;
+  // AT1b (LD330): with `peerBusy` (ORUNMILA_PEER_BUSY=1, off by default), each session's log notes when a peer sharing its folder works.
+  const live = o.baseline ? createLive({ key: o.installKey, clock, judge: o.judge || false, peerBusy: o.peerBusy === true, receive: (m) => engine.receive(m, {}), error: (reason, payload) => error(reason, payload) }) : null;
   let heldText = null;
   // Q12 (a) (LD212, LD289): extra folders the Sentinel watches for every held session (ORUNMILA_WATCH_EXTRA; none by
   // default), by their real paths; a mark there names its file's absolute path, so it reads as outside the project.

@@ -3550,6 +3550,23 @@ MUTANTS.push(
     to: '}); // PM2c3 (LD334)',
     fails: ['PM2c3: the launch agent runs the intake through the starter'],
   },
+  // PM1 (LD335): every npm route, run and checked.
+  {
+    id: "PM1-1 the route's copy is never removed",
+    file: 'scripts/install-routes.js',
+    test: 'test/install-routes.js',
+    from: '  for (const x of route.clear(m)) fs.rmSync(x, { recursive: true, force: true });\n',
+    to: '',
+    fails: ['PM1 (LD335)'],
+  },
+  {
+    id: 'PM1-2 install names the copy that ran it (PM2b undone), seen on every route',
+    file: 'bin/orunmila.js',
+    test: 'test/install-routes.js',
+    from: "const hookFor = (rel) => require('../src/runtime/install').hookCommand(orunmilaHome(), rel);",
+    to: "const hookFor = (rel) => `node \"${path.join(__dirname, '..', ...rel.split('/'))}\"`;",
+    fails: ['PM1 (LD335)'],
+  },
 );
 
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };

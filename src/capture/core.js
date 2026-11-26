@@ -417,9 +417,13 @@ function runHook(phase, adapter) {
     // it to the agent; other agents read hook stdout differently (Cursor
     // treats some of it as a decision), so they get the warning from
     // `orunmila status` only.
-    if (phase === 'prompt' && adapter.id === 'claude-code' && legacy.isLegacy(dataDir())
-      && legacy.firstWarningForSession(dataDir(), adapter.fields.sessionId(payload))) {
-      process.stdout.write(JSON.stringify({ systemMessage: legacy.WARNING }) + '\n');
+    if (phase === 'prompt' && adapter.id === 'claude-code') {
+      const answer = {};
+      if (legacy.isLegacy(dataDir()) && legacy.firstWarningForSession(dataDir(), adapter.fields.sessionId(payload))) answer.systemMessage = legacy.WARNING;
+      // MR1b1 (LD339): with ORUNMILA_CLAIMS_BLOCK=1, the agent is asked for the claims block (brief line 443), as context
+      // Claude Code gives it with the prompt. The block's module loads only with the switch on (hook reach unchanged).
+      if (process.env.ORUNMILA_CLAIMS_BLOCK === '1') answer.hookSpecificOutput = { hookEventName: 'UserPromptSubmit', additionalContext: require('../reconcile/claims-block').ASK };
+      if (Object.keys(answer).length) process.stdout.write(JSON.stringify(answer) + '\n');
     }
     if (phase === 'stop' && typeof out === 'string') {
       try {

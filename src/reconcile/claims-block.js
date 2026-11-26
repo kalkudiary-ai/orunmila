@@ -80,4 +80,18 @@ function mentions(command, run) {
   return String(run.command).split(/&&|\|\||\||;|\n/).map(norm).includes(norm(command));
 }
 
-module.exports = { parseClaimsBlock, provedBy, mentions };
+/**
+ * MR1b1 (LD339; brief line 443: "a structured claims block the agent is asked to produce at closeout"): the request,
+ * given to the agent as context with each prompt while ORUNMILA_CLAIMS_BLOCK=1. Its example is itself a block.
+ */
+const ASK = [
+  'Orunmila checks what you say you did against its own record of what happened. At the end of your final message this turn, add one block:',
+  '```orunmila-claims',
+  'changed: <each file you changed this turn, comma-separated>',
+  'proved: <one command you ran this turn that shows the work passes; one line each>',
+  'not done: <anything asked that you did not do; one line each>',
+  '```',
+  'Leave out a line you have nothing for. Each line is checked: a changed file the record does not show changed, or a proved command that did not run and pass, is a finding.',
+].join('\n');
+
+module.exports = { parseClaimsBlock, provedBy, mentions, ASK };

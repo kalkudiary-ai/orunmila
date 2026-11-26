@@ -515,8 +515,9 @@ orunmila facts (from the records, not your prose): Test runs this turn: npm test
 
 ### The claims block (off by default)
 
-With `ORUNMILA_CLAIMS_BLOCK=1`, an agent may end its message with a block that
-says exactly what it claims, instead of leaving the gate to read sentences:
+With `ORUNMILA_CLAIMS_BLOCK=1`, Claude Code's agent is asked, with each prompt,
+to end its turn with a block that says exactly what it claims, instead of
+leaving the gate to read sentences:
 
 ````markdown
 ```orunmila-claims
@@ -529,7 +530,9 @@ not done: the Windows run
 Each `proved:` command must have run in that turn and passed, with the run's
 exit status its own: `cd web && npm test` and `cd web; npm test` prove `npm
 test`; `npm test; echo done`, a pipe, or `|| true` do not. Otherwise it is the
-`no-green-without-command` law's finding.
+`no-green-without-command` law's finding. Each `changed:` file is checked in the
+session's record (with the intake): one the turn never changed is a claim with
+nothing behind it, and a change the block lists is never counted as unmentioned.
 Sentences are still read as before, so a block cannot hide a claim made in
 prose. The format is [`spec/claims-block.md`](spec/claims-block.md).
 

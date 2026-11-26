@@ -3668,6 +3668,23 @@ MUTANTS.push(
     to: 'const block = parseClaimsBlock(mark.detail.text);',
     fails: ["MR1b2: a claimed mark's block"],
   },
+  // MR1b1 (LD339): the prompt hook asks the agent for the claims block, behind ORUNMILA_CLAIMS_BLOCK=1.
+  {
+    id: 'MR1b1-1 the agent is never asked for the block',
+    file: 'src/capture/core.js',
+    test: 'test/claims-block.js',
+    from: "if (process.env.ORUNMILA_CLAIMS_BLOCK === '1') answer.hookSpecificOutput =",
+    to: 'if (false) answer.hookSpecificOutput =',
+    fails: ['MR1b1 (LD339'],
+  },
+  {
+    id: 'MR1b1-2 the agent is asked with the switch off',
+    file: 'src/capture/core.js',
+    test: 'test/claims-block.js',
+    from: "if (process.env.ORUNMILA_CLAIMS_BLOCK === '1') answer.hookSpecificOutput =",
+    to: "if (process.env.ORUNMILA_CLAIMS_BLOCK !== 'x') answer.hookSpecificOutput =",
+    fails: ['MR1b1 (LD339'],
+  },
 );
 
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };

@@ -61,4 +61,23 @@ it('MR1: with the switch off (the default) a block changes nothing; with it on, 
   assert.strictEqual(green(both).length, 2, 'the prose claim and the declared command are each a finding');
 });
 
+it('MR1b1 (LD339; brief line 443, "the agent is asked to produce"): with ORUNMILA_CLAIMS_BLOCK=1 the prompt hook asks the agent for the block, as context Claude Code passes it; off, the hook prints nothing', () => {
+  const { run: runScript, rmrf } = require('./helpers');
+  const home = tmpDir();
+  try {
+    const input = JSON.stringify({ session_id: 'mr1b1', transcript_path: '/none', cwd: home, hook_event_name: 'UserPromptSubmit', prompt: 'go' });
+    const on = runScript('src/capture/claude-code/user-prompt-submit.js', { input, env: { ORUNMILA_HOME: home, ORUNMILA_CLAIMS_BLOCK: '1' } });
+    assert.strictEqual(on.status, 0, on.stderr);
+    const out = JSON.parse(on.stdout.trim());
+    assert.strictEqual(out.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
+    const ask = out.hookSpecificOutput.additionalContext;
+    for (const words of ['```orunmila-claims', 'changed:', 'proved:', 'not done:']) assert.ok(ask.includes(words), `${words}: ${ask}`);
+    assert.ok(parseClaimsBlock(ask) !== null, 'the example in the ask is itself a block the parser reads');
+    const off = runScript('src/capture/claude-code/user-prompt-submit.js', { input, env: { ORUNMILA_HOME: home, ORUNMILA_CLAIMS_BLOCK: '' } });
+    assert.deepStrictEqual([off.status, off.stdout], [0, '']);
+  } finally {
+    rmrf(home);
+  }
+});
+
 runAll('claims-block');

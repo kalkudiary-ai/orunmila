@@ -17,7 +17,7 @@ not done: the Windows run (no Windows machine here)
 
 | Line | Says | Checked against |
 |---|---|---|
-| `changed: <path>, <path>` | the files the agent changed this turn; one or more lines | the record's changes in the turn (a later slice) |
+| `changed: <path>, <path>` | the files the agent changed this turn; one or more lines | the record's changes in the turn: the Ọpọ́n reads them as file claims of the turn (a file the turn never changed is a phantom file claim) and as files the agent mentioned (MR1b2) |
 | `proved: <command>` | one command that shows the work passes; one per line | a run in the turn that passed and whose exit status is that command's: the command is one of the `&&` steps of the run's last segment (`cd web && npm test` and `cd web; npm test` prove `npm test`; `npm test; echo done` does not, its status is echo's), with no unguarded pipe and no `\|\|` there |
 | `not done: <text>` | something asked for and not done | nothing: it is the agent's own disclosure, shown with its report |
 
@@ -29,5 +29,5 @@ Rules:
   an agent cannot hide a prose claim by writing a block that leaves it out.
 - **Text inside the block is not prose.** The fixed patterns skip fenced blocks, so `proved: npm test` is read once, as
   a declared command, not again as a sentence.
-- With `ORUNMILA_CLAIMS_BLOCK=1` the law gate checks each `proved:` line under the `no-green-without-command` law: a
+- With `ORUNMILA_CLAIMS_BLOCK=1` Claude Code's prompt hook asks the agent for the block with each prompt (MR1b1), and the law gate checks each `proved:` line under the `no-green-without-command` law: a
   declared command with no passing run in the turn is that law's finding, with the same severity.

@@ -2715,7 +2715,7 @@ const MUTANTS = [
     fails: ['Ship item 5 (LD292)'] },
   // PM3 (LD291): status names a hook whose script is missing.
   { id: 'PM3-1 a missing script is taken as there', file: 'bin/orunmila.js', test: 'test/status-hooks.js',
-    from: 'if (s && path.isAbsolute(s) && !fs.existsSync(s)) out.push({ event, script: s });', to: 'if (false) out.push({ event, script: s });',
+    from: 'if (!fs.existsSync(s)) out.push({ event, script: s });', to: 'if (false) out.push({ event, script: s });', // PM2b reshaped the line
     fails: ['PM3 (LD291)'] },
   { id: 'PM3-2 status exits 0 with a missing script', file: 'bin/orunmila.js', test: 'test/status-hooks.js',
     from: "      console.log('  Install again from a copy that stays (npm i -g orunmila, then orunmila install): a package runner\\'s cache can be cleared.');\n      process.exitCode = 1;", to: "      console.log('  Install again from a copy that stays (npm i -g orunmila, then orunmila install): a package runner\\'s cache can be cleared.');",
@@ -2734,8 +2734,9 @@ const MUTANTS = [
     from: ".digest('hex').slice(0, 16)}`;", to: ".digest('hex').slice(0, 12)}`;",
     fails: ['W2a: the command-hook sender'] },
   // W1 (LD297): the hooks, installed into a path with a space and run as written.
-  { id: 'W1-1 the hook command leaves its script path unquoted', file: 'bin/orunmila.js', test: 'test/smoke-hooks.js',
-    from: "const s = (name) => `node \"${path.join(root, 'src/capture/claude-code', name)}\"`;", to: "const s = (name) => `node ${path.join(root, 'src/capture/claude-code', name)}`;",
+  // PM2b (LD331): every hook names the starter, whose path (in a home with a space, in the smoke test) is the quoted one.
+  { id: 'W1-1 the hook command leaves its script path unquoted', file: 'src/runtime/install.js', test: 'test/smoke-hooks.js',
+    from: "const hookCommand = (home, rel) => `node \"${path.join(home, 'bin', STARTER)}\" ${rel}`;", to: "const hookCommand = (home, rel) => `node ${path.join(home, 'bin', STARTER)} ${rel}`;",
     fails: ['W1 (LD297)'] },
   // SN1 (LD294): a session's start off the intake's thread.
   { id: 'SN1-1 the start never leaves the thread', file: 'src/opon/intake/router.js', test: 'test/start-thread.js',
@@ -3351,6 +3352,55 @@ MUTANTS.push(
     from: ", 'ORUNMILA_ASYNC_START', 'ORUNMILA_PEER_BUSY'];",
     to: ", 'ORUNMILA_ASYNC_START'];",
     fails: ['LA3 (LD290)'],
+  },
+  // PM2b (LD331): the starter in Orunmila's home, and the copy of the package it runs.
+  {
+    id: 'PM2b-1 install writes the path of the copy that ran it, as before PM2b',
+    file: 'bin/orunmila.js',
+    test: 'test/starter.js',
+    from: "const hookFor = (rel) => require('../src/runtime/install').hookCommand(orunmilaHome(), rel);",
+    to: "const hookFor = (rel) => `node \"${path.join(__dirname, '..', ...rel.split('/'))}\"`;",
+    fails: ["PM2b: installed from npx's cache", 'PM2b: with the cache cleared'],
+  },
+  {
+    id: "PM2b-2 the starter drops the script's exit code",
+    file: 'src/runtime/orunmila-start.js',
+    test: 'test/starter.js',
+    from: 'process.exit(r.status === null ? 1 : r.status);',
+    to: 'process.exit(0);',
+    fails: ['PM2b: the starter passes the payload'],
+  },
+  {
+    id: 'PM2b-3 the starter runs any script it is given',
+    file: 'src/runtime/orunmila-start.js',
+    test: 'test/starter.js',
+    from: 'if (!SCRIPTS.has(rel)) fail(',
+    to: 'if (false) fail(',
+    fails: ['PM2b: the starter refuses'],
+  },
+  {
+    id: 'PM2b-4 the starter takes any text in current as a folder',
+    file: 'src/runtime/orunmila-start.js',
+    test: 'test/starter.js',
+    from: 'if (!NAME.test(version)) fail(',
+    to: 'if (false) fail(',
+    fails: ['PM2b: the starter refuses'],
+  },
+  {
+    id: 'PM2b-5 the version folder is named by the version alone',
+    file: 'src/runtime/install.js',
+    test: 'test/starter.js',
+    from: 'const folder = `${version}_${fingerprintOf(from, files).slice(0, 12)}`;',
+    to: 'const folder = version;',
+    fails: ["PM2b: installed from npx's cache"],
+  },
+  {
+    id: "PM2b-6 status does not follow the starter to the script it runs",
+    file: 'bin/orunmila.js',
+    test: 'test/starter.js',
+    from: 'else if (path.basename(s) === STARTER) {',
+    to: 'else if (false) {',
+    fails: ['PM2b: orunmila status names a hook whose starter is gone'],
   },
 );
 

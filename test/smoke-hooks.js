@@ -16,8 +16,17 @@ it('W1 (LD297): installed into a path with a space, every hook command runs as w
   assert.strictEqual(r.status, 0, r.stdout + r.stderr);
   const out = JSON.parse(r.stdout.trim().split('\n').pop());
   assert.strictEqual(out.ok, true, r.stdout);
-  assert.deepStrictEqual(out.hooks.map((h) => h.event), ['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'Stop'].filter((e) => out.hooks.some((h) => h.event === e)));
+  const first = out.hooks.filter((h) => !h.removed);
+  assert.deepStrictEqual(first.map((h) => h.event), ['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'Stop'].filter((e) => first.some((h) => h.event === e)));
   assert.ok(out.trail.prompt && out.trail.write, JSON.stringify(out.trail));
+});
+
+it('PM2b (LD331): with the installed package removed, the prompt hook still runs as written, through the starter and the copy kept in Orunmila\'s home, and the trail holds that prompt', () => {
+  const r = run('scripts/smoke-hooks.js');
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  const out = JSON.parse(r.stdout.trim().split('\n').pop());
+  assert.deepStrictEqual(out.hooks.filter((h) => h.removed).map((h) => [h.event, h.status]), [['UserPromptSubmit', 0]], r.stdout);
+  assert.strictEqual(out.trail.afterRemoval, true, JSON.stringify(out.trail));
 });
 
 runAll('smoke-hooks');

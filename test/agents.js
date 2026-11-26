@@ -223,10 +223,10 @@ it('cli: install --agent cursor writes a .cursor/hooks.json pointing at the conn
   const r = run('bin/orunmila.js', { args: ['install', '--agent', 'cursor'], env: { ORUNMILA_HOME: home }, cwd: work });
   assert.strictEqual(r.status, 0);
   const cfg = JSON.parse(fs.readFileSync(path.join(work, '.cursor', 'hooks.json'), 'utf8'));
-  // The connector script path is double-quoted so spaces/backslashes in it stay
-  // intact on every platform; the args follow the closing quote.
-  assert.ok(cfg.hooks.afterFileEdit.includes('connector.js" cursor postTool'), 'maps afterFileEdit → postTool');
-  assert.ok(cfg.hooks.beforeSubmitPrompt.includes('" cursor prompt'));
+  // The starter's path is double-quoted so spaces/backslashes in it stay intact
+  // on every platform; the connector and its args follow the closing quote (PM2b, LD331).
+  assert.ok(cfg.hooks.afterFileEdit.includes('orunmila-start.js" src/capture/connector.js cursor postTool'), 'maps afterFileEdit → postTool');
+  assert.ok(cfg.hooks.beforeSubmitPrompt.includes('" src/capture/connector.js cursor prompt'));
   rmrf(home);
   rmrf(work);
 });
@@ -241,7 +241,7 @@ it('cli: install --agent claude-code quotes the hook script path (space/backslas
   const cfg = JSON.parse(fs.readFileSync(path.join(work, '.claude', 'settings.json'), 'utf8'));
   const cmd = cfg.hooks.PostToolUse[0].hooks[0].command;
   assert.ok(/^node "/.test(cmd), 'command opens with: node "');
-  assert.ok(cmd.includes('post-tool-use.js"'), 'script path is closed-quoted');
+  assert.ok(cmd.includes('orunmila-start.js" src/capture/claude-code/post-tool-use.js'), 'the starter\'s path is closed-quoted, its script after it (PM2b, LD331)');
   rmrf(home);
   rmrf(work);
 });
@@ -335,7 +335,7 @@ it('cli: install --agent antigravity writes .agents/hooks.json in Antigravity fo
   assert.ok(cfg.orunmila.PostToolUse, 'has PostToolUse event');
   assert.ok(cfg.orunmila.Stop, 'has Stop event');
   const postCmd = cfg.orunmila.PostToolUse[0].hooks[0].command;
-  assert.ok(postCmd.includes('connector.js" antigravity postTool'), 'PostToolUse → postTool via connector');
+  assert.ok(postCmd.includes('orunmila-start.js" src/capture/connector.js antigravity postTool'), 'PostToolUse → postTool via connector, through the starter (PM2b, LD331)');
   rmrf(home);
   rmrf(work);
 });

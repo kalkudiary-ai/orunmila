@@ -61,22 +61,31 @@ function mergeClaudeHook(settings, eventName, matcher, command) {
  * words with their quotes taken off; and every command hook in a settings object whose script is not there (a package
  * runner's cache cleared, a copy moved), as [{ event, script }]. Such a hook runs nothing, so it records nothing.
  */
-const ORUNMILA_SCRIPTS = ['user-prompt-submit.js', 'pre-tool-use.js', 'post-tool-use.js', 'stop.js', 'law-gate.js', 'intake-send.js', 'connector.js'];
+const ORUNMILA_SCRIPTS = ['orunmila-start.js', 'user-prompt-submit.js', 'pre-tool-use.js', 'post-tool-use.js', 'stop.js', 'law-gate.js', 'intake-send.js', 'connector.js'];
+/** The command's words, quotes taken off, and the index of the first that names one of Orunmila's scripts (or -1). */
 function scriptOf(command) {
   const words = [];
   const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
   let m;
   while ((m = re.exec(String(command)))) words.push(m[1] !== undefined ? m[1] : m[2] !== undefined ? m[2] : m[3]);
-  return words.find((w) => ORUNMILA_SCRIPTS.includes(path.basename(w))) || null;
+  return { words, at: words.findIndex((w) => ORUNMILA_SCRIPTS.includes(path.basename(w))) };
 }
 function missingHookScripts(settings) {
+  const { starterTarget, STARTER } = require('../src/runtime/install');
   const out = [];
   for (const [event, entries] of Object.entries((settings && settings.hooks) || {})) {
     for (const entry of Array.isArray(entries) ? entries : []) {
       for (const h of (entry && entry.hooks) || []) {
         if (!h || h.type !== 'command') continue;
-        const s = scriptOf(h.command);
-        if (s && path.isAbsolute(s) && !fs.existsSync(s)) out.push({ event, script: s });
+        const { words, at } = scriptOf(h.command);
+        const s = at >= 0 ? words[at] : null;
+        if (!s || !path.isAbsolute(s)) continue;
+        if (!fs.existsSync(s)) out.push({ event, script: s });
+        else if (path.basename(s) === STARTER) {
+          // PM2b (LD331): the starter is there; the script it runs is the current version's.
+          const t = starterTarget(s, words[at + 1]);
+          if (!t.ok) out.push({ event, script: t.file });
+        }
       }
     }
   }
@@ -211,6 +220,13 @@ function lensState({ agentId = 'claude-code', global = false } = {}) {
 // Returns { installed: boolean }. Refuses (installed:false) rather than adding a
 // second registration when an orunmila hook already exists in this settings file
 // — silently skipping would hide the dual-install; we print where it was found.
+/**
+ * PM2b (LD331): Orunmila's home, and the hook command for one of its scripts: through the starter in the home, which
+ * runs the version `install` copied there (src/runtime/install.js), never a path inside the copy that ran `install`.
+ */
+const orunmilaHome = () => process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
+const hookFor = (rel) => require('../src/runtime/install').hookCommand(orunmilaHome(), rel);
+
 function installClaudeCode(root, p, { tolerateExisting = false } = {}) {
   const settings = readJson(p, {});
   const existing = findExistingClaudeHooks(settings);
@@ -231,10 +247,10 @@ function installClaudeCode(root, p, { tolerateExisting = false } = {}) {
     }
     return { installed: false, existing };
   }
-  // Quote the script path: it can contain spaces (e.g. C:\Users\Jane Doe\...)
-  // and, on Windows, backslash separators. Both are safe inside double quotes
-  // for the shell that runs the hook command on every platform.
-  const s = (name) => `node "${path.join(root, 'src/capture/claude-code', name)}"`;
+  // The starter's path is quoted (hookCommand): it can contain spaces (e.g.
+  // C:\Users\Jane Doe\...) and, on Windows, backslash separators. Both are safe
+  // inside double quotes for the shell that runs the hook command on every platform.
+  const s = (name) => hookFor(`src/capture/claude-code/${name}`);
   mergeClaudeHook(settings, 'UserPromptSubmit', '*', s('user-prompt-submit.js'));
   mergeClaudeHook(settings, 'PreToolUse', 'Write|Edit|MultiEdit', s('pre-tool-use.js'));
   mergeClaudeHook(settings, 'PostToolUse', '*', s('post-tool-use.js'));
@@ -248,11 +264,10 @@ function installClaudeCode(root, p, { tolerateExisting = false } = {}) {
 function installAntigravity(adapter, root, p) {
   const settings = readJson(p, {});
   settings.orunmila = settings.orunmila || {};
-  const connector = path.join(root, 'src/capture/connector.js');
   for (const [phase, eventName] of Object.entries(adapter.events)) {
     const matcher = phase === 'preTool' ? (adapter.preToolMatcher || '*') : '*';
     settings.orunmila[eventName] = [
-      { matcher, hooks: [{ type: 'command', command: `node "${connector}" ${adapter.id} ${phase}` }] },
+      { matcher, hooks: [{ type: 'command', command: `${hookFor('src/capture/connector.js')} ${adapter.id} ${phase}` }] },
     ];
   }
   fs.writeFileSync(p, JSON.stringify(settings, null, 2));
@@ -264,10 +279,9 @@ function installAntigravity(adapter, root, p) {
 function installGeneric(adapter, root, p) {
   const settings = readJson(p, {});
   settings.hooks = settings.hooks || {};
-  const connector = path.join(root, 'src/capture/connector.js');
   for (const [phase, eventNames] of Object.entries(adapter.events)) {
     for (const eventName of [].concat(eventNames)) {
-      settings.hooks[eventName] = `node "${connector}" ${adapter.id} ${phase}`;
+      settings.hooks[eventName] = `${hookFor('src/capture/connector.js')} ${adapter.id} ${phase}`;
     }
   }
   fs.writeFileSync(p, JSON.stringify(settings, null, 2));
@@ -311,6 +325,12 @@ function cmdInstall() {
   const p = configPath(adapter, { global, home: os.homedir(), cwd: process.cwd() });
   fs.mkdirSync(path.dirname(p), { recursive: true });
 
+  // PM2b (LD331): this copy kept in Orunmila's home, so every hook below runs it through the starter, whatever
+  // happens to the copy that ran `install` (npx's or pnpm's cache cleared, a global folder moved).
+  const rt = require('../src/runtime/install').installRuntime({ home: orunmilaHome(), from: root });
+  console.log(`Orunmila ${rt.version} is kept in ${rt.dir}${rt.fresh ? '' : ' (already there)'}; every hook runs it through ${rt.starter},`);
+  console.log('so the hooks keep working if the copy that ran this install is removed.\n');
+
   // The Closeout Gate is a SEPARATE registration from the Stain Map, so it must
   // be installable on its own. Someone who set capture up months ago and now
   // wants the gate would otherwise be turned away by the duplicate-install
@@ -329,7 +349,7 @@ function cmdInstall() {
       return;
     }
     const settings = readJson(p, {});
-    const sender = `node "${path.join(root, 'src/capture/claude-code', 'intake-send.js')}"`;
+    const sender = hookFor('src/capture/claude-code/intake-send.js');
     const url = `http://127.0.0.1:${require('../src/opon/intake/server').intakePort()}/hook`;
     // One channel per event (H2, LD140): Claude Code's own HTTP hooks where they are
     // known to fire, so each session is pinned to the claude process; the command
@@ -389,7 +409,7 @@ function cmdInstall() {
       console.log('  orunmila install --with-gate\n');
     }
     const settings = readJson(p, {});
-    const gate = `node "${path.join(root, 'src/capture/claude-code', 'law-gate.js')}"`;
+    const gate = hookFor('src/capture/claude-code/law-gate.js');
     mergeClaudeHook(settings, 'Stop', '*', gate);
     fs.writeFileSync(p, JSON.stringify(settings, null, 2));
     console.log(`${LENSES['closeout-gate'].name} installed on the Stop hook in ${p}.\n`);
@@ -426,7 +446,7 @@ function cmdInstall() {
       console.log(`\nThe ${LENSES['closeout-gate'].name} is claude-code only; the Stain Map is installed, the gate is not.`);
     } else {
       const settings = readJson(p, {});
-      const gate = `node "${path.join(root, 'src/capture/claude-code', 'law-gate.js')}"`;
+      const gate = hookFor('src/capture/claude-code/law-gate.js');
       mergeClaudeHook(settings, 'Stop', '*', gate);
       fs.writeFileSync(p, JSON.stringify(settings, null, 2));
       console.log(`${LENSES['closeout-gate'].name} installed on the Stop hook.\n`);

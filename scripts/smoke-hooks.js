@@ -74,7 +74,19 @@ function main() {
         }
       }
     }
-    const trail = run(process.execPath, [cli, 'trail', '--json', '--session', 'smoke-session'], { env, cwd: project });
+    // PM2b (LD331): the global copy removed (as a package runner's cache is cleared), the prompt hook runs again as
+    // written, through the starter and the copy `install` kept in Orunmila's home; the trail is read through it too.
+    fs.rmSync(pkg, { recursive: true, force: true });
+    for (const entry of settings.hooks.UserPromptSubmit || []) {
+      for (const h of entry.hooks || []) {
+        if (h.type !== 'command') continue;
+        const opts = { env, cwd: project, input: JSON.stringify({ ...payloads.UserPromptSubmit, prompt: 'after removal' }), encoding: 'utf8', timeout: 60000 };
+        const r = bash ? spawnSync('bash', ['-c', h.command], opts) : spawnSync(h.command, { ...opts, shell: true });
+        out.hooks.push({ event: 'UserPromptSubmit', removed: true, status: r.status, ...(r.status !== 0 ? { stderr: String(r.stderr || r.error || '').slice(0, 500) } : {}) });
+      }
+    }
+    const starter = path.join(data, 'bin', 'orunmila-start.js');
+    const trail = run(process.execPath, [starter, 'bin/orunmila.js', 'trail', '--json', '--session', 'smoke-session'], { env, cwd: project });
     let turns = [];
     try {
       turns = JSON.parse(trail.stdout).turns || []; // trail --json: each turn's prompt and its trail of events
@@ -82,8 +94,8 @@ function main() {
       turns = [];
     }
     const events = turns.flatMap((t) => t.trail || []);
-    out.trail = { events: events.length, prompt: turns.some((t) => t.prompt === 'write a.txt'), write: events.some((e) => e.type === 'file_write') };
-    out.ok = out.hooks.length >= 4 && out.hooks.every((h) => h.status === 0) && out.trail.prompt && out.trail.write;
+    out.trail = { events: events.length, prompt: turns.some((t) => t.prompt === 'write a.txt'), write: events.some((e) => e.type === 'file_write'), afterRemoval: turns.some((t) => t.prompt === 'after removal') };
+    out.ok = out.hooks.length >= 5 && out.hooks.every((h) => h.status === 0) && out.trail.prompt && out.trail.write && out.trail.afterRemoval;
   } catch (e) {
     out.error = e.message;
   } finally {

@@ -52,6 +52,16 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ### Changed
 
+- **The hooks no longer name the copy that ran `install`.** `orunmila install`
+  keeps a copy of the package in Orunmila's home
+  (`~/.orunmila/runtime/<version>_<fingerprint>/`, the current one named in
+  `~/.orunmila/runtime/current`), and every hook it writes runs that copy
+  through one fixed starter, `~/.orunmila/bin/orunmila-start.js`. A hook
+  installed through `npx` or `pnpm dlx` used to name a file in that tool's
+  cache, and recorded nothing once the cache was cleared. `orunmila status`
+  follows the starter to the script it runs and names one that is missing.
+  Each hook takes about 20 ms longer (one more Node start). An install made
+  before this one keeps its old hooks until it is installed again.
 - **The trail page says what it checked.** With no checked turn, the header,
   the file list, the Report tab, the Dashboard and the claim-vs-record section
   say "Not checked"; before, the page read "looks clean". Turns checked with no

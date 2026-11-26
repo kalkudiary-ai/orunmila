@@ -28,6 +28,18 @@ orunmila is designed to minimise its own attack surface:
   Unix socket in `~/.orunmila/intake/` and on `127.0.0.1` only (port 47390, or
   `ORUNMILA_INTAKE_PORT`), for Claude Code's own hooks on the same machine; it
   contacts nothing.
+- **One network call, for Orunmila's own updates** — `orunmila update` asks the
+  npm registry (`ORUNMILA_REGISTRY`, else npm's own registry setting, else
+  `https://registry.npmjs.org`) for the latest version of the `orunmila`
+  package and downloads it. The request carries the package's name and nothing
+  else: no session data, nothing that identifies you or your machine. The
+  download is checked against the integrity hash the registry gives, and the
+  new version's self-check must pass before Orunmila switches to it, which it
+  does only while no session is being recorded. Each switch, and each refused
+  update, is written to the hash-chained `~/.orunmila/updates.jsonl`
+  (`orunmila verify --updates`). Orunmila does not need the internet to work,
+  only to stay up to date. The code is one file, `src/runtime/registry.js`, and
+  a test fails if anything else in the package reaches the network.
 - **Read-mostly** — orunmila observes your agent's activity and renders reports.
   It does not modify your source files. It writes only to its own data dir and
   to report files you explicitly ask for.
@@ -72,7 +84,7 @@ complete key itself.
 ## Your `.env` values, and the leak check
 
 The trade-off, stated plainly: redaction will sometimes miss a secret.
-Orunmila keeps everything on your machine and sends nothing anywhere, so a
+Orunmila keeps everything on your machine and sends none of it anywhere, so a
 missed secret sits with the rest of your session data. The risk is a report or
 export you share. Orunmila's part is to say so, and to give you a way to find
 one.

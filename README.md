@@ -45,10 +45,12 @@ Summary: 1 verified, 0 partial, 1 phantom, 1 phantom-verification,
 100% free, Apache 2.0 licensed, runs entirely on your machine. No telemetry, no
 account, no API key, no AI model.
 
-**No internet call does Orunmila's work.** The `orunmila` CLI makes no outbound
-requests, and the HTML reports it writes load nothing from the network: they
-work offline, and opening or sharing one reveals nothing to a third party. Only
-updates of Orunmila itself may reach the internet.
+**No internet call does Orunmila's work.** Capture, the record, the judge and
+the reports make no outbound requests, and the HTML reports load nothing from
+the network: they work offline, and opening or sharing one reveals nothing to a
+third party. Only updates of Orunmila itself reach the internet: `orunmila
+update` asks the npm registry for the latest `orunmila` and sends nothing else
+(see SECURITY.md).
 
 ![Orunmila's report: what the agent claimed, against what it actually did](docs/images/stain-map.png)
 

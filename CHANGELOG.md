@@ -38,6 +38,14 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 - **The claims block** (`ORUNMILA_CLAIMS_BLOCK=1`, off by default). An agent
   may end a turn with an `orunmila-claims` block; each `proved:` command must
   have run in the turn and passed. Format: `spec/claims-block.md`.
+- **`orunmila update`.** Brings the copy in Orunmila's home up to the npm
+  registry's latest `orunmila`: the download is checked against the registry's
+  integrity hash, the new version must pass its own self-check, and Orunmila
+  switches to it only while no session is being recorded (it waits, checked,
+  until then), keeping the version it ran as `runtime/previous`. Each switch and
+  each failed self-check goes into `~/.orunmila/updates.jsonl`. This is the
+  package's one network call; it sends only the package's name. Run by hand
+  for now; a daily check comes next.
 - **A second session that sits idle no longer blocks credit**
   (`ORUNMILA_PEER_BUSY=1`, off by default). The intake notes in each session's
   record when another session in the same folder is working (the `overlapped`

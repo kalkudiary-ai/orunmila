@@ -62,4 +62,5 @@ function main() {
   process.exit(r.status === null ? 1 : r.status);
 }
 
-main();
+if (require.main === module) main();
+module.exports = { SCRIPTS }; // the one list: install.js and the updater's self-check read it from here

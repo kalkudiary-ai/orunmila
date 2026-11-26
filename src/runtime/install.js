@@ -117,4 +117,9 @@ function starterTarget(starter, rel) {
   return fs.existsSync(file) ? { ok: true, file, words: null } : { ok: false, file, words: `version ${version} has no ${rel}` };
 }
 
-module.exports = { shippedFiles, installRuntime, hookCommand, starterTarget, STARTER };
+/** The first 12 hex of a folder's fingerprint over `files`, as a version folder's name holds it (PM2c1 names a download so). */
+const fingerprintFolder = (from, files) => fingerprintOf(from, files).slice(0, 12);
+/** Every script the starter runs, from the starter itself (PM2c1's self-check). */
+const STARTER_SCRIPTS = [...require('./orunmila-start').SCRIPTS];
+
+module.exports = { shippedFiles, installRuntime, hookCommand, starterTarget, fingerprintFolder, STARTER, STARTER_SCRIPTS };

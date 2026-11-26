@@ -8,7 +8,8 @@
  * whole, and:
  *
  *   - no file loads a module that reaches the internet (https, http2, tls, dgram, dns, undici), or calls `fetch`,
- *     `XMLHttpRequest` or `WebSocket` with an address that leaves the machine;
+ *     `XMLHttpRequest` or `WebSocket` with an address that leaves the machine; except the one file that fetches
+ *     Orunmila's own updates from npm's registry (LD268), which may load https and http;
  *   - `http` and `net` are loaded only by the files below, each serving or reaching 127.0.0.1 or a local socket, and each
  *     is named with its reason, so a new one fails here until it is looked at;
  *   - no file names an AI service's host;
@@ -29,6 +30,12 @@ const LOCAL = {
   'src/capture/claude-code/intake-send.js': "sends a hook payload to the intake's local socket",
   'src/capture/claude-code/gate-send.js': "sends the gate's check to the intake's local socket",
 };
+/**
+ * LD268 (O, 2026-11-24): "Orunmila tool cannot make internet calls to do its work, but the updates are not classified
+ * as calls to work". The one file allowed to reach the internet, and only for Orunmila's own updates from npm's registry
+ * (PM2c1, LD332); test/update.js holds that only the updater loads it, and only `orunmila update` loads the updater.
+ */
+const UPDATES = { 'src/runtime/registry.js': "asks npm's registry for Orunmila's own latest version and downloads it" };
 const FAR = ['https', 'http2', 'tls', 'dgram', 'dns', 'undici'];
 const CDN_HOSTS = ['unpkg.com', 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com', 'ajax.googleapis.com', 'code.jquery.com', 'fonts.googleapis.com', 'fonts.gstatic.com', 'cdn.skypack.dev', 'esm.sh'];
 const AI_HOSTS = ['openrouter.ai', 'api.openai.com', 'api.anthropic.com', 'generativelanguage.googleapis.com', 'api.mistral.ai', 'api.cohere.ai', 'api.groq.com', 'api.together.xyz', 'api.deepseek.com', 'bedrock-runtime', 'aiplatform.googleapis.com', 'openai.azure.com'];
@@ -58,8 +65,9 @@ function modulesOf(text) {
 function problemsOf(rel, text) {
   const out = [];
   const mods = modulesOf(text);
-  for (const m of FAR) if (mods.has(m)) out.push(`${rel} loads ${m}, which reaches the internet`);
-  for (const m of ['http', 'net']) if (mods.has(m) && !LOCAL[rel]) out.push(`${rel} loads ${m} and is not on the local-only list`);
+  const updater = Boolean(UPDATES[rel]);
+  for (const m of FAR) if (mods.has(m) && !(updater && m === 'https')) out.push(`${rel} loads ${m}, which reaches the internet`);
+  for (const m of ['http', 'net']) if (mods.has(m) && !LOCAL[rel] && !(updater && m === 'http')) out.push(`${rel} loads ${m} and is not on the local-only list`);
   for (const h of AI_HOSTS) if (text.includes(h)) out.push(`${rel} names the AI service host ${h}`);
   for (const m of text.matchAll(/\b(fetch|XMLHttpRequest|WebSocket)\s*\(\s*[`'"](https?|wss?):\/\//g)) out.push(`${rel} calls ${m[1]} on an internet address`);
   for (const m of text.matchAll(/<(script|link)\b[^>]*\b(src|href)\s*=\s*\\?["']?(https?:)?\/\//gi)) out.push(`${rel} renders a page that loads a ${m[1] === 'link' ? 'stylesheet' : 'script'} from the internet`);
@@ -75,6 +83,9 @@ it('NI1 (LD264): no file the package ships reaches the internet, names an AI ser
   const problems = js.flatMap((f) => problemsOf(f, fs.readFileSync(path.join(ROOT, f), 'utf8')));
   assert.deepStrictEqual(problems, [], `\n${problems.join('\n')}`);
   for (const f of Object.keys(LOCAL)) assert.ok(files.includes(f), `the local-only list names a file the package ships: ${f}`);
+  for (const f of Object.keys(UPDATES)) assert.ok(files.includes(f), `the updates exception names a file the package ships: ${f}`);
+  assert.deepStrictEqual(problemsOf('src/runtime/update.js', "const https = require('https');"), ['src/runtime/update.js loads https, which reaches the internet'], 'the exception is that one file, not its folder');
+  assert.deepStrictEqual(problemsOf('src/runtime/registry.js', "const tls = require('tls');"), ['src/runtime/registry.js loads tls, which reaches the internet'], 'and https and http only');
 });
 
 it('NI1: the check sees each kind of call it refuses (planted in memory, never on disk)', () => {

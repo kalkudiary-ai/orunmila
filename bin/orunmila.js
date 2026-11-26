@@ -1881,8 +1881,36 @@ function cmdTrailer() {
   console.log(`orunmila trailer: ${lines.length} trailers in ${file}`);
 }
 
+/**
+ * `orunmila update` (PM2c1, LD332; LD268): the copy in Orunmila's home brought up to the registry's latest version
+ * (src/runtime/update.js), switched to only while no session is held: none held by the running intake, or, with no
+ * intake running, none it will resume (its held.json). The registry is ORUNMILA_REGISTRY, else npm's own setting, else
+ * npm's public registry; it is sent the package's name and nothing else. Exit 0 up to date, switched or waiting; 1
+ * refused or failed (the update log has each failed self-check).
+ */
+async function cmdUpdate() {
+  const { statusOf, intakePaths } = require('../src/opon/intake/server');
+  const home = orunmilaHome();
+  const registry = process.env.ORUNMILA_REGISTRY || process.env.npm_config_registry || 'https://registry.npmjs.org';
+  const held = async () => {
+    const st = await statusOf(intakePaths(home).sock, 1000);
+    if (st) return Array.isArray(st.held) && st.held.length > 0;
+    try {
+      const h = JSON.parse(fs.readFileSync(path.join(home, 'intake', 'held.json'), 'utf8'));
+      return Array.isArray(h) && h.length > 0;
+    } catch {
+      return false; // no held list: nothing to resume
+    }
+  };
+  console.log(`orunmila update: asking ${registry} for the latest orunmila (only the package's name is sent)`);
+  const r = await require('../src/runtime/update').updateNow({ home, registry, held });
+  console.log(`orunmila update: ${r.words}`);
+  process.exitCode = r.status === 'refused' || r.status === 'failed' ? 1 : 0;
+}
+
 const COMMANDS = {
   install: cmdInstall,
+  update: cmdUpdate,
   replay: cmdReplay,
   judge: cmdJudge,
   intake: cmdIntake,
@@ -1978,6 +2006,8 @@ Both lenses
   orunmila verify <session-folder> [--json]       check a session log folder's hash chains, records and kept files
                                                   (the per-session logs the intake writes, in ~/.orunmila/sessions/)
   orunmila verify --updates                       check the update log (~/.orunmila/updates.jsonl): each update, chained
+  orunmila update                                 bring the copy in ~/.orunmila up to npm's latest; switched only while
+                                                  no session is held (the one network call: the package's name is sent)
   orunmila intake run|start|status|stop           the intake server, one per machine (install --intake sends to it)
   orunmila intake agent install|uninstall|status  keep the intake running at login with a launch agent (macOS)
   orunmila replay <session-folder> [--expect file]  the Opon's settled groups for a session log, replayed (Phase 2)

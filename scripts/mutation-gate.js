@@ -3402,6 +3402,55 @@ MUTANTS.push(
     to: 'else if (false) {',
     fails: ['PM2b: orunmila status names a hook whose starter is gone'],
   },
+  // PM2c1 (LD332): orunmila update, the registry, the integrity hash, the self-check and the switch.
+  {
+    id: 'PM2c1-1 a download is kept whatever its integrity',
+    file: 'src/runtime/update.js',
+    test: 'test/update.js',
+    from: 'if (!matches(tgz, integrity)) return {',
+    to: 'if (false) return {',
+    fails: ['PM2c1: a download whose integrity'],
+  },
+  {
+    id: 'PM2c1-2 the switch does not wait for a held session',
+    file: 'src/runtime/update.js',
+    test: 'test/update.js',
+    from: 'if (await held()) {',
+    to: 'if (false) {',
+    fails: ['PM2c1: while a session is held'],
+  },
+  {
+    id: "PM2c1-3 the self-check does not read the new CLI's version",
+    file: 'src/runtime/update.js',
+    test: 'test/update.js',
+    from: "if (v.status !== 0 || String(v.stdout).trim() !== version) return",
+    to: 'if (v.status !== 0) return',
+    fails: ['PM2c1: a version whose self-check fails'],
+  },
+  {
+    id: 'PM2c1-4 a switch is not recorded',
+    file: 'src/runtime/update.js',
+    test: 'test/update.js',
+    from: "  recordUpdate(home, { from, to: latest, integrity, self_check: 'pass', switched: true });\n",
+    to: '',
+    fails: ['PM2c1: a newer version offered'],
+  },
+  {
+    id: 'PM2c1-5 the same version counts as newer',
+    file: 'src/runtime/update.js',
+    test: 'test/update.js',
+    from: 'compareVersions(latest, from) <= 0',
+    to: 'compareVersions(latest, from) < 0',
+    fails: ['PM2c1: a newer version offered'],
+  },
+  {
+    id: 'PM2c1-6 the unpacker lets a path leave the package',
+    file: 'src/runtime/untar.js',
+    test: 'test/update.js',
+    from: "if (rel.split('/').some((seg) => seg === '..' || seg === '.')) throw",
+    to: 'if (false) throw',
+    fails: ['PM2c1: the unpacker'],
+  },
 );
 
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };

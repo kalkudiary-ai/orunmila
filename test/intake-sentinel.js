@@ -214,11 +214,11 @@ it('B4 CLI: intake run watches a session\'s root, so a write there reaches its l
   const root = fs.realpathSync(tmpDir());
   const env = { ...process.env, ORUNMILA_HOME: home, ORUNMILA_INTAKE_PORT: '0' };
   const child = spawn(process.execPath, [path.join(__dirname, '..', 'bin', 'orunmila.js'), 'intake', 'run'], { env, stdio: 'ignore' });
-  const sock = require('../src/opon/intake/server').intakePaths(home).sock; // W3e: a named pipe on Windows
+  const paths = require('../src/opon/intake/server').intakePaths(home); // W3e, W4b: a named pipe on Windows, its name read at use
   try {
     assert.ok(await intakeAnswers(home), 'the intake listens');
     await new Promise((resolve, reject) => {
-      const c = net.createConnection(sock, () => c.end(JSON.stringify({ op: 'payload', payload: { session_id: 'cli1', hook_event_name: 'SessionStart', cwd: root } }) + '\n'));
+      const c = net.createConnection(paths.sock,() => c.end(JSON.stringify({ op: 'payload', payload: { session_id: 'cli1', hook_event_name: 'SessionStart', cwd: root } }) + '\n'));
       c.on('close', resolve);
       c.on('error', reject);
     });

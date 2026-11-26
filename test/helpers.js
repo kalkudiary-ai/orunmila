@@ -189,9 +189,9 @@ async function awaitWatching(dir, isSeen, { everyMs = 250, deadlineMs = 5000 } =
  */
 async function intakeAnswers(home, deadlineMs = 8000) {
   const { intakePaths, statusOf } = require('../src/opon/intake/server');
-  const sock = intakePaths(home).sock;
-  for (const end = Date.now() + deadlineMs; Date.now() < end; await sleep(50)) if (await statusOf(sock, 300)) return true;
-  return Boolean(await statusOf(sock, 300));
+  const p = intakePaths(home); // W4b: p.sock is read at each try, since on Windows each start publishes a fresh pipe name
+  for (const end = Date.now() + deadlineMs; Date.now() < end; await sleep(50)) if (await statusOf(p.sock, 300)) return true;
+  return Boolean(await statusOf(p.sock, 300));
 }
 
 module.exports = { assert, fs, os, path, ROOT, tmpHome, tmpDir, rmrf, run, runUntil, sleep, awaitWatching, it, runAll, slash, WINDOWS, notOnWindows, intakeAnswers, buildMachineOnly };

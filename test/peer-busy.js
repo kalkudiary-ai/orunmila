@@ -203,17 +203,17 @@ async function intakeRun(home, env) {
   child.stderr.on('data', (d) => (out += d));
   const exited = new Promise((resolve) => child.on('exit', (code) => resolve(code)));
   try {
-    const sock = intakePaths(home).sock;
-    assert.ok(await until(async () => (await statusOf(sock, 300)) !== null), 'the intake answers: ' + out);
+    const at = intakePaths(home); // W4b: at.sock read at each use (on Windows each start publishes a fresh pipe name)
+    assert.ok(await until(async () => (await statusOf(at.sock, 300)) !== null), 'the intake answers: ' + out);
     assert.ok(await until(() => /ORUNMILA_PEER_BUSY/.test(out)), 'a line about the busy notes: ' + out);
     const project = path.join(home, '..', 'p');
     fs.mkdirSync(project, { recursive: true });
     const ev = (sid, x) => req({ session_id: sid, transcript_path: '/tmp/t.jsonl', cwd: project, ...x });
-    await send(sock, ev('ses_ia', { hook_event_name: 'UserPromptSubmit', prompt: 'one' }));
+    await send(at.sock, ev('ses_ia', { hook_event_name: 'UserPromptSubmit', prompt: 'one' }));
     const rawA = path.join(home, 'sessions', 'ses_ia', 'raw.jsonl');
     assert.ok(await until(() => fs.existsSync(rawA) && fs.readFileSync(rawA, 'utf8').includes('"prompted"')), 'A begun');
-    await send(sock, ev('ses_ib', { hook_event_name: 'UserPromptSubmit', prompt: 'two' }));
-    await send(sock, ev('ses_ib', { hook_event_name: 'Stop', last_assistant_message: 'Nothing to do.' }));
+    await send(at.sock, ev('ses_ib', { hook_event_name: 'UserPromptSubmit', prompt: 'two' }));
+    await send(at.sock, ev('ses_ib', { hook_event_name: 'Stop', last_assistant_message: 'Nothing to do.' }));
     const rawB = path.join(home, 'sessions', 'ses_ib', 'raw.jsonl');
     assert.ok(await until(() => fs.existsSync(rawB) && fs.readFileSync(rawB, 'utf8').includes('"claimed"')), 'B\'s Stop written');
     const r = run('bin/orunmila.js', { args: ['intake', 'stop'], env: { ORUNMILA_HOME: home } });

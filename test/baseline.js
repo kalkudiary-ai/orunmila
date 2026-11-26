@@ -278,7 +278,7 @@ async function intakeRunFiles(env, last = 'raw.jsonl') {
     env: { ...process.env, ORUNMILA_HOME: home, ORUNMILA_INTAKE_PORT: '0', ORUNMILA_OPON_LIVE: '', ...env },
     stdio: 'ignore',
   });
-  const sock = intakePaths(home).sock; // W3e: a named pipe on Windows
+  const paths = intakePaths(home); // W3e, W4b: a named pipe on Windows, its name read at use
   const dir = path.join(home, 'sessions', 'ses_b3');
   const until = async (cond) => {
     for (let end = Date.now() + 8000; Date.now() < end; await new Promise((r) => setTimeout(r, 50))) if (cond()) return true;
@@ -287,7 +287,7 @@ async function intakeRunFiles(env, last = 'raw.jsonl') {
   try {
     assert.ok(await intakeAnswers(home), 'the intake did not start');
     await new Promise((resolve, reject) => {
-      const c = net.createConnection(sock, () => c.end(JSON.stringify({ op: 'payload', payload: { session_id: 'ses_b3', cwd: project, hook_event_name: 'SessionStart', source: 'startup' } }) + '\n'));
+      const c = net.createConnection(paths.sock,() => c.end(JSON.stringify({ op: 'payload', payload: { session_id: 'ses_b3', cwd: project, hook_event_name: 'SessionStart', source: 'startup' } }) + '\n'));
       c.on('error', reject);
       c.on('close', resolve);
     });

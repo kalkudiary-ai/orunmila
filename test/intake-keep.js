@@ -90,13 +90,13 @@ it('W2b: intake keep starts the intake again after a stop no one asked for, and 
   keeper.stdout.on('data', (d) => (out += d));
   keeper.stderr.on('data', (d) => (out += d));
   const exited = new Promise((resolve) => keeper.on('exit', (code) => resolve(code)));
-  const sock = intakePaths(home).sock;
+  const at = intakePaths(home); // W4b: at.sock read at each use (on Windows each start publishes a fresh pipe name)
   try {
-    assert.ok(await until(async () => (await statusOf(sock, 300)) !== null), 'the kept intake answers: ' + out);
-    const first = (await statusOf(sock, 1000)).pid;
+    assert.ok(await until(async () => (await statusOf(at.sock, 300)) !== null), 'the kept intake answers: ' + out);
+    const first = (await statusOf(at.sock, 1000)).pid;
     process.kill(first, 'SIGTERM'); // a stop no one asked for: TE2 records it and exits 1
     assert.ok(await until(async () => {
-      const st = await statusOf(sock, 300);
+      const st = await statusOf(at.sock, 300);
       return Boolean(st && st.pid !== first);
     }), 'started again: ' + out);
     assert.ok(out.includes('starting it again'), out);
@@ -105,7 +105,7 @@ it('W2b: intake keep starts the intake again after a stop no one asked for, and 
     assert.strictEqual(await exited, 0, 'a stop asked for ends the keeper: ' + out);
   } catch (e) {
     keeper.kill('SIGKILL');
-    const st = await statusOf(sock, 300);
+    const st = await statusOf(at.sock, 300);
     if (st) process.kill(st.pid, 'SIGKILL');
     throw e;
   } finally {
@@ -123,22 +123,22 @@ it('W2b with PM2c3: a kept intake moving onto an update exits 75, and the keeper
   keeper.stdout.on('data', (d) => (out += d));
   keeper.stderr.on('data', (d) => (out += d));
   const exited = new Promise((resolve) => keeper.on('exit', (code) => resolve(code)));
-  const sock = intakePaths(home).sock;
+  const at = intakePaths(home); // W4b: at.sock read at each use (on Windows each start publishes a fresh pipe name)
   try {
-    assert.ok(await until(async () => (await statusOf(sock, 300)) !== null), 'the kept intake answers: ' + out);
+    assert.ok(await until(async () => (await statusOf(at.sock, 300)) !== null), 'the kept intake answers: ' + out);
     const next = '9.9.9_000000000000';
     fs.cpSync(path.join(home, 'runtime', first), path.join(home, 'runtime', next), { recursive: true });
     const pkg = JSON.parse(fs.readFileSync(path.join(home, 'runtime', next, 'package.json'), 'utf8'));
     fs.writeFileSync(path.join(home, 'runtime', next, 'package.json'), JSON.stringify({ ...pkg, version: '9.9.9' }));
     fs.writeFileSync(path.join(home, 'runtime', 'current'), next + '\n');
-    assert.ok(await until(async () => ((await statusOf(sock, 300)) || {}).version === '9.9.9'), 'the keeper started 9.9.9: ' + out);
+    assert.ok(await until(async () => ((await statusOf(at.sock, 300)) || {}).version === '9.9.9'), 'the keeper started 9.9.9: ' + out);
     assert.ok(out.includes('exited 75'), out);
     const r = run('bin/orunmila.js', { args: ['intake', 'stop'], env: { ORUNMILA_HOME: home } });
     assert.strictEqual(r.status, 0, r.stdout + r.stderr);
     assert.strictEqual(await exited, 0, 'one intake, kept by one keeper: ' + out);
   } catch (e) {
     keeper.kill('SIGKILL');
-    const st = await statusOf(sock, 300);
+    const st = await statusOf(at.sock, 300);
     if (st) process.kill(st.pid, 'SIGKILL');
     throw e;
   } finally {

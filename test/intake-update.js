@@ -60,30 +60,30 @@ it('PM2c3: once current names a new version and no session is held, the intake m
   const first = installRuntime({ home, from: ROOT }).folder;
   try {
     assert.strictEqual(run('bin/orunmila.js', { args: ['intake', 'start'], env: env(home) }).status, 0);
-    const sock = intakePaths(home).sock;
-    const before = await statusOf(sock, 1000);
+    const at = intakePaths(home); // W4b: at.sock read at each use (on Windows each start publishes a fresh pipe name)
+    const before = await statusOf(at.sock, 1000);
     // a session held: the switch must wait
     await new Promise((resolve, reject) => {
-      const c = require('net').createConnection(sock);
+      const c = require('net').createConnection(at.sock);
       c.on('error', reject);
       c.on('close', resolve);
       c.on('connect', () => c.end(JSON.stringify({ op: 'payload', payload: { session_id: 'ses_hold', transcript_path: '/none', cwd: project, hook_event_name: 'UserPromptSubmit', prompt: 'go' } }) + '\n'));
     });
-    assert.ok(await until(async () => ((await statusOf(sock, 300)) || { held: [] }).held.includes('ses_hold')), 'the session is held');
+    assert.ok(await until(async () => ((await statusOf(at.sock, 300)) || { held: [] }).held.includes('ses_hold')), 'the session is held');
     const next = newerCopy(home, first);
     fs.writeFileSync(path.join(home, 'runtime', 'current'), next + '\n');
     await sleep(1500);
-    const held = await statusOf(sock, 1000);
+    const held = await statusOf(at.sock, 1000);
     assert.deepStrictEqual([held.pid, held.version], [before.pid, VERSION], 'a held session keeps the intake where it is');
     // the same, with no session held (a new home: a held session is let go only after 30 quiet minutes)
     const home2 = path.join(base, 'h2');
     const first2 = installRuntime({ home: home2, from: ROOT }).folder;
     assert.strictEqual(run('bin/orunmila.js', { args: ['intake', 'start'], env: env(home2) }).status, 0);
-    const sock2 = intakePaths(home2).sock;
-    const was = await statusOf(sock2, 1000);
+    const at2 = intakePaths(home2); // W4b: at2.sock read at each use (on Windows each start publishes a fresh pipe name)
+    const was = await statusOf(at2.sock, 1000);
     fs.writeFileSync(path.join(home2, 'runtime', 'current'), newerCopy(home2, first2) + '\n');
     assert.ok(await until(async () => {
-      const st = await statusOf(sock2, 300);
+      const st = await statusOf(at2.sock, 300);
       return Boolean(st && st.version === '9.9.9' && st.pid !== was.pid);
     }), 'the intake moved onto 9.9.9');
     const out = fs.readFileSync(intakePaths(home2).out, 'utf8');

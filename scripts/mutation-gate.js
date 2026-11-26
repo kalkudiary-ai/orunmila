@@ -3169,6 +3169,34 @@ function runGate({ root = ROOT, mutants = MUTANTS, log = console.log, suiteTimeo
   return ok ? 0 : 1;
 }
 
+// BJ1 (LD326): the judge's install switch (src/opon/intake/switches.js) and `intake run` reading it.
+MUTANTS.push(
+  {
+    id: 'BJ1-1 the environment no longer wins over the switch',
+    file: 'src/opon/intake/switches.js',
+    test: 'test/judge-switch.js',
+    from: "  if (v === '1' || v === '0') return { on: v === '1', from: 'environment' };\n",
+    to: '',
+    fails: ['BJ1: the switch is off with no file', 'BJ1: intake run follows the switch'],
+  },
+  {
+    id: 'BJ1-2 turning the judge on or off drops the other switches',
+    file: 'src/opon/intake/switches.js',
+    test: 'test/judge-switch.js',
+    from: 'const next = problem ? { judge: on === true } : { ...obj, judge: on === true };',
+    to: 'const next = { judge: on === true };',
+    fails: ['BJ1: the switch is off with no file'],
+  },
+  {
+    id: 'BJ1-3 intake run ignores the switch (the environment alone, as before BJ1)',
+    file: 'bin/orunmila.js',
+    test: 'test/judge-switch.js',
+    from: '      judge: judge.on, //',
+    to: "      judge: process.env.ORUNMILA_JUDGE_LIVE === '1', //",
+    fails: ['BJ1: intake run follows the switch'],
+  },
+);
+
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };
 
 if (require.main === module) process.exit(runGate());

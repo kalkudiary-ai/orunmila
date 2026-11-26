@@ -165,6 +165,15 @@ const LENSES = {
     agents: 'claude-code only',
     install: 'orunmila install --with-gate',
   },
+  // BJ1 (LD326): the judge, an install option, off by default (O: "not everyone will appreciate the feature").
+  babalawo: {
+    name: 'The Babaláwo',
+    verb: 'judges',
+    one_line: "Judges each session's sealed record at its closeout: Clean, Look at this or Violation, with the reason.",
+    refuses: false,
+    agents: 'claude-code (through the intake)',
+    install: 'orunmila install --with-judge',
+  },
 };
 
 /**
@@ -264,7 +273,31 @@ function installGeneric(adapter, root, p) {
   fs.writeFileSync(p, JSON.stringify(settings, null, 2));
 }
 
+/**
+ * BJ1 (LD326; LD300 (4)): `install --with-judge | --without-judge` sets the Babaláwo's switch in Orunmila's home and
+ * touches no hook. The intake reads it at its next start; the judge only reads sealed records and never stops the agent.
+ */
+function installJudge(on) {
+  const { setJudge } = require('../src/opon/intake/switches');
+  const home = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
+  const file = setJudge(home, on);
+  if (on) {
+    console.log(`${LENSES.babalawo.name} is on (${file}).`);
+    console.log('At each session\'s closeout the intake judges the sealed record: every event Clean, Look at this or Violation,');
+    console.log('and the session as a whole, into verdict.jsonl beside the other two logs. It only reads the record; it never stops the agent.');
+    console.log('Read a session\'s verdicts with: orunmila report --verdicts --session ID');
+  } else {
+    console.log(`${LENSES.babalawo.name} is off (${file}). No verdict log is written; the record is kept as before.`);
+    console.log('Any session can still be judged by hand: orunmila judge --session ID');
+  }
+  console.log('It takes effect at the intake\'s next start (orunmila intake stop, then orunmila intake start; a launch agent starts it again by itself).');
+  if (process.env.ORUNMILA_JUDGE_LIVE === '1' || process.env.ORUNMILA_JUDGE_LIVE === '0') {
+    console.log(`Note: ORUNMILA_JUDGE_LIVE=${process.env.ORUNMILA_JUDGE_LIVE} is set in this shell, and an intake started from it follows that instead.`);
+  }
+}
+
 function cmdInstall() {
+  if (args.includes('--with-judge') || args.includes('--without-judge')) return installJudge(args.includes('--with-judge'));
   const root = path.resolve(__dirname, '..');
   const agentId = flag('agent', 'claude-code');
   const adapter = getAdapter(agentId);
@@ -478,7 +511,7 @@ function cmdLenses() {
     return;
   }
 
-  console.log(bold('orunmila has two lenses. They are installed separately and used for different jobs.\n'));
+  console.log(bold('orunmila has three lenses. They are installed separately and used for different jobs.\n'));
 
   // Pad on VISIBLE width: the header cells carry ANSI bold codes, and padEnd
   // counts those bytes, which knocks the header out of line with the rows.
@@ -488,23 +521,24 @@ function cmdLenses() {
   const pad = (t, n) => String(t) + ' '.repeat(Math.max(0, n - vis(t)));
 
   const rows = [
-    ['', bold('The Stain Map'), bold('The Closeout Gate')],
-    ['what it does', 'records + reports', 'refuses'],
-    ['when', 'after each turn', "before a turn is allowed to end"],
-    ['can it stop the agent?', 'never', 'yes — 2 of its laws block'],
-    ['agents', 'all supported agents', 'claude-code only'],
-    ['install', 'orunmila install', 'orunmila install --with-gate'],
-    ['add to an existing install', '—', 'orunmila install --gate-only'],
-    ['turn off for one session', '—', 'ORUNMILA_LAWS=off'],
-    ['read it', 'orunmila trail', 'orunmila laws'],
+    ['', bold('The Stain Map'), bold('The Closeout Gate'), bold('The Babaláwo')],
+    ['what it does', 'records + reports', 'refuses', 'judges the record'],
+    ['when', 'after each turn', 'before a turn is allowed to end', "at each session's closeout"],
+    ['can it stop the agent?', 'never', 'yes — 2 of its laws block', 'never'],
+    ['agents', 'all supported agents', 'claude-code only', 'claude-code (through the intake)'],
+    ['install', 'orunmila install', 'orunmila install --with-gate', 'orunmila install --with-judge'],
+    ['add to an existing install', '—', 'orunmila install --gate-only', 'orunmila install --with-judge'],
+    ['turn off', '—', 'ORUNMILA_LAWS=off (one session)', 'orunmila install --without-judge'],
+    ['read it', 'orunmila trail', 'orunmila laws', 'orunmila report --verdicts --session ID'],
   ];
   const w0 = Math.max(...rows.map((r) => vis(r[0])));
-  for (const [a, b, c] of rows) {
-    console.log(`  ${pad(a, w0)}   ${pad(b, 29)} ${c}`);
+  for (const [a, b, c, d] of rows) {
+    console.log(`  ${pad(a, w0)}   ${pad(b, 22)} ${pad(c, 33)} ${d}`);
   }
 
   console.log(dim('\n  The gate judges the events the Stain Map records, so the gate needs the Stain'));
-  console.log(dim('  Map underneath it. The Stain Map is useful entirely on its own.'));
+  console.log(dim('  Map underneath it. The Stain Map is useful entirely on its own. The Babaláwo'));
+  console.log(dim("  judges the intake's record (install --intake), and is off until you turn it on."));
 
   console.log(`\n${bold('Installed right now')} ${dim(`(${state.configPath})`)}`);
   if (!state.exists) {
@@ -521,9 +555,24 @@ function cmdLenses() {
     }
   }
 
+  const j = judgeState();
+  const judgeMark = j.on ? '\x1b[32m✓ installed\x1b[0m' : '\x1b[2m· not installed\x1b[0m';
+  console.log(`  ${pad('The Babaláwo', 20)} ${judgeMark} ${dim(`(${j.why})`)}`);
+  if (j.problem) console.log(`      \x1b[33m${j.problem}: read as off\x1b[0m`);
+
   if (state.exists && state.stainMap.length && !state.gate.length && state.adapter.id === 'claude-code') {
     console.log(dim('\n  To add the gate without touching capture:  orunmila install --gate-only'));
   }
+}
+
+/** BJ1 (LD326): the judge's switch as `lenses` and `status` show it, from Orunmila's home; the environment noted. */
+function judgeState() {
+  const { readSwitches, switchesFile } = require('../src/opon/intake/switches');
+  const home = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
+  const s = readSwitches(home);
+  const env = process.env.ORUNMILA_JUDGE_LIVE;
+  const shell = env === '1' || env === '0' ? `; ORUNMILA_JUDGE_LIVE=${env} in this shell wins for an intake started from it` : '';
+  return { on: s.judge, problem: s.problem, why: `switch: ${switchesFile(home)}${shell}` };
 }
 
 function logSizeKB() {
@@ -548,7 +597,7 @@ function cmdStatus() {
     const gateCell = ls.adapter.id === 'claude-code'
       ? mk(ls.gate.length)
       : '\x1b[2mn/a (claude-code only)\x1b[0m';
-    console.log(`Lenses: Stain Map ${mk(ls.stainMap.length)}  |  Closeout Gate ${gateCell}`);
+    console.log(`Lenses: Stain Map ${mk(ls.stainMap.length)}  |  Closeout Gate ${gateCell}  |  Babaláwo ${mk(judgeState().on)}`);
     if (String(process.env.ORUNMILA_LAWS || '').toLowerCase() === 'off') {
       console.log('  \x1b[33mORUNMILA_LAWS=off is set in this shell — the gate is disabled regardless of install.\x1b[0m');
     }
@@ -1492,6 +1541,8 @@ async function cmdIntake() {
   if (sub === 'run') {
     const { createRouter } = require('../src/opon/intake/router');
     const { nowMono } = require('../src/opon/intake/mono');
+    const { judgeOn, switchesFile } = require('../src/opon/intake/switches');
+    const judge = judgeOn(process.env, home); // BJ1 (LD326): the install's switch, the environment winning where set
     const router = createRouter({
       home,
       clock: () => ({ mono: nowMono(), wall: new Date().toISOString() }),
@@ -1502,7 +1553,7 @@ async function cmdIntake() {
       sentinel: true, // the Sentinel runs inside the intake (B4, LD145)
       baseline: oponLive(), // the Ọpọ́n's live path, only with ORUNMILA_OPON_LIVE=1: the baseline at session start (N1b, LD170), stations 2-6 and odu.jsonl (L1c, LD200)
       guard: process.env.ORUNMILA_LOG_GUARD === '1', // TE1 (LD279): every session's logs watched for a change Orunmila did not make, and put back
-      judge: process.env.ORUNMILA_JUDGE_LIVE === '1', // the judge at each closeout, only with ORUNMILA_JUDGE_LIVE=1 too (BB6; on live only on O's word, Q38)
+      judge: judge.on, // the judge at each closeout (BB6), only when switched on (BJ1: install --with-judge, or ORUNMILA_JUDGE_LIVE=1; Q38)
       // Q12 (a) (LD289): extra folders the Sentinel watches, absolute paths joined by the path delimiter (none by default)
       watchExtra: (process.env.ORUNMILA_WATCH_EXTRA || '').split(path.delimiter).filter((x) => x && path.isAbsolute(x)),
       asyncStart: process.env.ORUNMILA_ASYNC_START === '1', // SN1 (LD294): a session's start off the intake's thread (F16)
@@ -1535,6 +1586,8 @@ async function cmdIntake() {
     fs.rmSync(lastStop, { force: true }); // named once, in this start's gaps
     console.log(`orunmila intake: listening on ${r.sock} (pid ${process.pid})` + (r.squat ? `; another process held the socket: recorded in ${p.errors}` : ''));
     console.log(r.http.listening ? `orunmila intake: HTTP on 127.0.0.1:${r.http.port}` : `orunmila intake: HTTP port 127.0.0.1:${r.http.port} is held by another process (recorded in ${p.errors}); tried again every second`);
+    const why = judge.from === 'environment' ? `ORUNMILA_JUDGE_LIVE=${judge.on ? 1 : 0}` : judge.from === 'switch' ? `the switch in ${switchesFile(home)}` : 'turn it on with: orunmila install --with-judge';
+    console.log(`orunmila intake: the judge is ${judge.on ? 'on' : 'off'} (${why})`);
     for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) {
       process.on(sig, async () => {
         if (stopping) return;
@@ -1839,18 +1892,20 @@ if (!cmd || !COMMANDS[cmd]) {
 
 Usage: orunmila <command> [options]
 
-TWO LENSES, installed separately (orunmila lenses — which do I have?):
+THREE LENSES, installed separately (orunmila lenses — which do I have?):
 
   The Stain Map      records + reports. Never refuses. All supported agents.
   The Closeout Gate  refuses a turn whose claims its evidence doesn't support.
                      claude-code only. 2 of its 6 laws block; the rest advise.
+  The Babaláwo       judges each session's record at its closeout. Never refuses. Off until you turn it on.
 
 Install
   orunmila install [--agent ID] [--global]        the Stain Map alone (default agent: claude-code)
   orunmila install --with-gate [--agent ID]       both lenses (--with-laws is the original spelling, still works)
   orunmila install --gate-only                    add the Closeout Gate to an existing Stain Map install
   orunmila install --intake                       send every hook payload to the intake too (claude-code; start it first)
-  orunmila lenses [--agent ID] [--global]         the two lenses side by side + which are installed right now
+  orunmila install --with-judge | --without-judge  the Babaláwo on or off (from the intake's next start)
+  orunmila lenses [--agent ID] [--global]         the three lenses side by side + which are installed right now
   orunmila agents                                 list supported agents and their config locations
   orunmila --version                              the installed version
 

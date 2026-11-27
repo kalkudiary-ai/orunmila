@@ -235,5 +235,17 @@ it('PM2c1 (LD268): the updater is the one file that reaches the network, and not
   assert.deepStrictEqual(loaders, ['src/runtime/update.js']);
 });
 
+// VB1 (O's word, 2026-11-27: "Bump package.json from 0.2.2 before any release"): this branch's version is above the
+// last one published (0.2.4, from `main`), so `orunmila update` on a user's 0.2.4 moves to it and never back, and an
+// install of this branch is never taken for an older release; package-lock.json says the same version.
+it('VB1: the version is above the last published release (0.2.4), and package-lock.json agrees', () => {
+  const LAST_PUBLISHED = [0, 2, 4];
+  const parts = VERSION.split(/[.+-]/).slice(0, 3).map(Number);
+  const cmp = parts.map((n, i) => n - LAST_PUBLISHED[i]).find((d) => d !== 0) || 0;
+  assert.ok(cmp > 0, `package.json says ${VERSION}, not above 0.2.4`);
+  const lock = JSON.parse(fs.readFileSync(path.join(ROOT, 'package-lock.json'), 'utf8'));
+  assert.deepStrictEqual([lock.version, lock.packages[''].version], [VERSION, VERSION]);
+});
+
 it('cleanup', () => rmrf(keep));
 runAll('update');

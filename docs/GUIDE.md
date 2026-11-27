@@ -494,6 +494,14 @@ the second of two Stops in a row with the same text and nothing between them, it
 cannot tell them apart, and `laws --check` counts that turn as having no record
 of its own.
 
+With `ORUNMILA_GATE_FROM_MARKS=1` (off by default) the gate judges the turn from
+the intake's record, and one more case is a skip: a tool call of the turn has
+started and its outcome is not in the record yet. Capture may still be writing
+the turn, so a missing receipt may only be late (on one machine's records, 8
+outcomes arrived between 90 ms and 5.8 s after their turn's claim). The gate
+then records a skip and does not block. A turn whose findings are only advice
+is judged as before.
+
 ### The facts line (off by default)
 
 With `ORUNMILA_FACTS_LINE=1`, the gate puts one line of facts from the turn's

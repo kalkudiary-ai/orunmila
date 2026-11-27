@@ -143,7 +143,9 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   skipped, with the laws and the quoted sentence) is also written to the
   intake's session log. With `ORUNMILA_GATE_FROM_MARKS=1` the gate judges a
   turn from that log: a read or edit that failed is no receipt, and a folder
-  listing is a weak one. With both off the gate behaves exactly as before.
+  listing is a weak one; and a turn with a tool call started whose outcome is
+  not in that log yet is never blocked, since capture may still be writing it:
+  the gate records a skip. With both off the gate behaves exactly as before.
 - **`orunmila leak-check`: find your `.env` values in what Orunmila stored.**
   Capture redacts known secret formats, not your `.env` values, so a value in
   a format it does not know is stored as written, by both witnesses;

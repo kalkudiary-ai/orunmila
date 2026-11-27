@@ -153,10 +153,11 @@ function liveGateCounts(sessionId, { claims = null } = {}) {
       continue;
     }
     records[name.slice(0, -5)] = s;
-    if (s.skipped_unconfirmed_claim || s.skipped_stale_claim) {
+    if (s.skipped_unconfirmed_claim || s.skipped_stale_claim || s.skipped_capture_writing) {
       counts.skipped++;
       if (s.skipped_unconfirmed_claim) counts.skipped_unconfirmed++;
-      else counts.skipped_repeat++;
+      else if (s.skipped_stale_claim) counts.skipped_repeat++;
+      else counts.skipped_writing = (counts.skipped_writing || 0) + 1; // T66: present only when a turn had one
     } else if (s.claim_fp) {
       counts.checked++;
       if (s.blocks > 0) counts.blocked++;
@@ -256,7 +257,7 @@ function renderFindings(findings, { blocking }) {
  * null when there is nothing to say — the overwhelmingly common case, and the
  * one that must cost nothing.
  */
-function decideForTurn({ sessionId, turnId, promptId, claimText, promptText, turnEvents, sentinelWrites = [], root, onCheck = () => {}, receipts = null }) {
+function decideForTurn({ sessionId, turnId, promptId, claimText, promptText, turnEvents, sentinelWrites = [], root, onCheck = () => {}, receipts = null, open = 0 }) {
   // With the switch on, the facts line comes first, ahead of any finding, and
   // stands alone on a turn with none. Everything after it is unchanged, and a
   // fault in the facts line drops the line, never a finding.
@@ -280,6 +281,15 @@ function decideForTurn({ sessionId, turnId, promptId, claimText, promptText, tur
   const res = evaluateTurn({ claimText, promptText, turnEvents, laws: active, strictProof: strictProofEnabled(), receipts, claimsBlock: process.env.ORUNMILA_CLAIMS_BLOCK === '1' });
   if (!res.findings.length) {
     onCheck({ findings: [], lawErrors });
+    return factsOnly;
+  }
+
+  // T66 (test 66; NF8), with ORUNMILA_GATE_FROM_MARKS=1 only: a tool call of this turn started and has no outcome in
+  // the intake's log yet, so capture may still be writing the turn and a missing receipt may only be late. The gate
+  // never blocks such a turn: it records a skip, counted like any skip. A turn with nothing blocking is unchanged.
+  if (res.blocking.length && open > 0) {
+    writeState(sessionId, turnId, Object.assign({}, readState(sessionId, turnId), { skipped_capture_writing: true }));
+    onCheck({ skipped: `capture was still writing this turn: ${open} tool call(s) had started with no outcome in the log yet, so the gate does not block it (NF8)`, lawErrors });
     return factsOnly;
   }
 
@@ -365,15 +375,17 @@ function runGate(payload, adapter, { root, onCheck } = {}) {
     const promptEvent = turnEvents.find((e) => e.type === 'user_prompt');
     let promptText = promptEvent ? String(promptEvent.text || '') : '';
     let receipts = null;
+    let open = 0; // T66: the turn's tool calls with no outcome in the intake's log yet
     // B9 (LD148), off by default: the turn's receipts and prompts from the
     // intake's marks (open questions 2 and 3); no log for the session, or no
     // turn in it the log shows is this Stop's and whole (B9b, LD163), judges
     // from the event log as before.
     if (process.env.ORUNMILA_GATE_FROM_MARKS === '1') {
-      const { readSessionMarks, confirmedTurn } = require('../opon/gate/turn-marks');
+      const { readSessionMarks, confirmedTurn, openCalls } = require('../opon/gate/turn-marks');
       const all = readSessionMarks(dataDir(), sessionId);
       const t = all && confirmedTurn(all, String(claimText));
       if (t && t.turn) {
+        open = openCalls(t.marks).length;
         receipts = require('../opon/gate/receipts').buildReceiptsFromMarks(t.marks);
         promptText = t.promptText;
         // The lexical laws and strict proof read commands: the turn's, from its marks.
@@ -394,6 +406,7 @@ function runGate(payload, adapter, { root, onCheck } = {}) {
       root: root || process.cwd(),
       onCheck: report,
       receipts,
+      open,
     });
   } catch (e) {
     // A broken law engine may stop enforcing. It may never stop the agent.

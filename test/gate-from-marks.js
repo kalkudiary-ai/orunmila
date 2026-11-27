@@ -188,4 +188,65 @@ it("B9b gate (LD163): with ORUNMILA_GATE_FROM_MARKS=1, a log whose latest turn e
   }
 });
 
+it('T66: openCalls names the tool calls of a turn that started and have no outcome in the log yet', () => {
+  const { openCalls } = require('../src/opon/gate/turn-marks');
+  const own = [
+    mark('started', { kind: 'command', text: 'npm test' }, { tool: 'Bash' }, { cause_hint: 'a' }),
+    mark('exited', { kind: 'command', text: 'npm test' }, { tool: 'Bash', exit_status: 'pass' }, { cause_hint: 'a' }),
+    mark('started', { kind: 'command', text: 'npm run lint' }, { tool: 'Bash' }, { cause_hint: 'b' }),
+    mark('started', { kind: 'file', path: 'src/x.js' }, { tool: 'Edit' }, { cause_hint: 'c' }),
+    mark('ended', { kind: 'file', path: 'src/x.js' }, { tool: 'Edit', exit_status: 'fail' }, { cause_hint: 'c' }),
+  ];
+  assert.deepStrictEqual(openCalls(own), ['b']);
+  assert.deepStrictEqual(openCalls(own.slice(0, 2)), []);
+});
+
+// T66 (test 66; NF8, measured: on this machine's raw logs 8 outcomes arrived after their turn's claim, 90 ms to 5.8 s
+// later): the gate runs while capture is still writing the turn, forced here by a call whose outcome is not yet sent.
+it('test 66: the gate runs while capture is still writing the turn (a test run started, its outcome not yet in the log): it records a skip, never a block', () => {
+  const home = fs.realpathSync(tmpDir());
+  const root = fs.realpathSync(tmpDir());
+  const saved = { ORUNMILA_HOME: process.env.ORUNMILA_HOME, ORUNMILA_GATE_FROM_MARKS: process.env.ORUNMILA_GATE_FROM_MARKS, ORUNMILA_LAWS: process.env.ORUNMILA_LAWS };
+  try {
+    process.env.ORUNMILA_HOME = home;
+    delete process.env.ORUNMILA_LAWS;
+    process.env.ORUNMILA_GATE_FROM_MARKS = '1';
+    const { runGate, liveGateCounts } = require('../src/laws/gate');
+    const { getAdapter } = require('../src/capture/agents');
+    const session = (sid, sendOutcome, start = true, claim = 'All tests pass.') => {
+      const r = createRouter({ home, clock: () => ({ mono: nowMono(), wall: new Date().toISOString() }), checkSender: () => true, codeRoot: path.join(__dirname, '..', 'src'), orunmilaVersion: 't', installKey: crypto.randomBytes(32), hookSettingsFor: () => [] });
+      const send = (p) => r.payload({ session_id: sid, cwd: root, ...p }, { channel: 'command' });
+      send({ hook_event_name: 'UserPromptSubmit', prompt: 'run the tests' });
+      if (start) send({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'npm test' }, tool_use_id: 'c1' });
+      if (sendOutcome) send({ hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_input: { command: 'npm test' }, tool_use_id: 'c1', tool_response: { stdout: 'ok', stderr: '', interrupted: false } });
+      r.stop('over');
+      let check = null;
+      const out = runGate({ session_id: sid, hook_event_name: 'Stop', last_assistant_message: claim }, getAdapter('claude-code'), { root, onCheck: (c) => (check = c) });
+      return { out, check };
+    };
+    const writing = session('w1', false);
+    assert.ok(!(writing.out && writing.out.decision === 'block'), JSON.stringify(writing.out));
+    assert.ok(/capture was still writing this turn/.test(writing.check && writing.check.skipped), JSON.stringify(writing.check));
+    const counts = liveGateCounts('w1');
+    assert.deepStrictEqual([counts.skipped, counts.checked, counts.blocked], [1, 0, 0], 'counted as a skip');
+    // The same claim with nothing started is a whole turn with no test run: blocked, as before.
+    assert.strictEqual(session('w2', false, false).out.decision, 'block');
+    // Once the outcome lands the turn is judged on it: a passing run, so no block.
+    const landed = session('w3', true);
+    assert.ok(!(landed.out && landed.out.decision === 'block'), JSON.stringify(landed.out));
+    assert.ok(!landed.check.skipped, JSON.stringify(landed.check));
+    // A call still open in a turn whose claim breaks only a warning law: judged as before, its advice given, no skip.
+    const quiet = session('w4', false, true, 'src/x.js contains no TODO markers.');
+    assert.ok(!quiet.check.skipped && quiet.check.findings.length > 0 && !quiet.check.blocked, JSON.stringify(quiet.check));
+    assert.strictEqual(liveGateCounts('w4').skipped, 0);
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    rmrf(home);
+    rmrf(root);
+  }
+});
+
 runAll('gate-from-marks');

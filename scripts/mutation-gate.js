@@ -4171,6 +4171,50 @@ MUTANTS.push(
   },
 );
 
+// T66 (Phase 7, test 66, LD373): the gate never blocks a turn capture is still writing (ORUNMILA_GATE_FROM_MARKS=1).
+MUTANTS.push(
+  {
+    id: 'T66-1 the gate blocks a turn capture is still writing',
+    file: 'src/laws/gate.js',
+    test: 'test/gate-from-marks.js',
+    from: 'if (res.blocking.length && open > 0) {',
+    to: 'if (false) {',
+    fails: ['test 66: the gate runs while capture is still writing the turn'],
+  },
+  {
+    id: 'T66-2 a turn with nothing blocking is skipped too',
+    file: 'src/laws/gate.js',
+    test: 'test/gate-from-marks.js',
+    from: 'if (res.blocking.length && open > 0) {',
+    to: 'if (open > 0) {',
+    fails: ['test 66: the gate runs while capture is still writing the turn'],
+  },
+  {
+    id: 'T66-3 the gate is never told of an open call',
+    file: 'src/laws/gate.js',
+    test: 'test/gate-from-marks.js',
+    from: 'open = openCalls(t.marks).length;',
+    to: 'open = 0;',
+    fails: ['test 66: the gate runs while capture is still writing the turn'],
+  },
+  {
+    id: 'T66-4 an answered call reads as open',
+    file: 'src/opon/gate/turn-marks.js',
+    test: 'test/gate-from-marks.js',
+    from: "m.says === 'started' && !done.has(m.cause_hint)",
+    to: "m.says === 'started'",
+    fails: ['T66: openCalls names the tool calls'],
+  },
+  {
+    id: 'T66-5 the skip is not counted',
+    file: 'src/laws/gate.js',
+    test: 'test/gate-from-marks.js',
+    from: ' || s.skipped_capture_writing) {',
+    to: ') {',
+    fails: ['test 66: the gate runs while capture is still writing the turn'],
+  },
+);
+
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };
 
 if (require.main === module) process.exit(runGate());

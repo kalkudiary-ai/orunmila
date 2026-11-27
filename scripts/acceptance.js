@@ -95,7 +95,7 @@ const MAP = {
   63: A(C('intake-router', 'test 63:')),
   64: A(C('trail-marks', 'test 64:')),
   65: A(C('verify', 'test 65:')),
-  66: { ...A(C('laws', 'NF63:')), unshown: 'the gate running while capture writes the turn, in that forced order, recording a skip' },
+  66: { ...A(C('laws', 'NF63:'), C('gate-from-marks', 'test 66:'), C('gate-from-marks', 'T66:')), unshown: "on by default: the gate sees a call still being written only in the intake's marks, with ORUNMILA_GATE_FROM_MARKS=1, off until O's word (LD373); the event log has no record of a command before it ends" },
   67: A(C('attribute', 'A1 tests 6 and 67'), C('confidence', 'C1 test 67'), C('judge', 'tests 20 and 67'), C('report', 'tests 67 and 74')),
   68: A(C('group', 'test 68:'), C('confidence', 'C1 test 68')),
   69: A(C('group', 'test 67 (group half)'), C('conflicts', 'C3a test 69')),

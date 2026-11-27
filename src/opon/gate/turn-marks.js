@@ -22,6 +22,9 @@
  *                       gap, as the engine reads them) since the previous
  *                       turn's end. Else { turn: null, reason }: the gate then
  *                       judges from the event log, as with the flag off.
+ *   openCalls(own) -> the call ids of the turn's tool calls that started and
+ *                       have no outcome in the log yet (T66, test 66): the
+ *                       gate then never blocks the turn, it records a skip
  *
  * The gate runs at the Stop, while the intake may still be writing the turn:
  * what it reads is what had arrived, as with today's event log. A line that
@@ -68,6 +71,17 @@ const endsTurn = (m) => m.source === 'hook' && m.says === 'ended' && m.target &&
 /** A gap that can lose Glove marks: any but a Sentinel watch gap (`detail.root`), as src/opon/settle/engine.js reads them. */
 const losesGlove = (m) => m.says === 'gap' && !(m.detail && typeof m.detail === 'object' && m.detail.root);
 
+/**
+ * T66 (test 66; NF8): the tool calls of a turn's Glove marks (`own`, as turnFromMarks gives them) that started and have
+ * no outcome in the log yet, by call id. Capture may still be writing them (measured: 8 outcomes on this machine's raw
+ * logs arrived 90 ms to 5.8 s after their turn's claim); a denied or lost call stays open too.
+ */
+function openCalls(own) {
+  const call = (m) => m && m.source === 'hook' && typeof m.cause_hint === 'string' && m.cause_hint;
+  const done = new Set(own.filter((m) => call(m) && m.says !== 'started').map((m) => m.cause_hint));
+  return own.filter((m) => call(m) && m.says === 'started' && !done.has(m.cause_hint)).map((m) => m.cause_hint);
+}
+
 function confirmedTurn(marks, claimText) {
   const t = turnFromMarks(marks);
   if (!t) return { turn: null, reason: 'no Glove mark names a turn' };
@@ -84,4 +98,4 @@ function confirmedTurn(marks, claimText) {
   return t;
 }
 
-module.exports = { readSessionMarks, turnFromMarks, confirmedTurn };
+module.exports = { readSessionMarks, turnFromMarks, confirmedTurn, openCalls };

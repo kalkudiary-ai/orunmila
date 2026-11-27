@@ -247,5 +247,14 @@ it('VB1: the version is above the last published release (0.2.4), and package-lo
   assert.deepStrictEqual([lock.version, lock.packages[''].version], [VERSION, VERSION]);
 });
 
+// R1 (Phase 7; O, 2026-11-27, LD361: "1.0.0"): output 1's release, the one strangers are asked to trust, ships as 1.0.0,
+// the record formats becoming v1 with it; the README's newest "What's new" entry names it.
+it('R1: the version is 1.0.0, and the README leads its What\'s new with 1.0.0', () => {
+  assert.strictEqual(VERSION, '1.0.0');
+  const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+  const news = readme.slice(readme.indexOf("## What's new"));
+  assert.ok(news.split('\n').find((l) => l.startsWith('**')).startsWith('**1.0.0 '), "the first What's new entry");
+});
+
 it('cleanup', () => rmrf(keep));
 runAll('update');

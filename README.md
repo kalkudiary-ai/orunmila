@@ -168,7 +168,10 @@ Orunmila itself, and how each figure was made:
 
 ## What's new
 
-**0.3.0 can record each session in its own tamper-evident log.** The intake,
+**1.0.0 records each session in a log anyone can check.** The record formats
+are published as an open v1 specification ([`spec/`](spec/README.md)), and
+`orunmila verify <session-folder>` checks a record end to end with no setup and
+no network. The intake,
 a preview (`orunmila install --intake`, then `orunmila intake start`), writes
 each Claude Code session to its own hash-chained log outside the project, runs
 the disk watcher for that session's folder, and puts back any change to the

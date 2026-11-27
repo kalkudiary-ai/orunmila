@@ -78,7 +78,10 @@ const ID_FIELDS = new Set(['session_id', 'call_id', 'sub_agent_id']);
 const PATH_FIELDS = new Set(['path', 'rel_path', 'output_path']);
 const HASH_FIELDS = new Set(['hash', 'hash_before', 'hash_after', 'head_sha', 'merged_sha']);
 const TEXT_FIELDS = new Set(['text', 'stdout_excerpt', 'result_excerpt', 'diff']);
-const OTHER_FIELDS = ['command', 'host', 'target', 'tool_name', 'sub_agent_type', 'redactions', 'input', 'branch', 'checks', 'ref'];
+const OTHER_FIELDS = ['command', 'host', 'target', 'tool_name', 'sub_agent_type', 'redactions', 'input', 'branch', 'checks', 'ref', 'read_range'];
+// F26: exact capture's read extent (LD94, LD121): line counts and two flags, the shape a read's full or range reading
+// rests on. Its keys are kept from this list, and a value only when it is a number, a boolean or null.
+const READ_RANGE_KEYS = new Set(['asked_limit', 'asked_offset', 'lines', 'start_line', 'total_lines', 'truncated_by_token_cap']);
 // LD84: every top-level key the event log is known to hold; any other key is raw data and becomes a placeholder.
 const EVENT_KEYS = new Set([...KEEP_FIELDS, ...ID_FIELDS, ...PATH_FIELDS, ...HASH_FIELDS, ...TEXT_FIELDS, ...OTHER_FIELDS]);
 
@@ -199,6 +202,15 @@ function stripEvents(events) {
       else if (k === 'tool_name') o[k] = stripToolName(v);
       else if (k === 'sub_agent_type') o[k] = SUB_AGENT_TYPES.has(String(v)) ? keep(v) : ph('a', String(v));
       else if (k === 'redactions' && Array.isArray(v)) o[k] = v.map((x) => (REDACTION_KINDS.has(x) ? keep(x) : ph('a', String(x))));
+      else if (k === 'read_range' && v && typeof v === 'object' && !Array.isArray(v)) {
+        const r = {};
+        for (const [rk, rv] of Object.entries(v)) {
+          const plain = rv === null || typeof rv === 'number' || typeof rv === 'boolean';
+          if (READ_RANGE_KEYS.has(rk)) r[keep(rk)] = plain ? rv : stripValue(rv);
+          else r[ph('a', rk)] = rv === null ? rv : stripValue(rv);
+        }
+        o[k] = r;
+      }
       else o[k] = stripValue(v);
     }
     return o;

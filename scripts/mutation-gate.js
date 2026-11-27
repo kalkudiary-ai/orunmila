@@ -4061,6 +4061,42 @@ MUTANTS.push(
   },
 );
 
+// F26 (Phase 7, found by EU1): the stripper keeps exact capture's read extent, so a stripped session's relevance holds.
+MUTANTS.push(
+  {
+    id: 'F26-1 read_range dropped to placeholders again',
+    file: 'src/opon/fixtures/strip.js',
+    test: 'test/strip.js',
+    from: "if (READ_RANGE_KEYS.has(rk)) r[keep(rk)] = plain ? rv : stripValue(rv);",
+    to: "if (READ_RANGE_KEYS.has(rk)) r[ph('a', rk)] = plain ? rv : stripValue(rv);",
+    fails: ["F26: an exact-capture read's read_range keeps its counts"],
+  },
+  {
+    id: 'F26-2 a read_range key off the list is kept by name',
+    file: 'src/opon/fixtures/strip.js',
+    test: 'test/strip.js',
+    from: "else r[ph('a', rk)] = rv === null ? rv : stripValue(rv);",
+    to: 'else r[rk] = rv;',
+    fails: ["F26: an exact-capture read's read_range keeps its counts"],
+  },
+  {
+    id: 'F26-3 a listed read_range key keeps its text raw (found by the cold check)',
+    file: 'src/opon/fixtures/strip.js',
+    test: 'test/strip.js',
+    from: "if (READ_RANGE_KEYS.has(rk)) r[keep(rk)] = plain ? rv : stripValue(rv);",
+    to: 'if (READ_RANGE_KEYS.has(rk)) r[keep(rk)] = rv;',
+    fails: ['F26 (its cold check): a listed read_range key holding text'],
+  },
+  {
+    id: 'F26-4 a read_range that is not an object is copied through (found by the cold check)',
+    file: 'src/opon/fixtures/strip.js',
+    test: 'test/strip.js',
+    from: "else if (k === 'read_range' && v && typeof v === 'object' && !Array.isArray(v)) {",
+    to: "else if (k === 'read_range' && (typeof v !== 'object' || Array.isArray(v))) o[k] = v;\n      else if (k === 'read_range' && v && typeof v === 'object' && !Array.isArray(v)) {",
+    fails: ['F26 (its cold check): a listed read_range key holding text'],
+  },
+);
+
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };
 
 if (require.main === module) process.exit(runGate());

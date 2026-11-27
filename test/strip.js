@@ -177,4 +177,35 @@ it('relevance at the mark level: the stripped events translate to the same marks
   assert.strictEqual(relevance(RAW, broken).same, false);
 });
 
+it("F26: an exact-capture read's read_range keeps its counts, so a stripped session still reads full or range (relevance holds); a key off its list is replaced", () => {
+  const read = (n, rr) => ({ ...RAW[1], call_id: `toolu_secretread${n}`, read_kind: undefined, read_range: rr });
+  const raw = [
+    RAW[0],
+    read(1, { asked_limit: null, asked_offset: null, lines: 40, start_line: 1, total_lines: 40 }),
+    read(2, { asked_limit: 20, asked_offset: 100, lines: 20, start_line: 100, total_lines: 812 }),
+    read(3, { asked_limit: null, asked_offset: null, lines: 9, start_line: 1, total_lines: 400, truncated_by_token_cap: true }),
+    read(4, { asked_limit: 5, asked_offset: null, lines: 5, start_line: 1, total_lines: 9, acme_payroll_note: 'alice salary' }),
+  ].map((e) => JSON.parse(JSON.stringify(e)));
+  const s = stripEvents(raw);
+  for (let i = 1; i <= 3; i++) assert.deepStrictEqual(s.events[i].read_range, raw[i].read_range, `read ${i}`);
+  const odd = s.events[4].read_range;
+  assert.strictEqual(odd.total_lines, 9);
+  assert.ok(!('acme_payroll_note' in odd) && Object.keys(odd).length === 6, JSON.stringify(odd));
+  assert.deepStrictEqual(leakCheck(raw, s), []);
+  const r = relevance(raw, s.events);
+  assert.strictEqual(r.same, true, JSON.stringify(r));
+});
+
+it('F26 (its cold check): a listed read_range key holding text, and a read_range that is not an object, are masked, never copied through', () => {
+  const read = (n, rr) => ({ ...RAW[1], call_id: `toolu_secretread${n}`, read_range: rr });
+  const raw = [read(1, { asked_limit: 'alice payroll', lines: { acme: 'salary' }, start_line: 1 }), read(2, 'acme payroll rates'), read(3, ['alice', 7])].map((e) => JSON.parse(JSON.stringify(e)));
+  const s = stripEvents(raw);
+  assert.strictEqual(s.events[0].read_range.asked_limit, 'x'.repeat(5) + ' ' + 'x'.repeat(7));
+  assert.ok(!JSON.stringify(s.events[0].read_range.lines).includes('acme'), JSON.stringify(s.events[0].read_range.lines));
+  assert.strictEqual(s.events[0].read_range.start_line, 1);
+  assert.strictEqual(s.events[1].read_range, 'xxxx xxxxxxx xxxxx');
+  assert.deepStrictEqual(s.events[2].read_range, ['xxxxx', 0]);
+  assert.deepStrictEqual(leakCheck(raw, s), []);
+});
+
 runAll('strip');

@@ -4097,6 +4097,16 @@ MUTANTS.push(
   },
 );
 
+// EU1 (Phase 7, test 47): the kept commands' output shapes against the published 0.2.4's.
+MUTANTS.push({
+  id: 'EU1-1 the shape comparison loses nothing whatever is lost',
+  file: 'scripts/compat-shapes.js',
+  test: 'test/compat-shapes.js',
+  from: "return !(x.endsWith(':null') && paths.has(p));",
+  to: 'return false;',
+  fails: ['EU1: the comparison sees a lost field'],
+});
+
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };
 
 if (require.main === module) process.exit(runGate());

@@ -3843,6 +3843,40 @@ MUTANTS.push(
     to: 'if (problem) return { written: false',
     fails: ['UD1: a plain install turns the daily check on'],
   },
+  // F20: `orunmila watch` crashed on its first tick once the event log held a disk watcher's row (session_id null), or
+  // when it read a report the Stop hook was still writing.
+  {
+    id: "F20-1 watch takes the disk watcher's null session id",
+    file: 'bin/orunmila.js',
+    test: 'test/hooks.js',
+    from: "for (const e of all) if (typeof e.session_id === 'string' && e.session_id) sessions.add(e.session_id);",
+    to: 'for (const e of all) sessions.add(e.session_id);',
+    fails: ["F20: watch keeps running when the event log holds the disk watcher's rows"],
+  },
+  {
+    id: 'F20-2 watch reads reports with no allowance for one half-written',
+    file: 'bin/orunmila.js',
+    test: 'test/hooks.js',
+    from: 'listSessionReports(sessionId, { onUnreadable })',
+    to: 'listSessionReports(sessionId)',
+    fails: ['F20: watch keeps running past a report caught half-written'],
+  },
+  {
+    id: 'F20-3 watch names an unreadable report on every tick',
+    file: 'bin/orunmila.js',
+    test: 'test/hooks.js',
+    from: '        if (told.has(key)) return;\n',
+    to: '',
+    fails: ['F20: watch keeps running past a report caught half-written'],
+  },
+  {
+    id: 'F20-4 watch skips an unreadable report in silence',
+    file: 'bin/orunmila.js',
+    test: 'test/hooks.js',
+    from: '        console.error(`orunmila watch: the report ${key} could not be read yet',
+    to: '        String(`orunmila watch: the report ${key} could not be read yet',
+    fails: ['F20: watch keeps running past a report caught half-written'],
+  },
 );
 
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };

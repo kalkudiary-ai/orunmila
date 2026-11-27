@@ -96,7 +96,10 @@ function runUntil(relScript, { env = {}, args = [], cwd, ms = 1200 } = {}) {
     timeout: ms,
     killSignal: 'SIGINT', // hit the command's own SIGINT shutdown path
   });
-  return { stdout: res.stdout || '', stderr: res.stderr || '', signal: res.signal };
+  // F20: `timedOut` is true only when the child was still running at `ms` and was stopped by us, on every OS (spawnSync
+  // sets ETIMEDOUT then). A command that crashed or exited on its own before `ms` has it false.
+  const timedOut = Boolean(res.error && res.error.code === 'ETIMEDOUT');
+  return { stdout: res.stdout || '', stderr: res.stderr || '', signal: res.signal, status: res.status, timedOut };
 }
 
 /** A path with `/` separators, as Orunmila records every path (paths.js, overlap.js): the same string on every OS. */

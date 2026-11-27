@@ -884,6 +884,82 @@ it('cli: watch boots the combined observer and tails new turn reports', () => {
   rmrf(work);
 });
 
+/** F20: one real turn report for session S in `home` (the hooks, as in the case above); returns the report file. */
+function seedWatchReport(home, work) {
+  run(HOOK('user-prompt-submit.js'), { env: { ORUNMILA_HOME: home }, input: JSON.stringify({ session_id: 'S', prompt: 'write a.js' }) });
+  const f = path.join(work, 'a.js');
+  fs.writeFileSync(f, 'const a = 1;\n');
+  const slotDir = path.join(home, 'cache', 'S');
+  fs.mkdirSync(slotDir, { recursive: true });
+  fs.writeFileSync(path.join(slotDir, encodeURIComponent(f) + '.before'), '');
+  run(HOOK('post-tool-use.js'), { env: { ORUNMILA_HOME: home }, input: JSON.stringify({ session_id: 'S', tool_name: 'Write', tool_input: { file_path: f } }) });
+  const tr = path.join(work, 't.jsonl');
+  fs.writeFileSync(tr, JSON.stringify({ role: 'assistant', content: 'I wrote a.js.' }) + '\n');
+  run(HOOK('stop.js'), { env: { ORUNMILA_HOME: home }, input: JSON.stringify({ session_id: 'S', transcript_path: tr }) });
+  const report = path.join(home, 'reports', 'S', 't1.json');
+  assert.ok(fs.existsSync(report), 'the hooks wrote the turn report');
+  return report;
+}
+const WATCH_HEADER = '=== orunmila: session S / turn t1 ===';
+const countOf = (text, s) => text.split(s).length - 1;
+
+it('F20: watch keeps running when the event log holds the disk watcher\'s rows (session_id null), and prints each report once', () => {
+  const home = tmpHome();
+  const work = tmpDir();
+  seedWatchReport(home, work);
+  // A row of the shape src/capture/fs-sentinel/index.js writes: it knows no session, so session_id is null. `watch`
+  // starts that Sentinel itself, so any change on disk while it runs puts such a row in the log.
+  const row = { ts: new Date().toISOString(), session_id: null, turn_id: null, agent: 'fs-sentinel', source: 'fs-sentinel', type: 'file_write', path: path.join(work, 'b.js'), rel_path: 'b.js', diff: '', hash_before: null, hash_after: 'x', binary: false, change_kind: 'created', failed: false };
+  fs.appendFileSync(path.join(home, 'events.jsonl'), JSON.stringify(row) + '\n');
+  const r = runUntil('bin/orunmila.js', { args: ['watch', '--root', work], env: { ORUNMILA_HOME: home }, ms: 4000 }); // two ticks (1.5 s, 3 s)
+  try {
+    assert.ok(r.timedOut, `watch was still running when stopped (it ended on its own, exit ${r.status}): ${r.stderr.split('\n').slice(0, 6).join(' | ')}`);
+    assert.strictEqual(countOf(r.stdout, WATCH_HEADER), 1, 'the seeded report printed once over two ticks');
+  } finally {
+    rmrf(home);
+    rmrf(work);
+  }
+});
+
+it('F20: watch keeps running past a report caught half-written, and prints it once it is whole', async () => {
+  const { spawn } = require('child_process');
+  const home = tmpHome();
+  const work = tmpDir();
+  const report = seedWatchReport(home, work);
+  const whole = fs.readFileSync(report, 'utf8');
+  fs.writeFileSync(report, whole.slice(0, Math.floor(whole.length / 2))); // as a reader can find a report mid-write
+  const child = spawn('node', [path.join(__dirname, '..', 'bin', 'orunmila.js'), 'watch', '--root', work], { env: { ...process.env, ORUNMILA_HOME: home } });
+  let out = '';
+  let err = '';
+  let exited = null;
+  child.stdout.on('data', (d) => (out += d));
+  child.stderr.on('data', (d) => (err += d));
+  child.on('exit', (code, signal) => (exited = { code, signal }));
+  const waitFor = async (ok, ms) => {
+    for (const end = Date.now() + ms; Date.now() < end && !ok(); ) await new Promise((res) => setTimeout(res, 50));
+    return ok();
+  };
+  try {
+    assert.ok(await waitFor(() => out.includes('Watching for new turn reports') || exited, 8000), 'watch printed its banner');
+    await new Promise((res) => setTimeout(res, 3400)); // two ticks (1.5 s, 3 s) read the half-written report
+    assert.strictEqual(exited, null, `watch was still running after reading a half-written report: ${err.split('\n').slice(0, 6).join(' | ')}`);
+    assert.strictEqual(countOf(out, WATCH_HEADER), 0, 'nothing printed for a report it could not read');
+    fs.writeFileSync(report, whole);
+    assert.ok(await waitFor(() => out.includes(WATCH_HEADER) || exited, 6000), 'the whole report printed on a later tick');
+    await new Promise((res) => setTimeout(res, 1700)); // one more tick: no second print
+    assert.strictEqual(exited, null, 'still running');
+    assert.strictEqual(countOf(out, WATCH_HEADER), 1, 'printed once');
+    assert.strictEqual(countOf(err, 'the report S/t1.json could not be read yet'), 1, 'the half-written report named once on stderr, never silently skipped');
+  } finally {
+    if (exited === null) {
+      child.kill('SIGINT');
+      await waitFor(() => exited, 5000);
+    }
+    rmrf(home);
+    rmrf(work);
+  }
+});
+
 it('cli: the fs-sentinel module run directly boots and stops on SIGINT', () => {
   const home = tmpHome();
   const work = tmpDir();

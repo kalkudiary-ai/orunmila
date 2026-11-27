@@ -974,11 +974,20 @@ function cmdWatch() {
 
   console.log('Watching for new turn reports + filesystem - leave this running, work normally in Claude Code...\n');
   const seen = new Set();
+  const told = new Set(); // reports already named as unreadable, so each is named once
   setInterval(() => {
     const all = eventlog.readAll();
-    const sessions = new Set(all.map((e) => e.session_id));
+    // F20: the disk watcher's rows have session_id null (it knows no session); only a real id names a session.
+    const sessions = new Set();
+    for (const e of all) if (typeof e.session_id === 'string' && e.session_id) sessions.add(e.session_id);
     for (const sessionId of sessions) {
-      for (const report of listSessionReports(sessionId)) {
+      const onUnreadable = (file, err) => {
+        const key = `${sessionId}/${file}`;
+        if (told.has(key)) return;
+        told.add(key);
+        console.error(`orunmila watch: the report ${key} could not be read yet (${err.message}); it is tried again on each tick.`);
+      };
+      for (const report of listSessionReports(sessionId, { onUnreadable })) {
         const key = `${sessionId}/${report.turn_id}`;
         if (!seen.has(key)) {
           seen.add(key);

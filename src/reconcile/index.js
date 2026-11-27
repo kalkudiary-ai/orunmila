@@ -103,14 +103,29 @@ function loadReport(sessionId, turnId) {
   return JSON.parse(fs.readFileSync(p, 'utf8'));
 }
 
-function listSessionReports(sessionId) {
+/**
+ * A session's turn reports, in file order. A report that cannot be read or parsed throws, unless `onUnreadable` is
+ * given: then it is called with (file, error) and that report is left out (F20: `watch` polls while the Stop hook
+ * writes, so it can find a report half-written, and tries it again on its next tick).
+ */
+function listSessionReports(sessionId, { onUnreadable } = {}) {
   const dir = path.join(dataDir(), 'reports', sessionId);
   if (!fs.existsSync(dir)) return [];
-  return fs
+  const read = (f) => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+  const files = fs
     .readdirSync(dir)
     .filter((f) => f.endsWith('.json'))
-    .sort()
-    .map((f) => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')));
+    .sort();
+  if (!onUnreadable) return files.map(read);
+  const out = [];
+  for (const f of files) {
+    try {
+      out.push(read(f));
+    } catch (err) {
+      onUnreadable(f, err);
+    }
+  }
+  return out;
 }
 
 module.exports = { reconcileAndPersist, loadReport, listSessionReports, reportPath };

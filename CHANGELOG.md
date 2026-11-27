@@ -118,6 +118,12 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ### Fixed
 
+- **`orunmila watch` no longer stops about 1.5 seconds after it starts.** On
+  its first check for new reports it took the disk watcher's records, which
+  belong to no session, for a session, and crashed. Any record of a change
+  on disk was enough, and `watch` starts that watcher itself. A report it
+  finds half-written, as the Stop hook is still writing it, is named once and
+  read again on the next check, instead of ending the command.
 - **Five faults Windows showed, fixed.** A claim naming a file with a drive
   letter (`C:/proj/src/a.ts`) lost the drive, so a backed claim read as a
   phantom; a path written with `\` is still read as its file name. On Windows

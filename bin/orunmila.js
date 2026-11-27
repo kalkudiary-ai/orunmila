@@ -2135,8 +2135,9 @@ const COMMANDS = {
   trailer: cmdTrailer,
 };
 
-// The installed version (SECURITY.md asks a reporter to give it; OW2, LD151).
-if (cmd === '--version') {
+// The installed version, one line, exit 0 (SECURITY.md asks a reporter to give it; OW2, LD151). `-v` and `version`
+// too, as 0.2.4 on `main` reads them (issue 2).
+if (cmd === '--version' || cmd === '-v' || cmd === 'version') {
   console.log(require('../package.json').version);
   process.exit(0);
 }

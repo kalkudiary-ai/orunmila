@@ -10,6 +10,14 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ### Added
 
+- **A short README, a guide, and a map of the system for contributors.** The
+  README is now the way in: what Orunmila is, a "Start here" table, a
+  four-command quickstart, the three lenses, what it catches and cannot see,
+  and what's new. Everything else moved, word for word, to `docs/GUIDE.md`,
+  which the package now carries. `CONTRIBUTING.md` gains a first hour and a
+  map of the system, every folder in `src/` named. The README now names three
+  lenses, as the help does (it said two), and `CONTRIBUTING.md` no longer says
+  the tool makes no network call (the update check is its one).
 - **The trail page's Graph tab is a flowchart on a canvas.** Each thing is a
   box and each link an arrow pointing the way it went, read, ran or used,
   changed, left to right. The canvas moves both ways: scroll (Shift and scroll

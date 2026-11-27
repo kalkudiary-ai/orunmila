@@ -2216,7 +2216,7 @@ Both lenses
   orunmila trailer --session ID [--append FILE]   the session's verdict as git trailers for a commit message
                                                   (a convenience, not evidence: orunmila verify proves the record)
 
-Docs: README.md · known issues with status: review/ISSUES.md
+Docs: README.md (the way in) · docs/GUIDE.md (every command, law, switch and limit) · known issues with status: review/ISSUES.md
 `);
   process.exit(cmd ? 1 : 0);
 }

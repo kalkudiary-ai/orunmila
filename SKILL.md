@@ -150,8 +150,8 @@ still read, so a block hides nothing.
 backs a green claim, except an unguarded pipe. With `ORUNMILA_STRICT_PROOF=1`
 (off by default, not yet recommended) only a test-runner step whose recorded
 status is a pass counts, with nothing after it deciding the line's status and
-no pipe after it unless `set -o pipefail` came first. The README's "What counts
-as proof" has the runner list and the measured cost.
+no pipe after it unless `set -o pipefail` came first. The guide's "What counts
+as proof" (`docs/GUIDE.md`) has the runner list and the measured cost.
 
 **Blocks are budgeted.** Two per user message by default; the agent's answer
 after a block does not refill the budget. Once spent, findings degrade to advice

@@ -40,4 +40,78 @@ it('DOC4 (LD348): the README no longer says hooks name the package path, and SEC
   assert.ok(sec.includes('named pipe') && sec.includes('intake/address'), 'the Windows pipe and its address file');
 });
 
+// DOC5 (the in-house dev, LD344 §1.2: "The README is too much at once. No clear way in for a contributor; it reads as
+// written for agents"): the README is a short way in, the whole reference is docs/GUIDE.md, and CONTRIBUTING.md
+// carries a map of the system.
+const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
+/** Every inline markdown link target in a file, with the file it is relative to. */
+function linksOf(f) {
+  const t = read(f);
+  const out = [];
+  let i = 0;
+  while ((i = t.indexOf('](', i)) >= 0) {
+    const j = t.indexOf(')', i + 2);
+    if (j < 0) break;
+    out.push(t.slice(i + 2, j).split(' ')[0]);
+    i = j;
+  }
+  return out;
+}
+
+it('DOC5 (LD358): the README is a short way in: under 260 lines, a "Start here" table, and the guide one link away', () => {
+  const readme = read('README.md');
+  const lines = readme.split('\n').length;
+  assert.ok(lines < 260, `the README is ${lines} lines`);
+  assert.ok(readme.includes('## Start here'), 'a way in, first');
+  assert.ok(readme.includes('](docs/GUIDE.md)'), 'the guide is linked');
+  assert.ok(readme.includes('](CONTRIBUTING.md)'), 'and the contributor guide');
+});
+
+it('DOC5 (LD358): the README names three lenses, as the help and SKILL.md do, never two', () => {
+  const readme = read('README.md');
+  assert.ok(!readme.includes('The two lenses') && !readme.includes('two different jobs'), 'two lenses is stale');
+  for (const lens of ['The Stain Map', 'The Closeout Gate', 'The Babaláwo']) assert.ok(readme.includes(lens), lens);
+});
+
+it('DOC5 (LD358): every table row the README shows is the guide\'s too, word for word, so the two cannot drift', () => {
+  const guide = read('docs/GUIDE.md');
+  // Every table row, by the section it sits in; the "Start here" table points elsewhere, so it is the README's own.
+  let section = '';
+  const rows = [];
+  for (const l of read('README.md').split('\n')) {
+    if (l.startsWith('## ')) section = l;
+    else if (l.startsWith('| ') && section !== '## Start here') rows.push(l);
+  }
+  assert.ok(rows.length >= 10, `${rows.length} rows`);
+  assert.deepStrictEqual(rows.filter((r) => !guide.includes(r)), []);
+});
+
+it('DOC5 (LD358): every relative link in the README, the guide and CONTRIBUTING.md reaches a file that exists', () => {
+  const bad = [];
+  for (const f of ['README.md', 'docs/GUIDE.md', 'CONTRIBUTING.md']) {
+    for (const target of linksOf(f)) {
+      if (/^(https?:|mailto:|#)/.test(target)) continue;
+      const file = path.join(ROOT, path.dirname(f), decodeURI(target.split('#')[0]));
+      if (!fs.existsSync(file)) bad.push(`${f} -> ${target}`);
+    }
+  }
+  assert.deepStrictEqual(bad, []);
+});
+
+it("DOC5 (LD358): CONTRIBUTING.md maps the system: every folder in src/ is named, and the update check is the tool's one network call", () => {
+  const c = read('CONTRIBUTING.md');
+  assert.ok(c.includes('## A map of the system'), 'the map');
+  const dirs = fs.readdirSync(path.join(ROOT, 'src'), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
+  assert.deepStrictEqual(dirs.filter((d) => !c.includes(`src/${d}/`)), []);
+  assert.ok(!c.includes('"phone-home" version checks'), 'stale: the daily update check exists since UD1');
+  assert.ok(c.includes('orunmila update'), 'the one network call, named');
+});
+
+it('DOC5 (LD358): the help sends a reader to the guide as well as the README', () => {
+  const { spawnSync } = require('child_process');
+  const help = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'orunmila.js')], { encoding: 'utf8' }).stdout;
+  const docs = help.split('\n').find((l) => l.startsWith('Docs:'));
+  assert.ok(docs && docs.includes('docs/GUIDE.md'), docs);
+});
+
 runAll('docs-surfaces');

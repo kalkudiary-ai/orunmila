@@ -21,13 +21,16 @@ it('PM1 (LD335): every npm route writes hooks that name the starter, and they ru
   assert.strictEqual(r.status, 0, r.stdout + r.stderr);
 });
 
-it('PM4 (LD337): the README gives the install line of every route the script checks, and what every route leaves behind', () => {
+// DOC5 (LD358): every route's line moved from the README to the guide (docs/GUIDE.md, "Quickstart: every route"),
+// which the README links to; the README keeps one route and the link.
+it('PM4 (LD337, DOC5): the guide gives the install line of every route the script checks, and what every route leaves behind', () => {
   const { fs, path, ROOT } = require('./helpers');
   const { ROUTES } = require('../scripts/install-routes');
-  const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
-  const missing = Object.entries(ROUTES).filter(([, r]) => !readme.includes(r.readme)).map(([n, r]) => `${n}: ${r.readme}`);
+  const guide = fs.readFileSync(path.join(ROOT, 'docs', 'GUIDE.md'), 'utf8');
+  const missing = Object.entries(ROUTES).filter(([, r]) => !guide.includes(r.readme)).map(([n, r]) => `${n}: ${r.readme}`);
   assert.deepStrictEqual(missing, []);
-  assert.ok(readme.includes('~/.orunmila/bin/orunmila-start.js'), 'it says what every route leaves behind: hooks that run the starter');
+  assert.ok(guide.includes('~/.orunmila/bin/orunmila-start.js'), 'it says what every route leaves behind: hooks that run the starter');
+  assert.ok(fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8').includes('](docs/GUIDE.md#quickstart-every-route)'), 'the README links to every route');
 });
 
 runAll('install-routes');

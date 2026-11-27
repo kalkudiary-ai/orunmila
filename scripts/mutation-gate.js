@@ -3626,12 +3626,12 @@ MUTANTS.push(
   },
   // PM4 (LD337): the README gives every route's install line.
   {
-    id: 'PM4-1 the README drops the dev-dependency route',
-    file: 'README.md',
+    id: 'PM4-1 the guide drops the dev-dependency route',
+    file: 'docs/GUIDE.md',
     test: 'test/install-routes.js',
     from: 'npm install -D orunmila                  # then: npx orunmila install\n',
     to: '',
-    fails: ['PM4 (LD337)'],
+    fails: ['PM4 (LD337, DOC5)'],
   },
   // W2b (LD338): the intake kept running, and started at login on Windows. (No mutant makes the keeper restart after a
   // stop asked for: it would never end, and its suite would only time out.)
@@ -3941,6 +3941,15 @@ MUTANTS.push(
     from: '{ cap: Infinity, search: graphSearch, width: 960 }',
     to: '{ cap: 60, search: graphSearch, width: 960 }',
     fails: ["G2D: the trail page's Graph tab uses the levels"],
+  },
+  // DOC5 (the in-house dev, LD344 §1.2): the help sends a reader to the guide as well as the README.
+  {
+    id: 'DOC5-1 the help names only the README',
+    file: 'bin/orunmila.js',
+    test: 'test/docs-surfaces.js',
+    from: 'Docs: README.md (the way in) · docs/GUIDE.md (every command, law, switch and limit) · known issues',
+    to: 'Docs: README.md · known issues',
+    fails: ['DOC5 (LD358): the help sends a reader to the guide'],
   },
 );
 

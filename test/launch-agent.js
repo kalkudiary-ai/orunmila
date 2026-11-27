@@ -60,7 +60,7 @@ it('LA2 (Q7, LD219): the plist carries ORUNMILA_OPON_LIVE when set, so an agent 
 });
 
 it("LA3 (LD290): the plist carries every flag the intake reads (the judge's, the log guard's, the extra folders), so an agent installed with them keeps them across restarts; unset, none", () => {
-  const env = { ORUNMILA_JUDGE_LIVE: '1', ORUNMILA_LOG_GUARD: '1', ORUNMILA_WATCH_EXTRA: '/a:/b', ORUNMILA_ASYNC_START: '1', ORUNMILA_PEER_BUSY: '1', ORUNMILA_UPDATES: '1', ORUNMILA_REGISTRY: 'https://registry.example/' }; // SN1 (LD294), AT1b (LD330), PM2c2 (LD333) too
+  const env = { ORUNMILA_JUDGE_LIVE: '1', ORUNMILA_LOG_GUARD: '1', ORUNMILA_WATCH_EXTRA: '/a:/b', ORUNMILA_ASYNC_START: '1', ORUNMILA_PEER_BUSY: '1', ORUNMILA_UPDATES: '1', ORUNMILA_REGISTRY: 'https://registry.example/', ORUNMILA_VCS_MARKS: '1' }; // SN1 (LD294), AT1b (LD330), PM2c2 (LD333), VC1 (LD372) too
   const on = plistFor({ ...BASE, env });
   for (const [k, v] of Object.entries(env)) assert.ok(on.includes(`<key>${k}</key>\n    <string>${v}</string>`), `${k}: ${on}`);
   const off = plistFor({ ...BASE, env: { ORUNMILA_JUDGE_LIVE: '', ORUNMILA_LOG_GUARD: '', ORUNMILA_WATCH_EXTRA: '' } });

@@ -196,6 +196,10 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 - **Edit verbs for the claim reader, off by default (`ORUNMILA_EDIT_VERBS=1`):**
   "I edited X", "modified", "rewrote" and "patched" are read as claims of
   changed work.
+- **Git, pull-request and CI state in the intake's record, off by default
+  (`ORUNMILA_VCS_MARKS=1`).** A `git` or `gh` command's output (its branch and
+  commit, each pull request and its state, each set of checks) goes on that
+  command's mark in the session's log, as the event log has always kept it.
 
 ### Changed
 

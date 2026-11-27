@@ -6,7 +6,7 @@
  * src/opon/intake/adapters/claude-code.js — Claude Code's hook payloads to
  * marks (brief v3 lines 240-268, 336-337; Phase 1 slice A8, second half).
  *
- *   translatePayload(payload, { turn, observedAt, monoNs?, file? })
+ *   translatePayload(payload, { turn, observedAt, monoNs?, file?, vcs? })
  *     -> { marks: [{ mark, keep }], rejects: [{ payload, reason }] }
  *
  * A pure translator: the caller (intake) gives the turn, the time it received
@@ -22,6 +22,8 @@
  *   carries the code its failure text states ("Exit code N", NF22), with the
  *   output after that line; one that states none has no exit_code (LD121).
  *   Launched in the background, or interrupted: `unknown`, never pass (NF66).
+ *   With `vcs` (the intake's ORUNMILA_VCS_MARKS=1, off by default; VC1, LD372),
+ *   a git or gh command that did not fail carries `detail.vcs` (test 60).
  * - A write: created, modified or deleted from the measured facts; with no
  *   facts, modified with the before-state null.
  * - A Read records the extent its own result states (`read_range`, LD94):
@@ -39,6 +41,7 @@
  */
 
 const { getAdapter, readRange } = require('../../../capture/agents');
+const { deriveVcsEvents } = require('../../../capture/vcs-evidence');
 const { monoString } = require('../mono');
 
 const CC = getAdapter('claude-code');
@@ -161,6 +164,12 @@ function translatePayload(payload, ctx = {}) {
     if (code !== null) detail.exit_code = code;
     if (!failed && input.run_in_background) Object.assign(detail, { exit_status: 'unknown', background: true });
     else if (!failed && response.interrupted === true) Object.assign(detail, { exit_status: 'unknown', interrupted: true });
+    if (ctx.vcs === true && !failed) {
+      // VC1 (LD372; brief v4 line 267, test 60): git, pull-request and CI state from the whole output, as today's capture
+      // derives it (core.js), one entry each with today's field names; a failed command asserts nothing.
+      const vcs = deriveVcsEvents(f.command(input), out);
+      if (vcs.length) detail.vcs = vcs;
+    }
     if (out.length > EXCERPT) keep.push({ slot: 'output_ref', text: out });
   } else if (failed) {
     says = 'ended';

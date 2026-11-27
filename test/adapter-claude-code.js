@@ -85,6 +85,34 @@ it('NF66: a command launched in the background, or interrupted, is exit_status u
   assert.strictEqual(cut.detail.interrupted, true);
 });
 
+// VC1 (LD372): the live path's git, pull-request and CI state, as today's capture derives it from a command's output,
+// on the command's own exited mark (brief v4 line 267); with the intake's ORUNMILA_VCS_MARKS=1 only, off by default.
+it('test 60: git status -sb, then gh pr list --json number,state showing two pull requests: detail.vcs on each exited mark, one entry with the branch, then one per pull request; source hook, never git', () => {
+  const on = { ...ctx, vcs: true };
+  const st = only(post('Bash', { command: 'git status -sb' }, { stdout: '## main...origin/main\n M src/a.ts\n', stderr: '' }), on).mark;
+  assert.deepStrictEqual([st.source, st.says, st.detail.vcs], ['hook', 'exited', [{ type: 'git_state', head_sha: null, branch: 'main' }]]);
+  const prs = JSON.stringify([{ number: 12, state: 'OPEN' }, { number: 9, state: 'MERGED' }]);
+  const pr = only(post('Bash', { command: 'gh pr list --json number,state' }, { stdout: prs, stderr: '' }), on).mark;
+  assert.deepStrictEqual([pr.source, pr.says, pr.detail.vcs], [
+    'hook',
+    'exited',
+    [
+      { type: 'pr_state', pr_number: 12, pr_state: 'open', merged_sha: null },
+      { type: 'pr_state', pr_number: 9, pr_state: 'merged', merged_sha: null },
+    ],
+  ]);
+  const long = only(post('Bash', { command: 'git log -1 --format=%H' }, { stdout: 'x'.repeat(2100) + '\n' + 'a'.repeat(40), stderr: '' }), on).mark;
+  assert.deepStrictEqual(long.detail.vcs, [{ type: 'git_state', head_sha: 'a'.repeat(40), branch: null }], 'read from the whole output, not the excerpt');
+});
+
+it('VC1 (LD372): no detail.vcs with the switch off (the default), on a failed command, or on a command that is neither git nor gh', () => {
+  const cmd = post('Bash', { command: 'git status -sb' }, { stdout: '## main...origin/main\n', stderr: '' });
+  assert.ok(!('vcs' in only(cmd).mark.detail), 'off by default');
+  const on = { ...ctx, vcs: true };
+  assert.ok(!('vcs' in only({ ...cmd, hook_event_name: 'PostToolUseFailure', error: 'Exit code 128\n## main' }, on).mark.detail), 'a failed command asserts nothing');
+  assert.ok(!('vcs' in only(post('Bash', { command: 'echo "## main"' }, { stdout: '## main\n', stderr: '' }), on).mark.detail), 'not git or gh');
+});
+
 it('long output: the first 2,000 characters in the mark, the whole output kept beside the log', () => {
   const out = 'x'.repeat(2500);
   const { mark, keep } = only(post('Bash', { command: 'make' }, { stdout: out, stderr: 'warn' }));

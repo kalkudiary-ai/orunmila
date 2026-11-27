@@ -4127,6 +4127,50 @@ MUTANTS.push(
   },
 );
 
+// VC1 (Phase 7, test 60, LD372): the live path's detail.vcs, behind ORUNMILA_VCS_MARKS=1.
+MUTANTS.push(
+  {
+    id: 'VC1-1 detail.vcs written with the switch off',
+    file: 'src/opon/intake/adapters/claude-code.js',
+    test: 'test/adapter-claude-code.js',
+    from: 'if (ctx.vcs === true && !failed) {',
+    to: 'if (!failed) {',
+    fails: ['VC1 (LD372): no detail.vcs with the switch off'],
+  },
+  {
+    id: 'VC1-2 a failed command carries detail.vcs',
+    file: 'src/opon/intake/adapters/claude-code.js',
+    test: 'test/adapter-claude-code.js',
+    from: 'if (ctx.vcs === true && !failed) {',
+    to: 'if (ctx.vcs === true) {',
+    fails: ['VC1 (LD372): no detail.vcs with the switch off'],
+  },
+  {
+    id: 'VC1-3 detail.vcs read from the excerpt, not the whole output',
+    file: 'src/opon/intake/adapters/claude-code.js',
+    test: 'test/adapter-claude-code.js',
+    from: 'const vcs = deriveVcsEvents(f.command(input), out);',
+    to: 'const vcs = deriveVcsEvents(f.command(input), out.slice(0, EXCERPT));',
+    fails: ['test 60: git status -sb, then gh pr list'],
+  },
+  {
+    id: 'VC1-4 the router never passes the switch',
+    file: 'src/opon/intake/router.js',
+    test: 'test/intake-router.js',
+    from: 'file, vcs: o.vcsMarks === true });',
+    to: 'file, vcs: false });',
+    fails: ['test 60 at the router (VC1, LD372)'],
+  },
+  {
+    id: 'VC1-5 the launch agent drops the switch',
+    file: 'src/opon/intake/launch-agent.js',
+    test: 'test/launch-agent.js',
+    from: "['ORUNMILA_HOME', 'ORUNMILA_VCS_MARKS', ",
+    to: "['ORUNMILA_HOME', ",
+    fails: ['LA3 (LD290)'],
+  },
+);
+
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };
 
 if (require.main === module) process.exit(runGate());

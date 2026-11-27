@@ -1682,6 +1682,7 @@ async function cmdIntake() {
       watchExtra: (process.env.ORUNMILA_WATCH_EXTRA || '').split(path.delimiter).filter((x) => x && path.isAbsolute(x)),
       asyncStart: process.env.ORUNMILA_ASYNC_START === '1', // SN1 (LD294): a session's start off the intake's thread (F16)
       peerBusy: peerBusy.on, // AT1b (LD330): a peer's working time noted in each session's log; on by default since PB1
+      vcsMarks: process.env.ORUNMILA_VCS_MARKS === '1', // VC1 (LD372, test 60): git, PR and CI state on a command's mark; off by default
     });
     // TE2 (LD283): a stop asked for comes over the socket (`orunmila intake stop`) and exits 0; a signal with no ask is
     // a tampered mark in every held session, kept in last-stop.json for the next start's gap, and exits 1, so the

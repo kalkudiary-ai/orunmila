@@ -101,6 +101,27 @@ it(
 );
 
 it(
+  'test 60 at the router (VC1, LD372): with vcsMarks, a git command\'s exited mark in the log carries detail.vcs, verified intact; without it (the default), none',
+  () => {
+    for (const on of [true, false]) {
+      withRouter(
+        ({ router, project, dir }) => {
+          const p = cc(project);
+          router.payload(p.prompt('status?'), { channel: 'command' });
+          router.payload(p.pre('Bash', { command: 'git status -sb' }, 'g1'), { channel: 'command' });
+          assert.strictEqual(router.payload(p.post('Bash', { command: 'git status -sb' }, { stdout: '## main...origin/main\n', stderr: '' }, 'g1'), { channel: 'command' }).ok, true);
+          const ex = marks(dir('ses_r1')).filter((m) => m.says === 'exited');
+          assert.strictEqual(ex.length, 1);
+          assert.deepStrictEqual(ex[0].detail.vcs, on ? [{ type: 'git_state', head_sha: null, branch: 'main' }] : undefined, `vcsMarks ${on}`);
+          assert.strictEqual(verifySessionLog(dir('ses_r1')).ok, true);
+        },
+        on ? { vcsMarks: true } : {},
+      )();
+    }
+  },
+);
+
+it(
   'test 76: a Stop for a turn whose prompt hook never fired writes no prompted mark',
   withRouter(({ router, project, dir }) => {
     router.payload(cc(project).stop('ok'), { channel: 'command' });

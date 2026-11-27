@@ -11,7 +11,9 @@
  *   createRouter({ home, clock, checkSender, codeRoot, orunmilaVersion,
  *                  installKey, hookSettingsFor?, lawPacksFor?, config?,
  *                  diff?, tickMs?, releaseMs?, sentinel?, baseline?, judge?,
- *                  peerBusy? })
+ *                  peerBusy?, vcsMarks? })
+ *       vcsMarks (VC1, LD372; test 60): a git or gh command's exited mark
+ *       carries detail.vcs, as today's capture derives it; off by default
  *       judge (BB6, with baseline): the rules file's text in each new
  *       session's header, and the verdict log written at its closeout;
  *       true for the default judge, or a judge's name (BB11)
@@ -688,7 +690,7 @@ function createRouter(o) {
     }
 
     const now = item ? item.at : clock(); // SN1: a queued payload keeps the time it arrived
-    const t = translatePayload(p, { turn, observedAt: now.wall, monoNs: from.monoNs !== undefined ? from.monoNs : item ? item.at.mono : undefined, file });
+    const t = translatePayload(p, { turn, observedAt: now.wall, monoNs: from.monoNs !== undefined ? from.monoNs : item ? item.at.mono : undefined, file, vcs: o.vcsMarks === true });
     const results = [];
     for (const { mark, keep } of t.marks) results.push(engine.receive(normalise(s, mark), from, keep));
     for (const r of t.rejects) results.push(engine.receive({ session_id: id, adapter_reject: r.reason, payload: p }, from));

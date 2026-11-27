@@ -202,6 +202,10 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   (`ORUNMILA_VCS_MARKS=1`).** A `git` or `gh` command's output (its branch and
   commit, each pull request and its state, each set of checks) goes on that
   command's mark in the session's log, as the event log has always kept it.
+- **A limit on a flooded Sentinel, off by default
+  (`ORUNMILA_SENTINEL_MAX_PENDING=N`).** Past N changed paths waiting at once
+  under one folder, the rest of the flood is dropped and one gap in each
+  session's record says so; the closeout's rescan finds what changed.
 
 ### Changed
 

@@ -4215,6 +4215,50 @@ MUTANTS.push(
   },
 );
 
+// T32 (Phase 7, test 32, LD374): a flooded Sentinel drops the rest of the flood and names it in one gap.
+MUTANTS.push(
+  {
+    id: 'T32-1 the Sentinel never drops, whatever its limit',
+    file: 'src/opon/intake/sentinel.js',
+    test: 'test/intake-sentinel.js',
+    from: 'if (!prev && w.pending.size >= maxPending) {',
+    to: 'if (false) {',
+    fails: ['test 32: a Sentinel flooded past its limit'],
+  },
+  {
+    id: 'T32-2 a gap for every dropped path',
+    file: 'src/opon/intake/sentinel.js',
+    test: 'test/intake-sentinel.js',
+    from: 'if (!w.dropping) gap(root, `changes under',
+    to: 'gap(root, `changes under',
+    fails: ['test 32: a Sentinel flooded past its limit'],
+  },
+  {
+    id: 'T32-3 a second flood is never named',
+    file: 'src/opon/intake/sentinel.js',
+    test: 'test/intake-sentinel.js',
+    from: 'if (!w.pending.size) w.dropping = false;',
+    to: 'void 0;',
+    fails: ['test 32: a Sentinel flooded past its limit'],
+  },
+  {
+    id: 'T32-4 the router never passes the limit',
+    file: 'src/opon/intake/router.js',
+    test: 'test/intake-sentinel.js',
+    from: 'maxPending: o.sentinelMaxPending,',
+    to: 'maxPending: undefined,',
+    fails: ['test 32 at the router (T32, LD374)'],
+  },
+  {
+    id: 'T32-5 the launch agent drops the limit',
+    file: 'src/opon/intake/launch-agent.js',
+    test: 'test/launch-agent.js',
+    from: "'ORUNMILA_VCS_MARKS', 'ORUNMILA_SENTINEL_MAX_PENDING', ",
+    to: "'ORUNMILA_VCS_MARKS', ",
+    fails: ['LA3 (LD290)'],
+  },
+);
+
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };
 
 if (require.main === module) process.exit(runGate());

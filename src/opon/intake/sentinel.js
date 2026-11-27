@@ -8,7 +8,10 @@
  * folder, run by the intake). The router owns it: a held session's project
  * root is watched from its first session to its last.
  *
- *   createSentinels({ clock, key, diffOf, emit, debounceMs = 150 })
+ *   createSentinels({ clock, key, diffOf, emit, debounceMs = 150, maxPending = Infinity })
+ *     maxPending  T32 (test 32, LD374; ORUNMILA_SENTINEL_MAX_PENDING, no limit by
+ *                 default): with more paths than this waiting at once under a
+ *                 root, the rest of the flood is dropped and one gap says so
  *     emit(root, mark, keep)   a translated mark (no session_id yet) for every
  *                              held session of `root`, with the files to keep
  *     .ignoreFor(root)  what this Sentinel does not watch under root: today's
@@ -74,7 +77,7 @@ function snapFile(abs, limit, key) {
 
 const ignoreFor = (root) => effectiveIgnore(root).filter((e) => String(e).replace(/\/+$/, '') !== WATCHED_ANYWAY);
 
-function createSentinels({ clock, key, diffOf, emit, debounceMs = DEBOUNCE_MS }) {
+function createSentinels({ clock, key, diffOf, emit, debounceMs = DEBOUNCE_MS, maxPending = Infinity }) {
   const watched = new Map(); // root -> { users, walker, store, pending, limit, ignore }
 
   const snap = (abs, limit) => snapFile(abs, limit, key);
@@ -136,9 +139,16 @@ function createSentinels({ clock, key, diffOf, emit, debounceMs = DEBOUNCE_MS })
       onPath: (abs) => {
         const at = clock(); // the last raw event of a burst stamps the mark
         const prev = w.pending.get(abs);
+        if (!prev && w.pending.size >= maxPending) {
+          // T32 (test 32, LD374): flooded past its limit, the Sentinel drops what comes after it, and says so once per flood.
+          if (!w.dropping) gap(root, `changes under ${root}: more than ${maxPending} paths were waiting at once, so the Sentinel dropped the rest of this flood and did not record them live; the closeout's rescan reads the folder again`, at);
+          w.dropping = true;
+          return;
+        }
         if (prev) clearTimeout(prev.timer);
         const timer = setTimeout(() => {
           w.pending.delete(abs);
+          if (!w.pending.size) w.dropping = false; // the flood has drained: a later one is named again
           if (watched.get(root) !== w) return;
           change(root, w, abs, at);
         }, debounceMs);

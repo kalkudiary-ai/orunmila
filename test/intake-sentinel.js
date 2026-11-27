@@ -18,7 +18,7 @@ const SRC = path.join(__dirname, '..', 'src');
 const KEY = crypto.randomBytes(32);
 const sha = (buf) => 'sha256:' + crypto.createHash('sha256').update(buf).digest('hex');
 
-function setup({ releaseMs } = {}) {
+function setup({ releaseMs, sentinelMaxPending } = {}) {
   const home = fs.realpathSync(tmpDir());
   const root = fs.realpathSync(tmpDir());
   const router = createRouter({
@@ -31,6 +31,7 @@ function setup({ releaseMs } = {}) {
     hookSettingsFor: () => [],
     sentinel: true,
     releaseMs,
+    sentinelMaxPending,
   });
   const dirOf = (id) => path.join(home, 'sessions', id);
   const marks = (id) => checkLog(dirOf(id), 'raw').records.map((r) => r.rec).slice(1);
@@ -231,6 +232,61 @@ it('B4 CLI: intake run watches a session\'s root, so a write there reaches its l
     await new Promise((r) => child.once('exit', r));
     rmrf(home);
     rmrf(root);
+  }
+});
+
+// T32 (test 32, LD374): a Sentinel flooded past its limit drops what comes after it, and says so in one gap; the
+// closeout's rescan (K2, test/closeout.js) is what finds a dropped change. The limit is off unless set.
+it('test 32: a Sentinel flooded past its limit (ORUNMILA_SENTINEL_MAX_PENDING) drops what comes after it and writes one gap naming the loss, then recovers; with no limit (the default) every change is a mark', async () => {
+  const { createSentinels } = require('../src/opon/intake/sentinel');
+  const { unifiedDiff } = require('../src/reconcile/difftool');
+  for (const cap of [3, undefined]) {
+    const root = fs.realpathSync(tmpDir());
+    const out = [];
+    const s = createSentinels({ clock: () => ({ mono: nowMono(), wall: new Date().toISOString() }), key: KEY, diffOf: unifiedDiff, emit: (r, m) => out.push(m), debounceMs: 400, maxPending: cap });
+    try {
+      s.watch(root, 1 << 20);
+      assert.ok(await awaitWatching(root, () => out.some((m) => m.source === 'sentinel')), 'the watch is live');
+      out.length = 0;
+      for (let i = 0; i < 20; i++) fs.writeFileSync(path.join(root, `f${i}.txt`), `v${i}\n`);
+      await sleep(1500);
+      const files = out.filter((m) => m.source === 'sentinel' && /^f[0-9]+\.txt$/.test(m.target.path)).length; // awaitWatching's probes left out
+      const gaps = out.filter((m) => m.says === 'gap');
+      if (cap) {
+        assert.strictEqual(gaps.length, 1, JSON.stringify(gaps));
+        assert.ok(/dropped/.test(gaps[0].detail.lost) && gaps[0].detail.root === root, JSON.stringify(gaps[0]));
+        assert.ok(files <= cap, `${files} marks for 20 changes`);
+        out.length = 0;
+        fs.writeFileSync(path.join(root, 'after.txt'), 'later\n');
+        await sleep(1000);
+        assert.ok(out.some((m) => m.source === 'sentinel' && m.target.path === 'after.txt'), 'once the flood drained, changes are read again');
+        out.length = 0;
+        for (let i = 0; i < 20; i++) fs.writeFileSync(path.join(root, `g${i}.txt`), `w${i}\n`);
+        await sleep(1500);
+        assert.strictEqual(out.filter((m) => m.says === 'gap').length, 1, 'a second flood is named again');
+      } else {
+        assert.strictEqual(gaps.length, 0);
+        assert.strictEqual(files, 20);
+      }
+    } finally {
+      s.stop();
+      rmrf(root);
+    }
+  }
+});
+
+it("test 32 at the router (T32, LD374): with sentinelMaxPending, a flood's gap is in the session's log, which verifies intact", async () => {
+  const t = setup({ sentinelMaxPending: 3 });
+  try {
+    open(t, 'fl1');
+    assert.ok(await awaitWatching(t.root, () => t.sentinelMarks('fl1').length > 0), 'the watch is live');
+    for (let i = 0; i < 20; i++) fs.writeFileSync(path.join(t.root, `f${i}.txt`), `v${i}\n`);
+    await sleep(1500);
+    const gaps = t.marks('fl1').filter((m) => m.says === 'gap' && m.detail.root === t.root && /dropped/.test(m.detail.lost));
+    assert.strictEqual(gaps.length, 1, JSON.stringify(t.marks('fl1').map((m) => m.says)));
+    assert.strictEqual(verifySession(t.dirOf('fl1')).ok, true);
+  } finally {
+    t.done();
   }
 });
 

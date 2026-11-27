@@ -61,7 +61,7 @@ const MAP = {
   29: A(C('verify-odu', 'V1 test 29'), C('verify-verdict', "BB7 test 29's form")),
   30: A(C('tamper', 'test 30:'), C('judge', 'tests 10, 30, 42, 52')),
   31: A(C('tamper-log', 'TE1, TE4: the raw log moved')),
-  32: { ...A(C('judge', 'tests 21, 32'), C('judge', 'tests 5, 44, 71, 32, 37'), C('closeout', 'K2 line 450')), unshown: 'a watcher flooded until it drops events writing its own gap mark' },
+  32: { ...A(C('judge', 'tests 21, 32'), C('judge', 'tests 5, 44, 71, 32, 37'), C('closeout', 'K2 line 450'), C('intake-sentinel', 'test 32')), unshown: "on by default: the Sentinel drops and names a flood only with ORUNMILA_SENTINEL_MAX_PENDING set, no limit until O's word (LD374); a drop inside the operating system is never reported to it, and only the closeout's rescan finds that change" },
   33: A(C('redact-intake', 'test 33:')),
   34: A(C('replay', 'tests 13 and 34')),
   35: A(C('replay', 'test 35:')),

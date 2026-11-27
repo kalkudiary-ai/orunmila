@@ -14,6 +14,8 @@
  *                  peerBusy?, vcsMarks? })
  *       vcsMarks (VC1, LD372; test 60): a git or gh command's exited mark
  *       carries detail.vcs, as today's capture derives it; off by default
+ *       sentinelMaxPending (T32, LD374; test 32): the Sentinel's limit on paths
+ *       waiting at once, past which a flood is dropped and named in a gap
  *       judge (BB6, with baseline): the rules file's text in each new
  *       session's header, and the verdict log written at its closeout;
  *       true for the default judge, or a judge's name (BB11)
@@ -249,6 +251,7 @@ function createRouter(o) {
         clock,
         key: o.installKey,
         diffOf,
+        maxPending: o.sentinelMaxPending, // T32 (LD374): no limit unless set
         emit: (root, mark, keep) => {
           for (const [id, s] of [...states].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
             if (s.watched && s.root !== root && (s.extras || []).includes(root)) {

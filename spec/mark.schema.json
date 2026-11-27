@@ -382,6 +382,16 @@
           "$comment": "brief v3 lines 240, 258; the stated code is LD121 (O's go, 2026-11-22), from X1's measurement (238 of 285 failure texts open with it)",
           "type": "integer"
         },
+        "background": {
+          "description": "On a command's exited mark: true when the agent launched the command to run in the background, so the hook saw it start, not finish, and its exit_status is `unknown`. Absent otherwise.",
+          "$comment": "agent's choice, NF66 (written since Phase 1); declared in the spec by F21, O's yes 2026-11-28",
+          "const": true
+        },
+        "interrupted": {
+          "description": "On a command's exited mark: true when the agent's tool says the command was interrupted before it finished, so its exit_status is `unknown`. Absent otherwise.",
+          "$comment": "agent's choice, NF66 (written since Phase 1); declared in the spec by F21, O's yes 2026-11-28",
+          "const": true
+        },
         "output_excerpt": { "description": "The first 2,000 characters of output.", "$comment": "brief v3 line 262", "type": "string", "maxLength": 2000 },
         "output_ref": {
           "description": "When the output is longer, the fingerprint of the full output, which is kept beside the log.",

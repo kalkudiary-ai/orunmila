@@ -216,6 +216,45 @@ it('LD85: every mark the A8 adapter writes, of every kind it translates, names o
   for (const { mark } of marks) assert.deepStrictEqual(check(sealed(mark)), [], `${mark.source} ${mark.says}`);
 });
 
+// F21 (O's yes, 2026-11-28): the Claude Code adapter's own marks, a command in the background and an interrupted one
+// included, name only declared fields, so the v1 spec names every field Orunmila writes.
+it('F21: every mark the Claude Code adapter writes, of every kind it translates, names only fields the mark schema declares', () => {
+  const { translatePayload } = require('../src/opon/intake/adapters/claude-code');
+  const check = compile(closed(load(path.join(SPEC, 'mark.schema.json'))));
+  const ctx = { turn: 't1', observedAt: '2026-11-16T09:00:00.000Z' };
+  const b = { session_id: 's', transcript_path: '/tmp/t.jsonl', cwd: '/p', tool_use_id: 'toolu_1' };
+  const post = (tool_name, tool_input, tool_response, extra = {}) => ({ ...b, hook_event_name: 'PostToolUse', tool_name, tool_input, tool_response, ...extra });
+  const fileFacts = { existedBefore: true, existsAfter: true, size: 3, fingerprintBefore: 'sha256:' + 'a'.repeat(64), fingerprint: 'sha256:' + 'b'.repeat(64), linesAdded: 1, linesRemoved: 1 };
+  const cases = [
+    [{ ...b, hook_event_name: 'UserPromptSubmit', prompt: 'go' }],
+    [{ ...b, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'npm test' } }],
+    [post('Bash', { command: 'npm test' }, { stdout: 'ok', stderr: '', interrupted: false })],
+    [post('Bash', { command: 'npm run soak', run_in_background: true }, { stdout: '', stderr: '' })],
+    [post('Bash', { command: 'sleep 9' }, { stdout: '', stderr: '', interrupted: true })],
+    [{ ...post('Bash', { command: 'false' }, {}), hook_event_name: 'PostToolUseFailure', error: 'Exit code 1' }],
+    [post('Edit', { file_path: 'a.js' }, {}), { file: fileFacts }],
+    [post('Read', { file_path: 'a.js', limit: 2 }, { type: 'text', file: { numLines: 2, startLine: 1, totalLines: 9 } }), { file: { size: 3, fingerprint: 'sha256:' + 'b'.repeat(64) } }],
+    [post('Grep', { pattern: 'x' }, {})],
+    [post('WebFetch', { url: 'https://h.example/' }, {})],
+    [post('WebSearch', { query: 'q' }, {})],
+    [post('mcp__db__q', { sql: 'x' }, {})],
+    [{ ...post('Edit', { file_path: 'a.js' }, {}), hook_event_name: 'PostToolUseFailure', error: 'refused' }],
+    [{ ...b, hook_event_name: 'Stop', last_assistant_message: 'done' }],
+    [{ ...b, hook_event_name: 'SessionEnd', reason: 'exit' }],
+  ];
+  const sealed = (m) => ({ ...m, seq: 1, mono_ns: '1', prev_hash: 'sha256:' + '0'.repeat(64), hash: 'sha256:' + '0'.repeat(64) });
+  let n = 0;
+  for (const [payload, extra] of cases) {
+    const { marks, rejects } = translatePayload(payload, { ...ctx, ...(extra || {}) });
+    assert.deepStrictEqual(rejects, [], payload.hook_event_name);
+    for (const { mark } of marks) {
+      n++;
+      assert.deepStrictEqual(check(sealed(mark)), [], `${mark.source} ${mark.says} ${JSON.stringify(mark.detail)}`);
+    }
+  }
+  assert.strictEqual(n, cases.length + 1, 'Stop writes two marks');
+});
+
 it("the brief's own example mark (v4 lines 215-232), with its shortened hashes written out in full, is a valid mark", () => {
   const check = compile(load(path.join(SPEC, 'mark.schema.json')));
   const full = (h) => 'sha256:' + h.repeat(64 / h.length);

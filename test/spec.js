@@ -370,4 +370,22 @@ it('SP1: the README states the versioning rule, the licence of the text, and tha
   assert.ok(readme.includes('| `FIELDS.md` |') && readme.includes('`hash-chain.md`'), 'the reading order names FIELDS.md and hash-chain.md');
 });
 
+it('SP2 test 27: a session record a developer wrote from spec/ alone is intact by verify, and one changed byte breaks it', () => {
+  const { verifySession } = require('../src/verify/session');
+  const { tmpDir, rmrf } = require('./helpers');
+  const src = path.join(CASES, 'hand-written', 'ses_handwritten_1');
+  const v = verifySession(src);
+  assert.strictEqual(v.ok, true, v.words);
+  assert.strictEqual(v.words, 'Record intact: 7 marks, 1 quarantined input, 1 kept file, unbroken; the baseline snapshot of 2 entries matches the header.');
+  const copy = path.join(tmpDir(), 'ses_handwritten_1');
+  try {
+    fs.cpSync(src, copy, { recursive: true });
+    const raw = path.join(copy, 'raw.jsonl');
+    fs.writeFileSync(raw, fs.readFileSync(raw, 'utf8').replace('"Helo\\" is now', '"Helx\\" is now'));
+    assert.strictEqual(verifySession(copy).words, 'Record broken at line 7 of the raw log: this line was changed after it was written.');
+  } finally {
+    rmrf(path.dirname(copy));
+  }
+});
+
 runAll('spec');

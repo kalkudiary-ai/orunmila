@@ -4259,6 +4259,34 @@ MUTANTS.push(
   },
 );
 
+// R50 (Phase 7, test 50, LD375): the comparison of a stripped fixture with its raw recording at the odù level.
+MUTANTS.push(
+  {
+    id: 'R50-1 conflicts are not compared',
+    file: 'scripts/relevance.js',
+    test: 'test/relevance.js',
+    from: "for (const k of ['odu', 'conflicts', 'verdicts', 'session']) {",
+    to: "for (const k of ['odu', 'verdicts', 'session']) {",
+    fails: ['R50 (F29, a stated limit)'],
+  },
+  {
+    id: "R50-2 a witness's exit statuses are not compared",
+    file: 'scripts/relevance.js',
+    test: 'test/relevance.js',
+    from: "`${w}:${s.status}:${(s.says || []).join('+')}:${s.scope || ''}:${slots(s)}`",
+    to: "`${w}:${s.status}:${(s.says || []).join('+')}:${s.scope || ''}`",
+    fails: ['R50: a planted difference is caught'],
+  },
+  {
+    id: 'R50-3 no closeout seals the groups, so nothing is compared',
+    file: 'scripts/relevance.js',
+    test: 'test/relevance.js',
+    from: "  log.append(sweep('exited', { exit_status: 'pass' }, 2), []);",
+    to: '',
+    fails: ['R50 test 50'],
+  },
+);
+
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };
 
 if (require.main === module) process.exit(runGate());

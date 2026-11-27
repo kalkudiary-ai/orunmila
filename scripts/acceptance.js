@@ -11,7 +11,8 @@
  * Each test is one of:
  *   auto     cases: [[suite, title prefix], ...]; every prefix must match at least one case of its suite, and every
  *            case it matches must pass. `unshown` (optional) names a part of the brief's scenario no case shows yet:
- *            the test then reads "passes, part not shown" and counts as not done.
+ *            the test then reads "passes, part not shown" and counts as not done. `record` (optional) is a run on
+ *            O's machine the cases cannot hold (raw recordings never leave it), quoted beside the case count.
  *   manual   done by real use, once (brief line 763: 26, 41, 49); `record` is where its result is written
  *   deferred `approval` is O's written approval in the ledger
  *   open     `why`, and whose it is
@@ -79,7 +80,7 @@ const MAP = {
   47: A(C('compat-shapes', 'EU1 test 47'), C('trail-marks', 'test 47:')),
   48: A(C('intake-router', 'NF30:'), C('intake-sentinel', 'B4 (N2):')),
   49: { kind: 'manual', record: "real Cursor sessions with O (brief line 816): not yet run; until then Cursor is experimental in the support table" },
-  50: { ...A(C('strip', 'relevance at the mark level'), C('strip', "F26: an exact-capture read's read_range")), unshown: "the odù, conflict and verdict half: each stripped fixture against its raw recording on O's machine" },
+  50: { ...A(C('strip', 'relevance at the mark level'), C('strip', "F26: an exact-capture read's read_range"), C('relevance', 'R50 test 50'), C('relevance', 'R50: a planted difference')), record: "on O's machine, 2026-11-28, scripts/relevance.js: the one stripped fixture (c5426624, test/cases/compat/0.2.4) against its raw recording, rebuilt exactly: 149 odù records, 20 conflicts, 149 verdicts and 1 session verdict each, the same kinds; stated limit F29 (LD375)" },
   51: A(C('judge', 'test 51:'), C('report', 'line 692, test 51')),
   52: A(C('tamper', 'test 52:'), C('judge', 'tests 10, 30, 42, 52')),
   53: A(C('intake-engine', 'test 53: a session idle'), C('intake-engine', 'test 53: a busy session')),
@@ -149,7 +150,7 @@ function judge(map, outputs) {
       for (const [title, s] of got) if (s !== 'PASS') bad.push(`${suite}: FAIL ${title}`);
     }
     if (bad.length) return { id, status: 'FAIL', detail: bad.join('; ') };
-    return t.unshown ? { id, status: 'passes, part not shown', detail: `${n} cases pass; not shown: ${t.unshown}` } : { id, status: 'passes', detail: `${n} cases` };
+    return t.unshown ? { id, status: 'passes, part not shown', detail: `${n} cases pass; not shown: ${t.unshown}` } : { id, status: 'passes', detail: `${n} cases${t.record ? `; ${t.record}` : ''}` };
   });
 }
 

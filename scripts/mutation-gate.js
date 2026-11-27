@@ -911,7 +911,7 @@ const MUTANTS = [
     from: 'for (const x of Object.values(o.definitions || {})) visit(x);', to: 'void 0;',
     fails: ['LD85: a mark naming a field the spec does not declare stays intact'] },
   { id: 'U3 undeclared fields left out of the answer', file: 'src/verify/session.js', test: 'test/verify.js',
-    from: 'unbroken${[...cuts, ...gapAt, ...other, ...tampers, ...fields, ...base, ...judged, ...foot]', to: 'unbroken${[...cuts, ...gapAt, ...other, ...tampers, ...base, ...judged, ...foot]', // moved with CR1 (LD250)
+    from: 'unbroken${[...cuts, ...gapAt, ...other, ...tampers, ...fields, ...base, ...oduWords, ...judged, ...foot]', to: 'unbroken${[...cuts, ...gapAt, ...other, ...tampers, ...base, ...oduWords, ...judged, ...foot]', // moved with CR1 (LD250)
     fails: ['LD85: a mark naming a field the spec does not declare stays intact'] },
   { id: 'U4 a continuation record checked as a mark for undeclared fields', file: 'src/verify/session.js', test: 'test/verify.js',
     from: 'if (isContinuation({ part, line })) continue;\n      for (const e of', to: 'for (const e of',
@@ -3950,6 +3950,50 @@ MUTANTS.push(
     from: 'Docs: README.md (the way in) · docs/GUIDE.md (every command, law, switch and limit) · known issues',
     to: 'Docs: README.md · known issues',
     fails: ['DOC5 (LD358): the help sends a reader to the guide'],
+  },
+);
+
+// V1 (Phase 7, test 29): verify checks the odù log whenever the folder holds one.
+MUTANTS.push(
+  {
+    id: 'V1-1 an odù may point to marks that do not exist',
+    file: 'src/verify/session.js',
+    test: 'test/verify-odu.js',
+    from: 'const missing = r.mark_seqs.find((s) => !seqs.has(s));',
+    to: 'const missing = undefined;',
+    fails: ['V1 test 29: an odù edited to list a mark that does not exist'],
+  },
+  {
+    id: 'V1-2 an odù is never checked against its schema',
+    file: 'src/verify/session.js',
+    test: 'test/verify-odu.js',
+    from: "odu: [load('odu.schema.json'), 'odù'],",
+    to: "odu: [() => [], 'odù'],",
+    fails: ['V1: an odù that is not a valid record of its kind'],
+  },
+  {
+    id: 'V1-3 the odù header may name another raw log',
+    file: 'src/verify/session.js',
+    test: 'test/verify-odu.js',
+    from: 'if (!head || r.raw_header !== head.hash) return broken(1,',
+    to: 'if (!head) return broken(1,',
+    fails: ['V1: an odù that is not a valid record of its kind'],
+  },
+  {
+    id: 'V1-4 a broken odù chain reads intact when no footer names it',
+    file: 'src/verify/session.js',
+    test: 'test/verify-odu.js',
+    from: "if (!chain.ok && !chain.cut) return broken(chain.line, chainWords(chain.reason, chain.line, 'odù log', 1));",
+    to: '',
+    fails: ['V1: one odù line edited after it was written'],
+  },
+  {
+    id: 'V1-5 the odù records go uncounted',
+    file: 'src/verify/session.js',
+    test: 'test/verify-odu.js',
+    from: '...(odus.present ? { odus: odus.odus } : {}),',
+    to: '',
+    fails: ['V1: an untouched session with an odù log'],
   },
 );
 

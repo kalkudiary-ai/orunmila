@@ -167,7 +167,8 @@ it(
       if (!notOnWindows('baseline N1b: baseline.jsonl is owner-only (0600); Windows has no POSIX modes')) assert.strictEqual((fs.statSync(path.join(dir, 'baseline.jsonl')).mode & 0o777).toString(8), '600');
       const v = verifySessionLog(dir);
       assert.strictEqual(v.ok, true, v.words);
-      assert.match(v.words, /; the baseline snapshot of 3 entries matches the header\.$/);
+      // V1: the live path's odù log (its header only, so far) is checked too, and named after the baseline.
+      assert.match(v.words, /; the baseline snapshot of 3 entries matches the header; 0 odù records, each pointing to marks the raw log holds\.$/);
     },
     { baseline: true },
   ),

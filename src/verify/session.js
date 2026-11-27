@@ -94,6 +94,45 @@ function verdictsOf(dir) {
   return { present: true, ok: true, verdicts };
 }
 
+// V1 (Phase 7; brief v4 lines 714-715): each line of the odù log, by its kind.
+const ODU_KINDS = {
+  odu_header: [load('odu-header.schema.json'), 'odù log header'],
+  odu: [load('odu.schema.json'), 'odù'],
+};
+
+/**
+ * V1 (test 29): the odù log, whenever the folder holds one (not only when a footer names it). Its chain, read a line
+ * at a time (LR2b); its header first, naming this session's raw log header; every line a valid record of its kind;
+ * every odù's mark_seqs naming marks the raw log holds. A last line a crash cut short is named, not broken: the odù log
+ * is rebuilt from the raw log by replay, and a footer that names a line at or after the cut breaks the record in
+ * footerOf. Returns { present, ok, words?, odus, cut? }.
+ */
+function odusOf(dir, raw) {
+  const file = path.join(dir, 'odu.jsonl');
+  if (!fs.existsSync(file)) return { present: false, ok: true, odus: 0 };
+  const broken = (line, words) => ({ present: true, ok: false, odus: 0, words: `Record broken at line ${line} of the odù log: ${words}.` });
+  const chain = verifyBuffer(readBytes(file));
+  if (!chain.ok && !chain.cut) return broken(chain.line, chainWords(chain.reason, chain.line, 'odù log', 1));
+  const head = raw.records.length && raw.records[0].part === 1 && raw.records[0].line === 1 ? raw.records[0].rec : null;
+  const seqs = new Set(raw.records.filter((r) => !isContinuation(r) && r.rec && Number.isInteger(r.rec.seq)).map((r) => r.rec.seq));
+  let odus = 0;
+  for (let i = 0; i < chain.records.length; i++) {
+    const r = chain.records[i];
+    const kind = ODU_KINDS[r.record];
+    if (!kind || (i === 0) !== (r.record === 'odu_header')) return broken(i + 1, i === 0 ? 'the odù log does not begin with its header' : 'it is not a record the odù log holds');
+    const bad = kind[0](r)[0];
+    if (bad) return broken(i + 1, `it is not a valid ${kind[1]} (${bad.path} ${bad.keyword})`);
+    if (i === 0) {
+      if (!head || r.raw_header !== head.hash) return broken(1, "it names a raw log header this session's raw log does not have");
+      continue;
+    }
+    odus++;
+    const missing = r.mark_seqs.find((s) => !seqs.has(s));
+    if (missing !== undefined) return broken(i + 1, `this odù points to evidence that does not exist (mark ${missing})`);
+  }
+  return { present: true, ok: true, odus, ...(chain.ok ? {} : { cut: chain.line }) };
+}
+
 /**
  * K4 (LD209): the session footer, when one was written: each line it names must be in its log with that
  * hash. Returns null when there is no footer, else { ok, words?, odu } (words name the first problem).
@@ -319,6 +358,7 @@ function verifySession(dir) {
   }
 
   const footer = footerOf(dir, raw);
+  const odus = odusOf(dir, raw);
   const verdicts = verdictsOf(dir);
 
   // CR1 (LD250; test 18, "verifier reports it"): the gaps the log records. The intake's downtime (a gap with `since`)
@@ -350,6 +390,7 @@ function verifySession(dir) {
     marks: marks.length,
     quarantined: quarantine.records.filter((r) => !(r.part === 1 && r.line === 1) && !isContinuation(r)).length,
     kept_files: files.checked,
+    ...(odus.present ? { odus: odus.odus } : {}), // V1: only with an odù log, as verdicts below (Ship item 5)
     ...(verdicts.present ? { verdicts: verdicts.verdicts } : {}), // BB7: only with a verdict log, so other answers keep their shape (Ship item 5)
   };
 
@@ -364,6 +405,8 @@ function verifySession(dir) {
     words = failWords(quarantine, 'quarantine');
   } else if (files.bad.length) {
     words = fileWords(files.bad[0]);
+  } else if (!odus.ok) {
+    words = odus.words;
   } else if (!verdicts.ok) {
     words = verdicts.words;
   } else if (footer && !footer.ok) {
@@ -381,13 +424,16 @@ function verifySession(dir) {
     const logs = ['the raw log', ...(footer && footer.odu ? ['the odù log'] : []), ...(footer && footer.verdict ? ['the verdict log'] : [])];
     const matched = logs.length > 1 ? `${logs.slice(0, -1).join(', ')} and ${logs[logs.length - 1]}` : logs[0];
     const foot = footer ? [`the session footer matches ${matched}`, ...after(footer.after.raw, 'raw log'), ...after(footer.after.odu, 'odù log'), ...after(footer.after.verdict, 'verdict log')] : [];
+    const oduWords = odus.present
+      ? [`${plural(odus.odus, 'odù record', 'odù records')}, each pointing to marks the raw log holds`, ...(odus.cut ? [`line ${odus.cut} of the odù log was cut short, as a crash leaves it`] : [])]
+      : [];
     const judged = verdicts.present ? [`${plural(verdicts.verdicts, 'verdict', 'verdicts')} in the verdict log, each pointing to its odù`] : [];
     const other = gaps.other ? [`${plural(gaps.other, 'other capture gap', 'other capture gaps')} recorded`] : [];
     words =
       `Record intact: ${plural(counts.marks, 'mark', 'marks')}, ${plural(counts.quarantined, 'quarantined input', 'quarantined inputs')}, ` +
-      `${plural(counts.kept_files, 'kept file', 'kept files')}, unbroken${[...cuts, ...gapAt, ...other, ...tampers, ...fields, ...base, ...judged, ...foot].map((c) => `; ${c}`).join('')}.`;
+      `${plural(counts.kept_files, 'kept file', 'kept files')}, unbroken${[...cuts, ...gapAt, ...other, ...tampers, ...fields, ...base, ...oduWords, ...judged, ...foot].map((c) => `; ${c}`).join('')}.`;
   }
-  return { ok: raw.ok && schema.ok && quarantine.ok && files.bad.length === 0 && verdicts.ok && (!footer || footer.ok), words, counts, raw: summary(raw), schema, quarantine: summary(quarantine), files, undeclared, gaps };
+  return { ok: raw.ok && schema.ok && quarantine.ok && files.bad.length === 0 && odus.ok && verdicts.ok && (!footer || footer.ok), words, counts, raw: summary(raw), schema, quarantine: summary(quarantine), files, undeclared, gaps };
 }
 
 /**

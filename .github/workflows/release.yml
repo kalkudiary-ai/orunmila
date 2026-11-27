@@ -1,0 +1,75 @@
+name: Release
+
+# R2 (Phase 7, LD361, LD363; brief v4 line 741): the npm release, started by hand by O from main.
+# npm trusted publishing: npm checks this run's OIDC token against the publisher O registered on npmjs.com
+# (repository kalkudiary-ai/orunmila, this file, environment npm), so no npm token is stored anywhere, and npm adds
+# provenance (a signed link from the package to the exact commit it was built from) by itself.
+# Brief line 743: publishing waits until O approves the release report; this workflow is how O publishes after that.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'The version to publish, exactly as package.json says it (a check against a press by mistake)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  # The whole suite on every OS and every supported Node, on the exact commit being released.
+  test:
+    name: test (node ${{ matrix.node }} / ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [18, 20, 22]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  publish:
+    name: publish to npm
+    needs: test
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Only from main
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then echo "Release refused: run it from main, not $GITHUB_REF."; exit 1; fi
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: npm new enough for trusted publishing (11.5.1 or later)
+        run: npm install -g npm@11.6.2
+      - name: The typed version is package.json's, and npm does not have it yet
+        env:
+          TYPED: ${{ inputs.version }}
+        run: |
+          PKG=$(node -p "require('./package.json').version")
+          if [ "$TYPED" != "$PKG" ]; then echo "Release refused: you typed $TYPED; package.json says $PKG."; exit 1; fi
+          if [ "$(npm view "orunmila@$PKG" version 2>/dev/null)" = "$PKG" ]; then echo "Release refused: orunmila@$PKG is already on npm."; exit 1; fi
+          echo "Releasing orunmila@$PKG from $GITHUB_SHA."
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run accuracy:gate
+      - run: npm run coverage
+      - name: What the package holds
+        run: npm pack --dry-run
+      # prepublishOnly runs lint, the accuracy gate, coverage and the mutation gate once more, inside npm publish.
+      - name: Publish (provenance from publishConfig and trusted publishing)
+        run: |
+          npm publish

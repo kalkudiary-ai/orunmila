@@ -49,6 +49,10 @@
   "engines": {
     "node": ">=18"
   },
+  "publishConfig": {
+    "provenance": true,
+    "access": "public"
+  },
   "dependencies": {},
   "devDependencies": {
     "@eslint/js": "^10.0.1",

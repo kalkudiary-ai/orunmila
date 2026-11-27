@@ -18,7 +18,7 @@
  * By OS: the Chrome path below is macOS's; pass --chrome elsewhere. Without Chrome it says "not run" and exits 2.
  */
 
-/* global window, document, Event, MouseEvent -- the probe below runs in the page, not in Node */
+/* global window, document, Event, MouseEvent, WheelEvent, KeyboardEvent, PointerEvent -- the probe below runs in the page, not in Node */
 
 const fs = require('fs');
 const path = require('path');
@@ -131,6 +131,63 @@ const probe = function () {
       var hot = document.querySelectorAll('#gv-graph .gv-edge.hot').length;
       g.dispatchEvent(new MouseEvent('mouseleave'));
       return [true, hot + ' links lit'];
+    });
+    // CV1: the canvas (the dev's "zoomed and scrolled both ways, like OneNote").
+    function viewBox() {
+      return (document.getElementById('gv-svg').getAttribute('viewBox') || '').split(' ').map(Number);
+    }
+    check('graph canvas: scroll moves down, Shift and scroll sideways, Ctrl and scroll zooms, 0 fits again', function () {
+      tab('graph');
+      $('#gv-graph [data-gmode="all"]').click();
+      var cv = document.getElementById('gv-canvas');
+      var r = cv.getBoundingClientRect();
+      var at = { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true, cancelable: true };
+      cv.dispatchEvent(new KeyboardEvent('keydown', { key: '0', bubbles: true }));
+      var a = viewBox();
+      cv.dispatchEvent(new WheelEvent('wheel', Object.assign({ deltaY: 120 }, at)));
+      var b = viewBox();
+      cv.dispatchEvent(new WheelEvent('wheel', Object.assign({ deltaY: 120, shiftKey: true }, at)));
+      var c = viewBox();
+      cv.dispatchEvent(new WheelEvent('wheel', Object.assign({ deltaY: -200, ctrlKey: true }, at)));
+      var d = viewBox();
+      var zoomText = ($('#gv-zlevel') || {}).textContent;
+      cv.dispatchEvent(new KeyboardEvent('keydown', { key: '0', bubbles: true }));
+      var e = viewBox();
+      var ok = b[1] > a[1] && c[0] > b[0] && d[2] < c[2] && e[0] === a[0] && e[1] === a[1] && e[2] === a[2];
+      return [ok, [a, b, c, d, e].map(function (v) { return v.map(function (n) { return Math.round(n); }).join(','); }).join(' > ') + ', zoom ' + zoomText];
+    });
+    check('graph canvas: dragging the background pans; the arrow keys and + and - move and zoom', function () {
+      tab('graph');
+      var cv = document.getElementById('gv-canvas');
+      var r = cv.getBoundingClientRect();
+      cv.dispatchEvent(new KeyboardEvent('keydown', { key: '0', bubbles: true }));
+      var a = viewBox();
+      var bg = document.querySelector('#gv-svg > rect');
+      var p = { pointerId: 7, pointerType: 'mouse', button: 0, bubbles: true };
+      bg.dispatchEvent(new PointerEvent('pointerdown', Object.assign({ clientX: r.left + 300, clientY: r.top + 300 }, p)));
+      cv.dispatchEvent(new PointerEvent('pointermove', Object.assign({ clientX: r.left + 200, clientY: r.top + 200 }, p)));
+      cv.dispatchEvent(new PointerEvent('pointerup', Object.assign({ clientX: r.left + 200, clientY: r.top + 200 }, p)));
+      var b = viewBox();
+      cv.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      var c = viewBox();
+      cv.dispatchEvent(new KeyboardEvent('keydown', { key: '+', bubbles: true }));
+      var d = viewBox();
+      cv.dispatchEvent(new KeyboardEvent('keydown', { key: '-', bubbles: true }));
+      var e = viewBox();
+      var ok = b[0] > a[0] && b[1] > a[1] && c[0] > b[0] && d[2] < c[2] && e[2] > d[2];
+      return [ok, [a, b, c, d, e].map(function (v) { return v.map(function (n) { return Math.round(n); }).join(','); }).join(' > ')];
+    });
+    check('graph canvas: nothing held back, a box for every thing, an arrow on every link, a full-screen button', function () {
+      tab('graph');
+      $('#gv-graph [data-gmode="all"]').click();
+      var held = /more: search to find one/.test(document.getElementById('gv-svg').textContent);
+      var nodes = document.querySelectorAll('#gv-graph .gv-node').length;
+      var boxes = document.querySelectorAll('#gv-graph .gv-node .gv-box').length;
+      var links = document.querySelectorAll('#gv-graph .gv-edge').length;
+      var arrows = document.querySelectorAll('#gv-graph .gv-edge[marker-end], #gv-graph .gv-edge[marker-start]').length;
+      var ok = !held && nodes > 0 && boxes === nodes && arrows === links && !!document.getElementById('gv-zfull');
+      $('#gv-graph [data-gmode="flagged"]').click();
+      return [ok, nodes + ' things, ' + boxes + ' boxes, ' + links + ' links, ' + arrows + ' arrows, held back ' + held];
     });
     check('tree: clicking a file opens its details', function () {
       var view = tab('tree');

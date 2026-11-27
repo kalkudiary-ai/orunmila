@@ -10,6 +10,14 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ### Added
 
+- **The trail page's Graph tab is a flowchart on a canvas.** Each thing is a
+  box and each link an arrow pointing the way it went, read, ran or used,
+  changed, left to right. The canvas moves both ways: scroll (Shift and scroll
+  to go sideways), drag the background, or use the arrow keys; Ctrl or ⌘ and
+  scroll, a pinch, or + and − zoom about the pointer; 0 or the Fit button fits
+  the width again, and a button opens it full screen. Nothing is held back:
+  the Graph showed at most 60 things a level, and now shows every one. At the
+  picture's edge the scroll goes back to the page.
 - **The licence and trademark files a release carries.** `TRADEMARKS.md` says
   how the Orunmila name may be used (the Apache License grants no rights to
   it, and a changed version needs a new name). `THIRD_PARTY_LICENSES` says the

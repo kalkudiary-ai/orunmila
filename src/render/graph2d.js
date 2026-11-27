@@ -19,6 +19,10 @@
  * title, never dropped silently, and a search brings a match back in. Links are smooth curves from the right edge of
  * one thing to the left edge of the next ("undulations"); a link inside one level bows out to the right.
  *
+ * CV1 (the in-house dev, 2026-11-27: "a flowchart on a blank canvas that can be zoomed and scrolled both ways, like
+ * OneNote"): each thing is a box, each link an arrow the way it went, and the trail page draws the levels on a canvas
+ * with no cap, moved and zoomed through `fitWidth`, `zoomAt` and `panBy` below. The cap stays for any other caller.
+ *
  * Plain code, no clock, no randomness: the same session gives the same picture. `core()` runs in Node for the tests
  * and, through `source()`, in the page.
  */
@@ -182,6 +186,9 @@ function core() {
         }))
         .sort((a, b) => Number(b.flagged) - Number(a.flagged) || b.touches - a.touches || (a.folder < b.folder ? -1 : a.folder > b.folder ? 1 : 0));
       const x = left + lv * colW + 14;
+      // CV1: each thing is a box from just left of its dot to the column's link edge, so the picture reads as a
+      // flowchart and every arrow lands on a box.
+      const edgeX = left + lv * colW + colW - 10;
       let y = top;
       const outGroups = [];
       for (const g of ordered) {
@@ -190,12 +197,15 @@ function core() {
         for (const n of g.list) {
           y += rowH / 2;
           const merged = (also.get(n.id) || []).map((id) => nodes.find((m) => m.id === id));
+          const r = 4 + Math.min(5, Math.sqrt(touches.get(n.id)) * 1.1);
+          const bx = x - r - 6;
           placed.push({
             id: n.id,
             level: lv,
             x,
             y,
-            r: 4 + Math.min(5, Math.sqrt(touches.get(n.id)) * 1.1),
+            r,
+            box: { x: bx, y: y - rowH / 2 + 2, w: edgeX - bx, h: rowH - 4 },
             folder: g.folder,
             flagged: isFlagged(n) || merged.some(isFlagged),
             match: matches(n) || merged.some(matches),
@@ -220,21 +230,59 @@ function core() {
       if (!a || !b || a === b || seenLink.has(from + '>' + to)) continue;
       seenLink.add(from + '>' + to);
       let d;
+      // CV1: where the arrowhead goes. A link is always drawn left to right, so one that went right to left carries
+      // its head at the start ('start'), pointing back the way it went.
+      let arrow = 'end';
       if (a.level === b.level) {
         const x = port(a), bow = x + 8 + Math.min(14, Math.abs(b.y - a.y) * 0.05);
         d = `M${f(x)} ${f(a.y)} C${f(bow)} ${f(a.y)} ${f(bow)} ${f(b.y)} ${f(x)} ${f(b.y)}`;
       } else {
         const [s, t] = a.x < b.x ? [a, b] : [b, a];
-        const x1 = port(s), x2 = t.x - t.r, mid = (x1 + x2) / 2;
+        if (s !== a) arrow = 'start';
+        const x1 = port(s), x2 = t.box.x, mid = (x1 + x2) / 2;
         d = `M${f(x1)} ${f(s.y)} C${f(mid)} ${f(s.y)} ${f(mid)} ${f(t.y)} ${f(x2)} ${f(t.y)}`;
       }
-      links.push({ from, to, kind: e.kind || '', d });
+      links.push({ from, to, kind: e.kind || '', d, arrow });
     }
     const height = Math.max(320, ...levels.map((l) => l.bottom)) + 16;
     return { width: W, height, levels, placed, links };
   }
 
-  return { layered, folders, flaggedView, runs, levelOf, folderOf, isFlagged, LEVELS };
+  /*
+   * CV1: the camera over the canvas (the dev: "zoomed and scrolled both ways, like OneNote"). A view is an SVG viewBox
+   * { x, y, w, h } in the picture's own units, always the canvas's shape, so one unit is the same on both axes.
+   */
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+  /** The first view: the picture's whole width across the canvas, its top first, never blown up past maxScale. */
+  function fitWidth(content, view, opts) {
+    const scale = Math.min((opts && opts.maxScale) || 1.25, view.width / Math.max(1, content.width));
+    const w = view.width / scale;
+    // A picture narrower than the canvas sits in its middle.
+    return { x: Math.min(0, (content.width - w) / 2), y: 0, w, h: view.height / scale };
+  }
+
+  /** Closer by `factor` (above 1) or further (below 1), the world point (wx, wy) staying where it is on the canvas. */
+  function zoomAt(vb, factor, wx, wy, view, limits) {
+    const lo = (limits && limits.min) || 0.05, hi = (limits && limits.max) || 4;
+    const scale = view.width / vb.w;
+    const next = clamp(scale * factor, lo, hi);
+    const k = scale / next;
+    return { x: wx - (wx - vb.x) * k, y: wy - (wy - vb.y) * k, w: vb.w * k, h: vb.h * k };
+  }
+
+  /**
+   * Moved by (dx, dy) picture units, as far as the canvas's middle can go while it stays over the picture
+   * (content: { x0, y0, x1, y1 }). `moved` false means it was already at that edge: the page may scroll instead.
+   */
+  function panBy(vb, dx, dy, content) {
+    const x = clamp(vb.x + dx, content.x0 - vb.w / 2, Math.max(content.x0 - vb.w / 2, content.x1 - vb.w / 2));
+    const y = clamp(vb.y + dy, content.y0 - vb.h / 2, Math.max(content.y0 - vb.h / 2, content.y1 - vb.h / 2));
+    const moved = Math.abs(x - vb.x) > 0.01 || Math.abs(y - vb.y) > 0.01;
+    return { vb: moved ? { x, y, w: vb.w, h: vb.h } : vb, moved };
+  }
+
+  return { layered, folders, flaggedView, runs, levelOf, folderOf, isFlagged, fitWidth, zoomAt, panBy, LEVELS };
 }
 
 /** The layout as page source. */

@@ -752,8 +752,9 @@ Recent additions to The Diviner:
 - **Interactive HTML report.** `orunmila trail` renders a session view that
   loads nothing from the network: **Timeline** (turn by turn; repeated touches
   of one thing fold into one line with a count), **Tree** (project files by
-  folder), **Graph** (three levels left to right: what the agent read, what it
-  ran, what it changed, each in its folders, flagged things first; search,
+  folder), **Graph** (a flowchart on a canvas you scroll both ways and zoom:
+  what the agent read, what it ran, what it changed, left to right, each in its
+  folders, flagged things first, an arrow on each link the way it went; search,
   filter by channel or outcome), **3D Map** (the same map in 3D, drawn by
   Orunmila's own code: orbit and zoom, a replay that starts from a blank
   canvas and builds the map in the order the agent worked, following it from

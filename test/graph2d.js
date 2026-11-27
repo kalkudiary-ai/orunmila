@@ -108,14 +108,73 @@ it('G2D: one file written two ways in one level is one row, and links to either 
   assert.strictEqual(L.links.length, 1, 'both links become one, between the two merged rows');
 });
 
-it("G2D: a link leaves from its column's right edge, past the labels, and enters at the dot", () => {
+it("G2D, CV1: a link leaves from its column's right edge, past the labels, and enters at its box's left edge", () => {
   const L = core.layered(nodes, edges, { cap: 50 });
   const l = L.links.find((x) => x.from === 1 && x.to === 4);
   const start = +l.d.split(' ')[0].slice(1);
   const b = L.placed.find((p) => p.id === 4);
   const end = +l.d.split(' ').slice(-2)[0];
   assert.ok(start >= L.levels[0].x + L.levels[0].width - 20, `starts at ${start}, the column ends at ${L.levels[0].x + L.levels[0].width}`);
-  assert.ok(Math.abs(end - (b.x - b.r)) < 0.11, `ends at the dot's left edge: ${end} vs ${b.x - b.r}`);
+  assert.ok(Math.abs(end - b.box.x) < 0.11, `ends at the box's left edge: ${end} vs ${b.box.x}`);
+});
+
+// CV1 (the in-house dev, 2026-11-27, LD344 §1.1): "a flowchart on a blank canvas that can be zoomed and scrolled both
+// ways, like OneNote". Each thing is a box, each link an arrow the way it went, and the camera is plain code here.
+it('CV1: each thing is a box that holds its dot and reaches its column\'s link edge (a flowchart, not a scatter)', () => {
+  const L = core.layered(nodes, edges, { cap: 50 });
+  for (const p of L.placed) {
+    const lv = L.levels[p.level];
+    assert.ok(p.box && p.box.x < p.x - p.r, `box ${p.id} starts left of its dot`);
+    assert.ok(Math.abs(p.box.x + p.box.w - (lv.x + lv.width - 10)) < 0.11, `box ${p.id} ends at the link edge`);
+    assert.ok(p.box.y < p.y && p.box.y + p.box.h > p.y && p.box.h > 8, `box ${p.id} holds its row`);
+  }
+  const rows = L.placed.filter((p) => p.level === 0).sort((a, b) => a.y - b.y);
+  for (let i = 1; i < rows.length; i++) assert.ok(rows[i].box.y >= rows[i - 1].box.y + rows[i - 1].box.h, 'boxes in a column do not overlap');
+});
+
+it('CV1: an arrow points the way the link went: forward to the right, back to the left, and within a level from its source', () => {
+  const L = core.layered(nodes, edges.concat([{ from: 4, to: 2 }]), { cap: 50 });
+  const arrow = (from, to) => L.links.find((l) => l.from === from && l.to === to).arrow;
+  assert.strictEqual(arrow(1, 4), 'end', 'read to changed: drawn left to right, the arrow at the end');
+  assert.strictEqual(arrow(4, 2), 'start', 'changed to ran: drawn left to right, the arrow at the start, pointing left');
+  assert.strictEqual(arrow(4, 3), 'end', 'within one level, drawn from its source');
+});
+
+it('CV1: the camera fits the picture\'s width to the canvas, never past full size, keeping the canvas\'s shape', () => {
+  const v = core.fitWidth({ width: 960, height: 3000 }, { width: 480, height: 600 }, { maxScale: 1.25 });
+  assert.deepStrictEqual([v.x, v.y, v.w, v.h], [0, 0, 960, 1200], 'half size: the whole width shows, the top first');
+  const big = core.fitWidth({ width: 960, height: 300 }, { width: 1920, height: 900 }, { maxScale: 1.25 });
+  assert.strictEqual(big.w, 1920 / 1.25, 'a small picture is not blown up past 1.25');
+  assert.ok(Math.abs(big.w / big.h - 1920 / 900) < 1e-9, "the view keeps the canvas's shape");
+  assert.strictEqual(big.x, (960 - big.w) / 2, 'a picture narrower than the canvas sits in its middle, not against the left');
+});
+
+it('CV1: zooming keeps the point under the cursor still, and stops at the limits', () => {
+  const view = { width: 800, height: 400 };
+  const vb = { x: 100, y: 50, w: 800, h: 400 };
+  const z = core.zoomAt(vb, 2, 300, 150, view, { min: 0.05, max: 4 });
+  assert.deepStrictEqual([z.w, z.h], [400, 200], 'twice as close');
+  // The world point (300, 150) sat 1/4 across and 1/4 down; it still does.
+  assert.ok(Math.abs((300 - z.x) / z.w - (300 - vb.x) / vb.w) < 1e-9 && Math.abs((150 - z.y) / z.h - (150 - vb.y) / vb.h) < 1e-9);
+  const far = core.zoomAt(vb, 1e6, 300, 150, view, { min: 0.05, max: 4 });
+  assert.strictEqual(view.width / far.w, 4, 'no closer than 4x');
+  const out = core.zoomAt(vb, 1e-6, 300, 150, view, { min: 0.05, max: 4 });
+  assert.ok(Math.abs(view.width / out.w - 0.05) < 1e-12, 'no further than 0.05x');
+});
+
+it('CV1: the camera pans both ways, and at the picture\'s edge it stops and says so, so the page can scroll on', () => {
+  const content = { x0: 0, y0: 0, x1: 960, y1: 2000 };
+  const vb = { x: 0, y: 0, w: 400, h: 300 };
+  const right = core.panBy(vb, 120, 0, content);
+  assert.deepStrictEqual([right.vb.x, right.vb.y, right.moved], [120, 0, true], 'sideways');
+  const down = core.panBy(vb, 0, 90, content);
+  assert.deepStrictEqual([down.vb.x, down.vb.y, down.moved], [0, 90, true], 'down');
+  const up = core.panBy(vb, 0, -100000, content);
+  assert.strictEqual(up.vb.y, -150, "up until the canvas's middle meets the picture's top edge");
+  assert.strictEqual(core.panBy(up.vb, 0, -10, content).moved, false, 'and no further: the wheel goes back to the page');
+  const end = core.panBy(vb, 0, 100000, content);
+  assert.strictEqual(end.vb.y, 2000 - 150, "down until the canvas's middle meets the picture's bottom edge");
+  assert.deepStrictEqual(core.panBy(vb, 0, 0, content).vb, vb, 'not moved, not changed');
 });
 
 it('HTML1: "Flagged" adds linked things only while they do not swamp it (860f51e9: 104 of 106 shown)', () => {
@@ -165,6 +224,10 @@ it("G2D: the trail page's Graph tab uses the levels, and its whole script parses
   const html = renderTrailVisual(buildVizData(model, new Map(), []));
   const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
   assert.ok(scripts[0].includes('orunmilaGraph2DCore.layered('), 'the Graph tab calls the levels layout');
+  // CV1: on the canvas nothing is held back (the fixed picture showed 60 rows a level), and the camera is the core's.
+  assert.ok(scripts[0].includes('cap: Infinity'), 'no cap on the canvas');
+  for (const fn of ['fitWidth(', 'zoomAt(', 'panBy(']) assert.ok(scripts[0].includes('orunmilaGraph2DCore.' + fn), 'the page moves with the core camera: ' + fn);
+  assert.ok(html.includes('id="gv-canvas"') && html.includes('id="gv-zfull"'), 'a canvas box with a full-screen button');
   new vm.Script(scripts[0], { filename: 'trail-page.js' });
 });
 

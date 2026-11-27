@@ -246,6 +246,16 @@ function renderTrailVisual(vizData) {
   .gv-search { background:#11151c; color:#e7edf3; border:1px solid #28313d; border-radius:7px; padding:5px 10px; font-size:.78rem; width:160px; outline:none; margin-left:8px; }
   .gv-search:focus { border-color:#40c4ff; }
   .gv-search::placeholder { color:#6f7b88; }
+  /* CV1: the Graph tab as a canvas, moved and zoomed both ways (the dev's "like OneNote") */
+  .gv-canvas { position:relative; height:min(78vh, 900px); min-height:420px; border-radius:10px; overflow:hidden; outline:none; touch-action:none; background:#0a0d12; box-shadow:inset 0 0 0 1px #1a212b; cursor:grab; }
+  .gv-canvas.panning { cursor:grabbing; }
+  .gv-canvas:focus-visible { box-shadow:inset 0 0 0 2px #40c4ff; }
+  .gv-canvas:fullscreen { height:100vh; border-radius:0; }
+  .gv-canvas:-webkit-full-screen { height:100vh; border-radius:0; }
+  .gv-canvas svg.gv-svg { width:100%; height:100%; border-radius:0; cursor:inherit; }
+  .gv-box { transition:fill-opacity .12s; }
+  .gv-node:hover .gv-box { fill-opacity:.26; }
+  .gv-zlevel { color:#6f7b88; font-size:.74rem; min-width:3.2em; text-align:right; align-self:center; }
   .gv-edge-label { font-size:8px; fill:#6f7b88; pointer-events:none; opacity:0; transition:opacity .1s; }
   .gv-edge.hot + .gv-edge-label, .gv-svg:hover .gv-edge-label { opacity:1; }
 
@@ -442,7 +452,7 @@ function renderTrailVisual(vizData) {
   }
 
   var HINTS = {
-    graph: 'The session left to right: what the agent read, what it ran, what it changed, each in its folders, flagged things first. Hover to follow a thing\\u2019s links, click for details. Scroll to zoom, drag to pan.',
+    graph: 'The session as a flowchart, left to right: what the agent read, what it ran, what it changed, each in its folders, flagged things first; arrows point the way each link went. Everything is on the canvas. Scroll to move around (Shift and scroll to go sideways), drag the background to pan, Ctrl or \\u2318 and scroll, or pinch, to zoom; with the canvas selected, the arrow keys move, + and \\u2212 zoom, 0 fits it again. Hover to follow a thing\\u2019s links, click for details.',
     map3d: 'The same map in 3D, drawn on this computer with no internet. Drag to turn it, right-drag or Shift-drag to move, scroll or pinch to zoom, click a sphere to fly to it. Flagged things pulse. Replay starts from a blank canvas and builds the map in the order the agent worked: each thing appears when first touched, each link grows when both its ends are there, the camera following the agent from file to file.',
     glossary: 'What every color, label, and metric means.',
     tree: 'Your project as folders. Each bar glows by how the agent touched that file. Click a file for details.',
@@ -508,7 +518,11 @@ function renderTrailVisual(vizData) {
   // The ring it replaces drew every link through one centre point, so a busy session became one knot.
   var graphMode = 'flagged';
   var graphSearch = '';
-  var vb = { x:0, y:0, w:960, h:520 };
+  // CV1: the camera (a viewBox). It stays where the reader left it when a filter, mode or search redraws the picture;
+  // Fit (or the 0 key) puts it back.
+  var vb = null;
+  var graphResize = null;
+  var ZOOM = { min: 0.05, max: 4 };
 ${graph2d.source()}
   function isFlaggedNode(n){ return !!(n.stain && n.stain !== 'verified' && n.stain !== 'clean'); }
 
@@ -528,9 +542,9 @@ ${graph2d.source()}
       filtered.forEach(function(n){ keep[n.id]=true; });
     }
     var visible = DATA.nodes.filter(function(n){ return keep[n.id] && nodePassesFilter(n); });
-    var Lay = orunmilaGraph2DCore.layered(visible, DATA.edges, { cap: 60, search: graphSearch, width: 960 });
+    // CV1: on the canvas nothing is held back; the reader moves to it instead.
+    var Lay = orunmilaGraph2DCore.layered(visible, DATA.edges, { cap: Infinity, search: graphSearch, width: 960 });
     var W = Lay.width, H = Lay.height;
-    vb = { x:0, y:0, w:W, h:H };
 
     var controls = renderFilterBar('graph');
     controls += '<div class="gv-gctl">'
@@ -539,13 +553,17 @@ ${graph2d.source()}
       + '<span class="gv-gcount">'+Lay.placed.length+' shown of '+DATA.nodes.length+' things'
       + (graphMode==='flagged'&&!stainedCount ? ' &middot; nothing flagged, showing all' : flaggedNote)+'</span>'
       + '<input class="gv-search" id="gv-search" placeholder="Search files\\u2026" autocomplete="off" value="'+escjs(graphSearch)+'">'
-      + '<div class="gv-zoom-ctrl"><button id="gv-zin" title="Zoom in">+</button><button id="gv-zout" title="Zoom out">&minus;</button><button id="gv-zreset" title="Reset view">&#8634;</button></div>'
+      + '<div class="gv-zoom-ctrl"><span class="gv-zlevel" id="gv-zlevel"></span><button id="gv-zin" title="Zoom in (+)">+</button><button id="gv-zout" title="Zoom out (\\u2212)">&minus;</button><button id="gv-zreset" title="Fit the width (0)">&#8634;</button><button id="gv-zfull" title="Full screen"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M1 4V1h3M8 1h3v3M11 8v3H8M4 11H1V8" stroke="currentColor" fill="none" stroke-width="1.5"/></svg></button></div>'
       + '</div>';
 
     // A dense session's links would cover everything: each link's ink scales with the square root of their count.
     var density = Math.min(1, 21 / Math.sqrt(Math.max(Lay.links.length, 1)));
-    // Full width at its natural height: a long session makes a long picture, and the page scrolls.
-    var svg = '<svg class="gv-svg gv-levels" id="gv-svg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMin meet" style="height:auto;aspect-ratio:'+W+' / '+H+'">';
+    // CV1: a canvas of fixed height that the picture moves inside, both ways, with a dotted ground to show it is one.
+    var svg = '<div class="gv-canvas" id="gv-canvas" tabindex="0" role="application" aria-label="The session as a flowchart. Scroll or drag to move, Ctrl or Command and scroll to zoom, arrow keys to move, plus and minus to zoom, 0 to fit.">'
+      + '<svg class="gv-svg gv-levels" id="gv-svg" preserveAspectRatio="xMinYMin meet">'
+      + '<defs><pattern id="gv-grid" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#1b232e"/></pattern>'
+      + '<marker id="gv-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" fill="#8a96a3"/></marker></defs>'
+      + '<rect x="-20000" y="-20000" width="'+(40000+W)+'" height="'+(40000+H)+'" fill="url(#gv-grid)"/>';
     Lay.levels.forEach(function(L, i){
       svg += '<rect class="gv-lvl-band" x="'+(L.x+2).toFixed(1)+'" y="8" width="'+(L.width-4).toFixed(1)+'" height="'+(H-16)+'" rx="10"/>';
       svg += '<text class="gv-lvl-title" x="'+(L.x+16).toFixed(1)+'" y="30">'+(i+1)+' &middot; '+escjs(L.title)+'</text>';
@@ -555,57 +573,109 @@ ${graph2d.source()}
     Lay.links.forEach(function(l){
       var t = DATA.nodes[l.to];
       var c = colorOf(t.stain, t.primaryChannel);
-      svg += '<path class="gv-edge" data-from="'+l.from+'" data-to="'+l.to+'" d="'+l.d+'" fill="none" stroke="'+c+'" stroke-width="1.1" style="--o:'+(0.2*density).toFixed(3)+'"/>';
+      svg += '<path class="gv-edge" data-from="'+l.from+'" data-to="'+l.to+'" d="'+l.d+'" fill="none" stroke="'+c+'" stroke-width="1.1" style="--o:'+(0.2*density).toFixed(3)+'" '+(l.arrow==='start'?'marker-start':'marker-end')+'="url(#gv-arrow)"/>';
     });
     Lay.placed.forEach(function(p){
       var nd = DATA.nodes[p.id];
       var c = colorOf(nd.stain, nd.primaryChannel);
       svg += '<g class="gv-node'+(p.flagged?' flagged':'')+(p.match?' match':'')+'" data-i="'+p.id+'" transform="translate('+p.x.toFixed(1)+','+p.y.toFixed(1)+')">';
+      // CV1: the box the arrows land on, faint unless the thing is flagged.
+      svg += '<rect class="gv-box" x="'+(p.box.x-p.x).toFixed(1)+'" y="'+(p.box.y-p.y).toFixed(1)+'" width="'+p.box.w.toFixed(1)+'" height="'+p.box.h.toFixed(1)+'" rx="5" fill="'+c+'" fill-opacity="'+(p.flagged?'0.16':'0.06')+'" stroke="'+c+'" stroke-opacity="'+(p.flagged?'0.85':'0.3')+'"/>';
       svg += '<circle r="'+p.r.toFixed(1)+'" fill="'+c+'" fill-opacity="'+(p.flagged?'0.9':'0.5')+'" stroke="'+c+'" stroke-width="'+(p.flagged?'2':'1')+'"/>';
       svg += '<text class="gv-nlabel" x="'+(p.r+6).toFixed(1)+'" dy="3.5"'+(p.flagged?' fill="'+c+'"':'')+'>'+escjs(trunc(nd.label, 34))+'</text>';
       svg += '</g>';
     });
-    svg += '</svg>';
+    svg += '</svg></div>';
     el.innerHTML = legend() + controls + svg;
 
-    // zoom/pan
+    // CV1: the camera. Its arithmetic is the core's (src/render/graph2d.js, tested in Node); this part only reads the
+    // mouse, the touch screen and the keyboard.
+    var cv = document.getElementById('gv-canvas');
     var svgEl = document.getElementById('gv-svg');
-    var dragging = false, dragStart = {};
-    svgEl.addEventListener('wheel', function(e){
-      e.preventDefault();
-      var scale = e.deltaY > 0 ? 1.12 : 0.89;
-      var rect = svgEl.getBoundingClientRect();
-      var mx = (e.clientX - rect.left) / rect.width * vb.w + vb.x;
-      var my = (e.clientY - rect.top) / rect.height * vb.h + vb.y;
-      vb.w *= scale; vb.h *= scale;
-      vb.x = mx - (mx - vb.x) * scale;
-      vb.y = my - (my - vb.y) * scale;
-      svgEl.setAttribute('viewBox', vb.x+' '+vb.y+' '+vb.w+' '+vb.h);
-    });
-    svgEl.addEventListener('mousedown', function(e){
-      if (e.button !== 0) return;
-      var target = e.target.closest('.gv-node');
-      if (target) return;
-      dragging = true;
-      dragStart = {x:e.clientX, y:e.clientY, vbx:vb.x, vby:vb.y};
-      e.preventDefault();
-    });
-    svgEl.addEventListener('mousemove', function(e){
-      if (!dragging) return;
-      var rect = svgEl.getBoundingClientRect();
-      var dx = (e.clientX - dragStart.x) / rect.width * vb.w;
-      var dy = (e.clientY - dragStart.y) / rect.height * vb.h;
-      vb.x = dragStart.vbx - dx;
-      vb.y = dragStart.vby - dy;
-      svgEl.setAttribute('viewBox', vb.x+' '+vb.y+' '+vb.w+' '+vb.h);
-    });
-    svgEl.addEventListener('mouseup', function(){ dragging = false; });
-    svgEl.addEventListener('mouseleave', function(){ dragging = false; });
+    var content = { x0: 0, y0: 0, x1: W, y1: H };
+    function viewSize(){ var r = cv.getBoundingClientRect(); return { width: Math.max(1, r.width), height: Math.max(1, r.height) }; }
+    function apply(){
+      svgEl.setAttribute('viewBox', vb.x.toFixed(2)+' '+vb.y.toFixed(2)+' '+vb.w.toFixed(2)+' '+vb.h.toFixed(2));
+      var z = document.getElementById('gv-zlevel'); if (z) z.textContent = Math.round(viewSize().width / vb.w * 100) + '%';
+    }
+    function fit(){ vb = orunmilaGraph2DCore.fitWidth({ width: W, height: H }, viewSize(), { maxScale: 1.25 }); apply(); }
+    // The canvas changed shape (a resize, full screen): the view keeps its width and takes the canvas's shape.
+    function reshape(){ if (!vb) return; var s = viewSize(); vb = { x: vb.x, y: vb.y, w: vb.w, h: vb.w * s.height / s.width }; apply(); }
+    function toWorld(cx, cy){ var r = cv.getBoundingClientRect(); return [vb.x + (cx - r.left) * vb.w / Math.max(1, r.width), vb.y + (cy - r.top) * vb.h / Math.max(1, r.height)]; }
+    function zoom(f, cx, cy){
+      var r = cv.getBoundingClientRect();
+      if (cx == null) { cx = r.left + r.width / 2; cy = r.top + r.height / 2; }
+      var w = toWorld(cx, cy);
+      vb = orunmilaGraph2DCore.zoomAt(vb, f, w[0], w[1], viewSize(), ZOOM); apply();
+    }
+    function panPx(dx, dy){ var s = viewSize(); var res = orunmilaGraph2DCore.panBy(vb, dx * vb.w / s.width, dy * vb.h / s.height, content); vb = res.vb; apply(); return res.moved; }
+    if (!vb) fit(); else reshape();
+    if (graphResize) graphResize.disconnect();
+    graphResize = window.ResizeObserver ? new ResizeObserver(reshape) : null;
+    if (graphResize) graphResize.observe(cv);
 
-    document.getElementById('gv-zin').addEventListener('click', function(){ applyZoom(0.75); });
-    document.getElementById('gv-zout').addEventListener('click', function(){ applyZoom(1.33); });
-    document.getElementById('gv-zreset').addEventListener('click', function(){ vb={x:0,y:0,w:W,h:H}; svgEl.setAttribute('viewBox','0 0 '+W+' '+H); });
-    function applyZoom(s){ var mx=vb.x+vb.w/2, my=vb.y+vb.h/2; vb.w*=s; vb.h*=s; vb.x=mx-vb.w/2; vb.y=my-vb.h/2; svgEl.setAttribute('viewBox',vb.x+' '+vb.y+' '+vb.w+' '+vb.h); }
+    // Scroll moves the picture (Shift and scroll, sideways); Ctrl or Cmd and scroll, which is also what a trackpad
+    // pinch sends, zooms about the pointer. At the picture's edge the scroll is left to the page.
+    cv.addEventListener('wheel', function(e){
+      var unit = e.deltaMode === 1 ? 16 : (e.deltaMode === 2 ? viewSize().height : 1);
+      if (e.ctrlKey || e.metaKey) { e.preventDefault(); zoom(Math.exp(-e.deltaY * unit * 0.0022), e.clientX, e.clientY); return; }
+      var dx = e.deltaX * unit, dy = e.deltaY * unit;
+      if (e.shiftKey && !dx) { dx = dy; dy = 0; }
+      if (panPx(dx, dy)) e.preventDefault();
+    }, { passive: false });
+
+    // Drag the background to move; two fingers pinch to zoom. A thing's own clicks are left alone.
+    var pts = {}, drag = null, pinch = null;
+    function twoApart(){ var ids = Object.keys(pts); var a = pts[ids[0]], b = pts[ids[1]]; return { d: Math.hypot(a[0]-b[0], a[1]-b[1]), cx: (a[0]+b[0])/2, cy: (a[1]+b[1])/2 }; }
+    cv.addEventListener('pointerdown', function(e){
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (e.target.closest && e.target.closest('.gv-node')) return;
+      pts[e.pointerId] = [e.clientX, e.clientY];
+      try { cv.setPointerCapture(e.pointerId); } catch (x) { /* a pointer the page cannot hold */ }
+      if (Object.keys(pts).length === 2) { pinch = twoApart(); drag = null; }
+      else drag = { x: e.clientX, y: e.clientY };
+      cv.classList.add('panning');
+    });
+    cv.addEventListener('pointermove', function(e){
+      if (!pts[e.pointerId]) return;
+      pts[e.pointerId] = [e.clientX, e.clientY];
+      if (pinch && Object.keys(pts).length === 2) { var t = twoApart(); if (pinch.d > 0) zoom(t.d / pinch.d, t.cx, t.cy); pinch = t; return; }
+      if (drag) { panPx(drag.x - e.clientX, drag.y - e.clientY); drag.x = e.clientX; drag.y = e.clientY; }
+    });
+    function lift(e){
+      delete pts[e.pointerId];
+      if (Object.keys(pts).length < 2) pinch = null;
+      if (!Object.keys(pts).length) { drag = null; cv.classList.remove('panning'); }
+    }
+    cv.addEventListener('pointerup', lift);
+    cv.addEventListener('pointercancel', lift);
+
+    // The keyboard, once the canvas is selected (click it, or Tab to it).
+    cv.addEventListener('keydown', function(e){
+      var k = e.key, step = 60;
+      if (k === 'ArrowLeft') panPx(-step, 0);
+      else if (k === 'ArrowRight') panPx(step, 0);
+      else if (k === 'ArrowUp') panPx(0, -step);
+      else if (k === 'ArrowDown') panPx(0, step);
+      else if (k === '+' || k === '=') zoom(1.25);
+      else if (k === '-' || k === '_') zoom(0.8);
+      else if (k === '0') fit();
+      else return;
+      e.preventDefault();
+    });
+
+    document.getElementById('gv-zin').addEventListener('click', function(){ zoom(1.25); });
+    document.getElementById('gv-zout').addEventListener('click', function(){ zoom(0.8); });
+    document.getElementById('gv-zreset').addEventListener('click', function(){ fit(); });
+    document.getElementById('gv-zfull').addEventListener('click', function(){
+      if (document.fullscreenElement || document.webkitFullscreenElement) {
+        if (document.exitFullscreen) document.exitFullscreen(); else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+        return;
+      }
+      var ask = cv.requestFullscreen || cv.webkitRequestFullscreen;
+      var asked = ask ? ask.call(cv) : null;
+      if (asked && asked.catch) asked.catch(function(){ /* refused: the canvas stays in the page */ });
+    });
 
     // search: lay the levels out again with the matches ringed, and brought in when a level was full
     var searchEl = document.getElementById('gv-search');

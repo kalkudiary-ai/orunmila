@@ -70,6 +70,22 @@ function scriptOf(command) {
   while ((m = re.exec(String(command)))) words.push(m[1] !== undefined ? m[1] : m[2] !== undefined ? m[2] : m[3]);
   return { words, at: words.findIndex((w) => ORUNMILA_SCRIPTS.includes(path.basename(w))) };
 }
+/**
+ * F28 (Phase 7, EU2): the script a hook runs, as a `/`-separated path inside this copy (`root`), when the hook names
+ * one of this copy's own files directly, as an earlier version's install wrote it (`node "<package>/src/...js"`);
+ * otherwise null. Paths are compared after resolving links, so a global folder reached through a link still matches.
+ */
+function ownScript(command, root) {
+  const { words, at } = scriptOf(command);
+  if (at < 0 || !path.isAbsolute(words[at])) return null;
+  let rel;
+  try {
+    rel = path.relative(fs.realpathSync(root), fs.realpathSync(words[at]));
+  } catch {
+    return null;
+  }
+  return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? { rel: rel.split(path.sep).join('/'), rest: words.slice(at + 1) } : null;
+}
 function missingHookScripts(settings) {
   const { starterTarget, STARTER } = require('../src/runtime/install');
   const out = [];
@@ -346,7 +362,7 @@ function cmdInstall() {
   const existing = adapter.id === 'claude-code' ? findExistingClaudeHooks(readJson(p, {})) : [];
   const upgrade = existing.length > 0 && existing.every((e) => {
     const { words, at } = scriptOf(e.command);
-    return at >= 0 && words[at] === thisStarter;
+    return (at >= 0 && words[at] === thisStarter) || ownScript(e.command, root) !== null; // F28: or this copy's own file
   });
   if (capturing && existing.length && !upgrade) {
     installClaudeCode(root, p); // prints the refusal and where the other hooks are; writes nothing
@@ -363,6 +379,26 @@ function cmdInstall() {
   if (require('../src/opon/intake/switches').setUpdatesDefault(orunmilaHome()).written) {
     console.log("Daily updates are on: once a day Orunmila asks the npm registry for its latest version, sending only the package's name,");
     console.log('and switches to it once it is checked and no session is being recorded. Turn them off with: orunmila install --without-updates\n');
+  }
+  // F28: every hook that names this copy's own files, as an earlier version's install wrote it, is rewritten in place to
+  // run the starter, keeping its event, matcher and arguments, so it keeps working when this copy goes.
+  if (adapter.id === 'claude-code' && fs.existsSync(p)) {
+    const settings = readJson(p, {});
+    let moved = 0;
+    for (const entries of Object.values((settings && settings.hooks) || {})) {
+      for (const entry of Array.isArray(entries) ? entries : []) {
+        for (const h of (entry && entry.hooks) || []) {
+          const own = h && h.type === 'command' ? ownScript(h.command, root) : null;
+          if (!own) continue;
+          h.command = [hookFor(own.rel), ...own.rest].join(' ');
+          moved++;
+        }
+      }
+    }
+    if (moved) {
+      fs.writeFileSync(p, JSON.stringify(settings, null, 2));
+      console.log(`${moved} hooks named this copy's own files, as an earlier version's install wrote them; each now runs the starter.`);
+    }
   }
   if (capturing && upgrade) {
     console.log(`Orunmila is already installed in ${p}: its hooks run that starter, which now runs ${rt.version}. No hook was added.`);

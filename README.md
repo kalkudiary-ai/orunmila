@@ -176,8 +176,8 @@ log it did not make; `orunmila verify` checks a log. Session verdicts, off by
 default (`ORUNMILA_JUDGE_LIVE=1`), judge each session with fixed rules, no
 model (`orunmila report --verdicts`). The hooks now run a copy of Orunmila
 kept in `~/.orunmila/`, so clearing an `npx` cache no longer silences them;
-over hooks an earlier version wrote, `orunmila install` changes nothing and
-names them to remove first. `orunmila install` also turns on a once-a-day
+after you upgrade, `orunmila install` moves the hooks an earlier version wrote
+onto that copy, adding none. `orunmila install` also turns on a once-a-day
 update check, the package's one network call (`--without-updates` turns it
 off). `orunmila watch` no longer stops 1.5 seconds after it starts. The trail
 page's Graph tab is a flowchart on a canvas you scroll both ways and zoom, with

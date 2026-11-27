@@ -209,9 +209,11 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   follows the starter to the script it runs and names one that is missing.
   Each hook takes about 20 ms longer (one more Node start). Installing again
   over hooks that already run the starter is an upgrade: the new copy becomes
-  current and no hook is added. Hooks written by an earlier version name that
-  version's copy, so `orunmila install` refuses over them and changes nothing:
-  remove the hooks it names, then install again.
+  current and no hook is added. Hooks an earlier version wrote, which name the
+  installed package's own files, are an upgrade too: after `npm install -g
+  orunmila`, `orunmila install` moves each of them onto the starter in place
+  (its event, matcher and arguments kept) and adds none. Hooks that name a
+  different copy of Orunmila are still refused, named, and left untouched.
 - **The trail page says what it checked.** With no checked turn, the header,
   the file list, the Report tab, the Dashboard and the claim-vs-record section
   say "Not checked"; before, the page read "looks clean". Turns checked with no

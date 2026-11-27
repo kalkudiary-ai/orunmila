@@ -3620,7 +3620,7 @@ MUTANTS.push(
     id: "F19-3 any copy's hooks count as this home's starter",
     file: 'bin/orunmila.js',
     test: 'test/starter.js',
-    from: 'return at >= 0 && words[at] === thisStarter;',
+    from: 'return (at >= 0 && words[at] === thisStarter) || ownScript(e.command, root) !== null;',
     to: 'return at >= 0;',
     fails: ["F19 (LD336): an install refused because another copy's hooks"],
   },
@@ -4106,6 +4106,26 @@ MUTANTS.push({
   to: 'return false;',
   fails: ['EU1: the comparison sees a lost field'],
 });
+
+// F28 (Phase 7, EU2): install over an earlier version's hooks that name this copy's own files is an upgrade.
+MUTANTS.push(
+  {
+    id: "F28-1 hooks naming this copy's own files are another copy again",
+    file: 'bin/orunmila.js',
+    test: 'test/upgrade-install.js',
+    from: "return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? { rel: rel.split(path.sep).join('/'), rest: words.slice(at + 1) } : null;",
+    to: 'return null;',
+    fails: ["F28: install over hooks an earlier version wrote, naming this copy's own files"],
+  },
+  {
+    id: 'F28-2 a file outside this copy counts as its own',
+    file: 'bin/orunmila.js',
+    test: 'test/upgrade-install.js',
+    from: "return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? {",
+    to: 'return rel ? {',
+    fails: ['F28: hooks that name a different copy are still refused'],
+  },
+);
 
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };
 

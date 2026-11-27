@@ -61,6 +61,7 @@ from the network, so opening or sharing one reveals nothing to a third party.
 
 | You want to | Go to |
 |---|---|
+| Start from nothing: what it is, ten minutes to a first report, what it stores, what it cannot see | [docs/START.md](docs/START.md) |
 | See a report before installing anything | [the live report](https://kalkudiary-ai.github.io/orunmila/), or `npx orunmila demo` |
 | Use it on your own agent | [Quickstart](#quickstart), below |
 | Know what it can and cannot tell you | [What it catches](#what-it-catches) and [What it cannot see](#what-it-cannot-see) |
@@ -91,7 +92,18 @@ orunmila trail                   # one offline page: timeline, files, flowchart,
 ```
 
 Claude Code is the default agent. `orunmila install --agent cursor` (and the
-others `orunmila agents` lists) gives another agent the Stain Map. pnpm, a
+others `orunmila agents` lists) gives another agent the Stain Map. How far each
+is supported:
+
+| Agent | Support |
+|---|---|
+| Claude Code | Fully supported, tested on real sessions. |
+| Cursor | Experimental until it passes the real-session tests (test 49, not yet run). |
+| Gemini CLI, Codex, Continue, Antigravity, Generic | Experimental: built, tested only with sample data; results may be wrong. |
+| Aider | Experimental, sentinel only (Aider has no hooks). |
+| Windsurf | No adapter exists. |
+
+ pnpm, a
 project-only install, a git clone, and what an install leaves in
 `~/.orunmila/`: [Quickstart: every route](docs/GUIDE.md#quickstart-every-route).
 

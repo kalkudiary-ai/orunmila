@@ -60,6 +60,16 @@ hook scripts by their paths in the package (`src/capture/claude-code/`),
 
 ### Added
 
+- **A page for new users, and the support table stated plainly.**
+  `docs/START.md` (in the package) is for someone who has never heard of
+  Orunmila: what it is, a first session in ten minutes, how to read a real
+  session report, its words, what it defends against and cannot see, what it
+  stores, where and for how long, and which agents are supported. Claude Code
+  is fully supported; Cursor is experimental until it passes the real-session
+  tests; Gemini CLI, Codex, Continue, Antigravity and Generic are experimental
+  (sample data only); Aider is experimental and sentinel only; no Windsurf
+  adapter exists. An experimental adapter's session says so on the first line
+  of `orunmila report`.
 - **A short README, a guide, and a map of the system for contributors.** The
   README is now the way in: what Orunmila is, a "Start here" table, a
   four-command quickstart, the three lenses, what it catches and cannot see,

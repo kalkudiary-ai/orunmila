@@ -107,6 +107,27 @@ it("DOC5 (LD358): CONTRIBUTING.md maps the system: every folder in src/ is named
   assert.ok(c.includes('orunmila update'), 'the one network call, named');
 });
 
+// DOC6 (Phase 7; brief v4 lines 719-733): the docs for a reader who has never heard of Orunmila.
+it("DOC6: docs/START.md has each part the brief asks for, the README's first table sends a new user there, and the vocabulary names the brief's terms", () => {
+  const start = read('docs/START.md');
+  for (const h of ['## What it is', '## Install, and your first session', '## Reading a session report', '## The words Orunmila uses', '## What it defends against, and what it does not', '## What it stores, where, and for how long', '## Which agents are supported']) assert.ok(start.includes(h + '\n'), h);
+  for (const term of ['| Orunmila |', '| Glove |', '| Sentinel |', '| Mark (àmì) |', '| Ọpọ́n |', '| Odù |', '| Babaláwo |', '| Law gate |', '| Ọ̀pẹ̀lẹ̀ |']) assert.ok(start.includes(term), term);
+  for (const part of ['Output 2 (Ọ̀pẹ̀lẹ̀)', 'Output 3', 'administrator rights', 'Whether a record is complete', '`orunmila leak-check`', '`orunmila retention --keep-days N --yes`']) assert.ok(start.includes(part), part);
+  assert.ok(read('README.md').includes('| [docs/START.md](docs/START.md) |'), 'the README sends a new user to it');
+});
+
+it("DOC6 (lines 727-732): the support table is the same in START.md, the README and the guide, and says what src/capture/support.js says", () => {
+  const { supportOf } = require('../src/capture/support');
+  const rows = (text) => text.split('\n').filter((l) => /^\| (Claude Code|Cursor|Gemini CLI, Codex, Continue, Antigravity, Generic|Aider|Windsurf) \| [A-Z]/.test(l));
+  const start = rows(read('docs/START.md'));
+  assert.strictEqual(start.length, 5);
+  assert.deepStrictEqual(rows(read('README.md')), start);
+  assert.ok(start.every((r) => read('docs/GUIDE.md').includes(r)));
+  assert.strictEqual(supportOf('claude-code').status, 'supported');
+  assert.ok(start[1].includes('test 49, not yet run') && supportOf('cursor').words.includes('test 49, not yet run'), 'Cursor: one wording, until test 49');
+  assert.ok(start[3].includes('sentinel only') && start[4].includes('No adapter exists'));
+});
+
 it('DOC5 (LD358): the help sends a reader to the guide as well as the README', () => {
   const { spawnSync } = require('child_process');
   const help = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'orunmila.js')], { encoding: 'utf8' }).stdout;

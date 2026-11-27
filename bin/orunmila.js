@@ -802,6 +802,12 @@ function cmdReport() {
   if (args.includes('--verdicts')) return cmdReportVerdicts();
   const sessionId = flag('session', eventlog.latestSessionId());
   if (!sessionId) return console.log('No sessions captured yet.');
+  // DOC6 (brief line 733): an experimental adapter's session says so first, in its own report.
+  const { experimentalNote } = require('../src/capture/support');
+  for (const id of [...new Set(eventlog.readSession(sessionId).map((e) => e.agent))].filter((a) => a && a !== 'fs-sentinel').sort()) {
+    const note = experimentalNote(id, (getAdapter(id) || { label: id }).label);
+    if (note) console.log(note + '\n');
+  }
   const turn = flag('turn', null);
   const stamp = flag('archive', null);
   if (turn) {

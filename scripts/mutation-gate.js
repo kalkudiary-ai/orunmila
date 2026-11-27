@@ -4325,6 +4325,26 @@ MUTANTS.push({
   fails: ['EU3: orunmila html names what replaces it and when'],
 });
 
+// DOC6 (Phase 7): the support table in one place, and an experimental adapter's session labelled in its report.
+MUTANTS.push(
+  {
+    id: 'DOC6-1 an experimental session is never labelled',
+    file: 'bin/orunmila.js',
+    test: 'test/support.js',
+    from: "    if (note) console.log(note + '\\n');",
+    to: '',
+    fails: ["DOC6 (line 733): a Cursor session's report says its adapter is experimental"],
+  },
+  {
+    id: 'DOC6-2 Cursor reads as supported',
+    file: 'src/capture/support.js',
+    test: 'test/support.js',
+    from: "cursor: { status: 'experimental',",
+    to: "cursor: { status: 'supported',",
+    fails: ['DOC6: every adapter has its support line'],
+  },
+);
+
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };
 
 if (require.main === module) process.exit(runGate());

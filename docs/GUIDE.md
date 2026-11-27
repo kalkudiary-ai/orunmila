@@ -698,6 +698,19 @@ html`, which keeps working in 1.x and is removed no sooner than 2.0.0.
 
 ## Supported agents
 
+How far each is supported, stated plainly:
+
+| Agent | Support |
+|---|---|
+| Claude Code | Fully supported, tested on real sessions. |
+| Cursor | Experimental until it passes the real-session tests (test 49, not yet run). |
+| Gemini CLI, Codex, Continue, Antigravity, Generic | Experimental: built, tested only with sample data; results may be wrong. |
+| Aider | Experimental, sentinel only (Aider has no hooks). |
+| Windsurf | No adapter exists. |
+
+An experimental adapter's session says so on the first line of `orunmila report`.
+What each adapter writes and where:
+
 | Agent | `--agent` id | Stain Map | Closeout Gate | Config written | Notes |
 |---|---|---|---|---|---|
 | Claude Code | `claude-code` (default) | ✅ | ✅ | `.claude/settings.json` | Richest hook surface; the original target |

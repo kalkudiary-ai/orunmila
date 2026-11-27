@@ -86,7 +86,7 @@ const MAP = {
   53: A(C('intake-engine', 'test 53: a session idle'), C('intake-engine', 'test 53: a busy session')),
   54: A(C('redact-intake', 'test 54:'), C('intake-router', 'test 54, mark side')),
   55: A(C('adapter-claude-code', 'test 55:'), C('intake-router', 'test 55:')),
-  56: { ...A(C('adapter-claude-code', 'test 55:'), C('gate-from-marks', 'B9: commands from marks')), unshown: "no-grep-as-basis's results on recorded sessions against today's" },
+  56: { ...A(C('adapter-claude-code', 'test 55:'), C('gate-from-marks', 'B9: commands from marks'), C('grading-compare', 'R56 test 56'), C('grading-compare', 'R56: the same evidence')), record: "on O's machine, 2026-11-28, scripts/grading-compare.js: 49 session logs, 360 claimed turns, each matched to its event-log turn: no-grep-as-basis the same both ways on all 360; it fired on none (56 claims name a path), so no recorded turn shows a grading difference, which the hand-built cases show (LD376)" },
   57: A(C('adapter-claude-code', 'test 57:')),
   58: A(C('redact-intake', 'test 58:')),
   59: A(C('adapter-claude-code', 'test 59, mark side'), C('trail', 'a sub-agent touch carries its attribution')),

@@ -4287,6 +4287,34 @@ MUTANTS.push(
   },
 );
 
+// R56 (Phase 7, test 56, LD376): no-grep-as-basis from the marks against the event log, each difference named.
+MUTANTS.push(
+  {
+    id: 'R56-1 a failed read is no longer a reason',
+    file: 'scripts/grading-compare.js',
+    test: 'test/grading-compare.js',
+    from: "    if (failed(READS)) return 'NF26: a failed read is no receipt';",
+    to: '',
+    fails: ['R56 test 56'],
+  },
+  {
+    id: 'R56-2 every difference reads as explained',
+    file: 'scripts/grading-compare.js',
+    test: 'test/grading-compare.js',
+    from: 'reasons: [...reasons].sort(), explained: unexplained === 0 };',
+    to: 'reasons: [...reasons].sort(), explained: true };',
+    fails: ['R56: the same evidence'],
+  },
+  {
+    id: 'R56-3 the comparison judges nothing',
+    file: 'scripts/grading-compare.js',
+    test: 'test/grading-compare.js',
+    from: "const law = () => loadLaws({ root: os.tmpdir() }).laws.filter((l) => l.id === LAW);",
+    to: 'const law = () => [];',
+    fails: ['R56 test 56'],
+  },
+);
+
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };
 
 if (require.main === module) process.exit(runGate());

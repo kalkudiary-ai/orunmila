@@ -114,4 +114,26 @@ it("Q40: for a judgement made before the law gate's results were in the odù rec
   }
 });
 
+it("SR1: an odù log written by an intake older than Q40 (no law_gate witness) gives the report the raw marks' counts, never 0 checked", () => {
+  const base = tmpDir();
+  try {
+    const { odus, verdicts, marks } = session(base, ['blocked', 'skipped']);
+    const older = odus.map((o) => {
+      if (o.record !== 'odu' || !o.witness_status.law_gate) return o;
+      const ws = { ...o.witness_status };
+      delete ws.law_gate;
+      return { ...o, witness_status: ws };
+    });
+    const zero = { checked: 0, passed: 0, warned: 0, blocked: 0, skipped: 0, skip_rate: 0, over_ceiling: false };
+    const judged = verdicts.map((v) => (v.record === 'session_verdict' ? { ...v, law_gate: zero } : v.rule === 'R21' ? { ...v, rule: 'R0', verdict: 'clean' } : v));
+    const rep = buildReport({ header: marks[0], marks: marks.slice(1), odus: older.slice(1), verdicts: judged });
+    assert.deepStrictEqual(rep.law_gate, { checked: 2, passed: 0, warned: 0, blocked: 1, skipped: 1, skip_rate: 50 });
+    assert.strictEqual(rep.findings.filter((x) => x.kind === 'law_gate_block').length, 1, JSON.stringify(rep.findings));
+    const none = buildReport({ header: marks[0], marks: marks.slice(1).filter((m) => m.source !== 'law_gate'), odus: older.slice(1), verdicts: judged });
+    assert.strictEqual(none.law_gate.checked, 0, 'no gate marks and no counts: still 0');
+  } finally {
+    rmrf(base);
+  }
+});
+
 runAll('law-gate-odu');

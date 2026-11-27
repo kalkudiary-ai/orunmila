@@ -258,13 +258,15 @@ function buildReport({ header, marks, odus, verdicts, quarantined = 0, judgedNow
   }
 
   // The law gate (line 692). Q40 (LD284): from the verdict log, when its session verdict carries the counts (each block an
-  // R21 verdict on its odù); from the raw log's checked marks for a judgement made before that (LD267).
+  // R21 verdict on its odù); from the raw log's checked marks for a judgement made before that (LD267), and for an odù
+  // log an intake older than Q40 wrote, whose odùs carry no law_gate results, so the judge counts none (SR1).
   const law_gate = { checked: 0, passed: 0, warned: 0, blocked: 0, skipped: 0, skip_rate: 0 };
   const blockWords = (m) => {
     const laws = ((m.detail && m.detail.findings) || []).filter((f) => f.severity === 'block').map((f) => f.law);
     return `The law gate blocked turn ${m.turn}: ${laws.join(', ') || 'a blocking law'}.`;
   };
-  if (session && session.law_gate) {
+  const gateMarks = marks.some((m) => m.source === 'law_gate' && m.says === 'checked');
+  if (session && session.law_gate && (session.law_gate.checked || !gateMarks)) {
     for (const k of Object.keys(law_gate)) law_gate[k] = session.law_gate[k];
     for (const o of odus.filter((x) => x.record === 'odu')) {
       const v = latest.get(o.odu_id);

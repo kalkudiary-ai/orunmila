@@ -2848,7 +2848,7 @@ const MUTANTS = [
     from: "const skips = law_gate.over_ceiling && rules.verdict.R22 !== 'off' ? rules.verdict.R22 : 'clean';", to: "const skips = 'clean';",
     fails: ['Q40: a skip rate over 2%'] },
   { id: 'Q40-5 the report ignores the verdict log for the law gate', file: 'src/babalawo/report/index.js', test: 'test/law-gate-odu.js',
-    from: '  if (session && session.law_gate) {', to: '  if (false) {',
+    from: '  if (session && session.law_gate && (session.law_gate.checked || !gateMarks)) {', to: '  if (false) {',
     fails: ["Q40: the report reads the law gate's counts"] },
   { id: 'Q40-6 the session verdict does not carry the counts', file: 'src/babalawo/index.js', test: 'test/law-gate-odu.js',
     from: 'counts: session.counts, law_gate: session.law_gate, judged:', to: 'counts: session.counts, judged:',
@@ -3766,6 +3766,15 @@ MUTANTS.push(
     from: '| install | `npx orunmila install` | `npx orunmila install --with-gate` | `npx orunmila install --with-judge` |',
     to: '| install | `npx orunmila install` | `npx orunmila install --with-gate` | |',
     fails: ['DOC3 (LD340)'],
+  },
+  // SR1 (LD347): a record an intake older than Q40 wrote: the report counts the law gate's raw marks, never 0.
+  {
+    id: "SR1-1 the judge's zero counts win over the raw marks",
+    file: 'src/babalawo/report/index.js',
+    test: 'test/law-gate-odu.js',
+    from: 'if (session && session.law_gate && (session.law_gate.checked || !gateMarks)) {',
+    to: 'if (session && session.law_gate) {',
+    fails: ['SR1: an odù log written by an intake older than Q40'],
   },
 );
 

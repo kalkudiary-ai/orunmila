@@ -693,8 +693,8 @@ fresh name at each start, published in `~/.orunmila/intake/address`, so no other
 program can take the name first. `orunmila status` names any hook whose
 script is missing (a package cache that was cleared) and exits 1. `orunmila
 judge` will not re-judge a session the intake still holds (it is free 30 minutes
-after its last payload). `orunmila html` still works for this release; `orunmila
-report --verdicts --html` replaces it.
+after its last payload). `orunmila report --verdicts --html` replaces `orunmila
+html`, which keeps working in 1.x and is removed no sooner than 2.0.0.
 
 ## Supported agents
 

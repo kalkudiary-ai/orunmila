@@ -4,9 +4,59 @@ All notable changes to orunmila are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
+From 1.0.0, a command, flag or output field is removed or changed in meaning only in a
+new major version, and named in this file first.
 
 ## [Unreleased]
+
+### Upgrading from 0.2.x
+
+**What changes**
+
+- **The hooks run through one starter.** `orunmila install` keeps a copy of the
+  package in Orunmila's home and every hook it writes runs that copy through
+  `~/.orunmila/bin/orunmila-start.js`, so clearing a package cache no longer
+  switches capture off. Hooks an earlier version wrote are moved onto the
+  starter when you run `orunmila install` again (below).
+- **A second, optional record: the intake.** Each session can get its own
+  hash-chained log in `~/.orunmila/sessions/<id>/`, outside the project, which
+  `orunmila verify` checks with no network and no setup. Its formats are the
+  open specification in `spec/` (v1, Apache 2.0). Nothing changes until you
+  install it.
+- **`orunmila install` turns on the daily update check** unless you have chosen
+  already (`--without-updates`, or `ORUNMILA_UPDATES=0`, turns it off). It sends
+  only the package's name.
+- **`orunmila html` is replaced** by `orunmila report --verdicts --session ID
+  --html FILE`. It keeps working in 1.x and is removed no sooner than 2.0.0; it
+  says so when it runs.
+- **`orunmila prune` stays for the old event log**; the intake's per-session logs
+  are removed whole, and recorded, by `orunmila retention`.
+
+**What to do**
+
+1. Upgrade the package the way you installed it (`npm install -g orunmila`, or
+   as a dev dependency).
+2. Run `orunmila install` again in each project whose sessions you record. It
+   moves your existing hooks onto the starter in place and adds none; hooks that
+   name a different copy of Orunmila are refused, named and left as they are.
+3. Run `orunmila status`: it names any hook whose script is missing, and exits 1
+   if one is.
+4. If your event log was written before 0.2.2, `orunmila log redact` removes the
+   secrets the old capture kept, or `orunmila log delete --yes` deletes the log.
+5. Optional: `orunmila install --intake`, then `orunmila intake start`, for the
+   per-session record and `orunmila verify`.
+
+**What still works**
+
+Every command of 0.2.x keeps its name, its flags and its output's shape:
+`install`, `agents`, `lenses`, `status`, `trail` (and its alias `glove`),
+`report`, `html`, `json`, `feedback`, `feedback-import`, `laws`, `stats`,
+`prune`, `rescore`, `archives`, `demo`, `watch`, `watch-fs` and
+`debug-transcript`. A test holds the JSON shapes of `trail --json`,
+`trail --json --facts-only`, `json` and `laws --check --json` against the
+published 0.2.4 on a real session. The event log `~/.orunmila/events.jsonl`, the
+hook scripts by their paths in the package (`src/capture/claude-code/`),
+`.orunmila/ignore`, `.orunmila/redact` and `ORUNMILA_LAWS=off` work as before.
 
 ### Added
 

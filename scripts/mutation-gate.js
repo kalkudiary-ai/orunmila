@@ -4315,6 +4315,16 @@ MUTANTS.push(
   },
 );
 
+// EU3 (Phase 7, LD378): a replaced command says what replaces it and when.
+MUTANTS.push({
+  id: 'EU3-1 the html notice no longer says when',
+  file: 'bin/orunmila.js',
+  test: 'test/upgrade-notes.js',
+  from: 'this command keeps working in 1.x and is removed no sooner than 2.0.0.',
+  to: 'this command stays for this release.',
+  fails: ['EU3: orunmila html names what replaces it and when'],
+});
+
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };
 
 if (require.main === module) process.exit(runGate());

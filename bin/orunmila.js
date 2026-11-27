@@ -833,7 +833,8 @@ function applyRedaction(reports, trail) {
 
 function cmdHtml() {
   // Ship item 5 (LD292): kept for this release; the session report from the verdict log replaces it.
-  console.log('Note: orunmila html is replaced by orunmila report --verdicts --session ID --html FILE (one file, nothing loaded from the network); this command stays for this release.');
+  // EU3 (LD378): and when: removing a command is a breaking change, so no sooner than the next major version.
+  console.log('Note: orunmila html is replaced by orunmila report --verdicts --session ID --html FILE (one file, nothing loaded from the network); this command keeps working in 1.x and is removed no sooner than 2.0.0.');
   const sessionId = flag('session', eventlog.latestSessionId());
   if (!sessionId) return console.log('No sessions captured yet.');
   const rawTrail = trailForSession(sessionId);

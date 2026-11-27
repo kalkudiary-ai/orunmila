@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "urn:orunmila:spec:v1:session-header",
-  "title": "Orunmila session header, schema version 1: DRAFT",
+  "title": "Orunmila session header, schema version 1",
   "description": "Every session's raw log begins with a header record, and the hash chain starts from it. It records everything needed to reproduce the session's results. Replay reads these values from the header, never from current settings.",
   "$comment": "brief v3 line 282 lists what the header holds but names no fields: every field name here is the agent's choice (LD16). Draft from Phase 1 slice A1; built in slice A10. Unknown fields are allowed (line 209).",
   "type": "object",

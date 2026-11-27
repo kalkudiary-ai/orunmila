@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "urn:orunmila:spec:v1:retention-header",
-  "title": "Orunmila retention log header, schema version 1: DRAFT",
+  "title": "Orunmila retention log header, schema version 1",
   "description": "The first line of the retention log, where its hash chain starts. Old sessions are removed only whole, and each removal is written to this hash-chained log, so a removal can never look like a session that never existed. Removal records follow (retention-removal.schema.json).",
   "$comment": "brief v4 line 348 asks for the log and names no fields: every field name here is the agent's choice (LD66; as schemas, LD77). Written by src/opon/ledger/retention.js, not wired. Unknown fields are allowed, as in the other v1 drafts (LD17).",
   "type": "object",

@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "urn:orunmila:spec:v1:odu",
-  "title": "Orunmila odù record, schema version 1: DRAFT",
+  "title": "Orunmila odù record, schema version 1",
   "description": "The single trustworthy record of one real event. The Ọpọ́n writes one odù record per real event to a second log, hash-chained and canonically serialised like the raw log. The judge reads only this log.",
   "$comment": "brief v4 lines 285-333. Fields the brief names keep its names; `record` and `seq` are the agent's choice (the hash chain checks seq, spec/hash-chain.md), and so is `continues`, rule 2's link back (line 364), which the brief requires and names no field for (LD167). `continues`, `ceiling` and each witness's `slots` were proposed to O as Q6 and approved (2026-11-22, LD174). Phase 3 slice O1 builds the fields replay can fill from a group; net_change came with station 4 (N2), cause and attribution with station 5 (A1b), confidence with station 6 (C1, LD185); conflicts come with station 6's C3 and are optional until then. Unknown fields are allowed (line 209).",
   "type": "object",

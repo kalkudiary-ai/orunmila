@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "urn:orunmila:spec:v1:updates-header",
-  "title": "Orunmila update log header, schema version 1: DRAFT",
+  "title": "Orunmila update log header, schema version 1",
   "description": "The first line of the update log (`updates.jsonl` in Orunmila's home, beside the sessions), where its hash chain starts. Orunmila switches itself to a newer version only while no session is held, so no session's record sees its code change; each switch, and each update it refused, is a record in this hash-chained log, so an update can never look like code that was always there. Update records follow (update.schema.json).",
   "$comment": "agent's proposal Q44 (a), approved by O 2026-11-25 (LD299): a log of its own beside the sessions, hash-chained, checked by `orunmila verify`; the brief names no update log, so every field name here is the agent's choice (LD329). Unknown fields are allowed, as in the other v1 drafts (LD17).",
   "type": "object",

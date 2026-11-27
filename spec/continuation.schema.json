@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "urn:orunmila:spec:v1:continuation",
-  "title": "Orunmila log continuation record, schema version 1: DRAFT",
+  "title": "Orunmila log continuation record, schema version 1",
   "description": "The first line of a log's second (or later) part. A crash can cut a log's last line short; that log is never edited. The restart starts a new part beside it, and this record, the new part's first line, says where the previous part was cut. One hash chain runs through all the parts (spec/hash-chain.md, \"A log in parts\").",
   "$comment": "agent's choice, LD57 (format change approved by O 2026-11-17: \"the restart would start a second part of the log beside it, recording where the first part broke\"). Unknown fields are allowed, as in the other v1 drafts (LD17).",
   "type": "object",

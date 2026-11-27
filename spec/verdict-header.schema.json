@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "urn:orunmila:spec:v1:verdict-header",
-  "title": "Orunmila verdict log header, schema version 1: DRAFT",
+  "title": "Orunmila verdict log header, schema version 1",
   "description": "The verdict log's first line, where its hash chain starts. It names the session, the odù log it judges and the judge that wrote it.",
   "$comment": "brief v4 lines 684 (a third hash-chained log), 682 (the swappable judge); Q34, approved by O 2026-11-24 (LD262). The header's shape follows the odù log's (LD167). Unknown fields are allowed (brief v4 line 209).",
   "type": "object",

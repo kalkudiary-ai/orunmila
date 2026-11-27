@@ -304,4 +304,67 @@ it('DOC3 (LD340): spec/README.md lists every file in spec/ in its table, and no 
   for (const stale of ['Nothing writes or reads these formats yet', 'The verdict record comes later', 'is not in the npm package yet']) assert.ok(!readme.includes(stale), stale);
 });
 
+// SP1 (Phase 7; brief v4 lines 703-709): the spec as a standalone document a developer who has never seen Orunmila's
+// code could implement from: v1, not a draft; every field in plain words; the versioning rule; openly licensed and
+// marked as staying open in every future version.
+it('SP1: spec/FIELDS.md is exactly what scripts/spec-fields.js makes from the schemas, so it cannot drift from them', () => {
+  const { fieldsMarkdown } = require('../scripts/spec-fields');
+  const file = path.join(SPEC, 'FIELDS.md');
+  assert.ok(fs.existsSync(file), 'spec/FIELDS.md');
+  assert.strictEqual(fs.readFileSync(file, 'utf8'), fieldsMarkdown(SPEC));
+});
+
+it('SP1: every property of every schema, at every depth, in shared shapes and in conditional rules, has its row in FIELDS.md with its wording', () => {
+  const { fieldsMarkdown } = require('../scripts/spec-fields');
+  // This walk is the test's own, not the generator's: a field the generator missed is missed here only if both miss it.
+  // A path is the property names from the schema's root (`a.b`), `[]` for a list's items, a shared shape by its name.
+  // Properties inside `if` and `not` are conditions, not fields; one with no wording restates a field described elsewhere.
+  function each(node, prefix, out) {
+    if (!node || typeof node !== 'object' || Array.isArray(node)) return;
+    for (const [name, sub] of Object.entries(node.properties || {})) {
+      const p = prefix ? `${prefix}.${name}` : name;
+      out.push({ p, d: sub && sub.description });
+      each(sub, p, out);
+    }
+    if (node.items) each(node.items, `${prefix}[]`, out);
+    for (const [name, sub] of Object.entries(node.definitions || {})) each(sub, name, out);
+    for (const k of ['allOf', 'anyOf', 'oneOf']) for (const sub of node[k] || []) each(sub, prefix, out);
+    for (const k of ['then', 'else']) each(node[k], prefix, out);
+  }
+  let described = 0;
+  let restated = 0;
+  for (const f of fs.readdirSync(SPEC).filter((x) => x.endsWith('.schema.json')).sort()) {
+    const md = fieldsMarkdown(SPEC).split('\n## ').find((s) => s.includes(`(\`${f}\`)`));
+    assert.ok(md, `${f} has its section`);
+    const out = [];
+    each(load(path.join(SPEC, f)), '', out);
+    for (const { p, d } of out) {
+      assert.ok(md.includes(`| \`${p}\` |`), `${f}: ${p} has a row`);
+      if (d) {
+        described++;
+        assert.ok(md.includes(d.replace(/\n/g, ' ').replace(/\|/g, '\\|')), `${f}: ${p} has its wording`);
+      } else restated++;
+    }
+  }
+  assert.ok(described >= 300, `${described} described properties, ${restated} restated`);
+});
+
+it('SP1: the spec is v1, not a draft: no title, heading or status in spec/ says draft', () => {
+  for (const f of fs.readdirSync(SPEC).sort()) {
+    const text = fs.readFileSync(path.join(SPEC, f), 'utf8');
+    if (f.endsWith('.schema.json')) assert.ok(!/draft/i.test(load(path.join(SPEC, f)).title), `${f} title`);
+    else assert.ok(!/\(draft\)|Status: draft/i.test(text), f);
+  }
+});
+
+it('SP1: the README states the versioning rule, the licence of the text, and that the formats stay open in every future version', () => {
+  const readme = fs.readFileSync(path.join(SPEC, 'README.md'), 'utf8');
+  for (const line of [
+    'Fields may be added in a later version of a format; a field is never renamed, removed or given another meaning without a new `schema_version`.',
+    'The text of this specification and its schema files are licensed under the Apache License 2.0, like the code (`LICENSE` at the repository root).',
+    'These formats and the verifier stay open in every future version of Orunmila: never paid, gated or closed.',
+  ]) assert.ok(readme.includes(line), line);
+  assert.ok(readme.includes('| `FIELDS.md` |') && readme.includes('`hash-chain.md`'), 'the reading order names FIELDS.md and hash-chain.md');
+});
+
 runAll('spec');

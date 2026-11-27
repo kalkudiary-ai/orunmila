@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "urn:orunmila:spec:v1:session-verdict",
-  "title": "Orunmila session verdict, schema version 1: DRAFT",
+  "title": "Orunmila session verdict, schema version 1",
   "description": "The whole session's one verdict, the last line a judgement writes to the verdict log: Incomplete if any evidence was lost, otherwise the most serious verdict among its events.",
   "$comment": "brief v4 line 686; Q34, approved by O 2026-11-24 (LD262). Unknown fields are allowed (brief v4 line 209).",
   "type": "object",

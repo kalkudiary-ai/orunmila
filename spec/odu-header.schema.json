@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "urn:orunmila:spec:v1:odu-header",
-  "title": "Orunmila odù log header, schema version 1: DRAFT",
+  "title": "Orunmila odù log header, schema version 1",
   "description": "The odù log's first line, where its hash chain starts. It names the session and the raw log it was reconciled from.",
   "$comment": "agent's choice, LD167: the hash chain checks seq from 0 (spec/hash-chain.md), as the retention log's header does. Unknown fields are allowed (brief v4 line 209).",
   "type": "object",

@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "urn:orunmila:spec:v1:mark",
-  "title": "Orunmila mark (raw observation), schema version 1: DRAFT",
+  "title": "Orunmila mark (raw observation), schema version 1",
   "description": "Every source's output is turned into marks of this one shape by its adapter, and intake appends them to the session's raw log (JSON Lines, one mark per line, never edited). Sources never write to the log themselves.",
   "$comment": "brief v3 lines 209-268. Draft from Phase 1 slice A1: nothing writes or reads this format yet. Unknown fields are allowed, because the brief lets v1 add fields without a version bump (line 209); a reader must ignore what it does not know. Rules the brief states but a schema cannot hold (seq strictly increasing, the hash chain, redaction before hashing) are checked elsewhere (A3a, A4, A5, A6).",
   "type": "object",

@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "urn:orunmila:spec:v1:update",
-  "title": "Orunmila update record, schema version 1: DRAFT",
+  "title": "Orunmila update record, schema version 1",
   "description": "One update of Orunmila by itself: the version it ran and the one it was offered, npm's integrity hash of the package it checked, the result of the new version's self-check, and whether it switched. A failed self-check keeps the version it ran, and is recorded too. Follows the update log's header (updates-header.schema.json) in one hash chain.",
   "$comment": "agent's proposal Q44 (a), approved by O 2026-11-25 (LD299): \"the version from and to, npm's integrity hash, the self-check's result, the time\"; `switched` and the field names are the agent's choice (LD329). Unknown fields are allowed (LD17).",
   "type": "object",

@@ -1,9 +1,9 @@
-# The hash chain, v1 (draft)
+# The hash chain, v1
 
-**Status: draft** (Phase 1 slice A3a). This is the exact rule, so anyone can recompute every hash
-without Orunmila's code. It covers the raw log (the session header, then marks) and the retention
-log (its header, then removals; LD66). The odù log and the verdict log will use the same rule when
-they are built.
+This is the exact rule, so anyone can recompute every hash without Orunmila's code. Every log
+Orunmila writes follows it: the raw log (the session header, then marks), the quarantine log, the
+odù log and the verdict log (each its header, then its records), the retention log (its header, then
+removals) and the update log (its header, then updates).
 
 ## A log is lines
 
@@ -13,7 +13,8 @@ they are built.
   the whole record, `hash` included. So a line can be changed in only one way that still parses as the
   same record: not at all. Any other spelling of the same data is itself a broken line.
 - The raw log's first line is the session header (`seq` 0). Marks follow, `seq` 1, 2, 3 and so on,
-  each one more than the last.
+  each one more than the last. Every other log's first line is its own header, `seq` 0, and its
+  records follow the same way.
 
 ## What is hashed
 
@@ -28,7 +29,7 @@ For each record:
 
 ## How records are linked
 
-- The first record (the session header) has `"prev_hash": null`.
+- The first record (the log's header) has `"prev_hash": null`.
 - Every later record's `prev_hash` is the previous line's `hash`, exactly as written there.
 
 ## Checking a log
@@ -71,11 +72,15 @@ A cut last line in the last part is not continued: the log is broken there.
 The cut line's content is lost. A continuation shows where the crash cut the log, never what the
 cut line said. The restart's gap mark covers the marks lost while intake was down.
 
+Only the raw log and the quarantine log continue in parts. The odù log and the verdict log are made
+from the raw log, and replay makes them again; a last line a crash cut short there is named by the
+verifier, not continued.
+
 ## What the chain cannot show
 
 - **Lines removed from the end.** A log cut short still checks as an unbroken chain. The session
-  footer, which records the final hash of each log, is what shows this (brief, closeout step 8; built
-  later).
+  footer (`footer.json`, `session-footer.schema.json`), written at the closeout's end with the last
+  line of each log by `seq` and `hash`, is what shows this.
 - **A whole log rewritten from the start.** Anyone can compute a new valid chain. The chain makes
   tampering visible against a hash recorded elsewhere (the footer, and later off-machine
   registration); it is not a signature.

@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "urn:orunmila:spec:v1:retention-removal",
-  "title": "Orunmila retention removal record, schema version 1: DRAFT",
+  "title": "Orunmila retention removal record, schema version 1",
   "description": "One line of the retention log after its header: one session removed whole (its raw and quarantine logs, every part, and the files kept beside them). It is written before the session's folder is touched, and it holds what is needed to show which session went and that it was intact: the hash of its header line and the last seq and hash of each of its logs.",
   "$comment": "brief v4 line 348 asks for the log and names no fields: every field name here is the agent's choice (LD66; as schemas, LD77). Written by src/opon/ledger/retention.js, not wired. Unknown fields are allowed, as in the other v1 drafts (LD17).",
   "type": "object",

@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "urn:orunmila:spec:v1:verdict",
-  "title": "Orunmila verdict record, schema version 1: DRAFT",
+  "title": "Orunmila verdict record, schema version 1",
   "description": "One verdict on one sealed odù record: Clean, Look at this or Violation, with its receipt. A line of the verdict log, hash-chained like the other two logs. Same odù records plus same rules always give the same verdicts, so a verdict holds no clock.",
   "$comment": "brief v4 lines 642-686; guarantees 3, 4, 6, 8 (lines 490-495); Q34, approved by O 2026-11-24 (LD262). Unknown fields are allowed (brief v4 line 209).",
   "type": "object",

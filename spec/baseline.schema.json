@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "urn:orunmila:spec:v1:baseline-entry",
-  "title": "Orunmila baseline snapshot entry, schema version 1: DRAFT",
+  "title": "Orunmila baseline snapshot entry, schema version 1",
   "description": "One line of `baseline.jsonl`, the baseline snapshot taken at session start: one entry seen under the project root. The file is one canonical JSON line (RFC 8785) per entry, sorted by path, and its plain SHA-256 is the session header's `baseline.fingerprint`.",
   "$comment": "brief v4 lines 385, 387, 390, 250 name the snapshot and its fingerprint but no fields: every field name here is the agent's choice (LD169, LD170). Written by src/opon/net/baseline.js.",
   "type": "object",

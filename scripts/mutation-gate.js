@@ -3997,6 +3997,50 @@ MUTANTS.push(
   },
 );
 
+// SP1 (Phase 7, brief v4 lines 703-709): the spec as a standalone v1 document, its field reference made from the schemas.
+MUTANTS.push(
+  {
+    id: 'SP1-1 the field reference leaves out the shared shapes',
+    file: 'scripts/spec-fields.js',
+    test: 'test/spec.js',
+    from: 'if (definitions && Object.keys(definitions).length) {',
+    to: 'if (false) {',
+    fails: ['SP1: every property of every schema'],
+  },
+  {
+    id: 'SP1-2 the field reference stops at the top level',
+    file: 'scripts/spec-fields.js',
+    test: 'test/spec.js',
+    from: "rows.push({ path: p, type: typeOf(sub), required: how === 'rule' ? (required.has(name) ? 'in this rule' : 'no') : required.has(name) ? 'yes' : 'no', what: sub && sub.description, source: sub && sub.$comment, how });\n    walk(sub, p, rows, rules, how);",
+    to: "rows.push({ path: p, type: typeOf(sub), required: how === 'rule' ? (required.has(name) ? 'in this rule' : 'no') : required.has(name) ? 'yes' : 'no', what: sub && sub.description, source: sub && sub.$comment, how });",
+    fails: ['SP1: every property of every schema'],
+  },
+  {
+    id: 'SP1-3 the field reference skips the rules\' then and else branches',
+    file: 'scripts/spec-fields.js',
+    test: 'test/spec.js',
+    from: "for (const k of ['then', 'else']) walk(node[k], prefix, rows, rules, 'rule');",
+    to: '',
+    fails: ['SP1: every property of every schema'],
+  },
+  {
+    id: 'SP1-4 a schema changes and the field reference is not made again',
+    file: 'spec/mark.schema.json',
+    test: 'test/spec.js',
+    from: '"description": "The tool\'s name, on both marks of a tool call;',
+    to: '"description": "The name of the tool, on both marks of a tool call;',
+    fails: ['SP1: spec/FIELDS.md is exactly what'],
+  },
+  {
+    id: 'SP1-5 the spec no longer says it stays open',
+    file: 'spec/README.md',
+    test: 'test/spec.js',
+    from: 'These formats and the verifier stay open in every future version of Orunmila: never paid, gated or closed.',
+    to: 'These formats are open today.',
+    fails: ['SP1: the README states the versioning rule'],
+  },
+);
+
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };
 
 if (require.main === module) process.exit(runGate());

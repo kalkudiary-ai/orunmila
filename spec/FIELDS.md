@@ -90,13 +90,13 @@ Every source's output is turned into marks of this one shape by its adapter, and
 | `instant` | object |  | On a gap for intake's downtime: one end of the window. since is when intake last wrote before it stopped (the latest record among the sessions it was serving); until is when it ran again. | agent's choice, B1c-2 (test 84); wording approved by O 2026-11-17 |
 | `instant.mono_ns` | string | yes | The monotonic clock at that moment, as a decimal string. | brief v4 line 238 |
 | `instant.observed_at` | string | yes | Wall-clock time at that moment, for humans, and the only clock that compares across a reboot. | brief v4 line 238 |
-| `glove_tool_mark` | any or any |  |  | A Glove (source hook) mark about one tool call: started, an outcome verb, or ended on something other than a turn (brief v3 line 258). It names no required keys: the root requires source, says and target (LD81, LD87). |
+| `glove_tool_mark` | object |  |  | A Glove (source hook) mark about one tool call: started, an outcome verb, or ended on something other than a turn (brief v3 line 258). It names no required keys: the root requires source, says and target (LD81, LD87). |
 | `glove_tool_mark.source` | `"hook"` | no |  |  |
 | `glove_tool_mark.says` | one of `"started"`, `"created"`, `"modified"`, `"deleted"`, `"renamed"`, `"exited"`, `"read"`, `"contacted"`, `"called"` | no |  |  |
 | `glove_tool_mark.says` | `"ended"` | no |  |  |
-| `glove_tool_mark.target` | any | no |  |  |
+| `glove_tool_mark.target` | object | no |  |  |
 | `glove_tool_mark.target.kind` | any | no |  |  |
-| `session_target` | any |  |  | A mark about the session itself: target { kind: session } (LD55). |
+| `session_target` | set by the rules below |  |  | A mark about the session itself: target { kind: session } (LD55). |
 | `session_target.target` | object | no |  |  |
 | `session_target.target.kind` | `"session"` | yes |  |  |
 | `target` | object or null |  |  |  |
@@ -200,11 +200,11 @@ Every source's output is turned into marks of this one shape by its adapter, and
 - brief v4 line 265: a renamed mark also carries from, the old path
 - brief v4 lines 245, 386: the Opon records a file's fingerprint at settle time; the mark's shape is the agent's proposal (LD171, Q8): a file that exists has its size and fingerprint, null only when unknown; a file that does not has none
 - brief v4 lines 344, 402-405, guarantee 3; the agent's proposal, Q11 (2) (a), adopted LD184, LD202: the intake names in this session's own log another session sharing its folder (its id, root and start), and later its end, so replay reads overlap from this log alone; AT1 (LD330, O approved Q45): `busy`, when present, says whether the session named was working at this mark (from its prompt to its turn's end, or with work left running), so a peer idle then is not counted as overlapping
-- `target`: a rule between fields; see the schema file
-- `target`: a rule between fields; see the schema file
-- `target`: a rule between fields; see the schema file
-- `target`: a rule between fields; see the schema file
-- `target`: a rule between fields; see the schema file
+- `target`: when `kind` is one of `"file"`, `"dir"`: `path` is required
+- `target`: when `kind` is `"command"`: `text` is required
+- `target`: when `kind` is one of `"turn"`, `"session"`: `id` is required
+- `target`: when `kind` is `"tool"`: `name` is required
+- `target`: when `kind` is `"network"`: `host` is required
 - `detail`: brief v3 line 266: diffs stay out of the raw log
 - `detail`: brief v3 line 266: no_diff only when there is no diff
 - `detail`: brief v3 line 264: line counts are null unless both states are known
@@ -324,8 +324,39 @@ The single trustworthy record of one real event. The Ọpọ́n writes one odù 
 - `conflicts[]`: brief v4 line 434; test 5; the fields are the agent's proposal (LD194, Q16); `downtime` (Q29, LD245): the intake's downtime gaps inside its turns, by mark seq
 - `conflicts[]`: brief v4 line 450; the field is the agent's proposal (LD207, Q19; provisional, Q17)
 - `conflicts[]`: agent's proposal for F9, approved by O as Q26 (2026-11-23), LD234
-- a rule between fields; see the schema file
-- a rule between fields; see the schema file
+- when `attribution` is `"unexplained"`: `cause` is null; otherwise `cause` is object
+- when `not_credited` is present: `attribution` is `"unexplained"`
+
+## Orunmila quarantine log header (`quarantine-header.schema.json`)
+
+The first line of a session's quarantine log (`quarantine.jsonl`), where its hash chain starts. The quarantine log keeps every input that reached intake for this session and was not a valid mark, with its reasons, so nothing sent is ever dropped. Every session folder has one, even when nothing was quarantined. Quarantined records follow (quarantine.schema.json).
+
+| Field | Type | Required | What it means | Source |
+|---|---|---|---|---|
+| `schema_version` | `1` | yes | All carry a `schema_version`. | brief v4 line 209 |
+| `record` | `"quarantine_header"` | yes | Marks this line as the quarantine log's header, so a reader tells it from a quarantined record without guessing. | agent's choice |
+| `session_id` | string | yes | The session whose inputs this log keeps: the same id as the raw log's session header. | agent's choice |
+| `seq` | `0` | yes | The header is the log's first record; quarantined records follow from seq 1. | agent's choice; spec/hash-chain.md |
+| `prev_hash` | null | yes | The hash chain starts from the header, so it has no previous hash. | brief v4 line 248; spec/hash-chain.md |
+| `hash` | string | yes | The header's own hash; the first quarantined record's prev_hash. | brief v4 line 248; spec/hash-chain.md |
+
+## Orunmila quarantined record (`quarantine.schema.json`)
+
+One input that reached intake for this session and was not a valid mark, kept whole with the reasons it was refused, one line of the quarantine log after its header. Redaction runs before anything is kept, so a secret in a malformed input is removed here as in a mark.
+
+| Field | Type | Required | What it means | Source |
+|---|---|---|---|---|
+| `schema_version` | `1` | yes | All carry a `schema_version`. | brief v4 line 209 |
+| `record` | `"quarantined"` | yes | Marks this line as a quarantined input. | agent's choice |
+| `session_id` | string | yes | The session whose log this is, as in its header. | agent's choice |
+| `seq` | integer | yes | This record's place in the quarantine log's own chain, from 1; it counts separately from the raw log's seq. | agent's choice; spec/hash-chain.md |
+| `received_at` | string | yes | Wall-clock time intake received the input, in UTC. | agent's choice; the form of a mark's observed_at |
+| `reasons` | list of string | yes | Why the input is not a valid mark, one sentence each (for example a schema rule it breaks, or that it is not JSON). Never empty. | brief v4 line 341 (kept with its reasons); agent's choice |
+| `received` | string | yes | The input as received, after redaction: its JSON text when it was JSON, otherwise its text as it came. | brief v4 line 340 (nothing dropped); agent's choice |
+| `redactions` | list of string | no | The kinds of secret redaction removed from the input (for example `aws_access_key`), never their values; absent when none. | brief v4 line 248; agent's choice, as a mark's detail.redactions |
+| `kept` | list of string | no | Files that came with the input and were kept beside the log anyway, each named `sha256:` and its 64 hex digits, as a mark's diff_ref; absent when none. | agent's choice, LD59 (evidence is never dropped) |
+| `prev_hash` | string | yes | The previous line's hash in the quarantine log (the header's, for the first record). | brief v4 line 248; spec/hash-chain.md |
+| `hash` | string | yes | This record's hash. | brief v4 line 248; spec/hash-chain.md |
 
 ## Orunmila retention log header (`retention-header.schema.json`)
 

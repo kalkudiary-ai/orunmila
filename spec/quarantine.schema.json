@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:orunmila:spec:v1:quarantine",
+  "title": "Orunmila quarantined record, schema version 1",
+  "description": "One input that reached intake for this session and was not a valid mark, kept whole with the reasons it was refused, one line of the quarantine log after its header. Redaction runs before anything is kept, so a secret in a malformed input is removed here as in a mark.",
+  "$comment": "brief v4 lines 340-341 and test 28 name no fields: every field name here is the agent's choice. Written by src/opon/ledger/session-log.js. Unknown fields are allowed (LD17).",
+  "type": "object",
+  "required": ["schema_version", "record", "session_id", "seq", "received_at", "reasons", "received", "prev_hash", "hash"],
+  "properties": {
+    "schema_version": { "description": "All carry a `schema_version`.", "$comment": "brief v4 line 209", "const": 1 },
+    "record": { "description": "Marks this line as a quarantined input.", "$comment": "agent's choice", "const": "quarantined" },
+    "session_id": { "description": "The session whose log this is, as in its header.", "$comment": "agent's choice", "type": "string", "minLength": 1 },
+    "seq": { "description": "This record's place in the quarantine log's own chain, from 1; it counts separately from the raw log's seq.", "$comment": "agent's choice; spec/hash-chain.md", "type": "integer", "minimum": 1 },
+    "received_at": {
+      "description": "Wall-clock time intake received the input, in UTC.",
+      "$comment": "agent's choice; the form of a mark's observed_at",
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$"
+    },
+    "reasons": {
+      "description": "Why the input is not a valid mark, one sentence each (for example a schema rule it breaks, or that it is not JSON). Never empty.",
+      "$comment": "brief v4 line 341 (kept with its reasons); agent's choice",
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "received": {
+      "description": "The input as received, after redaction: its JSON text when it was JSON, otherwise its text as it came.",
+      "$comment": "brief v4 line 340 (nothing dropped); agent's choice",
+      "type": "string"
+    },
+    "redactions": {
+      "description": "The kinds of secret redaction removed from the input (for example `aws_access_key`), never their values; absent when none.",
+      "$comment": "brief v4 line 248; agent's choice, as a mark's detail.redactions",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "kept": {
+      "description": "Files that came with the input and were kept beside the log anyway, each named `sha256:` and its 64 hex digits, as a mark's diff_ref; absent when none.",
+      "$comment": "agent's choice, LD59 (evidence is never dropped)",
+      "type": "array",
+      "items": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+    },
+    "prev_hash": {
+      "description": "The previous line's hash in the quarantine log (the header's, for the first record).",
+      "$comment": "brief v4 line 248; spec/hash-chain.md",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "hash": { "description": "This record's hash.", "$comment": "brief v4 line 248; spec/hash-chain.md", "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

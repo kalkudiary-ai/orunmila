@@ -28,10 +28,33 @@ function typeOf(n) {
   if (n.$ref) return `shape \`${n.$ref.split('/').pop()}\``;
   if ('const' in n) return lit(n.const);
   if (n.enum) return 'one of ' + n.enum.map(lit).join(', ');
-  if (n.anyOf) return n.anyOf.map(typeOf).join(' or ');
+  if (n.anyOf) {
+    const each = [...new Set(n.anyOf.map(typeOf))];
+    return each.every((t) => t === 'any') ? 'set by the rules below' : each.join(' or ');
+  }
   const t = Array.isArray(n.type) ? n.type.join(' or ') : n.type;
   if (t === 'array' && n.items) return `list of ${typeOf(n.items)}`;
-  return t || 'any';
+  if (!t && n.properties) return 'object';
+  return t || (n.allOf || n.if ? 'set by the rules below' : 'any');
+}
+
+/** A rule with no wording of its own, said from its structure: "when `kind` is `file`: `path` is required". */
+function ruleWords(rule) {
+  const says = (node) => {
+    const parts = [];
+    for (const [k, v] of Object.entries((node && node.properties) || {})) {
+      if (v && 'const' in v) parts.push(`\`${k}\` is ${lit(v.const)}`);
+      else if (v && v.enum) parts.push(`\`${k}\` is one of ${v.enum.map(lit).join(', ')}`);
+      else if (v && v.type) parts.push(`\`${k}\` is ${Array.isArray(v.type) ? v.type.join(' or ') : v.type}`);
+    }
+    for (const k of (node && node.required) || []) if (!(node.properties && node.properties[k])) parts.push(`\`${k}\` is present`);
+    return parts;
+  };
+  const need = (node) => [...says(node).filter((p) => !p.endsWith(' is present')), ...((node && node.required) || []).map((k) => `\`${k}\` is required`)];
+  const when = says(rule.if);
+  const then = rule.then ? need(rule.then) : [];
+  const otherwise = rule.else ? need(rule.else) : [];
+  return `when ${when.join(' and ') || 'the condition in the schema holds'}: ${then.join(' and ') || 'see the schema'}${otherwise.length ? `; otherwise ${otherwise.join(' and ')}` : ''}`;
 }
 
 /** Rows of one node: every property at every depth, through lists, shared shapes, and rules' then and else branches. */
@@ -46,7 +69,7 @@ function walk(node, prefix, rows, rules, how) {
   if (node.items) walk(node.items, `${prefix}[]`, rows, rules, how);
   for (const k of ['allOf', 'anyOf', 'oneOf']) {
     for (const sub of node[k] || []) {
-      if (k === 'allOf' && sub && (sub.if || sub.not || sub.then)) rules.push({ at: prefix, words: sub.$comment || 'a rule between fields; see the schema file' });
+      if (k === 'allOf' && sub && (sub.if || sub.not || sub.then)) rules.push({ at: prefix, words: sub.$comment || (sub.if ? ruleWords(sub) : 'a rule between fields; see the schema file') });
       walk(sub, prefix, rows, rules, k === 'allOf' && sub && sub.then ? 'rule' : how);
     }
   }

@@ -1,0 +1,424 @@
+{
+  "good": {
+    "with_files": {
+      "schema_version": 1,
+      "record": "quarantined",
+      "session_id": "ses_q1",
+      "seq": 1,
+      "received_at": "2026-11-27T12:00:00.000Z",
+      "reasons": [
+        "/says enum: must be one of the listed values"
+      ],
+      "received": "{\"says\":\"shouted\"}",
+      "redactions": [
+        "aws_access_key"
+      ],
+      "kept": [
+        "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      ],
+      "prev_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "plain": {
+      "schema_version": 1,
+      "record": "quarantined",
+      "session_id": "ses_q1",
+      "seq": 1,
+      "received_at": "2026-11-27T12:00:00.000Z",
+      "reasons": [
+        "/says enum: must be one of the listed values"
+      ],
+      "received": "{\"says\":\"shouted\"}",
+      "prev_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  },
+  "bad": [
+    {
+      "name": "a later schema version",
+      "from": "with_files",
+      "set": {
+        "/schema_version": 2
+      },
+      "unset": [],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "a header in a record's place",
+      "from": "with_files",
+      "set": {
+        "/record": "quarantine_header"
+      },
+      "unset": [],
+      "error": {
+        "path": "/record",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "an empty session id",
+      "from": "with_files",
+      "set": {
+        "/session_id": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/session_id",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "a session id that is not text",
+      "from": "with_files",
+      "set": {
+        "/session_id": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/session_id",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "seq 0, which is the header's",
+      "from": "with_files",
+      "set": {
+        "/seq": 0
+      },
+      "unset": [],
+      "error": {
+        "path": "/seq",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "a seq that is not a whole number",
+      "from": "with_files",
+      "set": {
+        "/seq": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/seq",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a receipt time not in UTC ISO form",
+      "from": "with_files",
+      "set": {
+        "/received_at": "2026-11-27 12:00"
+      },
+      "unset": [],
+      "error": {
+        "path": "/received_at",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "a receipt time that is not text",
+      "from": "with_files",
+      "set": {
+        "/received_at": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/received_at",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "no reason given",
+      "from": "with_files",
+      "set": {
+        "/reasons": []
+      },
+      "unset": [],
+      "error": {
+        "path": "/reasons",
+        "keyword": "minItems"
+      }
+    },
+    {
+      "name": "reasons that are not a list",
+      "from": "with_files",
+      "set": {
+        "/reasons": "bad"
+      },
+      "unset": [],
+      "error": {
+        "path": "/reasons",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "an empty reason",
+      "from": "with_files",
+      "set": {
+        "/reasons/0": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/reasons/0",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "a reason that is not text",
+      "from": "with_files",
+      "set": {
+        "/reasons/0": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/reasons/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "the input kept as an object, not as text",
+      "from": "with_files",
+      "set": {
+        "/received": {
+          "says": "shouted"
+        }
+      },
+      "unset": [],
+      "error": {
+        "path": "/received",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "redactions that are not a list",
+      "from": "with_files",
+      "set": {
+        "/redactions": "aws_access_key"
+      },
+      "unset": [],
+      "error": {
+        "path": "/redactions",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "an empty redaction kind",
+      "from": "with_files",
+      "set": {
+        "/redactions/0": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/redactions/0",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "a redaction kind that is not text",
+      "from": "with_files",
+      "set": {
+        "/redactions/0": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/redactions/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "kept files that are not a list",
+      "from": "with_files",
+      "set": {
+        "/kept": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "unset": [],
+      "error": {
+        "path": "/kept",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a kept file not named by its sha256",
+      "from": "with_files",
+      "set": {
+        "/kept/0": "files/x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/kept/0",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "a kept file name that is not text",
+      "from": "with_files",
+      "set": {
+        "/kept/0": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/kept/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a prev_hash not a whole sha256 hash",
+      "from": "with_files",
+      "set": {
+        "/prev_hash": "sha256:01"
+      },
+      "unset": [],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "a prev_hash of the wrong type",
+      "from": "with_files",
+      "set": {
+        "/prev_hash": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a hash not a whole sha256 hash",
+      "from": "with_files",
+      "set": {
+        "/hash": "sha256:01"
+      },
+      "unset": [],
+      "error": {
+        "path": "/hash",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "a hash of the wrong type",
+      "from": "with_files",
+      "set": {
+        "/hash": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/hash",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/schema_version missing",
+      "from": "plain",
+      "set": {},
+      "unset": [
+        "/schema_version"
+      ],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/record missing",
+      "from": "plain",
+      "set": {},
+      "unset": [
+        "/record"
+      ],
+      "error": {
+        "path": "/record",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/session_id missing",
+      "from": "plain",
+      "set": {},
+      "unset": [
+        "/session_id"
+      ],
+      "error": {
+        "path": "/session_id",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/seq missing",
+      "from": "plain",
+      "set": {},
+      "unset": [
+        "/seq"
+      ],
+      "error": {
+        "path": "/seq",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/received_at missing",
+      "from": "plain",
+      "set": {},
+      "unset": [
+        "/received_at"
+      ],
+      "error": {
+        "path": "/received_at",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/reasons missing",
+      "from": "plain",
+      "set": {},
+      "unset": [
+        "/reasons"
+      ],
+      "error": {
+        "path": "/reasons",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/received missing",
+      "from": "plain",
+      "set": {},
+      "unset": [
+        "/received"
+      ],
+      "error": {
+        "path": "/received",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/prev_hash missing",
+      "from": "plain",
+      "set": {},
+      "unset": [
+        "/prev_hash"
+      ],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/hash missing",
+      "from": "plain",
+      "set": {},
+      "unset": [
+        "/hash"
+      ],
+      "error": {
+        "path": "/hash",
+        "keyword": "required"
+      }
+    }
+  ]
+}

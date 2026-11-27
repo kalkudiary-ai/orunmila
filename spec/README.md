@@ -29,6 +29,8 @@ The text of this specification and its schema files are licensed under the Apach
 | `hash-chain.md` | The hash chain: the exact bytes hashed, how lines link, how a log is checked, and a log continued in parts after a crash |
 | `session-header.schema.json` | The session header: the raw log's first line, where the hash chain starts |
 | `mark.schema.json` | The mark: one raw observation, one line of a session's raw log |
+| `quarantine-header.schema.json` | The quarantine log's header: the first line of `quarantine.jsonl`, there in every session folder |
+| `quarantine.schema.json` | One quarantined input: something that reached intake and was not a valid mark, kept whole with its reasons |
 | `continuation.schema.json` | The continuation record: the first line of a log's second or later part, naming where the crash cut the previous part |
 | `baseline.schema.json` | One line of `baseline.jsonl`, the snapshot of the project at session start; the header's `baseline.fingerprint` covers the file |
 | `odu-header.schema.json` | The odù log's header: its first line, naming the raw log it came from |
@@ -45,20 +47,48 @@ The text of this specification and its schema files are licensed under the Apach
 
 ## A session folder
 
-One session's records sit together in one folder: `raw.jsonl` (the session header, then marks), `quarantine.jsonl`
-(inputs that were not valid marks, kept with their reasons), `files/` (each file a mark refers to by `sha256:` in
-`detail.diff_ref` or `detail.output_ref`, named by those 64 hex digits), and, when they were written,
-`baseline.jsonl`, `odu.jsonl`, `verdict.jsonl` and `footer.json`. Each `.jsonl` file is a hash-chained log by
-`hash-chain.md`; a log a crash cut short continues in `raw.2.jsonl` and so on.
+One session's records sit together in one folder, named by the session's id:
+
+- `raw.jsonl`: the session header, then marks. Always there.
+- `quarantine.jsonl`: its header, then each input that was not a valid mark, with its reasons. Always there, even
+  when it holds only its header.
+- `files/`: each file a mark keeps beside the log (`detail.diff_ref`, `detail.output_ref`), named by the 64 hex
+  digits of its SHA-256, with no prefix and no extension. A `diff_ref` file is the change as a unified diff (a `---`
+  line, a `+++` line, then `@@` hunks); an `output_ref` file is a command's whole output.
+- When they were written: `baseline.jsonl`, `odu.jsonl`, `verdict.jsonl` and `footer.json`.
+
+`raw.jsonl`, `quarantine.jsonl`, `odu.jsonl` and `verdict.jsonl` are hash-chained logs by `hash-chain.md`; the raw and
+quarantine logs continue in `raw.2.jsonl`, `quarantine.2.jsonl` and so on after a crash. `baseline.jsonl` is not a
+chain: it is one RFC 8785 line per entry, each line ended by a line feed (the last one too), sorted by `path` in
+UTF-16 code-unit order, and the header's `baseline.fingerprint` is the plain SHA-256 of the file's bytes.
+
+## Values a record holds but cannot explain alone
+
+- **Fingerprints and references** are written `sha256:` followed by the 64 lowercase hex digits of the SHA-256 of the
+  bytes. A file on the redaction list (such as `.env`) is fingerprinted `hmac-sha256:` with a secret key kept in
+  Orunmila's own home, so two such fingerprints can be compared but a reader cannot recompute one, and the file's
+  contents cannot be recovered from it.
+- **`orunmila.code_fingerprint`** in the session header covers Orunmila's own code: for every regular file under its
+  code folder, the line `<path relative to that folder, with />` + NUL + `<lowercase hex SHA-256 of the file>` + line
+  feed; the lines sorted; `sha256:` and the SHA-256 of their joined bytes.
+- **`mono_ns`** is the machine's monotonic clock in nanoseconds, so it compares only within one boot. It is not
+  required to rise with `seq`: `seq` is the order intake received marks, `mono_ns` the time each was observed, and a
+  slower source's mark can arrive after a later one.
+- **Redaction** runs before anything is hashed or written. A reader sees that text was redacted (`[REDACTED:<kind>]`
+  in place of the secret, and the kinds in `detail.redactions` or a quarantined record's `redactions`), never what was
+  removed. Which kinds Orunmila looks for is its own choice (`src/store/secrets.js`), not part of the format.
 
 Each field in a schema carries its wording in `description` and its source in `$comment`: a line of the build brief,
 or "agent's choice" where the brief names no field.
 
 ## Checking a record
 
-The schemas are JSON Schema draft-07. Orunmila checks them with its own small checker, `src/verify/schema.js` (no
-dependencies), which refuses any schema keyword it does not implement, so a misspelt keyword cannot check nothing.
-Any JSON Schema draft-07 checker can read them too.
+The schemas are JSON Schema draft-07 and use only these keywords: `type`, `enum`, `const`, `required`, `properties`,
+`additionalProperties`, `items`, `minimum`, `minLength`, `maxLength`, `pattern`, `minItems`, `allOf`, `anyOf`, `oneOf`,
+`not`, `if`, `then`, `else`, `$ref` and `definitions` (and `description`, `$comment`, `title`, `$id` and `$schema`,
+which check nothing). Any JSON Schema draft-07 checker can read them. Orunmila checks them with its own small checker,
+`src/verify/schema.js` (no dependencies), which refuses any keyword not on that list, so a misspelt keyword cannot
+check nothing.
 
 From the repository root, or from the installed package (`spec/` ships with it):
 

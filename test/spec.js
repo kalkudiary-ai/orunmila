@@ -65,6 +65,9 @@ const FORMATS = [
   // PM2a (Q44 (a), LD299, LD329): the update log's two records.
   { name: 'update log header', schema: 'updates-header.schema.json', cases: 'updates-headers.json', sweep: true },
   { name: 'update', schema: 'update.schema.json', cases: 'updates.json', sweep: true },
+  // SP1b (Phase 7, test 27): the quarantine log's two records, written since Phase 1 and published here.
+  { name: 'quarantine header', schema: 'quarantine-header.schema.json', cases: 'quarantine-headers.json', sweep: true },
+  { name: 'quarantined', schema: 'quarantine.schema.json', cases: 'quarantined.json', sweep: true },
 ];
 
 // --- the deletion sweep (NF85, LD79) ----------------------------------------------

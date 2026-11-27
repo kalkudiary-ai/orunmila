@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:orunmila:spec:v1:quarantine-header",
+  "title": "Orunmila quarantine log header, schema version 1",
+  "description": "The first line of a session's quarantine log (`quarantine.jsonl`), where its hash chain starts. The quarantine log keeps every input that reached intake for this session and was not a valid mark, with its reasons, so nothing sent is ever dropped. Every session folder has one, even when nothing was quarantined. Quarantined records follow (quarantine.schema.json).",
+  "$comment": "brief v4 lines 340-341 (a malformed mark lands in the quarantine log, nothing dropped; test 28) name no fields: every field name here is the agent's choice. Written by src/opon/ledger/session-log.js when the session log is made. Unknown fields are allowed, as in the other v1 formats (LD17).",
+  "type": "object",
+  "required": ["schema_version", "record", "session_id", "seq", "prev_hash", "hash"],
+  "properties": {
+    "schema_version": { "description": "All carry a `schema_version`.", "$comment": "brief v4 line 209", "const": 1 },
+    "record": {
+      "description": "Marks this line as the quarantine log's header, so a reader tells it from a quarantined record without guessing.",
+      "$comment": "agent's choice",
+      "const": "quarantine_header"
+    },
+    "session_id": {
+      "description": "The session whose inputs this log keeps: the same id as the raw log's session header.",
+      "$comment": "agent's choice",
+      "type": "string",
+      "minLength": 1
+    },
+    "seq": { "description": "The header is the log's first record; quarantined records follow from seq 1.", "$comment": "agent's choice; spec/hash-chain.md", "const": 0 },
+    "prev_hash": { "description": "The hash chain starts from the header, so it has no previous hash.", "$comment": "brief v4 line 248; spec/hash-chain.md", "type": "null" },
+    "hash": {
+      "description": "The header's own hash; the first quarantined record's prev_hash.",
+      "$comment": "brief v4 line 248; spec/hash-chain.md",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

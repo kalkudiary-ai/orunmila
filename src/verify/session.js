@@ -94,6 +94,26 @@ function verdictsOf(dir) {
   return { present: true, ok: true, verdicts };
 }
 
+// SP1b (Phase 7, test 27): each line of the quarantine log, by its kind.
+const QUARANTINE_KINDS = {
+  quarantine_header: [load('quarantine-header.schema.json'), 'quarantine log header'],
+  quarantined: [load('quarantine.schema.json'), 'quarantined record'],
+};
+
+/** SP1b: the first quarantine line that is not a valid record of its kind, in words, or null. */
+function quarantineProblem(q) {
+  for (const { rec, part, line } of q.records) {
+    if (isContinuation({ part, line })) continue; // checked with its part
+    const first = part === 1 && line === 1;
+    const at = `Record broken at ${where('quarantine log', part, line)}`;
+    const kind = rec && QUARANTINE_KINDS[rec.record];
+    if (!kind || first !== (rec.record === 'quarantine_header')) return `${at}: ${first ? 'the quarantine log does not begin with its header' : 'it is not a record the quarantine log holds'}.`;
+    const bad = kind[0](rec)[0];
+    if (bad) return `${at}: it is not a valid ${kind[1]} (${bad.path} ${bad.keyword}).`;
+  }
+  return null;
+}
+
 // V1 (Phase 7; brief v4 lines 714-715): each line of the odù log, by its kind.
 const ODU_KINDS = {
   odu_header: [load('odu-header.schema.json'), 'odù log header'],
@@ -358,6 +378,7 @@ function verifySession(dir) {
   }
 
   const footer = footerOf(dir, raw);
+  const qProblem = quarantine.ok ? quarantineProblem(quarantine) : null;
   const odus = odusOf(dir, raw);
   const verdicts = verdictsOf(dir);
 
@@ -403,6 +424,8 @@ function verifySession(dir) {
     words = failWords(raw, 'raw');
   } else if (!quarantine.ok) {
     words = failWords(quarantine, 'quarantine');
+  } else if (qProblem) {
+    words = qProblem;
   } else if (files.bad.length) {
     words = fileWords(files.bad[0]);
   } else if (!odus.ok) {
@@ -433,7 +456,7 @@ function verifySession(dir) {
       `Record intact: ${plural(counts.marks, 'mark', 'marks')}, ${plural(counts.quarantined, 'quarantined input', 'quarantined inputs')}, ` +
       `${plural(counts.kept_files, 'kept file', 'kept files')}, unbroken${[...cuts, ...gapAt, ...other, ...tampers, ...fields, ...base, ...oduWords, ...judged, ...foot].map((c) => `; ${c}`).join('')}.`;
   }
-  return { ok: raw.ok && schema.ok && quarantine.ok && files.bad.length === 0 && odus.ok && verdicts.ok && (!footer || footer.ok), words, counts, raw: summary(raw), schema, quarantine: summary(quarantine), files, undeclared, gaps };
+  return { ok: raw.ok && schema.ok && quarantine.ok && !qProblem && files.bad.length === 0 && odus.ok && verdicts.ok && (!footer || footer.ok), words, counts, raw: summary(raw), schema, quarantine: summary(quarantine), files, undeclared, gaps };
 }
 
 /**

@@ -4041,6 +4041,26 @@ MUTANTS.push(
   },
 );
 
+// SP1b (Phase 7, test 27): the quarantine log's format published, and verify checking every line of it by its kind.
+MUTANTS.push(
+  {
+    id: 'SP1b-1 a quarantine line that breaks its schema reads intact',
+    file: 'src/verify/session.js',
+    test: 'test/verify-odu.js',
+    from: 'const qProblem = quarantine.ok ? quarantineProblem(quarantine) : null;',
+    to: 'const qProblem = null;',
+    fails: ['SP1b: every line of the quarantine log is checked against its schema'],
+  },
+  {
+    id: 'SP1b-2 the quarantine header is checked as a record',
+    file: 'src/verify/session.js',
+    test: 'test/verify-odu.js',
+    from: "quarantine_header: [load('quarantine-header.schema.json'), 'quarantine log header'],",
+    to: "quarantine_header: [load('quarantine.schema.json'), 'quarantine log header'],",
+    fails: ['SP1b: every line of the quarantine log is checked against its schema'],
+  },
+);
+
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };
 
 if (require.main === module) process.exit(runGate());

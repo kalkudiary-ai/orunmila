@@ -131,4 +131,21 @@ it(
   }),
 );
 
+it(
+  "SP1b: every line of the quarantine log is checked against its schema: a quarantined record with no reason, its chain sealed again, fails naming the line",
+  withBase((base) => {
+    const { openSessionLog } = require('../src/opon/ledger/session-log');
+    const s = makeLog(base);
+    assert.strictEqual(openSessionLog(s.dir).append({ says: 'shouted' }).ok, false); // not a mark: quarantined with its reasons
+    const q = path.join(s.dir, 'quarantine.jsonl');
+    const recs = fs.readFileSync(q, 'utf8').split('\n').slice(0, -1).map((l) => JSON.parse(l));
+    assert.deepStrictEqual(recs.map((r) => r.record), ['quarantine_header', 'quarantined']);
+    assert.strictEqual(verifySession(s.dir).ok, true, verifySession(s.dir).words);
+    let prev = null;
+    const out = recs.map((r) => (prev = seal(r.record === 'quarantined' ? { ...r, reasons: [] } : { ...r }, prev ? prev.hash : null)));
+    fs.writeFileSync(q, out.map((r) => canonicalize(r) + '\n').join(''));
+    assert.strictEqual(verifySession(s.dir).words, 'Record broken at line 2 of the quarantine log: it is not a valid quarantined record (/reasons minItems).');
+  }),
+);
+
 runAll('verify-odu');

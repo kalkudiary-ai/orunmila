@@ -46,10 +46,11 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   switches to it only while no session is being recorded (it waits, checked,
   until then), keeping the version it ran as `runtime/previous`. Each switch and
   each failed self-check goes into `~/.orunmila/updates.jsonl`. This is the
-  package's one network call; it sends only the package's name. With
-  `orunmila install --with-updates` (or `ORUNMILA_UPDATES=1`) it also runs by
-  itself, at most once a day, started by the intake or, where none runs, by a
-  hook, in the background, so nothing waits for it; off by default for now.
+  package's one network call; it sends only the package's name. `orunmila
+  install` turns it on to run by itself, unless you have already chosen: at
+  most once a day, started by the intake or, where none runs, by a hook, in the
+  background, so nothing waits for it. `orunmila install --without-updates`
+  (or `ORUNMILA_UPDATES=0`) turns it off, `--with-updates` on again.
   The intake runs the copy in Orunmila's home too (`orunmila intake start` and
   the launch agent start it through the starter), moves onto a new version once
   it holds no session, and names the version it runs in `orunmila intake status`.
@@ -73,7 +74,7 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   crashed (with the error) or the machine rebooted while it ran. On Windows a
   console Ctrl+Break is now handled like the other stop signals.
 - **A second session that sits idle no longer blocks credit**
-  (`ORUNMILA_PEER_BUSY=1`, off by default). The intake notes in each session's
+  (on by default; `ORUNMILA_PEER_BUSY=0` turns it off). The intake notes in each session's
   record when another session in the same folder is working (the `overlapped`
   mark's new `busy` field). A change made during this session's command while
   every other session is idle is credited to that command at medium
@@ -333,7 +334,7 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   rate over 2% another. A session that goes quiet for 30 minutes without ending
   is closed out before the intake lets it go. `ORUNMILA_FEEDBACK_FROM_VERDICTS=1`
   gives the agent the same findings through `orunmila json`.
-- **A tamper-evident log, off by default (`ORUNMILA_LOG_GUARD=1`).** Every log of
+- **A tamper-evident log, on by default (`ORUNMILA_LOG_GUARD=0` turns it off).** Every log of
   a session (raw, quarantine, odù, verdict) is watched against Orunmila's own
   copy: a change it did not make (an append, a cut, an edit, a delete or move) is
   recorded with the text removed and added, the log is put back, and `verify`

@@ -267,4 +267,74 @@ it("TE1's rest (LD285): after a restart the reopened session's odù log is guard
   }
 });
 
+// MR7 (O's word, 2026-11-27; R7, LD315): the log guard on by default on every OS (W3 ran green on Windows in CI,
+// run 45836015702, LD315's condition); ORUNMILA_LOG_GUARD=0 turns it off.
+it('MR7: logGuardOn is on unless ORUNMILA_LOG_GUARD is 0, and says where its answer came from', () => {
+  const { logGuardOn } = require('../src/opon/intake/switches');
+  assert.deepStrictEqual(logGuardOn({}), { on: true, from: 'default' });
+  assert.deepStrictEqual(logGuardOn({ ORUNMILA_LOG_GUARD: '' }), { on: true, from: 'default' });
+  assert.deepStrictEqual(logGuardOn({ ORUNMILA_LOG_GUARD: '1' }), { on: true, from: 'environment' });
+  assert.deepStrictEqual(logGuardOn({ ORUNMILA_LOG_GUARD: '0' }), { on: false, from: 'environment' });
+  assert.deepStrictEqual(logGuardOn({ ORUNMILA_LOG_GUARD: 'off' }), { on: true, from: 'default' }, 'only 0 turns it off');
+});
+
+it('MR7: intake run guards every session\'s raw log by default and says so; with ORUNMILA_LOG_GUARD=0 it says so and a forged line stays', async () => {
+  const { spawn } = require('child_process');
+  const { intakePaths, statusOf } = require('../src/opon/intake/server');
+  const { run, sleep } = require('./helpers');
+  const until = async (cond, ms = 15000) => {
+    for (const end = Date.now() + ms; Date.now() < end; await sleep(50)) if (await cond()) return true;
+    return cond();
+  };
+  const send = (sock, payload) =>
+    new Promise((resolve, reject) => {
+      const c = require('net').createConnection(sock);
+      c.on('error', reject);
+      c.on('close', () => resolve());
+      c.on('connect', () => c.end(JSON.stringify({ op: 'payload', payload }) + '\n'));
+    });
+  const base = tmpDir();
+  try {
+    for (const [name, value, words] of [
+      ['default', '', "orunmila intake: every session's logs are guarded: a change Orunmila did not make is recorded and put back (on by default; ORUNMILA_LOG_GUARD=0 turns it off)"],
+      ['off', '0', 'orunmila intake: the logs are not guarded (ORUNMILA_LOG_GUARD=0)'],
+    ]) {
+      const home = path.join(base, name, 'h');
+      const project = path.join(base, name, 'p');
+      fs.mkdirSync(project, { recursive: true });
+      const child = spawn(process.execPath, [path.join(__dirname, '..', 'bin', 'orunmila.js'), 'intake', 'run'], { env: { ...process.env, ORUNMILA_HOME: home, ORUNMILA_INTAKE_PORT: '0', ORUNMILA_LOG_GUARD: value }, stdio: ['ignore', 'pipe', 'pipe'] });
+      let out = '';
+      child.stdout.on('data', (d) => (out += d));
+      child.stderr.on('data', (d) => (out += d));
+      const exited = new Promise((resolve) => child.on('exit', (code) => resolve(code)));
+      try {
+        const at = intakePaths(home); // W4b: read at each use
+        assert.ok(await until(async () => (await statusOf(at.sock, 300)) !== null), 'the intake answers: ' + out);
+        assert.ok(await until(() => out.includes(words)), `${name}: ${out}`);
+        await send(at.sock, { session_id: 'ses_mr7', transcript_path: '/tmp/t.jsonl', cwd: project, hook_event_name: 'UserPromptSubmit', prompt: 'go' });
+        const file = path.join(home, 'sessions', 'ses_mr7', 'raw.jsonl');
+        assert.ok(await until(() => fs.existsSync(file) && fs.readFileSync(file, 'utf8').includes('"prompted"')), 'begun: ' + out);
+        fs.appendFileSync(file, '{"forged":true}\n');
+        const putBack = () => fs.readFileSync(file, 'utf8').split('\n').some((l) => l.includes('"tampered"') && l.includes('"appended"'));
+        if (name === 'default') {
+          assert.ok(await until(putBack), 'recorded at a heartbeat: ' + fs.readFileSync(file, 'utf8'));
+          assert.ok(!fs.readFileSync(file, 'utf8').split('\n').includes('{"forged":true}'), 'put back');
+        } else {
+          await sleep(2000); // several heartbeats (500 ms each)
+          assert.ok(fs.readFileSync(file, 'utf8').split('\n').includes('{"forged":true}') && !putBack(), 'off: nothing watched');
+        }
+        const r = run('bin/orunmila.js', { args: ['intake', 'stop'], env: { ORUNMILA_HOME: home } });
+        assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+        assert.strictEqual(await exited, 0);
+      } catch (e) {
+        child.kill('SIGKILL');
+        await exited;
+        throw e;
+      }
+    }
+  } finally {
+    rmrf(base);
+  }
+});
+
 runAll('tamper-log');

@@ -74,7 +74,9 @@ nothing touched in their real log.
 - **Nothing leaves their machine.** No telemetry, no account, no AI model; the
   event log is a local append-only `~/.orunmila/events.jsonl`, and no session
   content is ever transmitted. The one network call is `orunmila update`, which
-  asks the npm registry for Orunmila's latest version, sending only its name. The HTML report loads nothing from the internet,
+  asks the npm registry for Orunmila's latest version, sending only its name;
+  the install turns on a daily check that runs it in the background
+  (`npx orunmila install --without-updates` turns that off). The HTML report loads nothing from the internet,
   so opening or sharing it reveals nothing to a third party.
 - **Detection accuracy is 100% on a labelled set of 17 turns / 38 assertions**
   (`npm run accuracy` in a clone reproduces it). Say "100% on our labelled set",

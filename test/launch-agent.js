@@ -166,6 +166,7 @@ it(
     const cli = path.join(__dirname, '..', 'bin', 'orunmila.js');
     const env = { ...process.env, ORUNMILA_LAUNCHCTL: fakeCtl, ORUNMILA_LAUNCH_AGENTS_DIR: agents, ORUNMILA_HOME: home };
     delete env.ORUNMILA_INTAKE_PORT;
+    delete env.ORUNMILA_UPDATES; // UD1: test/helpers.js sets it to 0 for every test; this plist is the one with no switch set
     const r = spawnSync(process.execPath, [cli, 'intake', 'agent', 'install'], { encoding: 'utf8', env });
     assert.strictEqual(r.status, 0, r.stderr);
     const p = path.join(agents, `${LABEL}.plist`);

@@ -49,8 +49,9 @@ account, no API key, no AI model.
 the reports make no outbound requests, and the HTML reports load nothing from
 the network: they work offline, and opening or sharing one reveals nothing to a
 third party. Only updates of Orunmila itself reach the internet: `orunmila
-update` asks the npm registry for the latest `orunmila` and sends nothing else
-(see SECURITY.md).
+update` asks the npm registry for the latest `orunmila` and sends nothing else,
+and `orunmila install` turns on a daily check that runs it for you
+(`orunmila install --without-updates` turns that off; see SECURITY.md).
 
 ![Orunmila's report: what the agent claimed, against what it actually did](docs/images/stain-map.png)
 
@@ -132,8 +133,10 @@ one fixed starter, `~/.orunmila/bin/orunmila-start.js`. So the hooks keep
 working when npx's or pnpm's cache is cleared, or the global or project copy is
 removed. The package itself stays where the route put it. To move to a newer
 version, run `orunmila update` (or install the newer package and run
-`orunmila install` again: the hooks stay, and run the new copy);
-`orunmila install --with-updates` checks once a day by itself. Hooks written by
+`orunmila install` again: the hooks stay, and run the new copy). `orunmila
+install` also turns on a check once a day that does this by itself, unless you
+have already chosen (`orunmila install --without-updates` turns it off,
+`--with-updates` back on). Hooks written by
 an Orunmila from before the starter name that version's own copy: `orunmila
 install` refuses over them and names each one; remove those, then install.
 
@@ -840,21 +843,23 @@ each turn it blocked is its own **Look at this**, and the session verdict counts
 the turns it checked, passed, warned, blocked and skipped (a skip rate over 2% is
 its own **Look at this**, never Incomplete).
 
-### Switches for the intake (each off unless set to `1`)
+### Switches for the intake
 
-Set them where the intake starts (`orunmila intake agent install` copies each one
+Each is off unless set to `1`, except three: the log guard and a peer's busy
+notes are on unless set to `0`, and the daily update check is on once
+`orunmila install` has run. Set them where the intake starts (`orunmila intake agent install` copies each one
 that is set into the launch agent on macOS, or into the Startup-folder script on
 Windows, so it survives restarts and logins).
 
 | Variable | What it does when on |
 |---|---|
 | `ORUNMILA_JUDGE_LIVE` | Judges each session at its closeout (above). A session that goes quiet for 30 minutes without ending (its agent's process died) is closed out before the intake lets it go, so nothing it holds waits for ever. |
-| `ORUNMILA_LOG_GUARD` | Watches every log of a session (raw, quarantine, odù, verdict) for a change Orunmila did not make: the change is recorded, with the text removed and added, and the log is put back from Orunmila's own copy. `verify` names each one. |
+| `ORUNMILA_LOG_GUARD` | **On by default; `=0` turns it off.** Watches every log of a session (raw, quarantine, odù, verdict) for a change Orunmila did not make: the change is recorded, with the text removed and added, and the log is put back from Orunmila's own copy. `verify` names each one. |
 | `ORUNMILA_ASYNC_START` | Takes a new session's baseline snapshot, and the closeout's full rescan, off the intake's thread, so a project of 100,000 files does not stall every other session for seconds; the session's own payloads wait, with the time they arrived, until its log is ready. |
 | `ORUNMILA_WATCH_EXTRA` | Folders outside the project for the Sentinel to watch too (absolute paths, joined by `:` on macOS and Linux, `;` on Windows): a change there is recorded with its full path, outside the project. |
 | `ORUNMILA_EDIT_VERBS` | Reads "I edited X", "modified", "rewrote" and "patched" as claims of changed work, for the Closeout Gate and the judge (today's verbs: added, created, updated, fixed and others). |
-| `ORUNMILA_UPDATES` | Checks the npm registry for a newer Orunmila at most once a day, from the intake or, where none runs, from a hook, in the background, and switches to it once it is checked and no session is being recorded (`orunmila update` does the same by hand at any time). `orunmila install --with-updates` sets the same switch in Orunmila's home; `=0` turns it off. The request sends only the package's name. |
-| `ORUNMILA_PEER_BUSY` | Notes in each session's record when another session in the same folder is working: from its prompt to the end of its turn, and for the rest of its session once it leaves work running in the background. A change made while this session's command runs and every other session is idle is then credited to that command (at medium confidence), not left unexplained. While another session is working, only a direct cause credits a change, as always. |
+| `ORUNMILA_UPDATES` | Checks the npm registry for a newer Orunmila at most once a day, from the intake or, where none runs, from a hook, in the background, and switches to it once it is checked and no session is being recorded (`orunmila update` does the same by hand at any time). **On once `orunmila install` has run:** it sets the same switch in Orunmila's home unless you have set it already; `orunmila install --without-updates` turns it off, `--with-updates` on, and `=0` here wins over both. The request sends only the package's name. |
+| `ORUNMILA_PEER_BUSY` | **On by default; `=0` turns it off.** Notes in each session's record when another session in the same folder is working: from its prompt to the end of its turn, and for the rest of its session once it leaves work running in the background. A change made while this session's command runs and every other session is idle is then credited to that command (at medium confidence), not left unexplained. While another session is working, only a direct cause credits a change, as always. |
 
 Always on, no switch: `orunmila intake stop` asks the intake to stop over its own
 socket; a stop signal that comes without that ask (`kill`, a logout or shutdown)

@@ -74,7 +74,9 @@ Every route (npm, npx, pnpm) leaves the same thing behind: a copy of Orunmila in
 `~/.orunmila/bin/orunmila-start.js`, so clearing npx's or pnpm's cache does not
 break them. `orunmila update` moves that copy to npm's latest (it asks the
 registry, sending only the package's name; it switches only while no session is
-recorded); `orunmila install --with-updates` checks once a day by itself.
+recorded). `orunmila install` also turns on a check once a day that does this by
+itself, unless the user has already chosen; `orunmila install --without-updates`
+turns it off. Say so when you install it: it is Orunmila's one internet call.
 
 ## Using the Stain Map
 
@@ -182,7 +184,8 @@ engine stops enforcing, it never stops the agent.
   adopts the other's writes. Read its touch list as "what changed on this
   machine while I worked", never as authorship. The intake's record names the
   sessions that overlapped, credits a change only to the session that made it,
-  and (with `ORUNMILA_PEER_BUSY=1`) no longer counts an idle second session.
+  and no longer counts an idle second session (`ORUNMILA_PEER_BUSY=0` turns that
+  off).
 - **No AI model and no internet call does Orunmila's work.** An AI pass over
   semantic claims is not part of the free version; only updates of Orunmila
   itself may reach the internet.

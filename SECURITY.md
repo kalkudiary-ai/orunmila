@@ -40,9 +40,15 @@ orunmila is designed to minimise its own attack surface:
   new version's self-check must pass before Orunmila switches to it, which it
   does only while no session is being recorded. Each switch, and each refused
   update, is written to the hash-chained `~/.orunmila/updates.jsonl`
-  (`orunmila verify --updates`). Orunmila does not need the internet to work,
-  only to stay up to date. The code is one file, `src/runtime/registry.js`, and
-  a test fails if anything else in the package reaches the network.
+  (`orunmila verify --updates`). **It also runs by itself:** `orunmila install`
+  turns on a daily check, unless you have already chosen, so at most once a
+  day the intake, or where none runs a hook, starts `orunmila update --auto` in
+  the background. `orunmila install --without-updates`, or
+  `ORUNMILA_UPDATES=0` where the intake and hooks start, turns it off; then
+  nothing reaches the network unless you run `orunmila update` yourself.
+  Orunmila does not need the internet to work, only to stay up to date. The
+  code is one file, `src/runtime/registry.js`, and a test fails if anything
+  else in the package reaches the network.
 - **Read-mostly** — orunmila observes your agent's activity and renders reports.
   It does not modify your source files. It writes only to its own data dir and
   to report files you explicitly ask for.

@@ -7,8 +7,9 @@
  * it on and off. `orunmila install --with-updates | --without-updates` sets `updates` in Orunmila's switches
  * (ORUNMILA_UPDATES=1 or 0 wins where set); with it on, at most once a day, the starter (on a hook) or the intake
  * starts `orunmila update --auto` on its own, detached, so no hook waits for the network. `update --auto` does nothing
- * with the switch off or while another one runs, and leaves its answer in `runtime/last-update`. Off by default while
- * the build runs (Leopard rule 2). The registry here is an address nothing answers on; nothing reaches the internet.
+ * with the switch off or while another one runs, and leaves its answer in `runtime/last-update`. Off with no switch at
+ * all; a plain install sets it on unless it is set already (UD1). The registry here is an address nothing answers on;
+ * nothing reaches the internet.
  */
 
 const { spawn, spawnSync } = require('child_process');
@@ -66,6 +67,33 @@ it('PM2c2: install --with-updates turns the daily check on and says what it send
     const off = run('bin/orunmila.js', { args: ['install', '--without-updates'], env: env(home), cwd: project });
     assert.ok(off.stdout.includes('Daily updates are off'), off.stdout);
     assert.deepStrictEqual(updatesOn({}, home), { on: false, from: 'switch' });
+  } finally {
+    rmrf(base);
+  }
+});
+
+// UD1 (O's word, 2026-11-27, with MR7 and Q38; Q33's plan): a user's install turns the daily check on, unless the
+// switch is already set either way; the fallback with no switch at all stays off, so a home no install made never
+// asks the registry.
+it('UD1: a plain install turns the daily check on when the switch is unset, and says how to turn it off; a switch already set is kept', () => {
+  const base = tmpDir();
+  try {
+    for (const [name, before, after] of [
+      ['unset', null, true],
+      ['off', false, false],
+      ['on', true, true],
+    ]) {
+      const home = path.join(base, name, 'h');
+      const project = path.join(base, name, 'p');
+      fs.mkdirSync(project, { recursive: true });
+      if (before !== null) setUpdates(home, before);
+      const r = run('bin/orunmila.js', { args: ['install'], env: env(home), cwd: project });
+      assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+      assert.deepStrictEqual(updatesOn({}, home), { on: after, from: 'switch' }, name);
+      const said = r.stdout.includes('Daily updates are on: once a day Orunmila asks the npm registry for its latest version');
+      assert.strictEqual(said, before === null, `${name}: ${r.stdout}`);
+      if (said) assert.ok(r.stdout.includes('Turn them off with: orunmila install --without-updates'), r.stdout);
+    }
   } finally {
     rmrf(base);
   }

@@ -24,6 +24,11 @@ const { execFileSync, spawnSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..');
 
+// UD1: a plain install now turns the daily update check on; every test, and every child it starts, keeps off the
+// network unless the test sets ORUNMILA_UPDATES itself (test/update-auto.js sets it empty and points the registry at
+// a port nothing answers on).
+if (process.env.ORUNMILA_UPDATES === undefined) process.env.ORUNMILA_UPDATES = '0';
+
 function freshTmp(prefix) {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }

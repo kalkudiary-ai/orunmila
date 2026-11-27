@@ -73,8 +73,9 @@ function judgeOn(env, home) {
 
 /**
  * PM2c2 (LD333): the daily update check, `{"updates": true | false}` in the same file, written by `orunmila install
- * --with-updates | --without-updates`; ORUNMILA_UPDATES=1 or 0 wins where set. Off by default while the build runs
- * (Leopard rule 2: the live intake runs this code); the starter reads the same key itself (src/runtime/orunmila-start.js).
+ * --with-updates | --without-updates`; ORUNMILA_UPDATES=1 or 0 wins where set. Off with no switch at all; a plain
+ * install sets it on unless it is set already (UD1, setUpdatesDefault below); the starter reads the same key itself
+ * (src/runtime/orunmila-start.js).
  */
 function setUpdates(home, on) {
   const file = switchesFile(home);
@@ -96,4 +97,25 @@ function updatesOn(env, home) {
   return { on: false, from: 'default' };
 }
 
-module.exports = { switchesFile, readSwitches, setJudge, judgeOn, setUpdates, updatesOn };
+/**
+ * UD1 (O's word, 2026-11-27, with MR7 and Q38; Q33's plan): a user's install turns the daily check on. Written only
+ * when the switch holds neither true nor false and the file reads cleanly, so a choice already made either way is kept,
+ * and a damaged file is left for `orunmila lenses` to name. A home no install made has no switch, and stays off.
+ *   -> { written, file }
+ */
+function setUpdatesDefault(home) {
+  const { obj, problem } = readObject(home);
+  if (problem || typeof obj.updates === 'boolean') return { written: false, file: switchesFile(home) };
+  return { written: true, file: setUpdates(home, true) };
+}
+
+/**
+ * MR7 (R7, LD315) and PB1 (LD330): two of the intake's switches on by default since O's word of 2026-11-27, each
+ * turned off by its variable set to 0 (any other value, or none, leaves it on): the log guard (TE1, LD279) and a
+ * peer's busy notes (AT1b). -> { on, from: 'environment' | 'default' }
+ */
+const onUnlessZero = (v) => (v === '0' || v === '1' ? { on: v === '1', from: 'environment' } : { on: true, from: 'default' });
+const logGuardOn = (env) => onUnlessZero(env && env.ORUNMILA_LOG_GUARD);
+const peerBusyOn = (env) => onUnlessZero(env && env.ORUNMILA_PEER_BUSY);
+
+module.exports = { switchesFile, readSwitches, setJudge, judgeOn, setUpdates, updatesOn, setUpdatesDefault, logGuardOn, peerBusyOn };

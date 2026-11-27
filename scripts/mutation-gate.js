@@ -3374,9 +3374,9 @@ MUTANTS.push(
     id: 'AT1b-7 intake run ignores ORUNMILA_PEER_BUSY',
     file: 'bin/orunmila.js',
     test: 'test/peer-busy.js',
-    from: "      peerBusy: process.env.ORUNMILA_PEER_BUSY === '1', //",
+    from: '      peerBusy: peerBusy.on, //', // PB1: the switch now read by peerBusyOn
     to: '      peerBusy: false, //',
-    fails: ['AT1b: intake run writes the busy notes'],
+    fails: ['AT1b, PB1: intake run writes the busy notes'],
   },
   {
     id: 'AT1b-8 the launch agent does not keep ORUNMILA_PEER_BUSY',
@@ -3792,6 +3792,56 @@ MUTANTS.push(
     from: '  Unix socket in `~/.orunmila/intake/` (on Windows, a named pipe with a fresh\n  name at each start, published in `~/.orunmila/intake/address`) and on\n',
     to: '  Unix socket in `~/.orunmila/intake/` and on\n',
     fails: ['DOC4 (LD348): the README no longer says'],
+  },
+  // MR7, PB1, UD1 (O's word, 2026-11-27, with Q38): the log guard and the peer's busy notes on by default, the daily
+  // update check turned on by a user's install.
+  {
+    id: 'MR7-1 the default is off',
+    file: 'src/opon/intake/switches.js',
+    test: 'test/tamper-log.js',
+    from: ": { on: true, from: 'default' });",
+    to: ": { on: false, from: 'default' });",
+    fails: ['MR7: logGuardOn is on unless'],
+  },
+  {
+    id: 'MR7-2 intake run ignores the log guard',
+    file: 'bin/orunmila.js',
+    test: 'test/tamper-log.js',
+    from: '      guard: logGuard.on, //',
+    to: '      guard: false, //',
+    fails: ["MR7: intake run guards every session's raw log"],
+  },
+  {
+    id: 'PB1-1 peerBusyOn reads the log guard variable',
+    file: 'src/opon/intake/switches.js',
+    test: 'test/peer-busy.js',
+    from: 'onUnlessZero(env && env.ORUNMILA_PEER_BUSY)',
+    to: 'onUnlessZero(env && env.ORUNMILA_LOG_GUARD)',
+    fails: ['PB1: peerBusyOn is on unless'],
+  },
+  {
+    id: 'PB1-2 a 0 no longer turns a switch off',
+    file: 'src/opon/intake/switches.js',
+    test: 'test/peer-busy.js',
+    from: "(v === '0' || v === '1' ? { on: v === '1', from: 'environment' }",
+    to: "(v === '1' ? { on: v === '1', from: 'environment' }",
+    fails: ['AT1b, PB1: intake run writes the busy notes'],
+  },
+  {
+    id: 'UD1-1 install never turns the daily check on',
+    file: 'bin/orunmila.js',
+    test: 'test/update-auto.js',
+    from: "if (require('../src/opon/intake/switches').setUpdatesDefault(orunmilaHome()).written) {",
+    to: 'if (false) {',
+    fails: ['UD1: a plain install turns the daily check on'],
+  },
+  {
+    id: 'UD1-2 install overwrites a choice already made',
+    file: 'src/opon/intake/switches.js',
+    test: 'test/update-auto.js',
+    from: "if (problem || typeof obj.updates === 'boolean') return { written: false",
+    to: 'if (problem) return { written: false',
+    fails: ['UD1: a plain install turns the daily check on'],
   },
 );
 

@@ -4,8 +4,8 @@
 
 /**
  * test/peer-busy.js — AT1b (LD330; LD300 (3); O approved Q45): the live intake notes, in each session's own log, when a
- * peer sharing its folder is working (the `overlapped` mark's `busy`), behind ORUNMILA_PEER_BUSY=1, off by default
- * (Leopard rule 2). A peer is busy from its prompt to its turn's end, and for the rest of its session once it leaves
+ * peer sharing its folder is working (the `overlapped` mark's `busy`), on by default since PB1 (O's word, 2026-11-27;
+ * off by default before it, Leopard rule 2), ORUNMILA_PEER_BUSY=0 turning it off. A peer is busy from its prompt to its turn's end, and for the rest of its session once it leaves
  * work running (a background command) or the Glove records it outside a turn. Live and replay read the notes alike
  * (AT1a), so a change during this session's command, while the peer is idle, is credited here. Hand-built logs and
  * payloads in throwaway folders, labelled so (brief line 761); made-up paths.
@@ -227,19 +227,32 @@ async function intakeRun(home, env) {
   }
 }
 
-it('AT1b: intake run writes the busy notes with ORUNMILA_PEER_BUSY=1 and says so; unset, it says how to turn them on and writes none', async () => {
+it('AT1b, PB1: intake run writes the busy notes by default (unset or empty) and with ORUNMILA_PEER_BUSY=1, and says so; with 0 it says so and writes none', async () => {
   const base = tmpDir();
   try {
     const env = { ORUNMILA_INTAKE_PORT: '0', ORUNMILA_OPON_LIVE: '1' }; // never the real port (LD140); the live path pairs sessions
+    // PB1 (O's word, 2026-11-27, with MR7 and Q38): on by default; intakeRun passes ORUNMILA_PEER_BUSY '' unless given.
+    const dflt = await intakeRun(path.join(base, 'default', 'h'), env);
+    assert.ok(dflt.out.includes("orunmila intake: each session's log notes when a peer sharing its folder is working (on by default; ORUNMILA_PEER_BUSY=0 turns it off)"), dflt.out);
+    assert.ok(dflt.notes.some((n) => n[2] === true) && dflt.notes[dflt.notes.length - 1][2] === false, JSON.stringify(dflt.notes));
     const on = await intakeRun(path.join(base, 'on', 'h'), { ...env, ORUNMILA_PEER_BUSY: '1' });
     assert.ok(on.out.includes("orunmila intake: each session's log notes when a peer sharing its folder is working (ORUNMILA_PEER_BUSY=1)"), on.out);
     assert.ok(on.notes.some((n) => n[2] === true) && on.notes[on.notes.length - 1][2] === false, JSON.stringify(on.notes));
-    const off = await intakeRun(path.join(base, 'off', 'h'), env);
-    assert.ok(off.out.includes('orunmila intake: a peer\'s busy time is not noted; ORUNMILA_PEER_BUSY=1 turns it on'), off.out);
+    const off = await intakeRun(path.join(base, 'off', 'h'), { ...env, ORUNMILA_PEER_BUSY: '0' });
+    assert.ok(off.out.includes("orunmila intake: a peer's busy time is not noted (ORUNMILA_PEER_BUSY=0)"), off.out);
     assert.deepStrictEqual(off.notes, [['ses_ib', false, 'none']]);
   } finally {
     rmrf(base);
   }
+});
+
+it('PB1: peerBusyOn is on unless ORUNMILA_PEER_BUSY is 0, and says where its answer came from', () => {
+  const { peerBusyOn } = require('../src/opon/intake/switches');
+  assert.deepStrictEqual(peerBusyOn({}), { on: true, from: 'default' });
+  assert.deepStrictEqual(peerBusyOn({ ORUNMILA_PEER_BUSY: '' }), { on: true, from: 'default' });
+  assert.deepStrictEqual(peerBusyOn({ ORUNMILA_PEER_BUSY: '1' }), { on: true, from: 'environment' });
+  assert.deepStrictEqual(peerBusyOn({ ORUNMILA_PEER_BUSY: '0' }), { on: false, from: 'environment' });
+  assert.deepStrictEqual(peerBusyOn({ ORUNMILA_PEER_BUSY: 'no' }), { on: true, from: 'default' }, 'only 0 turns it off');
 });
 
 runAll('peer-busy');

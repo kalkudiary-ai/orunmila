@@ -359,6 +359,11 @@ function cmdInstall() {
   const rt = require('../src/runtime/install').installRuntime({ home: orunmilaHome(), from: root });
   console.log(`Orunmila ${rt.version} is kept in ${rt.dir}${rt.fresh ? '' : ' (already there)'}; every hook runs it through ${rt.starter},`);
   console.log('so the hooks keep working if the copy that ran this install is removed.\n');
+  // UD1 (O's word, 2026-11-27; Q33's plan): a user's install turns the daily update check on, unless it is set already.
+  if (require('../src/opon/intake/switches').setUpdatesDefault(orunmilaHome()).written) {
+    console.log("Daily updates are on: once a day Orunmila asks the npm registry for its latest version, sending only the package's name,");
+    console.log('and switches to it once it is checked and no session is being recorded. Turn them off with: orunmila install --without-updates\n');
+  }
   if (capturing && upgrade) {
     console.log(`Orunmila is already installed in ${p}: its hooks run that starter, which now runs ${rt.version}. No hook was added.`);
     return;
@@ -1613,8 +1618,10 @@ async function cmdIntake() {
   if (sub === 'run') {
     const { createRouter } = require('../src/opon/intake/router');
     const { nowMono } = require('../src/opon/intake/mono');
-    const { judgeOn, switchesFile } = require('../src/opon/intake/switches');
+    const { judgeOn, switchesFile, logGuardOn, peerBusyOn } = require('../src/opon/intake/switches');
     const judge = judgeOn(process.env, home); // BJ1 (LD326): the install's switch, the environment winning where set
+    const logGuard = logGuardOn(process.env); // MR7: on unless ORUNMILA_LOG_GUARD=0
+    const peerBusy = peerBusyOn(process.env); // PB1: on unless ORUNMILA_PEER_BUSY=0
     const router = createRouter({
       home,
       clock: () => ({ mono: nowMono(), wall: new Date().toISOString() }),
@@ -1624,12 +1631,12 @@ async function cmdIntake() {
       installKey: readInstallKey(home),
       sentinel: true, // the Sentinel runs inside the intake (B4, LD145)
       baseline: oponLive(), // the Ọpọ́n's live path, only with ORUNMILA_OPON_LIVE=1: the baseline at session start (N1b, LD170), stations 2-6 and odu.jsonl (L1c, LD200)
-      guard: process.env.ORUNMILA_LOG_GUARD === '1', // TE1 (LD279): every session's logs watched for a change Orunmila did not make, and put back
+      guard: logGuard.on, // TE1 (LD279): every session's logs watched for a change Orunmila did not make, and put back; on by default since MR7
       judge: judge.on, // the judge at each closeout (BB6), only when switched on (BJ1: install --with-judge, or ORUNMILA_JUDGE_LIVE=1; Q38)
       // Q12 (a) (LD289): extra folders the Sentinel watches, absolute paths joined by the path delimiter (none by default)
       watchExtra: (process.env.ORUNMILA_WATCH_EXTRA || '').split(path.delimiter).filter((x) => x && path.isAbsolute(x)),
       asyncStart: process.env.ORUNMILA_ASYNC_START === '1', // SN1 (LD294): a session's start off the intake's thread (F16)
-      peerBusy: process.env.ORUNMILA_PEER_BUSY === '1', // AT1b (LD330): a peer's working time noted in each session's log
+      peerBusy: peerBusy.on, // AT1b (LD330): a peer's working time noted in each session's log; on by default since PB1
     });
     // TE2 (LD283): a stop asked for comes over the socket (`orunmila intake stop`) and exits 0; a signal with no ask is
     // a tampered mark in every held session, kept in last-stop.json for the next start's gap, and exits 1, so the
@@ -1679,7 +1686,9 @@ async function cmdIntake() {
     console.log(r.http.listening ? `orunmila intake: HTTP on 127.0.0.1:${r.http.port}` : `orunmila intake: HTTP port 127.0.0.1:${r.http.port} is held by another process (recorded in ${p.errors}); tried again every second`);
     const why = judge.from === 'environment' ? `ORUNMILA_JUDGE_LIVE=${judge.on ? 1 : 0}` : judge.from === 'switch' ? `the switch in ${switchesFile(home)}` : 'turn it on with: orunmila install --with-judge';
     console.log(`orunmila intake: the judge is ${judge.on ? 'on' : 'off'} (${why})`);
-    console.log(process.env.ORUNMILA_PEER_BUSY === '1' ? "orunmila intake: each session's log notes when a peer sharing its folder is working (ORUNMILA_PEER_BUSY=1)" : "orunmila intake: a peer's busy time is not noted; ORUNMILA_PEER_BUSY=1 turns it on");
+    const dflt = (name, sw) => (sw.from === 'environment' ? `${name}=${sw.on ? 1 : 0}` : `on by default; ${name}=0 turns it off`);
+    console.log(logGuard.on ? `orunmila intake: every session's logs are guarded: a change Orunmila did not make is recorded and put back (${dflt('ORUNMILA_LOG_GUARD', logGuard)})` : 'orunmila intake: the logs are not guarded (ORUNMILA_LOG_GUARD=0)');
+    console.log(peerBusy.on ? `orunmila intake: each session's log notes when a peer sharing its folder is working (${dflt('ORUNMILA_PEER_BUSY', peerBusy)})` : "orunmila intake: a peer's busy time is not noted (ORUNMILA_PEER_BUSY=0)");
     // PM2c2 (LD333): the daily update check, read at each tick so the switch takes effect without a restart; the update
     // runs as its own process (src/runtime/daily.js), never in the intake's. ORUNMILA_UPDATE_POLL_MS is for tests.
     const { updatesOn } = require('../src/opon/intake/switches');
@@ -2141,7 +2150,7 @@ Install
   orunmila install --gate-only                    add the Closeout Gate to an existing Stain Map install
   orunmila install --intake                       send every hook payload to the intake too (claude-code; start it first)
   orunmila install --with-judge | --without-judge  the Babaláwo on or off (from the intake's next start)
-  orunmila install --with-updates | --without-updates  the daily update check on or off (orunmila update by hand, always)
+  orunmila install --with-updates | --without-updates  the daily update check on or off (a plain install turns it on; orunmila update by hand, always)
   orunmila lenses [--agent ID] [--global]         the three lenses side by side + which are installed right now
   orunmila agents                                 list supported agents and their config locations
   orunmila --version                              the installed version

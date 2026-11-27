@@ -19,4 +19,25 @@ it('DOC3 (LD340): SKILL.md names every lens, command and page a user can reach n
   assert.ok(!skill.includes('It has two lenses'), 'three lenses now');
 });
 
+it("DOC4 (LD348): the help names every intake subcommand the intake's own usage lists, and says report --verdicts replaces html", () => {
+  const { spawnSync } = require('child_process');
+  const cli = path.join(ROOT, 'bin', 'orunmila.js');
+  const help = spawnSync(process.execPath, [cli], { encoding: 'utf8' }).stdout;
+  const usage = spawnSync(process.execPath, [cli, 'intake'], { encoding: 'utf8' });
+  const subs = (usage.stdout + usage.stderr).split('orunmila intake ')[1].trim().split('|');
+  assert.ok(subs.length >= 6, subs.join(' '));
+  const intakeLines = help.split('\n').filter((l) => l.trim().startsWith('orunmila intake '));
+  const named = new Set(intakeLines.flatMap((l) => l.trim().split(/\s+/)[2].split('|')));
+  assert.deepStrictEqual(subs.filter((s) => !named.has(s)), []);
+  const html = help.split('\n').find((l) => l.trim().startsWith('orunmila html '));
+  assert.ok(html && html.includes('report --verdicts'), html);
+});
+
+it('DOC4 (LD348): the README no longer says hooks name the package path, and SECURITY.md names the intake on Windows', () => {
+  const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+  assert.ok(!readme.includes('node "<path to the installed package>/src/capture/claude-code/<hook>.js"'), 'hooks run the starter since PM2b');
+  const sec = fs.readFileSync(path.join(ROOT, 'SECURITY.md'), 'utf8');
+  assert.ok(sec.includes('named pipe') && sec.includes('intake/address'), 'the Windows pipe and its address file');
+});
+
 runAll('docs-surfaces');

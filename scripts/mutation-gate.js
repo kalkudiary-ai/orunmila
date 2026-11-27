@@ -3776,6 +3776,23 @@ MUTANTS.push(
     to: 'if (session && session.law_gate) {',
     fails: ['SR1: an odù log written by an intake older than Q40'],
   },
+  // DOC4 (LD348): the phase's last surfaces brought up to date, held by test/docs-surfaces.js.
+  {
+    id: 'DOC4-1 the help drops intake keep',
+    file: 'bin/orunmila.js',
+    test: 'test/docs-surfaces.js',
+    from: '  orunmila intake run|start|status|stop|keep      the intake server',
+    to: '  orunmila intake run|start|status|stop           the intake server',
+    fails: ['DOC4 (LD348): the help names every intake subcommand'],
+  },
+  {
+    id: 'DOC4-2 SECURITY.md forgets the pipe on Windows',
+    file: 'SECURITY.md',
+    test: 'test/docs-surfaces.js',
+    from: '  Unix socket in `~/.orunmila/intake/` (on Windows, a named pipe with a fresh\n  name at each start, published in `~/.orunmila/intake/address`) and on\n',
+    to: '  Unix socket in `~/.orunmila/intake/` and on\n',
+    fails: ['DOC4 (LD348): the README no longer says'],
+  },
 );
 
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };

@@ -2154,7 +2154,7 @@ The Stain Map — read what happened
   orunmila trail --json --marks [--facts-only] [--session ID]
                                                   the same, from the intake's session log: both witnesses on every row
   orunmila report [--session ID] [--turn ID] [--archive STAMP]   terminal stain report (live, or a pinned snapshot)
-  orunmila html [--session ID] [--out path] [--archive STAMP]    mismatch-only HTML report
+  orunmila html [--session ID] [--out path] [--archive STAMP]    the old mismatch-only page (report --verdicts --html replaces it)
   orunmila json [--session ID] [--turn ID] [--include claim_text]   per-turn stain output (schema_version 1.0)
   orunmila json --session ID --side-by-side       the same beside the odù log's (ORUNMILA_FEEDBACK_FROM_ODU=1: the odù log's alone)
   orunmila demo [--out path]                      sample report from a scripted session — no setup, for a first look
@@ -2186,7 +2186,8 @@ Both lenses
   orunmila verify --updates                       check the update log (~/.orunmila/updates.jsonl): each update, chained
   orunmila update                                 bring the copy in ~/.orunmila up to npm's latest; switched only while
                                                   no session is held (the one network call: the package's name is sent)
-  orunmila intake run|start|status|stop           the intake server, one per machine (install --intake sends to it)
+  orunmila intake run|start|status|stop|keep      the intake server, one per machine (install --intake sends to it);
+                                                  keep runs it and starts it again after a crash
   orunmila intake agent install|uninstall|status  keep the intake running at login: a launch agent on macOS, a script
                                                   in the Startup folder on Windows (it runs orunmila intake keep)
   orunmila replay <session-folder> [--expect file]  the Opon's settled groups for a session log, replayed (Phase 2)

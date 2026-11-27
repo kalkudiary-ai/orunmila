@@ -639,11 +639,11 @@ Code running inside the Antigravity IDE (`--agent claude-code`, the default);
 above, Antigravity's own agent (`--agent antigravity`, Stain Map only).
 
 One thing to know wherever Claude Code runs: `orunmila install` writes each
-hook as `node "<path to the installed package>/src/capture/claude-code/<hook>.js"`.
-The hooks work only where that path exists, so install the package globally
-or as a dev dependency rather than through `npx`, whose cache can be cleared,
-and run `orunmila install` again on each machine (or cloud environment) the
-project's sessions run on.
+hook as `node "~/.orunmila/bin/orunmila-start.js" <hook script>`, the starter
+in Orunmila's home that runs the copy `install` kept there (Quickstart, "What
+every route leaves behind"). The hooks work only where that home exists, so run
+`orunmila install` again on each machine (or cloud environment) the project's
+sessions run on.
 
 ## What it cannot see
 
@@ -859,7 +859,12 @@ Windows, so it survives restarts and logins).
 Always on, no switch: `orunmila intake stop` asks the intake to stop over its own
 socket; a stop signal that comes without that ask (`kill`, a logout or shutdown)
 is recorded in every open session as one no one asked for, and the intake exits
-so its launch agent starts it again. `orunmila status` names any hook whose
+so its launch agent starts it again. A stop no handler can see (`kill -9`, or
+Task Manager and `taskkill /F` on Windows, where every kill is one) is named at
+the intake's next start, in the gap it writes: a kill, a crash with its error,
+or a reboot while it ran. On Windows the intake listens on a named pipe with a
+fresh name at each start, published in `~/.orunmila/intake/address`, so no other
+program can take the name first. `orunmila status` names any hook whose
 script is missing (a package cache that was cleared) and exits 1. `orunmila
 judge` will not re-judge a session the intake still holds (it is free 30 minutes
 after its last payload). `orunmila html` still works for this release; `orunmila

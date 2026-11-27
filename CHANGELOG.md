@@ -58,6 +58,20 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   rights), which starts the intake hidden through `orunmila intake keep`; the
   keeper starts it again after a crash or a stop no one asked for, as the
   launch agent does on macOS. Not yet run on a real Windows login.
+- **The intake on Windows.** It listens on a named pipe, under a fresh name at
+  each start (the home's name plus 32 random hex), published in
+  `~/.orunmila/intake/address`, which both hook senders and the CLI read; so no
+  program can take the name before the intake starts. A program listening on
+  the old, fixed name is recorded as a squat. The full test suite, the hooks
+  run through cmd.exe and Git Bash, and every install route pass on Windows in
+  CI (Node 18, 20 and 22); a few checks need POSIX file modes or a stop signal
+  Windows does not deliver, and are skipped there by name, never passed.
+- **A stop no handler sees is named at the next start.** A kill (`kill -9`, or
+  Task Manager and `taskkill /F` on Windows) runs no handler, so the intake
+  could only show the downtime. Each run now leaves a note while it runs, and
+  the next start says in the gap it writes whether the intake was killed,
+  crashed (with the error) or the machine rebooted while it ran. On Windows a
+  console Ctrl+Break is now handled like the other stop signals.
 - **A second session that sits idle no longer blocks credit**
   (`ORUNMILA_PEER_BUSY=1`, off by default). The intake notes in each session's
   record when another session in the same folder is working (the `overlapped`
@@ -103,6 +117,18 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ### Fixed
 
+- **Five faults Windows showed, fixed.** A claim naming a file with a drive
+  letter (`C:/proj/src/a.ts`) lost the drive, so a backed claim read as a
+  phantom; a path written with `\` is still read as its file name. On Windows
+  every hook payload sent over HTTP was recorded as tampering, since the
+  sender was found with tools Windows does not have (`netstat` and `tasklist`
+  now). Replay could credit a change on Windows to a session it had lost. After
+  a restart, a change to Orunmila's own code outside the project was recorded
+  twice. A program squatting on the intake's pipe was written as "taken back"
+  before the start failed.
+- **The session report's law-gate line on a record an older intake wrote.** It
+  said "0 turns checked" when the record holds the gate's checks but not yet
+  their results in each event; it now counts them from the record.
 - **SECURITY.md no longer describes network use the package does not have.**
   It said the report's 3D Graph tab loaded a script from a CDN and named a
   `bin/bench.js`; neither exists. It now says the pages Orunmila renders load
@@ -212,7 +238,8 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
   `orunmila intake agent uninstall` removes it). A sender that cannot hand its
   payload over within one second gives up, and that payload is lost. If
   another process holds the intake's socket when it starts, the intake records
-  that and takes the socket back; a port held by another process is recorded
+  that and takes the socket back (on Windows a pipe cannot be taken back, so
+  each start listens on a fresh name, above); a port held by another process is recorded
   and tried again every second until the intake has it. The intake runs the Filesystem Sentinel
   itself for each session's folder, `.orunmila/` included, and records a change
   during the session to the project's `.orunmila/` files, the law packs, the
@@ -327,7 +354,8 @@ While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
 
 ### Changed
 
-- **Nothing Orunmila ships calls the internet or an AI service.** The trail
+- **Nothing Orunmila ships calls an AI service, and its one internet call is
+  `orunmila update`'s** (above). The trail
   page's 3D graph, which loaded a library from a CDN, is gone (its 2D graph and
   the other tabs need no network); the model benchmark runner left the package
   (it stays in the repository as `scripts/bench.js`), and the dashboard's

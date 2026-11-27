@@ -17,17 +17,20 @@ orunmila is designed to minimise its own attack surface:
 - **Zero runtime dependencies** — there is no third-party supply chain to
   compromise. The only installed packages are dev tooling (`c8`, `eslint`,
   `prettier`).
-- **No network calls in capture or reports** — the hooks, the sentinel and the
-  CLI never contact a remote server, send no telemetry, and need no account or
-  API key. Everything stays on your machine in `~/.orunmila/`, and the pages
+- **No network calls in capture or reports** — the hooks, the sentinel and
+  every CLI command but `orunmila update` (below) never contact a remote server,
+  send no telemetry, and need no account or API key. Everything stays on your machine in `~/.orunmila/`, and the pages
   Orunmila renders load nothing from the network. `bin/dashboard.js` is a local
   web server (loopback only since 0.2.2). The benchmark runner
   `scripts/bench.js` is not in the npm package: in a git clone, when you invoke
   it, it runs AI agents and calls AI models over the internet. The intake
   (`orunmila intake`, sent to by `orunmila install --intake`) listens on a
-  Unix socket in `~/.orunmila/intake/` and on `127.0.0.1` only (port 47390, or
-  `ORUNMILA_INTAKE_PORT`), for Claude Code's own hooks on the same machine; it
-  contacts nothing.
+  Unix socket in `~/.orunmila/intake/` (on Windows, a named pipe with a fresh
+  name at each start, published in `~/.orunmila/intake/address`) and on
+  `127.0.0.1` only (port 47390, or `ORUNMILA_INTAKE_PORT`), for Claude Code's
+  own hooks on the same machine; it contacts nothing. A program running as your
+  own account can rewrite that address file, as elsewhere it can replace the
+  socket file.
 - **One network call, for Orunmila's own updates** — `orunmila update` asks the
   npm registry (`ORUNMILA_REGISTRY`, else npm's own registry setting, else
   `https://registry.npmjs.org`) for the latest version of the `orunmila`

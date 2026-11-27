@@ -45,7 +45,7 @@ const MAP = {
   12: A(C('crash', 'CR1 test 12'), C('report', 'tests 12, 18, 21 and 84')),
   13: A(C('replay', 'tests 13 and 34'), C('odu', 'O1: the same raw log replayed twice')),
   14: A(C('paths', 'test 14:'), C('intake-router', 'test 14:')),
-  15: { kind: 'open', why: "the brief asks for a Phase 0 session, which has no raw log (F5): a brief change, O's; proposed: a recent real session stands for it, its every odù checked by hand" },
+  15: { kind: 'manual', record: "done: O, 2026-11-28 (F5): the best fit in the 3-month event log, session 69beb441, the original Phase 0 session (Orunmila's own code, both witnesses, its transcript kept), its events through the intake's path to 215 marks and 125 odù records (1.72 marks per odù), every odù checked by hand against its transcript: 3 wrong (a cp's creation unexplained, the v0 log has no command start; two claim conflicts from Phase 0's stale claims, N10), and 16 of 26 prompts the old Stop backfill (LD377)" },
   16: A(C('no-network', 'NI1 (LD264)'), C('judge', 'the judge is plain code')),
   17: A(C('tamper-log', 'TE1, TE4: the raw log appended'), C('tamper-log', 'TE1, TE4: the raw log edited'), C('tamper-log', 'TE1, TE4: the raw log deleted by')),
   18: A(C('crash', 'CR1 test 18'), C('report', 'tests 12, 18, 21 and 84')),

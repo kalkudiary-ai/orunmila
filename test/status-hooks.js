@@ -80,4 +80,19 @@ it("F24: in a Cursor project, status and lenses read Cursor's hooks file: the St
   }
 });
 
+it("F42: status counts sessions by their ids only: the Sentinel's rows, which name no session, are not a session", () => {
+  const project = fs.realpathSync(tmpDir());
+  const home = tmpDir();
+  try {
+    const ev = (o) => JSON.stringify({ ts: '2026-11-28T09:00:00.000Z', ...o });
+    fs.writeFileSync(path.join(home, 'events.jsonl'), [ev({ session_id: 's-one', turn_id: 't1', type: 'user_prompt', text: 'go' }), ev({ session_id: null, source: 'fs-sentinel', type: 'file_write', path: '/p/a.js' }), ev({ session_id: null, source: 'fs-sentinel', type: 'file_write', path: '/p/b.js' })].join('\n') + '\n');
+    fs.writeFileSync(path.join(home, 'log-state.json'), JSON.stringify({ schema: 2 }));
+    const st = run('bin/orunmila.js', { args: ['status'], env: { ORUNMILA_HOME: home }, cwd: project });
+    assert.ok(st.stdout.includes('Sessions seen: 1\n'), st.stdout);
+  } finally {
+    rmrf(project);
+    rmrf(home);
+  }
+});
+
 runAll('status-hooks');

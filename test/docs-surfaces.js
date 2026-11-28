@@ -129,6 +129,12 @@ it("DOC6 (lines 727-732): the support table is the same in START.md, the README 
   assert.ok(start[3].includes('sentinel only') && start[4].includes('No adapter exists'));
 });
 
+it("SW4 (the close-out's sweep): the help names both agents the Closeout Gate runs for", () => {
+  const help = require('child_process').spawnSync(process.execPath, [path.join(ROOT, 'bin', 'orunmila.js'), 'help'], { encoding: 'utf8' }).stdout;
+  assert.ok(help.includes('claude-code and cursor. 2 of its 6 laws block'), help);
+  assert.ok(!help.includes('claude-code only. 2 of'), 'the old words are gone');
+});
+
 it("SW1 (Phase 7's sweep): the help sends a new user to docs/START.md, and says when html goes (no sooner than 2.0.0)", () => {
   const help = require('child_process').spawnSync(process.execPath, [path.join(ROOT, 'bin', 'orunmila.js'), 'help'], { encoding: 'utf8' }).stdout;
   assert.ok(help.includes('docs/START.md (new to Orunmila)'), help);

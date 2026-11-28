@@ -4713,6 +4713,14 @@ MUTANTS.push(
     from: " : adapter.id === 'cursor' ? findCursorGateHooks(settings) : [],", to: ' : [],', fails: ['CG1 (LD394)'] },
 );
 
+// F42, SW4 (the close-out's sweep): status's session count; the help's gate line.
+MUTANTS.push(
+  { id: "F42-1 the Sentinel's rows count as a session", file: 'bin/orunmila.js', test: 'test/status-hooks.js',
+    from: "  const sessions = new Set(all.map((e) => e.session_id).filter((s) => typeof s === 'string' && s));", to: '  const sessions = new Set(all.map((e) => e.session_id));', fails: ['F42'] },
+  { id: 'SW4-1 the help calls the gate claude-code only', file: 'bin/orunmila.js', test: 'test/docs-surfaces.js',
+    from: '                     claude-code and cursor. 2 of its 6 laws block; the rest advise.', to: '                     claude-code only. 2 of its 6 laws block; the rest advise.', fails: ['SW4'] },
+);
+
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };
 
 if (require.main === module) process.exit(runGate());

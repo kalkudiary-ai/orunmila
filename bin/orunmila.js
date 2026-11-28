@@ -761,7 +761,8 @@ function logSizeKB() {
 
 function cmdStatus() {
   const all = eventlog.readAll();
-  const sessions = new Set(all.map((e) => e.session_id));
+  // F42: only a real id names a session; the Sentinel's rows name none (as F20 found in watch).
+  const sessions = new Set(all.map((e) => e.session_id).filter((s) => typeof s === 'string' && s));
   if (legacy.isLegacy(eventlog.dataDir())) console.log(`\x1b[33m${legacy.WARNING}\x1b[0m\n`);
 
   // Which lenses are live, first — before any counts. A log with events in it
@@ -2365,12 +2366,12 @@ THREE LENSES, installed separately (orunmila lenses — which do I have?):
 
   The Stain Map      records + reports. Never refuses. All supported agents.
   The Closeout Gate  refuses a turn whose claims its evidence doesn't support.
-                     claude-code only. 2 of its 6 laws block; the rest advise.
+                     claude-code and cursor. 2 of its 6 laws block; the rest advise.
   The Babaláwo       judges each session's record at its closeout. Never refuses. Off until you turn it on.
 
 Install
   orunmila install [--agent ID] [--global]        the Stain Map alone (default agent: claude-code)
-  orunmila install --with-gate [--agent ID]       both lenses (--with-laws is the original spelling, still works)
+  orunmila install --with-gate [--agent ID]       both lenses, for claude-code or cursor (--with-laws is the original spelling)
   orunmila install --gate-only                    add the Closeout Gate to an existing Stain Map install
   orunmila install --intake                       send every hook payload to the intake too (claude-code; start it first)
   orunmila install --with-judge | --without-judge  the Babaláwo on or off (from the intake's next start)

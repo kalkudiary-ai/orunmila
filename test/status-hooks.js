@@ -47,4 +47,37 @@ it('PM3 (LD291): status names each hook whose script is missing, with its event 
   }
 });
 
+it("F24: in a Cursor project, status and lenses read Cursor's hooks file: the Stain Map on, for Cursor; a Cursor hook whose script is gone is named; a folder with no agent's hooks reads as before", () => {
+  const project = fs.realpathSync(tmpDir());
+  const home = tmpDir();
+  try {
+    const here = path.join(project, 'kept', 'src', 'capture');
+    fs.mkdirSync(here, { recursive: true });
+    fs.writeFileSync(path.join(here, 'connector.js'), '// there\n');
+    const cmd = (p, phase) => `node "${p}" cursor ${phase}`;
+    fs.mkdirSync(path.join(project, '.cursor'));
+    fs.writeFileSync(path.join(project, '.cursor', 'hooks.json'), JSON.stringify({ version: 1, hooks: { postToolUse: [{ command: cmd(path.join(here, 'connector.js'), 'postTool') }], afterAgentResponse: [{ command: cmd(path.join(project, 'gone', 'connector.js'), 'stop') }] } }));
+    const st = run('bin/orunmila.js', { args: ['status'], env: { ORUNMILA_HOME: home }, cwd: project });
+    assert.ok(st.stdout.includes('Lenses (Cursor): Stain Map \x1b[32mon\x1b[0m'), st.stdout);
+    assert.ok(!st.stdout.includes('Lenses: Stain Map'), 'no Claude Code line for a folder with only Cursor hooks');
+    assert.ok(st.stdout.includes(`[afterAgentResponse] ${path.join(project, 'gone', 'connector.js')}`), st.stdout);
+    assert.strictEqual(st.status, 1, 'a hook naming a missing script exits 1');
+    const ln = run('bin/orunmila.js', { args: ['lenses'], env: { ORUNMILA_HOME: home }, cwd: project });
+    assert.ok(ln.stdout.includes(path.join(project, '.cursor', 'hooks.json')), ln.stdout);
+    assert.ok(/The Stain Map\s+.\[32m✓ installed/.test(ln.stdout), ln.stdout); // . is the colour code's escape character
+    const asked = run('bin/orunmila.js', { args: ['status', '--agent', 'claude-code'], env: { ORUNMILA_HOME: home }, cwd: project });
+    assert.ok(asked.stdout.includes('Lenses: Stain Map \x1b[2moff\x1b[0m'), '--agent still names the one asked for: ' + asked.stdout);
+    const empty = fs.realpathSync(tmpDir());
+    try {
+      const none = run('bin/orunmila.js', { args: ['status'], env: { ORUNMILA_HOME: home }, cwd: empty });
+      assert.ok(none.stdout.includes('Lenses: Stain Map \x1b[2moff\x1b[0m'), none.stdout);
+    } finally {
+      rmrf(empty);
+    }
+  } finally {
+    rmrf(project);
+    rmrf(home);
+  }
+});
+
 runAll('status-hooks');

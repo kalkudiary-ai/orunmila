@@ -13,7 +13,7 @@
  * only sessionStart and sessionEnd. The payloads below have those shapes, with invented ids and temporary paths.
  */
 
-const { assert, fs, path, tmpHome, tmpDir, rmrf, run, it, runAll } = require('./helpers');
+const { assert, fs, path, tmpHome, tmpDir, rmrf, run, runUntil, it, runAll } = require('./helpers');
 
 const CONNECTOR = 'src/capture/connector.js';
 
@@ -166,6 +166,28 @@ it('CU1: the claim is the final message: afterAgentResponse joins the turn\'s te
   assert.deepStrictEqual(claims('j2'), ['I will look first.Fixed `a.js`. All tests pass.'], 'never a stale message');
   rmrf(home);
   rmrf(work);
+});
+
+it("F41: orunmila watch names the agent whose hooks the folder holds (Cursor), never Claude Code there; with none, it names no agent", () => {
+  const project = fs.realpathSync(tmpDir());
+  const home = tmpDir();
+  try {
+    fs.mkdirSync(path.join(project, '.cursor'));
+    fs.writeFileSync(path.join(project, '.cursor', 'hooks.json'), JSON.stringify({ version: 1, hooks: { postToolUse: [{ command: 'node "/x/connector.js" cursor postTool' }] } }));
+    const w = runUntil('bin/orunmila.js', { args: ['watch'], env: { ORUNMILA_HOME: home }, cwd: project, ms: 1500 });
+    assert.ok(w.stdout.includes('work normally in Cursor'), w.stdout + w.stderr);
+    assert.ok(!w.stdout.includes('Claude Code'), w.stdout);
+    const empty = fs.realpathSync(tmpDir());
+    try {
+      const n = runUntil('bin/orunmila.js', { args: ['watch'], env: { ORUNMILA_HOME: home }, cwd: empty, ms: 1500 });
+      assert.ok(n.stdout.includes('work normally in your coding agent'), n.stdout + n.stderr);
+    } finally {
+      rmrf(empty);
+    }
+  } finally {
+    rmrf(project);
+    rmrf(home);
+  }
 });
 
 runAll('cursor');

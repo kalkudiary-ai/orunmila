@@ -217,8 +217,27 @@ function testedIsNegated(masked, index) {
  * Hedges are left to the caller: the law gate drops a hedged claim (another law
  * grades it), while the reconciler grades it and tags it hedged.
  */
+/**
+ * F40 (LD392), with ORUNMILA_RUNNER_CLAIMS=1 (off by default: this reader is the live gate's too): a span quoted in
+ * backticks, bold or double quotes that holds only a runner's count of passes ("`1 test passed`", "**12 tests
+ * passing**") is the agent quoting its run's result, not discussing a phrase, so its words are kept for the reader.
+ * A count with a failure in it, or no pass, stays masked; a span with no number is never kept; nor one after a word
+ * that reports someone else's words (says, reports, per, shows, printed ...).
+ */
+const REPORTED_BEFORE_RE = /\b(?:says?|said|claims?|claimed|asserts?|asserted|states?|stated|reports?|reported|per|according to|documented as|recorded as|shows?|showed|prints?|printed|reads?)\b/i;
+const COUNT_SPAN_RE = /(\*\*|`|")\s*([1-9][0-9]*\s+tests?\s+(?:passed|passing|pass)\b[^*`"\n]*?)\s*\1/g;
+function keepRunnerCounts(sentence) {
+  if (process.env.ORUNMILA_RUNNER_CLAIMS !== '1') return sentence;
+  const text = String(sentence);
+  return text.replace(COUNT_SPAN_RE, (whole, mark, words, at) => {
+    if (/\b[1-9][0-9]*\s+(?:failed|failing|errors?)\b/i.test(words)) return whole; // a count with a failure
+    if (REPORTED_BEFORE_RE.test(text.slice(0, at))) return whole; // someone else's count: "the handover says `3 tests passed`"
+    return ` ${words} `;
+  });
+}
+
 function findExecutionClaims(sentence) {
-  const masked = maskQuoted(sentence);
+  const masked = maskQuoted(keepRunnerCounts(sentence));
   if (!VERIFICATION_RE.test(masked)) return [];
   if (VERIFICATION_DISQUALIFIER_RE.test(masked)) return [];
   const found = [];

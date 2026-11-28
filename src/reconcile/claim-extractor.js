@@ -54,7 +54,7 @@ const VERIFICATION_WORDS = [
 // The verb list (LD203 (b), LD288): "I edited X" is a claim of changed work as much as "I updated X". This list is the
 // live law gate's too, so the edit verbs come only with ORUNMILA_EDIT_VERBS=1 (off by default; turning it on is O's).
 // `changed` is left out: it is said of the world as often as of the agent's own work.
-const EDIT_VERBS = ['edited', 'modified', 'rewrote', 'patched'];
+const EDIT_VERBS = ['edited', 'modified', 'rewrote', 'patched', 'wired']; // wired: F40 (LD392)
 const ACTION_VERBS = [
   'added', 'created', 'implemented', 'wrote', 'fixed', 'updated', 'refactored', 'removed',
   'deleted', 'renamed', 'moved', 'configured', 'installed', 'replaced', 'extracted',

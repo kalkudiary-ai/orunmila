@@ -300,6 +300,14 @@ hook scripts by their paths in the package (`src/capture/claude-code/`),
   `tripwire`) and at the closeout, which names each that changed by path only.
   The closeout also checks the record against the agent's own transcript and
   names each tool call with no mark (`detail.completeness`).
+- **A claim that quotes its run's count, off by default (`ORUNMILA_RUNNER_CLAIMS=1`).**
+  "`npm test` passed (`1 test passed`)" and "Ran `npm test`: **1 test passed**" are read
+  as test claims, for the gate and the judge, for every agent (F40). With
+  `ORUNMILA_EDIT_VERBS=1`, "wired" is a work verb too.
+- **`status`, `lenses` and `watch` read the folder's own agent (F24, F41).** In a
+  Cursor project they read `.cursor/hooks.json`: `status` no longer says the
+  Stain Map is off there, names a Cursor hook whose script is gone, and `watch`
+  no longer tells a Cursor user to work in Claude Code.
 - **A limit on a flooded Sentinel, off by default
   (`ORUNMILA_SENTINEL_MAX_PENDING=N`).** Past N changed paths waiting at once
   under one folder, the rest of the flood is dropped and one gap in each

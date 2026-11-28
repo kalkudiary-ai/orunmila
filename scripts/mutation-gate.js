@@ -4673,6 +4673,30 @@ MUTANTS.push(
     from: '  else if (cp && !cp.unmarked.length) out.push(', to: '  else if (cp) out.push(', fails: ['CF5 (LD385)'] },
 );
 
+// F24, F41: status, lenses and watch read the folder's own agent.
+MUTANTS.push(
+  { id: "F24-1 status reads Claude Code's settings only", file: 'bin/orunmila.js', test: 'test/status-hooks.js',
+    from: '  return found.length ? found : [lensState({ agentId: \'claude-code\', global })];', to: "  return [lensState({ agentId: 'claude-code', global })];", fails: ['F24'] },
+  { id: "F24-2 a Cursor hook's missing script is not named", file: 'bin/orunmila.js', test: 'test/status-hooks.js',
+    from: " : entry && typeof entry.command === 'string' ? [{ type: 'command', command: entry.command }] : [];", to: ' : [];', fails: ['F24'] },
+  { id: 'F41-1 watch names Claude Code again', file: 'bin/orunmila.js', test: 'test/cursor.js',
+    from: "work normally in ${agents.length ? agents.join(' or ') : 'your coding agent'}...", to: 'work normally in Claude Code...', fails: ['F41'] },
+);
+
+// F40 (LD392): a claim quoting its run's own count is a test claim, behind ORUNMILA_RUNNER_CLAIMS=1.
+MUTANTS.push(
+  { id: 'F40-1 a quoted count is never kept', file: 'src/reconcile/verification-claim.js', test: 'test/runner-claims.js',
+    from: '    return ` ${words} `;\n  });', to: '    return whole;\n  });', fails: ['F40 (LD392)', 'F40 through the claim reader'] },
+  { id: 'F40-2 a count with a failure is kept', file: 'src/reconcile/verification-claim.js', test: 'test/runner-claims.js',
+    from: "    if (/\\b[1-9][0-9]*\\s+(?:failed|failing|errors?)\\b/i.test(words)) return whole; // a count with a failure", to: '', fails: ['F40: still not a claim'] },
+  { id: "F40-3 someone else's count is kept", file: 'src/reconcile/verification-claim.js', test: 'test/runner-claims.js',
+    from: '    if (REPORTED_BEFORE_RE.test(text.slice(0, at))) return whole;', to: '', fails: ['F40: still not a claim'] },
+  { id: 'F40-4 the switch is ignored', file: 'src/reconcile/verification-claim.js', test: 'test/runner-claims.js',
+    from: "  if (process.env.ORUNMILA_RUNNER_CLAIMS !== '1') return sentence;", to: '', fails: ['F40 (LD392)', 'F40 through the claim reader'] },
+  { id: 'F40-5 wired is not a work verb', file: 'src/reconcile/claim-extractor.js', test: 'test/runner-claims.js',
+    from: "'patched', 'wired']; // wired: F40 (LD392)", to: "'patched'];", fails: ['F40: with ORUNMILA_EDIT_VERBS=1'] },
+);
+
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };
 
 if (require.main === module) process.exit(runGate());

@@ -91,7 +91,9 @@ function missingHookScripts(settings) {
   const out = [];
   for (const [event, entries] of Object.entries((settings && settings.hooks) || {})) {
     for (const entry of Array.isArray(entries) ? entries : []) {
-      for (const h of (entry && entry.hooks) || []) {
+      // F24: Claude Code nests { type: 'command', command } under each entry's hooks; Cursor lists { command } itself.
+      const list = entry && Array.isArray(entry.hooks) ? entry.hooks : entry && typeof entry.command === 'string' ? [{ type: 'command', command: entry.command }] : [];
+      for (const h of list) {
         if (!h || h.type !== 'command') continue;
         const { words, at } = scriptOf(h.command);
         const s = at >= 0 ? words[at] : null;
@@ -612,6 +614,22 @@ function printLawsForReview({ root }) {
 }
 
 /**
+ * F24: the lens states `status` and `lenses` show. With --agent, that agent's alone, as before. Without it, every agent
+ * whose config in this folder (or, with --global, the home folder) holds one of Orunmila's hooks, so a Cursor project
+ * reads Cursor's hooks file; when none does, Claude Code's, as before.
+ */
+function lensStatesShown() {
+  const global = args.includes('--global');
+  const asked = flag('agent', null);
+  if (asked) {
+    const one = lensState({ agentId: asked, global });
+    return one ? [one] : [];
+  }
+  const found = listAgents().map((a) => lensState({ agentId: a.id, global })).filter((s) => s && s.exists && (s.stainMap.length || s.gate.length));
+  return found.length ? found : [lensState({ agentId: 'claude-code', global })];
+}
+
+/**
  * `orunmila lenses` — which lens is which, what each one can do, and which of
  * them you actually have installed right now.
  *
@@ -622,12 +640,11 @@ function printLawsForReview({ root }) {
 function cmdLenses() {
   const dim = (t) => `\x1b[2m${t}\x1b[0m`;
   const bold = (t) => `\x1b[1m${t}\x1b[0m`;
-  const agentId = flag('agent', 'claude-code');
-  const global = args.includes('--global');
-  const state = lensState({ agentId, global });
+  const states = lensStatesShown();
+  const state = states[0];
 
   if (!state) {
-    console.error(`Unknown agent "${agentId}". Try: orunmila agents`);
+    console.error(`Unknown agent "${flag('agent', '')}". Try: orunmila agents`);
     process.exitCode = 1;
     return;
   }
@@ -661,16 +678,19 @@ function cmdLenses() {
   console.log(dim('  Map underneath it. The Stain Map is useful entirely on its own. The Babaláwo'));
   console.log(dim("  judges the intake's record (install --intake), and is off until you turn it on."));
 
-  console.log(`\n${bold('Installed right now')} ${dim(`(${state.configPath})`)}`);
-  if (!state.exists) {
-    console.log('  neither — no config file at that path yet.');
-  } else {
+  for (const st of states) {
+    const who = st.adapter.id === 'claude-code' ? '' : ` for ${st.adapter.label}`;
+    console.log(`\n${bold(`Installed right now${who}`)} ${dim(`(${st.configPath})`)}`);
+    if (!st.exists) {
+      console.log('  neither — no config file at that path yet.');
+      continue;
+    }
     const mark = (on) => (on ? '\x1b[32m✓ installed\x1b[0m' : '\x1b[2m· not installed\x1b[0m');
-    console.log(`  ${pad('The Stain Map', 20)} ${mark(state.stainMap.length)}`);
-    for (const h of state.stainMap) console.log(dim(`      [${h.event}] ${h.command}`));
-    if (state.adapter.id === 'claude-code') {
-      console.log(`  ${pad('The Closeout Gate', 20)} ${mark(state.gate.length)}`);
-      for (const h of state.gate) console.log(dim(`      [${h.event}] ${h.command}`));
+    console.log(`  ${pad('The Stain Map', 20)} ${mark(st.stainMap.length)}`);
+    for (const h of st.stainMap) console.log(dim(`      [${h.event}] ${h.command}`));
+    if (st.adapter.id === 'claude-code') {
+      console.log(`  ${pad('The Closeout Gate', 20)} ${mark(st.gate.length)}`);
+      for (const h of st.gate) console.log(dim(`      [${h.event}] ${h.command}`));
     } else {
       console.log(`  ${pad('The Closeout Gate', 20)} ${dim('· unavailable for this agent (claude-code only)')}`);
     }
@@ -712,13 +732,14 @@ function cmdStatus() {
   // Which lenses are live, first — before any counts. A log with events in it
   // says capture ran at some point; it does not say the gate is on, and those
   // are the two separate things a person checking status actually wants.
-  const ls = lensState({ agentId: flag('agent', 'claude-code'), global: args.includes('--global') });
-  if (ls) {
+  const shown = lensStatesShown(); // F24: every agent with Orunmila's hooks in this folder, or the one --agent names
+  for (const ls of shown) {
     const mk = (on) => (on ? '\x1b[32mon\x1b[0m' : '\x1b[2moff\x1b[0m');
     const gateCell = ls.adapter.id === 'claude-code'
       ? mk(ls.gate.length)
       : '\x1b[2mn/a (claude-code only)\x1b[0m';
-    console.log(`Lenses: Stain Map ${mk(ls.stainMap.length)}  |  Closeout Gate ${gateCell}  |  Babaláwo ${mk(judgeState().on)}`);
+    const who = ls.adapter.id === 'claude-code' ? '' : ` (${ls.adapter.label})`;
+    console.log(`Lenses${who}: Stain Map ${mk(ls.stainMap.length)}  |  Closeout Gate ${gateCell}  |  Babaláwo ${mk(judgeState().on)}`);
     if (String(process.env.ORUNMILA_LAWS || '').toLowerCase() === 'off') {
       console.log('  \x1b[33mORUNMILA_LAWS=off is set in this shell — the gate is disabled regardless of install.\x1b[0m');
     }
@@ -731,7 +752,7 @@ function cmdStatus() {
       console.log('  Install again from a copy that stays (npm i -g orunmila, then orunmila install): a package runner\'s cache can be cleared.');
       process.exitCode = 1;
     }
-    console.log('  detail: orunmila lenses\n');
+    if (ls === shown[shown.length - 1]) console.log('  detail: orunmila lenses\n');
   }
 
   console.log(`Event log: ${eventlog.logPath()}`);
@@ -1092,7 +1113,9 @@ function cmdWatch() {
     process.exit(0);
   });
 
-  console.log('Watching for new turn reports + filesystem - leave this running, work normally in Claude Code...\n');
+  // F41: the agent named is the one whose hooks this folder holds (F24's reading), never Claude Code by default.
+  const agents = lensStatesShown().filter((s) => s.exists && (s.stainMap.length || s.gate.length)).map((s) => s.adapter.label);
+  console.log(`Watching for new turn reports + filesystem - leave this running, work normally in ${agents.length ? agents.join(' or ') : 'your coding agent'}...\n`);
   const seen = new Set();
   const told = new Set(); // reports already named as unreadable, so each is named once
   setInterval(() => {

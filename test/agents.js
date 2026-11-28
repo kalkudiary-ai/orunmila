@@ -225,8 +225,9 @@ it('cli: install --agent cursor writes a .cursor/hooks.json pointing at the conn
   const cfg = JSON.parse(fs.readFileSync(path.join(work, '.cursor', 'hooks.json'), 'utf8'));
   // The starter's path is double-quoted so spaces/backslashes in it stay intact
   // on every platform; the connector and its args follow the closing quote (PM2b, LD331).
-  assert.ok(cfg.hooks.afterFileEdit.includes('orunmila-start.js" src/capture/connector.js cursor postTool'), 'maps afterFileEdit → postTool');
-  assert.ok(cfg.hooks.beforeSubmitPrompt.includes('" src/capture/connector.js cursor prompt'));
+  // CU1: Cursor's own format, each event a list of commands (test/cursor.js holds the rest).
+  assert.ok(cfg.hooks.postToolUse[0].command.includes('orunmila-start.js" src/capture/connector.js cursor postTool'), 'maps postToolUse → postTool');
+  assert.ok(cfg.hooks.beforeSubmitPrompt[0].command.includes('" src/capture/connector.js cursor prompt'));
   rmrf(home);
   rmrf(work);
 });

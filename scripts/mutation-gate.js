@@ -4507,6 +4507,63 @@ MUTANTS.push(
     to: "'ORUNMILA_SENTINEL_MAX_PENDING', ",
     fails: ['LA3 (LD290)'],
   },
+  // CU1 (test 49): the Cursor adapter against the hook shapes Cursor's agent 2026.11.22 sends.
+  {
+    id: 'CU1-1 the hooks file goes back to one string per event',
+    file: 'bin/orunmila.js',
+    test: 'test/cursor.js',
+    from: "      hooks[ev] = (Array.isArray(hooks[ev]) ? hooks[ev] : []).concat([{ command: `${hookFor('src/capture/connector.js')} ${adapter.id} ${phase}` }]);",
+    to: "      hooks[ev] = `${hookFor('src/capture/connector.js')} ${adapter.id} ${phase}`;",
+    fails: ['CU1: install --agent cursor writes the hooks file Cursor reads'],
+  },
+  {
+    id: "CU1-2 an earlier install's entries are kept",
+    file: 'bin/orunmila.js',
+    test: 'test/cursor.js',
+    from: "  const ours = (c) => scriptOf(c).words.some((w) => path.basename(w) === 'connector.js');",
+    to: '  const ours = () => false;',
+    fails: ['CU1: installing over an earlier one-string-per-event Cursor install'],
+  },
+  {
+    id: "CU1-3 a tool's output is not parsed, so a command's exit is lost",
+    file: 'src/capture/agents.js',
+    test: 'test/cursor.js',
+    from: '          const v = JSON.parse(r);',
+    to: '          const v = null;',
+    fails: ['CU1: a Cursor turn in the measured shapes is recorded'],
+  },
+  {
+    id: 'CU1-4 sessionEnd closes a turn a response already closed',
+    file: 'src/capture/core.js',
+    test: 'test/cursor.js',
+    from: '  if (!isTurnOpen(sessionId) || !readTurn(sessionId, turnId(sessionId)).length) return null;',
+    to: '  if (!readTurn(sessionId, turnId(sessionId)).length) return null;',
+    fails: ['CU1: sessionEnd closes a turn no response hook closed'],
+  },
+  {
+    id: "CU1-5 Cursor's query tags stay on the ask",
+    file: 'src/capture/agents.js',
+    test: 'test/cursor.js',
+    from: '        return m ? m[1] : t;',
+    to: '        return t;',
+    fails: ['CU1: sessionEnd closes a turn no response hook closed'],
+  },
+  {
+    id: 'CU1-6 the claim takes the transcript whatever it says',
+    file: 'src/capture/agents.js',
+    test: 'test/cursor.js',
+    from: '        return last && last !== p.text && p.text.endsWith(last) ? last : p.text;',
+    to: '        return last || p.text;',
+    fails: ['CU1: the claim is the final message'],
+  },
+  {
+    id: "CU1-7 the transcript reader loses Cursor's line shape",
+    file: 'src/capture/transcript.js',
+    test: 'test/cursor.js',
+    from: "  (line) => (typeof line.role === 'string' && line.message && line.message.content !== undefined ? { role: line.role, text: textOf(line.message.content) } : null),",
+    to: '  () => null,',
+    fails: ['CU1: sessionEnd closes a turn no response hook closed'],
+  },
 );
 
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };

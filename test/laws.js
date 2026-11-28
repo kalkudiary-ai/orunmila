@@ -1172,8 +1172,9 @@ it('test 40: an unraced turn is still judged on its final text', () => {
 });
 
 it('test 40: another agent\'s Stop still reads the transcript (its payloads are not measured)', () => {
-  const r = stopThroughHooks({ session_id: 't40-d' }, { agent: 'cursor' });
-  assert.strictEqual(r.claim.text, GREEN_LIE.claimText, 'cursor keeps the transcript claim it had before');
+  // Codex: still unmeasured. Cursor's payloads were measured in CU1 and its claim is its response hook's text (test/cursor.js).
+  const r = stopThroughHooks({ session_id: 't40-d' }, { agent: 'codex' });
+  assert.strictEqual(r.claim.text, GREEN_LIE.claimText, 'codex keeps the transcript claim it had before');
   assert.strictEqual(r.claim.claim_unconfirmed, undefined);
   r.done();
 });

@@ -289,6 +289,29 @@ function installAntigravity(adapter, root, p) {
   fs.writeFileSync(p, JSON.stringify(settings, null, 2));
 }
 
+// CU1: Cursor reads { version: 1, hooks: { <event>: [{ command }] } } (its docs, and measured on its command-line
+// agent 2026.11.22). Each of Orunmila's entries, in either the list form or the one string an earlier install wrote, is
+// taken out of every event, the user's own entries kept, and one entry per measured event added.
+function installCursor(adapter, root, p) {
+  const settings = readJson(p, {});
+  const hooks = settings.hooks && typeof settings.hooks === 'object' ? settings.hooks : {};
+  const ours = (c) => scriptOf(c).words.some((w) => path.basename(w) === 'connector.js');
+  for (const ev of Object.keys(hooks)) {
+    const v = hooks[ev];
+    const kept = typeof v === 'string' ? (ours(v) ? [] : [{ command: v }]) : (Array.isArray(v) ? v.filter((h) => !(h && ours(h.command))) : v);
+    if (Array.isArray(kept) && !kept.length) delete hooks[ev];
+    else hooks[ev] = kept;
+  }
+  for (const [phase, eventNames] of Object.entries(adapter.events)) {
+    for (const ev of [].concat(eventNames)) {
+      hooks[ev] = (Array.isArray(hooks[ev]) ? hooks[ev] : []).concat([{ command: `${hookFor('src/capture/connector.js')} ${adapter.id} ${phase}` }]);
+    }
+  }
+  settings.version = settings.version || 1;
+  settings.hooks = hooks;
+  fs.writeFileSync(p, JSON.stringify(settings, null, 2));
+}
+
 // Generic agents: a flat { hooks: { <theirEventName>: "node connector.js <agent> <phase>" } }
 // JSON. Each adapter's `events` map declares which of its hook names maps to
 // which lifecycle phase; we expand array values (e.g. two postTool variants).
@@ -507,6 +530,8 @@ function cmdInstall() {
     }
   } else if (adapter.id === 'antigravity') {
     installAntigravity(adapter, root, p);
+  } else if (adapter.id === 'cursor') {
+    installCursor(adapter, root, p);
   } else {
     installGeneric(adapter, root, p);
   }

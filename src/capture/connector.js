@@ -27,7 +27,7 @@
 const { runHook } = require('./core');
 const { getAdapter } = require('./agents');
 
-const VALID_PHASES = new Set(['prompt', 'preTool', 'postTool', 'stop']);
+const VALID_PHASES = new Set(['prompt', 'preTool', 'postTool', 'stop', 'sessionEnd']);
 
 function main() {
   const agentId = process.argv[2];

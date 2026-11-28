@@ -23,7 +23,7 @@ const { unifiedDiff } = require('../reconcile/difftool');
 const { sha256 } = require('./fs-sentinel/hasher');
 const { redactString } = require('../store/secrets');
 const legacy = require('../store/legacy');
-const { bumpTurn, writeTurnId, closeTurn, stopKey } = require('./turnstate');
+const { bumpTurn, writeTurnId, closeTurn, stopKey, isTurnOpen, turnId } = require('./turnstate');
 const { reconcileAndPersist } = require('../reconcile');
 const { renderTurn } = require('../render/terminal');
 const { deriveVcsEvents } = require('./vcs-evidence');
@@ -376,6 +376,22 @@ function handleStop(payload, adapter) {
   return renderTurn(report);
 }
 
+/**
+ * sessionEnd phase (CU1, an agent whose adapter names it): the session is over. A turn that is still open, because no
+ * stop hook fired (Cursor's print mode fires none), is closed here, its claim the transcript's last assistant text,
+ * or none and unconfirmed. A turn a stop already closed, or a session with no record, gets nothing.
+ */
+function handleSessionEnd(payload, adapter) {
+  const sessionId = adapter.fields.sessionId(payload);
+  if (!isTurnOpen(sessionId) || !readTurn(sessionId, turnId(sessionId)).length) return null;
+  const transcript = adapter.transcript || defaultTranscript;
+  const text = transcript.lastAssistantText(adapter.fields.transcriptPath(payload));
+  const p = Object.assign({}, payload);
+  delete p.text;
+  if (text) p.text = text;
+  return handleStop(p, adapter);
+}
+
 // --- generic stdin runner ---------------------------------------------------
 // Each per-agent hook script is one line: `runHook('postTool', adapter)`. This
 // reads stdin, parses JSON, dispatches to the handler, and ALWAYS exits 0. The
@@ -398,6 +414,7 @@ const HANDLERS = {
   preTool: handlePreTool,
   postTool: handlePostTool,
   stop: handleStop,
+  sessionEnd: handleSessionEnd,
 };
 
 function runHook(phase, adapter) {
@@ -425,7 +442,7 @@ function runHook(phase, adapter) {
       if (process.env.ORUNMILA_CLAIMS_BLOCK === '1') answer.hookSpecificOutput = { hookEventName: 'UserPromptSubmit', additionalContext: require('../reconcile/claims-block').ASK };
       if (Object.keys(answer).length) process.stdout.write(JSON.stringify(answer) + '\n');
     }
-    if (phase === 'stop' && typeof out === 'string') {
+    if ((phase === 'stop' || phase === 'sessionEnd') && typeof out === 'string') {
       try {
         fs.writeFileSync(lastTurnReportPath(), out + '\n', { mode: 0o600 });
       } catch {
@@ -444,6 +461,7 @@ module.exports = {
   handlePreTool,
   handlePostTool,
   handleStop,
+  handleSessionEnd,
   runHook,
   // exported for tests / reuse
   cacheSlot,

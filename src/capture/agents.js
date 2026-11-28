@@ -213,19 +213,61 @@ const REGISTRY = {
     },
   }),
 
-  // Cursor — hooks land in .cursor; tool names differ (edit_file, read_file,
-  // run_terminal_cmd). Field defaults already cover its camelCase shapes.
+  // Cursor — hooks in .cursor/hooks.json as { version: 1, hooks: { <event>: [{ command }] } } (bin/orunmila.js
+  // installCursor). CU1, measured 2026-11-28 on Cursor's command-line agent 2026.11.22-e9042b2, every hook's stdin
+  // kept (test/cursor.js holds the shapes): preToolUse/postToolUse name the tool (Read, Write, Grep, Shell) with
+  // `tool_input` an object and `tool_output` JSON text (Shell's: { output, exitCode }); afterFileEdit and
+  // afterShellExecution repeat those calls with less (no tool name; no exit code), so they are not used. The final
+  // text comes only in afterAgentResponse (`text`), so that closes the turn; `stop`, at the same moment, has none.
+  // Print mode (`-p`) fires no prompt, stop or response hook: sessionEnd closes a turn nothing closed, from the
+  // transcript. The "before" hooks print nothing: measured, an empty answer blocked nothing.
   cursor: withDefaults({
     id: 'cursor',
     label: 'Cursor',
     config: { dir: '.cursor', file: 'hooks.json' },
     events: {
       prompt: 'beforeSubmitPrompt',
-      preTool: 'beforeShellExecution',
-      postTool: ['afterFileEdit', 'afterShellExecution'],
-      stop: 'stop',
+      preTool: 'preToolUse',
+      postTool: ['postToolUse', 'postToolUseFailure'],
+      stop: 'afterAgentResponse',
+      sessionEnd: 'sessionEnd',
     },
-    preToolMatcher: 'edit_file|create_file|apply_patch',
+    stopCarriesFinalText: true,
+    transcript: {
+      lastAssistantText: (p) => require('./transcript').lastAssistantText(p),
+      // Cursor wraps the ask: "<timestamp>...</timestamp>\n<user_query>\n...\n</user_query>".
+      lastUserText: (p) => {
+        const t = require('./transcript').lastUserText(p);
+        const m = /<user_query>\n?([\s\S]*?)\n?<\/user_query>/.exec(t);
+        return m ? m[1] : t;
+      },
+    },
+    fields: {
+      toolResponse: (p) => {
+        const r = p.tool_output !== undefined ? p.tool_output : (p.tool_response || p.result || {});
+        if (typeof r !== 'string') return r || {};
+        try {
+          const v = JSON.parse(r);
+          return v && typeof v === 'object' ? v : { output: r };
+        } catch {
+          return { output: r };
+        }
+      },
+      // afterAgentResponse's `text` is every text block of the turn joined with no space ("...the tests.Updated ..."),
+      // which the claim reader cannot split. Measured: the transcript's last assistant message is that text's tail, so
+      // the claim is that message, as Claude Code's is; when the transcript's last message is not exactly the tail (not
+      // caught up, N10), the hook's own text stands.
+      finalText: (p) => {
+        if (typeof p.text !== 'string') return null;
+        let last;
+        try {
+          last = require('./transcript').lastAssistantText(p.transcript_path || null);
+        } catch {
+          last = '';
+        }
+        return last && last !== p.text && p.text.endsWith(last) ? last : p.text;
+      },
+    },
   }),
 
   // Aider — drives edits via git commits + a chat history file. It has no native

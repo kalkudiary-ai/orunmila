@@ -55,6 +55,8 @@ const EXTRACTORS = [
       ? { role: line.message.role, text: textOf(line.message.content) }
       : null,
   (line) => (line.type === 'user' || line.type === 'assistant' ? { role: line.type, text: textOf(line.content) } : null),
+  // Cursor (CU1, its agent 2026.11.22): { role, message: { content: [blocks] } }, the role outside the message.
+  (line) => (typeof line.role === 'string' && line.message && line.message.content !== undefined ? { role: line.role, text: textOf(line.message.content) } : null),
   // Gemini CLI: type 'gemini' = assistant, content + thoughts + toolCalls
   (line) => {
     if (line.type === 'gemini') {

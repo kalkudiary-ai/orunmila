@@ -3947,8 +3947,8 @@ MUTANTS.push(
     id: 'DOC5-1 the help names only the README',
     file: 'bin/orunmila.js',
     test: 'test/docs-surfaces.js',
-    from: 'Docs: README.md (the way in) · docs/GUIDE.md (every command, law, switch and limit) · known issues',
-    to: 'Docs: README.md · known issues',
+    from: 'README.md (the way in) · docs/GUIDE.md (every command, law, switch and limit) · known issues',
+    to: 'README.md · known issues',
     fails: ['DOC5 (LD358): the help sends a reader to the guide'],
   },
 );

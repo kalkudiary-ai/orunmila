@@ -2219,7 +2219,7 @@ The Stain Map — read what happened
   orunmila trail --json --marks [--facts-only] [--session ID]
                                                   the same, from the intake's session log: both witnesses on every row
   orunmila report [--session ID] [--turn ID] [--archive STAMP]   terminal stain report (live, or a pinned snapshot)
-  orunmila html [--session ID] [--out path] [--archive STAMP]    the old mismatch-only page (report --verdicts --html replaces it)
+  orunmila html [--session ID] [--out path] [--archive STAMP]    the old mismatch-only page (report --verdicts --html replaces it; removed no sooner than 2.0.0)
   orunmila json [--session ID] [--turn ID] [--include claim_text]   per-turn stain output (schema_version 1.0)
   orunmila json --session ID --side-by-side       the same beside the odù log's (ORUNMILA_FEEDBACK_FROM_ODU=1: the odù log's alone)
   orunmila demo [--out path]                      sample report from a scripted session — no setup, for a first look
@@ -2262,7 +2262,7 @@ Both lenses
   orunmila trailer --session ID [--append FILE]   the session's verdict as git trailers for a commit message
                                                   (a convenience, not evidence: orunmila verify proves the record)
 
-Docs: README.md (the way in) · docs/GUIDE.md (every command, law, switch and limit) · known issues with status: review/ISSUES.md
+Docs: docs/START.md (new to Orunmila) · README.md (the way in) · docs/GUIDE.md (every command, law, switch and limit) · known issues with status: review/ISSUES.md
 `);
   process.exit(cmd ? 1 : 0);
 }

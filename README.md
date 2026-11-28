@@ -103,7 +103,7 @@ is supported:
 | Aider | Experimental, sentinel only (Aider has no hooks). |
 | Windsurf | No adapter exists. |
 
- pnpm, a
+pnpm, a
 project-only install, a git clone, and what an install leaves in
 `~/.orunmila/`: [Quickstart: every route](docs/GUIDE.md#quickstart-every-route).
 

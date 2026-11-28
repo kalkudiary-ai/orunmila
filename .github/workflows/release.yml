@@ -1,7 +1,7 @@
 name: Release
 
 # R2 (Phase 7, LD361, LD363; brief v4 line 741): the npm release, started by hand by O from main.
-# npm trusted publishing: npm checks this run's OIDC token against the publisher O registered on npmjs.com
+# npm trusted publishing: npm checks this run's OIDC token against the trusted publisher O registers on npmjs.com
 # (repository kalkudiary-ai/orunmila, this file, environment npm), so no npm token is stored anywhere, and npm adds
 # provenance (a signed link from the package to the exact commit it was built from) by itself.
 # Brief line 743: publishing waits until O approves the release report; this workflow is how O publishes after that.

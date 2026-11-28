@@ -4487,8 +4487,8 @@ MUTANTS.push(
     id: 'CF1-4 the router never passes the switch',
     file: 'src/opon/intake/router.js',
     test: 'test/intake-router.js',
-    from: 'facts: o.commandFacts === true, file,',
-    to: 'facts: false, file,',
+    from: 'facts: o.commandFacts === true, packages, file,',
+    to: 'facts: false, packages, file,',
     fails: ['CF1 at the router (LD385)'],
   },
   {
@@ -4609,6 +4609,30 @@ MUTANTS.push(
     from: '      const counts = testCounts(f.command(input), out);', to: '      const counts = testCounts(f.command(input), out.slice(0, EXCERPT));', fails: ['CF2 (LD385)'] },
   { id: 'CF2-8 the report leaves the counts out', file: 'src/babalawo/report/index.js', test: 'test/report.js',
     from: '  if (cmds.test_counts && cmds.test_counts.length) {', to: '  if (false) {', fails: ['CF2 (LD385)'] },
+);
+
+// CF3 (LD385): an install's packages, from npm's lock file before and after it.
+MUTANTS.push(
+  { id: 'CF3-1 no command is an install', file: 'src/capture/package-lock.js', test: 'test/package-lock.js',
+    from: '    if (VERBS[word].has(verb)) return word;', to: '', fails: ['CF3 (LD385): which commands install packages'] },
+  { id: 'CF3-2 a version change is not seen', file: 'src/capture/package-lock.js', test: 'test/package-lock.js',
+    from: '    else if (b.version !== a.version) d.changed.push(', to: '    else if (false) d.changed.push(', fails: ['CF3: the change between two lock files'] },
+  { id: 'CF3-3 the install script is never named', file: 'src/capture/package-lock.js', test: 'test/package-lock.js',
+    from: "install_script: v.hasInstallScript === true });", to: 'install_script: false });', fails: ['CF3: the change between two lock files'] },
+  { id: 'CF3-4 package-lock.json wins over the shrinkwrap', file: 'src/capture/package-lock.js', test: 'test/package-lock.js',
+    from: "const NPM_LOCKS = ['npm-shrinkwrap.json', 'package-lock.json'];", to: "const NPM_LOCKS = ['package-lock.json', 'npm-shrinkwrap.json'];", fails: ["CF3: npm's older lock (v1)"] },
+  { id: 'CF3-5 an unknown start reads as an empty lock', file: 'src/capture/package-lock.js', test: 'test/package-lock.js',
+    from: '  if (before === undefined || (before && before.file !== read)) return', to: '  if (before && before.file !== read) return', fails: ["CF3: another manager's lock is named"] },
+  { id: 'CF3-6 the list is never cut', file: 'src/capture/package-lock.js', test: 'test/package-lock.js',
+    from: '    if (d[k].length > room) {', to: '    if (false) {', fails: ["CF3: another manager's lock is named"] },
+  { id: "CF3-7 another manager's lock is not named", file: 'src/capture/package-lock.js', test: 'test/package-lock.js',
+    from: '    if (f !== read && isFile(path.join(root, f))) d.not_read.push(f);', to: '', fails: ['CF3: the change between two lock files', "CF3: another manager's lock is named"] },
+  { id: 'CF3-8 the router reads the lock only after the command', file: 'src/opon/intake/router.js', test: 'test/intake-router.js',
+    from: "      if (ev === 'PreToolUse') s.lockPre.set(callId, lockNow());", to: "      if (false) s.lockPre.set(callId, lockNow());", fails: ['CF3 at the router (LD385)'] },
+  { id: 'CF3-9 the adapter drops the packages', file: 'src/opon/intake/adapters/claude-code.js', test: 'test/adapter-claude-code.js',
+    from: '      if (ctx.packages) detail.packages = ctx.packages;', to: '', fails: ['CF3 (LD385)'] },
+  { id: 'CF3-10 the report leaves the install scripts out', file: 'src/babalawo/report/index.js', test: 'test/report.js',
+    from: '.filter((e) => e.install_script === true)', to: '.filter(() => false)', fails: ['CF3 (LD385)'] },
 );
 
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };

@@ -290,7 +290,10 @@ hook scripts by their paths in the package (`src/capture/claude-code/`),
   The agent's testimony: a host named is not a host reached. A test run's mark also
   carries its runner's own pass, fail and skip counts (`detail.test_counts`: node:test,
   jest, vitest, mocha, pytest, go, cargo), and the report names them, so "all tests
-  pass" beside a skipped test shows.
+  pass" beside a skipped test shows. An install command's mark names what npm's
+  lock file gained, changed and lost across it (`detail.packages`), each package
+  with its version and whether it runs an install script; another manager's lock
+  file is named as not read.
 - **A limit on a flooded Sentinel, off by default
   (`ORUNMILA_SENTINEL_MAX_PENDING=N`).** Past N changed paths waiting at once
   under one folder, the rest of the flood is dropped and one gap in each

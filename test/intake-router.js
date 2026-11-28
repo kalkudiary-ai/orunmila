@@ -143,6 +143,31 @@ it(
 );
 
 it(
+  "CF3 at the router (LD385): with commandFacts, an npm install's exited mark names what package-lock.json gained, changed and lost across the call, verified intact; without it (the default), nothing",
+  () => {
+    const lock = (pkgs) => JSON.stringify({ name: 'p', lockfileVersion: 3, packages: { '': { name: 'p' }, ...pkgs } });
+    for (const on of [true, false]) {
+      withRouter(
+        ({ router, project, dir }) => {
+          const p = cc(project);
+          fs.writeFileSync(path.join(project, 'package-lock.json'), lock({ 'node_modules/a': { version: '1.0.0' } }));
+          router.payload(p.prompt('add esbuild'), { channel: 'command' });
+          router.payload(p.pre('Bash', { command: 'npm install esbuild' }, 'n1'), { channel: 'command' });
+          fs.writeFileSync(path.join(project, 'package-lock.json'), lock({ 'node_modules/a': { version: '1.0.1' }, 'node_modules/esbuild': { version: '0.19.2', hasInstallScript: true } }));
+          assert.strictEqual(router.payload(p.post('Bash', { command: 'npm install esbuild' }, { stdout: 'added 1 package', stderr: '' }, 'n1'), { channel: 'command' }).ok, true);
+          const ex = marks(dir('ses_r1')).filter((m) => m.says === 'exited');
+          assert.strictEqual(ex.length, 1);
+          const want = { manager: 'npm', lock: 'package-lock.json', added: [{ name: 'esbuild', version: '0.19.2', install_script: true }], changed: [{ name: 'a', from: '1.0.0', to: '1.0.1', install_script: false }], removed: [], not_read: [] };
+          assert.deepStrictEqual(ex[0].detail.packages, on ? want : undefined, `commandFacts ${on}`);
+          assert.strictEqual(verifySessionLog(dir('ses_r1')).ok, true);
+        },
+        on ? { commandFacts: true } : {},
+      )();
+    }
+  },
+);
+
+it(
   'test 76: a Stop for a turn whose prompt hook never fired writes no prompted mark',
   withRouter(({ router, project, dir }) => {
     router.payload(cc(project).stop('ok'), { channel: 'command' });

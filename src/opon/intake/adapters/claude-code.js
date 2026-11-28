@@ -25,7 +25,8 @@
  *   With `vcs` (the intake's ORUNMILA_VCS_MARKS=1, off by default; VC1, LD372),
  *   a git or gh command that did not fail carries `detail.vcs` (test 60).
  *   With `facts` (ORUNMILA_COMMAND_FACTS=1, off by default; LD385): the hosts it
- *   names and a sudo (CF1), and a test runner's own counts (CF2, `detail.test_counts`).
+ *   names and a sudo (CF1), a test runner's own counts (CF2, `detail.test_counts`) and,
+ *   given `packages` by the intake, an install's change to its lock file (CF3).
  * - A write: created, modified or deleted from the measured facts; with no
  *   facts, modified with the before-state null.
  * - A Read records the extent its own result states (`read_range`, LD94):
@@ -183,6 +184,8 @@ function translatePayload(payload, ctx = {}) {
       // CF2 (LD385): a test runner's own pass, fail and skip counts, from the whole output, passed or failed.
       const counts = testCounts(f.command(input), out);
       if (counts.length) detail.test_counts = counts;
+      // CF3 (LD385): an install's change to npm's lock file, measured by the intake before and after the call.
+      if (ctx.packages) detail.packages = ctx.packages;
     }
     if (out.length > EXCERPT) keep.push({ slot: 'output_ref', text: out });
   } else if (failed) {

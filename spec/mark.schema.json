@@ -416,6 +416,95 @@
           "$comment": "agent's proposal CF1 (LD385); written only with ORUNMILA_COMMAND_FACTS=1",
           "const": true
         },
+        "packages": {
+          "description": "On an install command's exited mark (npm, yarn, pnpm or bun installing, adding, updating or removing packages): what npm's lock file at the project's root gained, changed and lost between the command's start and its end, as the intake read the file each time. The lock file's own words, not proof of what is under node_modules/. Only npm's lock is read; every other lock file there is named in not_read. Absent for other commands, or when command facts are off.",
+          "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["manager", "lock", "added", "changed", "removed", "not_read"],
+          "properties": {
+            "manager": {
+              "description": "The package manager the command ran.",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+              "enum": ["npm", "yarn", "pnpm", "bun"]
+            },
+            "lock": {
+              "description": "The lock file read: npm-shrinkwrap.json when there is one, else package-lock.json (npm's own order); null when the manager is not npm or no npm lock file was there after the command.",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+              "enum": ["npm-shrinkwrap.json", "package-lock.json", null]
+            },
+            "added": {
+              "description": "Packages in the lock after the command and not before, sorted by name. A name is the package's folder under node_modules/, a nested one with its parent's (`b/node_modules/c`).",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "version", "install_script"],
+                "properties": {
+                  "name": { "description": "The package's folder under node_modules/.", "type": "string", "minLength": 1 },
+                  "version": { "description": "Its version in the lock.", "type": "string", "minLength": 1 },
+                  "install_script": {
+                    "description": "true when the lock says it runs an install script, false when it says not, null when the lock (lockfileVersion 1) does not say.",
+                    "enum": [true, false, null]
+                  }
+                }
+              }
+            },
+            "changed": {
+              "description": "Packages whose version in the lock changed, sorted by name.",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "from", "to", "install_script"],
+                "properties": {
+                  "name": { "description": "The package's folder under node_modules/.", "type": "string", "minLength": 1 },
+                  "from": { "description": "Its version before the command.", "type": "string", "minLength": 1 },
+                  "to": { "description": "Its version after it.", "type": "string", "minLength": 1 },
+                  "install_script": { "description": "As in added, for the version after.", "enum": [true, false, null] }
+                }
+              }
+            },
+            "removed": {
+              "description": "Packages in the lock before the command and not after, sorted by name.",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "version"],
+                "properties": {
+                  "name": { "description": "The package's folder under node_modules/.", "type": "string", "minLength": 1 },
+                  "version": { "description": "Its version before the command.", "type": "string", "minLength": 1 }
+                }
+              }
+            },
+            "not_read": {
+              "description": "Every other lock file at the project's root, named, not read.",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+              "type": "array",
+              "items": { "enum": ["npm-shrinkwrap.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lock", "bun.lockb"] }
+            },
+            "cut": {
+              "description": "How many entries were left out of the three lists, past the first 200. Absent when none was.",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+              "type": "integer",
+              "minimum": 1
+            },
+            "before_unknown": {
+              "description": "true when the intake saw no start of the command, so the lock before it is not known and no change is named.",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+              "const": true
+            },
+            "unreadable": {
+              "description": "true when the lock file was there but could not be read as JSON, before or after, so no change is named.",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+              "const": true
+            }
+          }
+        },
         "test_counts": {
           "description": "On a command's exited mark, when the command runs a test runner: that runner's own pass, fail and skip counts, read from the whole output, one entry for each runner whose summary it holds. The runner's testimony: what it printed, not proof of which tests exist. `skipped` is every test it neither passed nor failed (skipped, todo, pending, ignored, xfailed). Absent when no summary is found, or when command facts are off.",
           "$comment": "agent's proposal CF2 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",

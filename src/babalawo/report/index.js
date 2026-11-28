@@ -319,7 +319,7 @@ function buildReport({ header, marks, odus, verdicts, quarantined = 0, judgedNow
   }
   // CF1 (LD385): what the commands' own text said, from their exited marks (ORUNMILA_COMMAND_FACTS=1): each that asked for
   // administrator rights, and every host they named. Facts beside the findings, never a verdict.
-  const commands = { elevated: [], hosts: [], test_counts: [] };
+  const commands = { elevated: [], hosts: [], test_counts: [], packages: [] };
   const hosts = new Set();
   for (const m of marks) {
     if (m.source !== 'hook' || m.says !== 'exited' || !m.detail) continue;
@@ -327,6 +327,9 @@ function buildReport({ header, marks, odus, verdicts, quarantined = 0, judgedNow
     for (const h of Array.isArray(m.detail.hosts) ? m.detail.hosts : []) hosts.add(h);
     // CF2 (LD385): each test run's own counts, as its runner printed them.
     if (Array.isArray(m.detail.test_counts) && m.detail.test_counts.length) commands.test_counts.push({ turn: m.turn, text: m.target && m.target.text, ref: m.cause_hint, counts: m.detail.test_counts });
+    // CF3 (LD385): what each install changed in its lock file, as the intake measured it.
+    const pk = m.detail.packages;
+    if (pk && typeof pk === 'object' && !Array.isArray(pk)) commands.packages.push({ turn: m.turn, text: m.target && m.target.text, ref: m.cause_hint, ...pk });
   }
   commands.hosts = [...hosts].sort();
   return {
@@ -409,6 +412,20 @@ function lines(rep) {
     const count = (c) => `${c.passed} ${c.unit === 'packages' ? 'packages ' : ''}passed, ${c.failed} failed, ${c.skipped} skipped (${c.format})`;
     out.push(`Test runs, in their runners' own counts: ${cmds.test_counts.map((r) => `turn ${r.turn} \`${quote(r.text)}\`: ${r.counts.map(count).join(', ')}`).join('; ')}.`);
   }
+  const pk = cmds.packages || [];
+  const quoteCmd = (s) => String(s || '').split('\n')[0].slice(0, 120);
+  const read = pk.filter((p) => p.lock);
+  for (const lock of [...new Set(read.map((p) => p.lock))]) {
+    const each = read.filter((p) => p.lock === lock).map((p) => {
+      if (p.unreadable) return `turn ${p.turn} \`${quoteCmd(p.text)}\`: the lock file could not be read`;
+      if (p.before_unknown) return `turn ${p.turn} \`${quoteCmd(p.text)}\`: no state before the command, so no change is named`;
+      const scripts = [...p.added, ...p.changed].filter((e) => e.install_script === true).map((e) => `${e.name} ${e.version || e.to}`);
+      return `turn ${p.turn} \`${quoteCmd(p.text)}\`: ${p.added.length} added, ${p.changed.length} changed, ${p.removed.length} removed${p.cut ? ` (${p.cut} more not listed)` : ''}${scripts.length ? `; with an install script: ${scripts.join(', ')}` : ''}`;
+    });
+    out.push(`Packages, from ${lock}: ${each.join('; ')}.`);
+  }
+  const unread = pk.filter((p) => !p.lock && p.not_read.length);
+  if (unread.length) out.push(`Packages not read: ${unread.map((p) => `turn ${p.turn} \`${quoteCmd(p.text)}\`: ${p.not_read.join(', ')} ${p.not_read.length === 1 ? 'is' : 'are'} not read, so what it installed is not recorded`).join('; ')}.`);
   if (rep.quarantined) out.push(`${plural(rep.quarantined, 'badly formatted mark was', 'badly formatted marks were')} kept in the quarantine log, nothing dropped.`);
   if (rep.overlapped.length) out.push(`Sessions overlapped with this one in the same folder: ${rep.overlapped.join(', ')}.`);
   if (rep.not_done && rep.not_done.length) out.push(`The agent said it did not do: ${rep.not_done.map((x) => `"${x.text}" (turn ${x.turn})`).join('; ')}.`); // MR1b3

@@ -123,6 +123,7 @@ const { snapshot, baselineMap } = require('../net/baseline');
 const { createLive } = require('./live');
 const { prepareOffThread } = require('./start-worker');
 const { canonicalize } = require('../../verify/canonical');
+const { installManager, readLock, lockChange } = require('../../capture/package-lock');
 const crypto = require('crypto');
 
 const CC = getAdapter('claude-code');
@@ -549,8 +550,10 @@ function createRouter(o) {
     const input = CC.fields.toolInput(p) || {};
     const kind = toolName ? CC.classifyTool(toolName, input) : null;
     const filePath = kind === 'write' || kind === 'read' ? CC.fields.filePath(input) : null;
-    if (!filePath) return null;
     const ev = p.hook_event_name;
+    // CF3 (LD385): an install's lock file, as it was when the payload arrived.
+    if (kind === 'command' && o.commandFacts === true && installManager(CC.fields.command(input))) return { lock: readLock(root) };
+    if (!filePath) return null;
     const measured = (kind === 'write' && (ev === 'PreToolUse' || ev === 'PostToolUse')) || (kind === 'read' && ev === 'PostToolUse');
     return measured ? snap(path.resolve(root, String(filePath)), o.installKey) : null;
   }
@@ -691,9 +694,21 @@ function createRouter(o) {
       const n = measured();
       if (n.regular) file = { size: n.size, fingerprint: n.fingerprint };
     }
+    // CF3 (LD385), with commandFacts: npm's lock file before an install command and after it; the change goes on its mark.
+    let packages = null;
+    const manager = kind === 'command' && o.commandFacts === true ? installManager(CC.fields.command(input)) : null;
+    if (manager) {
+      const lockNow = () => (item && item.snap ? item.snap.lock : readLock(s.root));
+      s.lockPre = s.lockPre || new Map();
+      if (ev === 'PreToolUse') s.lockPre.set(callId, lockNow());
+      else if (ev === 'PostToolUse' || ev === 'PostToolUseFailure') {
+        packages = lockChange(manager, s.lockPre.has(callId) ? s.lockPre.get(callId) : undefined, lockNow(), s.root);
+        s.lockPre.delete(callId);
+      }
+    }
 
     const now = item ? item.at : clock(); // SN1: a queued payload keeps the time it arrived
-    const t = translatePayload(p, { turn, observedAt: now.wall, monoNs: from.monoNs !== undefined ? from.monoNs : item ? item.at.mono : undefined, facts: o.commandFacts === true, file, vcs: o.vcsMarks === true });
+    const t = translatePayload(p, { turn, observedAt: now.wall, monoNs: from.monoNs !== undefined ? from.monoNs : item ? item.at.mono : undefined, facts: o.commandFacts === true, packages, file, vcs: o.vcsMarks === true });
     const results = [];
     for (const { mark, keep } of t.marks) results.push(engine.receive(normalise(s, mark), from, keep));
     for (const r of t.rejects) results.push(engine.receive({ session_id: id, adapter_reject: r.reason, payload: p }, from));

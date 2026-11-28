@@ -61,4 +61,4 @@ function asksElevation(text) {
   return steps(text).some((words) => ELEVATORS.has(commandWord(words).word));
 }
 
-module.exports = { hostsNamed, asksElevation };
+module.exports = { hostsNamed, asksElevation, steps, commandWord };

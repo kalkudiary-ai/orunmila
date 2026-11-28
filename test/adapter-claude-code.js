@@ -273,4 +273,13 @@ it("CF2 (LD385): with command facts on, a test run's mark carries its runner's o
   }
 });
 
+it("CF3 (LD385): with command facts on, the packages the intake measured go on the install's exited mark, passed or failed; off, none", () => {
+  const packages = { manager: 'npm', lock: 'package-lock.json', added: [{ name: 'x', version: '1.0.0', install_script: false }], changed: [], removed: [], not_read: [] };
+  const p = post('Bash', { command: 'npm i x' }, { stdout: '', stderr: '' });
+  assert.deepStrictEqual(only(p, { ...ctx, facts: true, packages }).mark.detail.packages, packages);
+  const failed = { ...p, hook_event_name: 'PostToolUseFailure', error: 'Exit code 1\nERR' };
+  assert.deepStrictEqual(only(failed, { ...ctx, facts: true, packages }).mark.detail.packages, packages);
+  assert.strictEqual(only(p, { ...ctx, packages }).mark.detail.packages, undefined, 'off by default');
+});
+
 runAll('adapter-claude-code');

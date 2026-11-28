@@ -129,7 +129,9 @@ who", never guessed.
   system files. Dependency folders such as `node_modules/` are on the ignore
   list (`orunmila status` prints it), so what a package install or a package's
   own scripts change inside them is not watched; the package files you edit
-  (`package.json`, the lock file) are.
+  (`package.json`, the lock file) are. With `ORUNMILA_COMMAND_FACTS=1`, an npm
+  install's report names the packages its lock file gained, changed and lost,
+  and which of them run an install script.
 - Most network activity: only a web fetch or search tool's host and query, never
   what was sent or received, nor traffic from programs the agent runs. With
   `ORUNMILA_COMMAND_FACTS=1`, the hosts a command's own text names (`curl`,

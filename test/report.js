@@ -284,7 +284,7 @@ it('CF1 (LD385): the report names the commands that asked for administrator righ
     odus: [],
     verdicts: [],
   });
-  assert.deepStrictEqual(rep.commands, { elevated: [{ turn: 't1', text: 'sudo apt-get install x', ref: 'b1' }], hosts: ['a.example', 'github.com'], test_counts: [] });
+  assert.deepStrictEqual(rep.commands, { elevated: [{ turn: 't1', text: 'sudo apt-get install x', ref: 'b1' }], hosts: ['a.example', 'github.com'], test_counts: [], packages: [] });
   const text = renderText(rep);
   assert.ok(text.includes('1 command asked for administrator rights (turn t1: `sudo apt-get install x`); what it did with them is outside what Orunmila sees.'), text);
   assert.ok(text.includes("The agent's commands named these hosts: a.example, github.com (named, not proof of contact)."), text);
@@ -310,6 +310,26 @@ it("CF2 (LD385): the report names each test run's own counts, a skip or a failur
   assert.strictEqual(rep.verdict, 'clean', 'facts, not verdicts');
   const none = renderText(buildReport({ header: { session_id: 's2', agent: { name: 'claude-code' } }, marks: [], odus: [], verdicts: [] }));
   assert.ok(!none.includes("runners' own counts"), none);
+});
+
+it("CF3 (LD385): the report names what each install changed in its lock file, the packages with an install script, and a lock it did not read, as plain lines, never a verdict", () => {
+  const ex = (ms, call, text, detail, turn = 't1') => ({ ...M.exited(ms, call, text, 'pass', turn), detail: { tool: 'Bash', exit_status: 'pass', output_excerpt: '', ...detail } });
+  const rep = buildReport({
+    header: { session_id: 's1', agent: { name: 'claude-code' } },
+    marks: [
+      ex(10, 'b1', 'npm install esbuild', { packages: { manager: 'npm', lock: 'package-lock.json', added: [{ name: 'esbuild', version: '0.19.2', install_script: true }, { name: 'x', version: '1.0.0', install_script: false }], changed: [{ name: 'a', from: '1.0.0', to: '1.0.1', install_script: false }], removed: [], not_read: [] } }),
+      ex(20, 'b2', 'yarn add y', { packages: { manager: 'yarn', lock: null, added: [], changed: [], removed: [], not_read: ['yarn.lock'] } }, 't2'),
+    ],
+    odus: [],
+    verdicts: [],
+  });
+  assert.strictEqual(rep.commands.packages.length, 2);
+  const text = renderText(rep);
+  assert.ok(text.includes('Packages, from package-lock.json: turn t1 `npm install esbuild`: 2 added, 1 changed, 0 removed; with an install script: esbuild 0.19.2.'), text);
+  assert.ok(text.includes('Packages not read: turn t2 `yarn add y`: yarn.lock is not read, so what it installed is not recorded.'), text);
+  assert.strictEqual(rep.verdict, 'clean', 'facts, not verdicts');
+  const none = renderText(buildReport({ header: { session_id: 's2', agent: { name: 'claude-code' } }, marks: [], odus: [], verdicts: [] }));
+  assert.ok(!none.includes('Packages'), none);
 });
 
 runAll('report');

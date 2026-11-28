@@ -319,12 +319,14 @@ function buildReport({ header, marks, odus, verdicts, quarantined = 0, judgedNow
   }
   // CF1 (LD385): what the commands' own text said, from their exited marks (ORUNMILA_COMMAND_FACTS=1): each that asked for
   // administrator rights, and every host they named. Facts beside the findings, never a verdict.
-  const commands = { elevated: [], hosts: [] };
+  const commands = { elevated: [], hosts: [], test_counts: [] };
   const hosts = new Set();
   for (const m of marks) {
     if (m.source !== 'hook' || m.says !== 'exited' || !m.detail) continue;
     if (m.detail.elevated === true) commands.elevated.push({ turn: m.turn, text: m.target && m.target.text, ref: m.cause_hint });
     for (const h of Array.isArray(m.detail.hosts) ? m.detail.hosts : []) hosts.add(h);
+    // CF2 (LD385): each test run's own counts, as its runner printed them.
+    if (Array.isArray(m.detail.test_counts) && m.detail.test_counts.length) commands.test_counts.push({ turn: m.turn, text: m.target && m.target.text, ref: m.cause_hint, counts: m.detail.test_counts });
   }
   commands.hosts = [...hosts].sort();
   return {
@@ -402,6 +404,11 @@ function lines(rep) {
     out.push(`${plural(cmds.elevated.length, 'command', 'commands')} asked for administrator rights (${cmds.elevated.map((c) => `turn ${c.turn}: \`${quote(c.text)}\``).join('; ')}); what ${cmds.elevated.length === 1 ? 'it' : 'they'} did with them is outside what Orunmila sees.`);
   }
   if (cmds.hosts.length) out.push(`The agent's commands named these hosts: ${cmds.hosts.join(', ')} (named, not proof of contact).`);
+  if (cmds.test_counts && cmds.test_counts.length) {
+    const quote = (s) => String(s || '').split('\n')[0].slice(0, 120);
+    const count = (c) => `${c.passed} ${c.unit === 'packages' ? 'packages ' : ''}passed, ${c.failed} failed, ${c.skipped} skipped (${c.format})`;
+    out.push(`Test runs, in their runners' own counts: ${cmds.test_counts.map((r) => `turn ${r.turn} \`${quote(r.text)}\`: ${r.counts.map(count).join(', ')}`).join('; ')}.`);
+  }
   if (rep.quarantined) out.push(`${plural(rep.quarantined, 'badly formatted mark was', 'badly formatted marks were')} kept in the quarantine log, nothing dropped.`);
   if (rep.overlapped.length) out.push(`Sessions overlapped with this one in the same folder: ${rep.overlapped.join(', ')}.`);
   if (rep.not_done && rep.not_done.length) out.push(`The agent said it did not do: ${rep.not_done.map((x) => `"${x.text}" (turn ${x.turn})`).join('; ')}.`); // MR1b3

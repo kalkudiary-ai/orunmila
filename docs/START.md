@@ -137,7 +137,8 @@ who", never guessed.
 - Which program wrote a file. The Sentinel sees that bytes changed, not who
   changed them.
 - What happens inside a command beyond its file changes, how it ended and the
-  output kept.
+  output kept. With `ORUNMILA_COMMAND_FACTS=1`, a test run's report also gives
+  its runner's own pass, fail and skip counts, as the runner printed them.
 - Whether a record is complete. It can prove a record was not altered, not that
   nothing was left out.
 

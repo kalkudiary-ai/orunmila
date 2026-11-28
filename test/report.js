@@ -284,13 +284,32 @@ it('CF1 (LD385): the report names the commands that asked for administrator righ
     odus: [],
     verdicts: [],
   });
-  assert.deepStrictEqual(rep.commands, { elevated: [{ turn: 't1', text: 'sudo apt-get install x', ref: 'b1' }], hosts: ['a.example', 'github.com'] });
+  assert.deepStrictEqual(rep.commands, { elevated: [{ turn: 't1', text: 'sudo apt-get install x', ref: 'b1' }], hosts: ['a.example', 'github.com'], test_counts: [] });
   const text = renderText(rep);
   assert.ok(text.includes('1 command asked for administrator rights (turn t1: `sudo apt-get install x`); what it did with them is outside what Orunmila sees.'), text);
   assert.ok(text.includes("The agent's commands named these hosts: a.example, github.com (named, not proof of contact)."), text);
   assert.strictEqual(rep.verdict, 'clean', 'facts, not verdicts');
   const none = renderText(buildReport({ header: { session_id: 's2', agent: { name: 'claude-code' } }, marks: [], odus: [], verdicts: [] }));
   assert.ok(!none.includes('administrator rights') && !none.includes('named these hosts'), none);
+});
+
+it("CF2 (LD385): the report names each test run's own counts, a skip or a failure included, as plain lines, never a verdict; with none, no line", () => {
+  const ex = (ms, call, text, detail, turn = 't1') => ({ ...M.exited(ms, call, text, 'pass', turn), detail: { tool: 'Bash', exit_status: 'pass', output_excerpt: '', ...detail } });
+  const rep = buildReport({
+    header: { session_id: 's1', agent: { name: 'claude-code' } },
+    marks: [
+      ex(10, 'b1', 'npm test', { test_counts: [{ format: 'node:test', unit: 'tests', passed: 40, failed: 0, skipped: 2, summaries: 1 }] }),
+      ex(20, 'b2', 'go test ./...', { test_counts: [{ format: 'go', unit: 'packages', passed: 3, failed: 1, skipped: 0, summaries: 1 }] }, 't2'),
+    ],
+    odus: [],
+    verdicts: [],
+  });
+  assert.deepStrictEqual(rep.commands.test_counts.map((c) => [c.turn, c.ref, c.counts.length]), [['t1', 'b1', 1], ['t2', 'b2', 1]]);
+  const text = renderText(rep);
+  assert.ok(text.includes("Test runs, in their runners' own counts: turn t1 `npm test`: 40 passed, 0 failed, 2 skipped (node:test); turn t2 `go test ./...`: 3 packages passed, 1 failed, 0 skipped (go)."), text);
+  assert.strictEqual(rep.verdict, 'clean', 'facts, not verdicts');
+  const none = renderText(buildReport({ header: { session_id: 's2', agent: { name: 'claude-code' } }, marks: [], odus: [], verdicts: [] }));
+  assert.ok(!none.includes("runners' own counts"), none);
 });
 
 runAll('report');

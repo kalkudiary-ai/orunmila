@@ -4591,6 +4591,26 @@ MUTANTS.push(
   },
 );
 
+// CF2 (LD385): a test runner's own counts, on its mark and in the report.
+MUTANTS.push(
+  { id: 'CF2-1 no count is ever read', file: 'src/capture/test-counts.js', test: 'test/test-counts.js',
+    from: '    if (r) found.push(', to: '    if (r && false) found.push(', fails: ["CF2 (LD385): each runner's own summary"] },
+  { id: 'CF2-2 any command\'s output is read as a run', file: 'src/capture/test-counts.js', test: 'test/test-counts.js',
+    from: "  if (typeof command !== 'string' || !isTestRun(command)) return [];", to: '', fails: ['CF2: colour codes are read through'] },
+  { id: "CF2-3 node:test's todo is not a skip", file: 'src/capture/test-counts.js', test: 'test/test-counts.js',
+    from: 'skipped: keys.skipped + keys.todo, summaries', to: 'skipped: keys.skipped, summaries', fails: ["CF2 (LD385): each runner's own summary"] },
+  { id: "CF2-4 go's packages read as tests", file: 'src/capture/test-counts.js', test: 'test/test-counts.js',
+    from: "      if (seenPkgs) return { ...pkgs, summaries: 1, unit: 'packages' };", to: '      if (seenPkgs) return { ...pkgs, summaries: 1 };', fails: ["CF2 (LD385): each runner's own summary"] },
+  { id: 'CF2-5 only the last summary counts', file: 'src/capture/test-counts.js', test: 'test/test-counts.js',
+    from: "        else keys[m[1]] += n(m[2]);", to: "        else keys[m[1]] = n(m[2]);", fails: ['CF2: two runs of node:test in one output are summed'] },
+  { id: 'CF2-6 the adapter never writes the counts', file: 'src/opon/intake/adapters/claude-code.js', test: 'test/adapter-claude-code.js',
+    from: '      if (counts.length) detail.test_counts = counts;', to: '', fails: ['CF2 (LD385)'] },
+  { id: 'CF2-7 the adapter reads the excerpt only', file: 'src/opon/intake/adapters/claude-code.js', test: 'test/adapter-claude-code.js',
+    from: '      const counts = testCounts(f.command(input), out);', to: '      const counts = testCounts(f.command(input), out.slice(0, EXCERPT));', fails: ['CF2 (LD385)'] },
+  { id: 'CF2-8 the report leaves the counts out', file: 'src/babalawo/report/index.js', test: 'test/report.js',
+    from: '  if (cmds.test_counts && cmds.test_counts.length) {', to: '  if (false) {', fails: ['CF2 (LD385)'] },
+);
+
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };
 
 if (require.main === module) process.exit(runGate());

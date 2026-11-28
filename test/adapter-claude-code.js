@@ -249,4 +249,28 @@ it("CF1 (LD385): with command facts on, a command's mark names the hosts its tex
   }
 });
 
+it("CF2 (LD385): with command facts on, a test run's mark carries its runner's own counts, passed or failed; off (the default), or not a test run, none", () => {
+  const facts = { ...ctx, facts: true };
+  const tap = '# tests 3\n# pass 2\n# fail 0\n# skipped 1\n# todo 0\n';
+  const ok = only(post('Bash', { command: 'npm test' }, { stdout: tap, stderr: '' }), facts).mark.detail;
+  assert.deepStrictEqual(ok.test_counts, [{ format: 'node:test', unit: 'tests', passed: 2, failed: 0, skipped: 1, summaries: 1 }]);
+  const long = only(post('Bash', { command: 'npx jest' }, { stdout: 'x'.repeat(5000) + '\nTests:       1 failed, 4 passed, 5 total\n', stderr: '' }), facts).mark.detail;
+  assert.deepStrictEqual(long.test_counts.map((e) => [e.failed, e.passed]), [[1, 4]], 'read from the whole output, past the excerpt');
+  const failed = only({ ...post('npm test', {}, {}), tool_name: 'Bash', tool_input: { command: 'pytest' }, hook_event_name: 'PostToolUseFailure', error: 'Exit code 1\n=== 1 failed, 3 passed in 0.2s ===' }, facts).mark.detail;
+  assert.deepStrictEqual(failed.test_counts.map((e) => [e.format, e.failed, e.passed]), [['pytest', 1, 3]]);
+  assert.strictEqual(only(post('Bash', { command: 'npm test' }, { stdout: tap, stderr: '' })).mark.detail.test_counts, undefined, 'off by default');
+  assert.strictEqual(only(post('Bash', { command: 'cat log' }, { stdout: tap, stderr: '' }), facts).mark.detail.test_counts, undefined, 'not a test run');
+  assert.strictEqual(only(post('Bash', { command: 'npm test' }, { stdout: 'fine', stderr: '' }), facts).mark.detail.test_counts, undefined, 'no summary: no field');
+  const dir = tmpDir();
+  try {
+    const h = JSON.parse(JSON.stringify(HEADERS.good.header));
+    for (const k of ['seq', 'prev_hash', 'hash']) delete h[k];
+    const log = createSessionLog(path.join(dir, 's'), h);
+    const res = log.append(only(post('Bash', { command: 'npm test' }, { stdout: tap, stderr: '' }), facts).mark, []);
+    assert.strictEqual(res.ok, true, JSON.stringify(res.reasons));
+  } finally {
+    rmrf(dir);
+  }
+});
+
 runAll('adapter-claude-code');

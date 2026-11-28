@@ -287,7 +287,10 @@ hook scripts by their paths in the package (`src/capture/claude-code/`),
   names (`detail.hosts`) and whether a step of it asked for administrator rights
   (`detail.elevated`: `sudo`, `doas`, `su`, `pkexec`, `runas`, `gsudo`); the
   session report names those commands and hosts as plain lines, never a verdict.
-  The agent's testimony: a host named is not a host reached.
+  The agent's testimony: a host named is not a host reached. A test run's mark also
+  carries its runner's own pass, fail and skip counts (`detail.test_counts`: node:test,
+  jest, vitest, mocha, pytest, go, cargo), and the report names them, so "all tests
+  pass" beside a skipped test shows.
 - **A limit on a flooded Sentinel, off by default
   (`ORUNMILA_SENTINEL_MAX_PENDING=N`).** Past N changed paths waiting at once
   under one folder, the rest of the flood is dropped and one gap in each

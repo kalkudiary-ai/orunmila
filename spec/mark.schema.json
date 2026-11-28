@@ -416,6 +416,25 @@
           "$comment": "agent's proposal CF1 (LD385); written only with ORUNMILA_COMMAND_FACTS=1",
           "const": true
         },
+        "test_counts": {
+          "description": "On a command's exited mark, when the command runs a test runner: that runner's own pass, fail and skip counts, read from the whole output, one entry for each runner whose summary it holds. The runner's testimony: what it printed, not proof of which tests exist. `skipped` is every test it neither passed nor failed (skipped, todo, pending, ignored, xfailed). Absent when no summary is found, or when command facts are off.",
+          "$comment": "agent's proposal CF2 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["format", "unit", "passed", "failed", "skipped", "summaries"],
+            "properties": {
+              "format": { "description": "The runner whose summary was read.", "enum": ["node:test", "jest", "vitest", "mocha", "pytest", "cargo", "go"] },
+              "unit": { "description": "`tests`, or `packages` for go without -v, which names packages, not tests.", "enum": ["tests", "packages"] },
+              "passed": { "description": "Passed, as the runner counted them (pytest's xpassed included).", "type": "integer", "minimum": 0 },
+              "failed": { "description": "Failed, as the runner counted them (node:test's cancelled and pytest's errors included).", "type": "integer", "minimum": 0 },
+              "skipped": { "description": "Neither passed nor failed: skipped, todo, pending, ignored, xfailed; for go packages, those with no test files.", "type": "integer", "minimum": 0 },
+              "summaries": { "description": "How many of this runner's summaries the output held; the counts are their sum.", "type": "integer", "minimum": 1 }
+            }
+          }
+        },
         "read_kind": {
           "description": "`full` only when the adapter can show the tool returned the whole file, `range` when it returned only part, `pattern` when the agent only searched, `listing` when the tool listed a folder's entries (their names, no file's content), `null` when the adapter cannot tell.",
           "$comment": "brief v3 line 261 (open question 3); listing is LD121 (O's go, 2026-11-22)",

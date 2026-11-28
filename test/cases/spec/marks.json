@@ -1121,6 +1121,34 @@
       "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
       "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
     },
+    "hook_exited_test_counts": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "command",
+        "text": "npm test"
+      },
+      "says": "exited",
+      "detail": {
+        "tool": "Bash",
+        "exit_status": "pass",
+        "output_excerpt": "",
+        "test_counts": [
+          { "format": "node:test", "unit": "tests", "passed": 40, "failed": 0, "skipped": 2, "summaries": 1 },
+          { "format": "go", "unit": "packages", "passed": 3, "failed": 1, "skipped": 0, "summaries": 1 }
+        ]
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
     "hook_exited_interrupted": {
       "schema_version": 1,
       "session_id": "ses_test_0001",
@@ -3576,6 +3604,25 @@
     {"name": "an empty hosts list (CF1)", "from": "hook_exited_background", "set": {"/detail/hosts": []}, "unset": [], "error": {"path": "/detail/hosts", "keyword": "minItems"}},
     {"name": "a host that is not text (CF1)", "from": "hook_exited_background", "set": {"/detail/hosts": [443]}, "unset": [], "error": {"path": "/detail/hosts/0", "keyword": "type"}},
     {"name": "an empty host (CF1)", "from": "hook_exited_background", "set": {"/detail/hosts": [""]}, "unset": [], "error": {"path": "/detail/hosts/0", "keyword": "minLength"}},
-    {"name": "an elevated note that is not true (CF1)", "from": "hook_exited_background", "set": {"/detail/elevated": false}, "unset": [], "error": {"path": "/detail/elevated", "keyword": "const"}}
+    {"name": "an elevated note that is not true (CF1)", "from": "hook_exited_background", "set": {"/detail/elevated": false}, "unset": [], "error": {"path": "/detail/elevated", "keyword": "const"}},
+    {"name": "test counts that are not a list (CF2, LD385)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": "x"}, "unset": [], "error": {"path": "/detail/test_counts", "keyword": "type"}},
+    {"name": "a test count entry that is not an object (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [1]}, "unset": [], "error": {"path": "/detail/test_counts/0", "keyword": "type"}},
+    {"name": "a test count entry with a field the spec does not name (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "passed": 40, "failed": 0, "skipped": 2, "summaries": 1, "total": 42}]}, "unset": [], "error": {"path": "/detail/test_counts/0/total", "keyword": "additionalProperties"}},
+    {"name": "a test count entry with no format (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"unit": "tests", "passed": 40, "failed": 0, "skipped": 2, "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/format", "keyword": "required"}},
+    {"name": "a test count entry with no unit (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "passed": 40, "failed": 0, "skipped": 2, "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/unit", "keyword": "required"}},
+    {"name": "a test count entry with no passed (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "failed": 0, "skipped": 2, "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/passed", "keyword": "required"}},
+    {"name": "a test count entry with no failed (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "passed": 40, "skipped": 2, "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/failed", "keyword": "required"}},
+    {"name": "a test count entry with no skipped (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "passed": 40, "failed": 0, "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/skipped", "keyword": "required"}},
+    {"name": "a test count entry with no summaries (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "passed": 40, "failed": 0, "skipped": 2}]}, "unset": [], "error": {"path": "/detail/test_counts/0/summaries", "keyword": "required"}},
+    {"name": "a test count from a runner the spec does not name (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "ava", "unit": "tests", "passed": 40, "failed": 0, "skipped": 2, "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/format", "keyword": "enum"}},
+    {"name": "a test count in a unit the spec does not name (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "files", "passed": 40, "failed": 0, "skipped": 2, "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/unit", "keyword": "enum"}},
+    {"name": "a passed count that is not a whole number (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "passed": "2", "failed": 0, "skipped": 2, "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/passed", "keyword": "type"}},
+    {"name": "a failed count that is not a whole number (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "passed": 40, "failed": "2", "skipped": 2, "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/failed", "keyword": "type"}},
+    {"name": "a skipped count that is not a whole number (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "passed": 40, "failed": 0, "skipped": "2", "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/skipped", "keyword": "type"}},
+    {"name": "a summaries count that is not a whole number (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "passed": 40, "failed": 0, "skipped": 2, "summaries": "2"}]}, "unset": [], "error": {"path": "/detail/test_counts/0/summaries", "keyword": "type"}},
+    {"name": "a passed count below its least (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "passed": -1, "failed": 0, "skipped": 2, "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/passed", "keyword": "minimum"}},
+    {"name": "a failed count below its least (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "passed": 40, "failed": -1, "skipped": 2, "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/failed", "keyword": "minimum"}},
+    {"name": "a skipped count below its least (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "passed": 40, "failed": 0, "skipped": -1, "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/skipped", "keyword": "minimum"}},
+    {"name": "a summaries count below its least (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "passed": 40, "failed": 0, "skipped": 2, "summaries": 0}]}, "unset": [], "error": {"path": "/detail/test_counts/0/summaries", "keyword": "minimum"}}
   ]
 }

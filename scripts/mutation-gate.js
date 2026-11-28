@@ -4457,6 +4457,58 @@ MUTANTS.push({
   fails: ['F38 (LD382)'],
 });
 
+// CF1 (LD385): the hosts a command names and its sudo, on its mark and in the report.
+MUTANTS.push(
+  {
+    id: 'CF1-1 no host is ever named',
+    file: 'src/capture/command-facts.js',
+    test: 'test/adapter-claude-code.js',
+    from: '  return [...hosts].sort();\n}',
+    to: '  return [];\n}',
+    fails: ['CF1 (LD385)'],
+  },
+  {
+    id: 'CF1-2 sudo is never seen',
+    file: 'src/capture/command-facts.js',
+    test: 'test/adapter-claude-code.js',
+    from: '  return steps(text).some((words) => ELEVATORS.has(commandWord(words).word));',
+    to: '  return false;',
+    fails: ['CF1 (LD385)'],
+  },
+  {
+    id: 'CF1-3 a sudo inside a word counts',
+    file: 'src/capture/command-facts.js',
+    test: 'test/adapter-claude-code.js',
+    from: "  return { word: words[i] ? words[i].replace(/^.*[\\\\/]/, '') : '', rest: words.slice(i + 1) };",
+    to: "  return { word: words.find((w) => ELEVATORS.has(w)) || words[i] || '', rest: words.slice(i + 1) };",
+    fails: ['CF1 (LD385)'],
+  },
+  {
+    id: 'CF1-4 the router never passes the switch',
+    file: 'src/opon/intake/router.js',
+    test: 'test/intake-router.js',
+    from: 'facts: o.commandFacts === true, file,',
+    to: 'facts: false, file,',
+    fails: ['CF1 at the router (LD385)'],
+  },
+  {
+    id: 'CF1-5 the report leaves the sudo out',
+    file: 'src/babalawo/report/index.js',
+    test: 'test/report.js',
+    from: '    if (m.detail.elevated === true) commands.elevated.push(',
+    to: '    if (false) commands.elevated.push(',
+    fails: ['CF1 (LD385)'],
+  },
+  {
+    id: 'CF1-6 the launch agent drops the switch',
+    file: 'src/opon/intake/launch-agent.js',
+    test: 'test/launch-agent.js',
+    from: "'ORUNMILA_SENTINEL_MAX_PENDING', 'ORUNMILA_COMMAND_FACTS', ",
+    to: "'ORUNMILA_SENTINEL_MAX_PENDING', ",
+    fails: ['LA3 (LD290)'],
+  },
+);
+
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };
 
 if (require.main === module) process.exit(runGate());

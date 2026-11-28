@@ -693,7 +693,7 @@ function createRouter(o) {
     }
 
     const now = item ? item.at : clock(); // SN1: a queued payload keeps the time it arrived
-    const t = translatePayload(p, { turn, observedAt: now.wall, monoNs: from.monoNs !== undefined ? from.monoNs : item ? item.at.mono : undefined, file, vcs: o.vcsMarks === true });
+    const t = translatePayload(p, { turn, observedAt: now.wall, monoNs: from.monoNs !== undefined ? from.monoNs : item ? item.at.mono : undefined, facts: o.commandFacts === true, file, vcs: o.vcsMarks === true });
     const results = [];
     for (const { mark, keep } of t.marks) results.push(engine.receive(normalise(s, mark), from, keep));
     for (const r of t.rejects) results.push(engine.receive({ session_id: id, adapter_reject: r.reason, payload: p }, from));

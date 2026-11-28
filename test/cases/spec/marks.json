@@ -3571,6 +3571,11 @@
     {"name": "an overlapped busy note that is not a boolean (AT1, LD330)", "from": "process_overlapped", "set": {"/detail/busy": "yes"}, "unset": [], "error": {"path": "/detail/busy", "keyword": "type"}},
     {"name": "an intake stop by a signal Orunmila does not catch (TE2, LD283)", "from": "process_tampered_intake_stop", "set": {"/detail/signal": "SIGKILL"}, "unset": [], "error": {"path": "/detail/signal", "keyword": "enum"}},
     {"name": "a background note that is not true (F21, NF66)", "from": "hook_exited_background", "set": {"/detail/background": false}, "unset": [], "error": {"path": "/detail/background", "keyword": "const"}},
-    {"name": "an interrupted note that is not true (F21, NF66)", "from": "hook_exited_interrupted", "set": {"/detail/interrupted": false}, "unset": [], "error": {"path": "/detail/interrupted", "keyword": "const"}}
+    {"name": "an interrupted note that is not true (F21, NF66)", "from": "hook_exited_interrupted", "set": {"/detail/interrupted": false}, "unset": [], "error": {"path": "/detail/interrupted", "keyword": "const"}},
+    {"name": "hosts that are not a list (CF1, LD385)", "from": "hook_exited_background", "set": {"/detail/hosts": "a.example"}, "unset": [], "error": {"path": "/detail/hosts", "keyword": "type"}},
+    {"name": "an empty hosts list (CF1)", "from": "hook_exited_background", "set": {"/detail/hosts": []}, "unset": [], "error": {"path": "/detail/hosts", "keyword": "minItems"}},
+    {"name": "a host that is not text (CF1)", "from": "hook_exited_background", "set": {"/detail/hosts": [443]}, "unset": [], "error": {"path": "/detail/hosts/0", "keyword": "type"}},
+    {"name": "an empty host (CF1)", "from": "hook_exited_background", "set": {"/detail/hosts": [""]}, "unset": [], "error": {"path": "/detail/hosts/0", "keyword": "minLength"}},
+    {"name": "an elevated note that is not true (CF1)", "from": "hook_exited_background", "set": {"/detail/elevated": false}, "unset": [], "error": {"path": "/detail/elevated", "keyword": "const"}}
   ]
 }

@@ -122,6 +122,27 @@ it(
 );
 
 it(
+  'CF1 at the router (LD385): with commandFacts, a command\'s exited mark in the log names its hosts and that it asked for administrator rights, verified intact; without it (the default), neither',
+  () => {
+    for (const on of [true, false]) {
+      withRouter(
+        ({ router, project, dir }) => {
+          const p = cc(project);
+          router.payload(p.prompt('deploy?'), { channel: 'command' });
+          router.payload(p.pre('Bash', { command: 'sudo curl -fsS https://deploy.example/hook' }, 'd1'), { channel: 'command' });
+          assert.strictEqual(router.payload(p.post('Bash', { command: 'sudo curl -fsS https://deploy.example/hook' }, { stdout: 'ok', stderr: '' }, 'd1'), { channel: 'command' }).ok, true);
+          const ex = marks(dir('ses_r1')).filter((m) => m.says === 'exited');
+          assert.strictEqual(ex.length, 1);
+          assert.deepStrictEqual([ex[0].detail.hosts, ex[0].detail.elevated], on ? [['deploy.example'], true] : [undefined, undefined], `commandFacts ${on}`);
+          assert.strictEqual(verifySessionLog(dir('ses_r1')).ok, true);
+        },
+        on ? { commandFacts: true } : {},
+      )();
+    }
+  },
+);
+
+it(
   'test 76: a Stop for a turn whose prompt hook never fired writes no prompted mark',
   withRouter(({ router, project, dir }) => {
     router.payload(cc(project).stop('ok'), { channel: 'command' });

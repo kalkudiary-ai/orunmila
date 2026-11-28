@@ -122,13 +122,17 @@ who", never guessed.
 **It does not see:**
 
 - An agent with administrator rights (`sudo`), which can attack Orunmila itself.
+  With `ORUNMILA_COMMAND_FACTS=1` where the intake starts, the session report at
+  least names each command that asked for those rights.
 - Anything outside the folders it watches: your home folder, other projects,
   system files. Dependency folders such as `node_modules/` are on the ignore
   list (`orunmila status` prints it), so what a package install or a package's
   own scripts change inside them is not watched; the package files you edit
   (`package.json`, the lock file) are.
 - Most network activity: only a web fetch or search tool's host and query, never
-  what was sent or received, nor traffic from programs the agent runs.
+  what was sent or received, nor traffic from programs the agent runs. With
+  `ORUNMILA_COMMAND_FACTS=1`, the hosts a command's own text names (`curl`,
+  `git push` and the like) are recorded too: named, not proof of contact.
 - Which program wrote a file. The Sentinel sees that bytes changed, not who
   changed them.
 - What happens inside a command beyond its file changes, how it ended and the

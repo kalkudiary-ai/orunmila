@@ -221,4 +221,32 @@ it('every translated mark is accepted by the session log', () => {
   }
 });
 
+it("CF1 (LD385): with command facts on, a command's mark names the hosts its text names and that it asked for administrator rights; with them off (the default), neither", () => {
+  const facts = { ...ctx, facts: true };
+  const run = (command, c = facts, failed = false) => {
+    const p = failed ? { ...post('Bash', { command }, {}), hook_event_name: 'PostToolUseFailure', error: 'Exit code 1\nno' } : post('Bash', { command }, { stdout: '', stderr: '' });
+    return only(p, c).mark.detail;
+  };
+  assert.deepStrictEqual(run('curl -s https://api.example.com/v1/x | jq .').hosts, ['api.example.com']);
+  assert.deepStrictEqual(run('git clone git@github.com:o/r.git && scp f deploy@host.example:/tmp && wget http://127.0.0.1:8080/a').hosts, ['127.0.0.1:8080', 'github.com', 'host.example']);
+  assert.strictEqual(run('npm test').hosts, undefined, 'no host named: no field');
+  for (const c of ['sudo rm -rf /x', 'FOO=1 sudo make install', 'cd a && doas cp x y', 'ls; su -c id', 'pkexec true']) assert.strictEqual(run(c).elevated, true, c);
+  for (const c of ['echo sudo', 'grep sudo notes.txt', 'npm test']) assert.strictEqual(run(c).elevated, undefined, c);
+  assert.strictEqual(run('sudo false', facts, true).elevated, true, 'a failed command still asked for it');
+  const off = run('sudo curl https://x.example', ctx);
+  assert.deepStrictEqual([off.hosts, off.elevated], [undefined, undefined], 'off by default');
+  // The session log accepts them (their fields are in the spec).
+  const dir = tmpDir();
+  try {
+    const h = JSON.parse(JSON.stringify(HEADERS.good.header));
+    for (const k of ['seq', 'prev_hash', 'hash']) delete h[k];
+    const log = createSessionLog(path.join(dir, 's'), h);
+    const { mark } = only(post('Bash', { command: 'sudo curl https://x.example/a' }, { stdout: '', stderr: '' }), facts);
+    const res = log.append(mark, []);
+    assert.strictEqual(res.ok, true, JSON.stringify(res.reasons));
+  } finally {
+    rmrf(dir);
+  }
+});
+
 runAll('adapter-claude-code');

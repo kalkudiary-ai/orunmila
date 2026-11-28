@@ -404,6 +404,18 @@
           "type": "array",
           "items": { "type": "object" }
         },
+        "hosts": {
+          "description": "On a command's exited mark: every host the command line names (a URL's host with its port, and the host of a `user@host` argument to ssh, scp, sftp, rsync or git), sorted, each once. The agent's testimony: a name is not a contact, and a command can reach a host it never names. Absent when it names none, or when command facts are off.",
+          "$comment": "agent's proposal CF1 (LD385; O, 2026-11-28: the in-roads, all but the one that needs administrator rights); written only with ORUNMILA_COMMAND_FACTS=1",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        },
+        "elevated": {
+          "description": "On a command's exited mark: true when a step of the command line starts with sudo, doas, su, pkexec, runas or gsudo, so it asked for administrator rights; what it did with them is outside what Orunmila sees. Absent otherwise, or when command facts are off.",
+          "$comment": "agent's proposal CF1 (LD385); written only with ORUNMILA_COMMAND_FACTS=1",
+          "const": true
+        },
         "read_kind": {
           "description": "`full` only when the adapter can show the tool returned the whole file, `range` when it returned only part, `pattern` when the agent only searched, `listing` when the tool listed a folder's entries (their names, no file's content), `null` when the adapter cannot tell.",
           "$comment": "brief v3 line 261 (open question 3); listing is LD121 (O's go, 2026-11-22)",

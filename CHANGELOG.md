@@ -276,6 +276,12 @@ hook scripts by their paths in the package (`src/capture/claude-code/`),
   (`ORUNMILA_VCS_MARKS=1`).** A `git` or `gh` command's output (its branch and
   commit, each pull request and its state, each set of checks) goes on that
   command's mark in the session's log, as the event log has always kept it.
+- **What a command's own text says, off by default (`ORUNMILA_COMMAND_FACTS=1`).**
+  Each command's mark in the intake's record names the hosts its command line
+  names (`detail.hosts`) and whether a step of it asked for administrator rights
+  (`detail.elevated`: `sudo`, `doas`, `su`, `pkexec`, `runas`, `gsudo`); the
+  session report names those commands and hosts as plain lines, never a verdict.
+  The agent's testimony: a host named is not a host reached.
 - **A limit on a flooded Sentinel, off by default
   (`ORUNMILA_SENTINEL_MAX_PENDING=N`).** Past N changed paths waiting at once
   under one folder, the rest of the flood is dropped and one gap in each

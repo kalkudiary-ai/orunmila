@@ -276,4 +276,21 @@ it('MR3: a session with no change on disk says that neither witness recorded one
   assert.strictEqual(renderText(rep).split('\n')[1], 'What changed on disk: neither witness recorded a change to a file in this session.');
 });
 
+it('CF1 (LD385): the report names the commands that asked for administrator rights and the hosts the commands named, as plain lines, never a verdict; with none, no line', () => {
+  const ex = (ms, call, text, detail, turn = 't1') => ({ ...M.exited(ms, call, text, 'pass', turn), detail: { tool: 'Bash', exit_status: 'pass', output_excerpt: '', ...detail } });
+  const rep = buildReport({
+    header: { session_id: 's1', agent: { name: 'claude-code' } },
+    marks: [ex(10, 'b1', 'sudo apt-get install x', { elevated: true }), ex(20, 'b2', 'curl https://a.example/x', { hosts: ['a.example'] }, 't2'), ex(30, 'b3', 'git push git@github.com:o/r.git', { hosts: ['github.com'] }, 't2')],
+    odus: [],
+    verdicts: [],
+  });
+  assert.deepStrictEqual(rep.commands, { elevated: [{ turn: 't1', text: 'sudo apt-get install x', ref: 'b1' }], hosts: ['a.example', 'github.com'] });
+  const text = renderText(rep);
+  assert.ok(text.includes('1 command asked for administrator rights (turn t1: `sudo apt-get install x`); what it did with them is outside what Orunmila sees.'), text);
+  assert.ok(text.includes("The agent's commands named these hosts: a.example, github.com (named, not proof of contact)."), text);
+  assert.strictEqual(rep.verdict, 'clean', 'facts, not verdicts');
+  const none = renderText(buildReport({ header: { session_id: 's2', agent: { name: 'claude-code' } }, marks: [], odus: [], verdicts: [] }));
+  assert.ok(!none.includes('administrator rights') && !none.includes('named these hosts'), none);
+});
+
 runAll('report');

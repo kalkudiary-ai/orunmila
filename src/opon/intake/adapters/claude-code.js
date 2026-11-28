@@ -42,6 +42,7 @@
 
 const { getAdapter, readRange } = require('../../../capture/agents');
 const { deriveVcsEvents } = require('../../../capture/vcs-evidence');
+const { hostsNamed, asksElevation } = require('../../../capture/command-facts');
 const { monoString } = require('../mono');
 
 const CC = getAdapter('claude-code');
@@ -169,6 +170,13 @@ function translatePayload(payload, ctx = {}) {
       // derives it (core.js), one entry each with today's field names; a failed command asserts nothing.
       const vcs = deriveVcsEvents(f.command(input), out);
       if (vcs.length) detail.vcs = vcs;
+    }
+    if (ctx.facts === true) {
+      // CF1 (LD385): what the command's own text says, failed or not: the hosts it names, and that it asked for
+      // administrator rights. Testimony, never proof of contact or of what ran.
+      const hosts = hostsNamed(f.command(input));
+      if (hosts.length) detail.hosts = hosts;
+      if (asksElevation(f.command(input))) detail.elevated = true;
     }
     if (out.length > EXCERPT) keep.push({ slot: 'output_ref', text: out });
   } else if (failed) {

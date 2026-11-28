@@ -1771,6 +1771,7 @@ async function cmdIntake() {
       asyncStart: process.env.ORUNMILA_ASYNC_START === '1', // SN1 (LD294): a session's start off the intake's thread (F16)
       peerBusy: peerBusy.on, // AT1b (LD330): a peer's working time noted in each session's log; on by default since PB1
       vcsMarks: process.env.ORUNMILA_VCS_MARKS === '1', // VC1 (LD372, test 60): git, PR and CI state on a command's mark; off by default
+      commandFacts: process.env.ORUNMILA_COMMAND_FACTS === '1', // CF1 (LD385): the hosts a command names, and a sudo, on its mark; off by default
       // T32 (LD374, test 32): past this many paths waiting at once, the Sentinel drops the flood and writes a gap; no limit unless set
       sentinelMaxPending: Number.isInteger(Number(process.env.ORUNMILA_SENTINEL_MAX_PENDING)) && Number(process.env.ORUNMILA_SENTINEL_MAX_PENDING) > 0 ? Number(process.env.ORUNMILA_SENTINEL_MAX_PENDING) : undefined,
     });

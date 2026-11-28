@@ -71,6 +71,25 @@ jobs:
       - name: Every route, run and checked
         run: node scripts/install-routes.js
 
+  # EU2 (LD371, LD379): an existing user's upgrade, from the published 0.2.4 (fetched from npm) to this build, in a
+  # throwaway machine: installed and used, upgraded, install run again (every hook moved onto the starter, none added),
+  # capture continuing, the old log kept and owner-only, status, and the kept JSON commands. (npm test runs the same
+  # script offline, from a local build, through test/upgrade-proof.js.)
+  upgrade:
+    name: upgrade (from the published 0.2.4 / ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: 0.2.4, then this build over it
+        run: node scripts/upgrade-proof.js --from orunmila@0.2.4
+
   # The coverage gate (c8 check-coverage in .c8rc.json) and the detection
   # accuracy gate are the two quality bars. They are deterministic on Linux;
   # we run them once on the primary OS/Node to keep the matrix fast and the

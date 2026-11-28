@@ -4365,6 +4365,16 @@ MUTANTS.push(
   },
 );
 
+// EU2 (Phase 7, LD371, LD379): the upgrade proof fails when install refuses after the upgrade.
+MUTANTS.push({
+  id: 'EU2-1 install after the upgrade always reads as passed',
+  file: 'scripts/upgrade-proof.js',
+  test: 'test/upgrade-proof.js',
+  from: "step('install-again', again.status === 0,",
+  to: "step('install-again', true,",
+  fails: ['EU2: a hook naming a different copy, planted before the upgrade'],
+});
+
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };
 
 if (require.main === module) process.exit(runGate());

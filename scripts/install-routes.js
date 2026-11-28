@@ -164,4 +164,4 @@ function main() {
 }
 
 if (require.main === module) process.exit(main());
-module.exports = { ROUTES };
+module.exports = { ROUTES, pack, machine, sh, hooksOf }; // the last four: scripts/upgrade-proof.js (EU2) shares them

@@ -8,21 +8,28 @@ Orunmila reconciliation metrics.
 
 ## Running benchmarks
 
+The runner is `scripts/bench.js`, in a git clone only: it is not in the npm
+package, because it runs AI agents and calls AI models over the internet, which
+Orunmila itself never does.
+
 ```bash
 # Direct API (framework-neutral, via OpenRouter)
-OPENROUTER_API_KEY=<key> node bin/bench.js --agent direct-api --model <provider/model>
+OPENROUTER_API_KEY=<key> node scripts/bench.js --agent direct-api --model <provider/model>
 
 # Claude Code (hook-based capture)
-node bin/bench.js --agent claude-code --model haiku
-node bin/bench.js --agent claude-code --model sonnet
-node bin/bench.js --agent claude-code --model opus
+node scripts/bench.js --agent claude-code --model haiku
+node scripts/bench.js --agent claude-code --model sonnet
+node scripts/bench.js --agent claude-code --model opus
 
 # Aider (post-hoc reconciliation from stdout + git diff)
-node bin/bench.js --agent aider --model <provider/model>
+node scripts/bench.js --agent aider --model <provider/model>
 
 # Gemini CLI (hook-based capture)
-GEMINI_API_KEY=<key> node bin/bench.js --agent gemini-cli --model gemini-2.5-flash
+GEMINI_API_KEY=<key> node scripts/bench.js --agent gemini-cli --model gemini-2.5-flash
 ```
+
+It also runs `--agent codex`. Cursor and Antigravity have no headless command it
+can drive.
 
 Divinations auto-save to this directory as `YYYY-MM-DD_agent_model.json`.
 
@@ -180,8 +187,10 @@ inflates pass rates with retries.
 
 - Divinations vary between runs. Models are non-deterministic. These are single
   runs, not averaged. Run multiple times for publishable confidence intervals.
-- The claim extractor has known false-positive issues on non-work text.
-  See `review/ISSUES.md`.
+- When these runs were made (June 2026), the claim extractor had known
+  false-positive issues on non-work text (`review/ISSUES.md`). Its false-alarm
+  set scores 15/15 clean today (`npm run accuracy`, 2026-11-28); these runs were
+  not redone.
 - Direct-api mode gives models the full file contents in the system prompt
   and asks for complete file rewrites. This favors models with large context
   windows and may disadvantage models that work better with diff-based editing.

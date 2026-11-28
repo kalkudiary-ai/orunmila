@@ -119,6 +119,29 @@ Sanitization runs on **every string-valued field that exits**, defaults AND
 opt-ins — not only `--include` fields. `--include` controls which raw text
 fields *enter* the pipeline; sanitization always runs on what does.
 
+## `orunmila json` from the session logs
+
+Where the intake records a session, `orunmila json` can be built from its logs
+instead of the old event log: from the verdicts with
+`ORUNMILA_FEEDBACK_FROM_VERDICTS=1` (and by itself when the old event log has
+nothing for the session: it then says so on stderr), from the odù log with
+`ORUNMILA_FEEDBACK_FROM_ODU=1`, and beside the old payload with
+`--side-by-side`. It keeps `schema_version` `"1.0"`, `session_id`, `agent`,
+`generated_at`, `included_fields`, `turns[]` and `summary`, and differs as
+follows (read from real output, 2026-11-28):
+
+- **Added at the top:** `source` (`"verdict_log"` or `"odu_log"`) and `findings`;
+  from the verdicts also `session_verdict`, `top_line`, `judged_now`, `law_gate`
+  and `verdicts[]` (each `{ kind, verdict, rule, odu_id, target, sentence }`,
+  the session report's findings).
+- **Added on a turn:** `undisclosed_outside`, changes outside the project.
+- **A claim carries less:** `id`, `outcome`, `evidence`, `verdict_confidence`, and
+  from the verdicts `verdict`. It has no `claim_type`, `extraction_confidence`,
+  `cause_hint`, `label` or `classification_features`.
+
+A consumer that reads those claim fields should read the old payload (the
+default whenever the old event log has the session).
+
 ## `orunmila feedback` — per-session drop file
 
 The feedback file wraps the `orunmila json` payload (as `report`) and adds a

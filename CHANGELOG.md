@@ -116,6 +116,12 @@ hook scripts by their paths in the package (`src/capture/claude-code/`),
   block: each `proved:` command must have run in the turn and passed; each
   `changed:` file is checked in the session's record; `not done:` lines are
   shown in the session report. Format: `spec/claims-block.md`.
+- **The judge as an install option, like the Closeout Gate.** `orunmila install
+  --with-judge` and `--without-judge` set its switch in Orunmila's home, read at
+  the intake's next start; `orunmila lenses` and `status` show it beside the
+  other two lenses (`ORUNMILA_JUDGE_LIVE` still wins where set).
+- **`orunmila verify --updates`** checks the update log's hash chain and each
+  record against its schema.
 - **`orunmila update`.** Brings the copy in Orunmila's home up to the npm
   registry's latest `orunmila`: the download is checked against the registry's
   integrity hash, the new version must pass its own self-check, and Orunmila
@@ -180,9 +186,13 @@ hook scripts by their paths in the package (`src/capture/claude-code/`),
   and tried again every second until the intake has it. The intake runs the Filesystem Sentinel
   itself for each session's folder, `.orunmila/` included, and records a change
   during the session to the project's `.orunmila/` files, the law packs, the
-  agent's hook settings or Orunmila's own code as tampering. Only
-  `orunmila trail --json --marks` reads these logs so far (both witnesses on
-  every row); every other report still comes from the event log.
+  agent's hook settings or Orunmila's own code as tampering. These logs are
+  read by `orunmila verify`, `report --verdicts`, `judge`, `trailer`,
+  `trail --json --marks` (both witnesses on every row), `json` with
+  `--side-by-side` or its two switches, and the trail page and dashboard (the
+  witness line and the judge's verdict); the other reports come from the event
+  log, and read the session log when the event log has nothing for the session
+  (below).
 - **Exact capture, off by default (`ORUNMILA_EXACT_CAPTURE=1`).** Claude Code
   sends a failed tool call with no `tool_response`; the exit code is the first
   line of its `error` text (`Exit code N`, or `Error: Exit code N`) and the
@@ -225,7 +235,11 @@ hook scripts by their paths in the package (`src/capture/claude-code/`),
 - **SECURITY.md says how fast a report is answered:** an acknowledgement within
   7 days, whether the issue is confirmed within 30, and a released fix, or a
   published advisory with a workaround, within 90.
-- **Session verdicts, off by default (`ORUNMILA_JUDGE_LIVE=1`).** At each
+- **Session verdicts, off by default (`orunmila install --with-judge`, or
+  `ORUNMILA_JUDGE_LIVE=1` where the intake starts; `--without-judge` turns it
+  off).** The switch also turns on the record the judge reads, a baseline at each
+  session's start and the session's odù log (`ORUNMILA_OPON_LIVE`, on with the
+  judge unless set to `0`). At each
   session's closeout the intake judges every event of its record with fixed
   rules, no model: **Clean**, **Look at this** or **Violation**, each citing its
   rule and the marks behind it, and the session as a whole, **Incomplete**
@@ -314,6 +328,40 @@ hook scripts by their paths in the package (`src/capture/claude-code/`),
 
 ### Fixed
 
+- **`orunmila install --with-judge` alone judged nothing.** The judge reads a
+  session's odù log, which the intake wrote only with `ORUNMILA_OPON_LIVE=1`,
+  and no page said so: a session judged with the switch on had no verdict and
+  `report --verdicts` refused it. The odù log now comes on with the judge
+  (`ORUNMILA_OPON_LIVE=1` or `0` still decides where set, and with `0` the
+  intake says at its start that the judge has nothing to judge).
+- **One session, one set of words on the pages.** The dashboard called a
+  session "70% Trustworthy" in green while the trail page said "Untracked
+  writes: investigate" and the judge "Violation". The dashboard's card now uses
+  the trail page's header words and colours, both pages give the judge's
+  verdict from the verdict log with why it can differ from the header (or say
+  "Not judged"), and the score's tooltip says what it scores (dropped parts of
+  the request are not scored; it said they score 0). The dashboard no longer
+  says Orunmila "checks every claim", and marks the dropped-part check as often
+  wrong. The Dashboard tab calls an unflagged thing "nothing flagged", not
+  "clean", and the Glossary defines the Glove, the Sentinel, both witnesses, an
+  odù and the judge's verdicts.
+- **A session only in the intake's record no longer reads as empty.** With the
+  old event log holding nothing for a session, `trail`, `trail --json`, `html`
+  and `json` exited 0 with no turn and no touch. They now read the session log
+  (`json` gives the verdicts' feedback: schema 1.0, fewer fields on each claim,
+  `docs/SCHEMA.md`) and say so; `status` counts the session logs; `report`,
+  `stats`, `feedback` and `laws --check` name the command that reads them.
+  A session the old log has is answered exactly as before.
+- **The docs said things the tool no longer does.** Every document in the
+  repository was read against the tool: the measurement write-up said "MIT
+  licensed", that the CLI makes no outbound request and that the 3D tab loads a
+  library from a CDN, and quoted a retired precision figure as current; the
+  benchmark and corpus pages ran `bin/bench.js` (it is `scripts/bench.js`, and
+  Cursor and Antigravity cannot be driven by it); SECURITY.md said "pre-1.0";
+  the skills page priced three free skills; the guide said `install` refuses an
+  earlier version's hooks (it moves them onto the starter) and left out
+  `ORUNMILA_OPON_LIVE`; the spec still named a "separate-user setup in Phase 5",
+  which output 1 does not have. Each now says what the tool does.
 - **A session report no longer quotes a whole command.** A finding about the
   agent reading Orunmila's record quoted each command whole, so one heredoc
   could fill the report with tens of lines. It now quotes the first line, at

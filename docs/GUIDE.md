@@ -62,7 +62,8 @@ event, and the session as a whole, a verdict: **Clean**, **Look at this** or **V
 both witnesses recorded. It never refuses anything, and no AI model is involved: its rules are fixed code over
 the record. It needs the intake, a preview in this release:
 `orunmila install --intake`, then `orunmila intake start`. `orunmila install --with-judge` turns it on from the
-intake's next start. Session verdicts, below, has the rest.
+intake's next start, and with it the record it reads (a baseline at each session's start and the session's odù
+log). Session verdicts, below, has the rest.
 
 One dependency between them, stated plainly: the gate judges the events the
 Stain Map records, so the gate needs the Stain Map underneath it. The Stain Map
@@ -108,8 +109,11 @@ version, run `orunmila update` (or install the newer package and run
 install` also turns on a check once a day that does this by itself, unless you
 have already chosen (`orunmila install --without-updates` turns it off,
 `--with-updates` back on). Hooks written by
-an Orunmila from before the starter name that version's own copy: `orunmila
-install` refuses over them and names each one; remove those, then install.
+an Orunmila from before the starter name that version's own files: after you
+install the newer package, `orunmila install` moves each of them onto the starter
+in place (its event, matcher and arguments kept) and adds none. Hooks that name a
+different copy of Orunmila are refused, named and left as they are; remove those,
+then install.
 
 ### From a git clone
 
@@ -207,7 +211,21 @@ in the [changelog](../CHANGELOG.md)):
   `trail.html#map3d`, `#graph`.
 - **Nothing checked never reads as clean.** A session with no checked turn
   says "Not checked" in the header, the file list, the Report tab and the
-  Dashboard; it used to say "looks clean".
+  Dashboard; it used to say "looks clean". A thing no check flagged reads
+  "nothing flagged", never "clean", the judge's word for a verdict.
+- **One session, one set of words.** The trail page and the dashboard give the
+  judge's verdict on the session from its verdict log (or say "Not judged"),
+  beside the header's own words, and say why the two can differ: the header
+  checks each turn's claims, the judge the whole record. The dashboard's card
+  uses the header's words and colours; its own "Trustworthy" and "Low trust"
+  are gone.
+- **A session only in the intake's record still shows.** When the old event log
+  has nothing for a session and its session log is there, `trail` (page and
+  `--json`) and `html` show the session log's trail, `json` gives the verdicts'
+  feedback (schema 1.0, with fewer fields on each claim: [docs/SCHEMA.md](SCHEMA.md)),
+  `status` counts the session logs, and `report`,
+  `stats`, `feedback` and `laws --check` name the command that reads them; each
+  says it read the session log.
 - **The judge's report groups repeats.** A finding the judge made many times
   shows once, with its count; the JSON for the agent keeps every one.
 - **Dashboard default port → 3773.** `node bin/dashboard.js` now serves on
@@ -367,16 +385,19 @@ local: no content-level taint, no NLP, no API calls.
 
 The glove and the skeptical stain are **two lenses on one events.jsonl**,
 rendered by one tool into one page: `orunmila trail` shows the complete trail +
-lineage (the glove) *and* the claim-vs-reality stains together - one global
-truth.
+lineage (the glove) *and* the claim-vs-reality stains together. Where the
+intake records the session, the page also reads its session logs: the witness
+line under the header from the odù log, the judge's verdict from the verdict
+log, and the whole trail from the session log when the event log has none.
 
 ```bash
 node bin/orunmila.js trail        # unified report: trail (the glove) + lineage + stains
 node bin/orunmila.js glove        # alias of `trail` - "the glove" is its user-facing name
 ```
 
-`orunmila html` still produces the original mismatch-only report if that's all
-you want.
+`orunmila html` still produces the original mismatch-only report. `orunmila
+report --verdicts --session <id> --html <file>` replaces it; `html` keeps working
+in 1.x and is removed no sooner than 2.0.0.
 
 ## The Closeout Gate
 
@@ -620,8 +641,9 @@ run; `set -o pipefail` restores it.
 
 ## Session verdicts (Babaláwo, the judge; off by default)
 
-With the intake's live path and `ORUNMILA_JUDGE_LIVE=1`, each session's closeout
-judges every event in its record with fixed rules (no model) and writes a third
+With the judge on (`orunmila install --with-judge`, or `ORUNMILA_JUDGE_LIVE=1`
+where the intake starts), each closeout of a session the intake records judges
+every event in its record with fixed rules (no model) and writes a third
 hash-chained log, `verdict.jsonl`: each event **Clean**, **Look at this** or
 **Violation**, citing the rule and the marks behind it, and the session as a
 whole, **Incomplete** whenever evidence was lost. The rules live in
@@ -672,7 +694,8 @@ Windows, so it survives restarts and logins).
 
 | Variable | What it does when on |
 |---|---|
-| `ORUNMILA_JUDGE_LIVE` | Judges each session at its closeout (above). A session that goes quiet for 30 minutes without ending (its agent's process died) is closed out before the intake lets it go, so nothing it holds waits for ever. |
+| `ORUNMILA_JUDGE_LIVE` | Judges each session at its closeout (above); `=1` or `=0` here wins over the switch `orunmila install --with-judge` and `--without-judge` set. A session that goes quiet for 30 minutes without ending (its agent's process died) is closed out before the intake lets it go, so nothing it holds waits for ever. |
+| `ORUNMILA_OPON_LIVE` | The record the judge reads: a baseline snapshot at each session's start, the Ọpọ́n's settling of every mark, and the session's odù log (`odu.jsonl`), which the witness line, `report --verdicts`, `judge` and `json --side-by-side` read. **On whenever the judge is on**; `=1` turns it on without the judge, `=0` off, and then the judge has nothing to judge, which the intake says at its start. |
 | `ORUNMILA_LOG_GUARD` | **On by default; `=0` turns it off.** Watches every log of a session (raw, quarantine, odù, verdict) for a change Orunmila did not make: the change is recorded, with the text removed and added, and the log is put back from Orunmila's own copy. `verify` names each one. |
 | `ORUNMILA_ASYNC_START` | Takes a new session's baseline snapshot, and the closeout's full rescan, off the intake's thread, so a project of 100,000 files does not stall every other session for seconds; the session's own payloads wait, with the time they arrived, until its log is ready. |
 | `ORUNMILA_WATCH_EXTRA` | Folders outside the project for the Sentinel to watch too (absolute paths, joined by `:` on macOS and Linux, `;` on Windows): a change there is recorded with its full path, outside the project. |
@@ -727,8 +750,9 @@ Every other agent gets the Stain Map: full capture, full reconciliation, full
 reports.
 
 All agents write the **same** `~/.orunmila/events.jsonl`. The stain model, the
-glove, and the HTML report never know or care which agent produced an event —
-that's the whole point of "one global truth."
+glove, and the HTML report never know or care which agent produced an event.
+The intake's per-session logs (`~/.orunmila/sessions/<id>/`) are Claude Code
+only for now.
 
 ### Claude Code, wherever it runs: terminal, VS Code, Antigravity, the app
 
@@ -789,17 +813,20 @@ kind of contribution.
 
 ### Known defects, with status
 
-Every issue — open and closed — is tracked with its status, reproduction and
-acceptance test in [`review/ISSUES.md`](../review/ISSUES.md). The open ones that
+[`review/ISSUES.md`](../review/ISSUES.md) tracks each issue with its status,
+reproduction and acceptance test, as of 2026-10-28 (its own date line); findings
+since then are fixed or named in the [changelog](../CHANGELOG.md). The open ones that
 change how you should read a report:
 
-- **The sentinel's writes carry no session id** (P0-2). Correlation is purely by
-  time window, so on a machine running two agent sessions over one tree, each
-  **adopts the other's writes** — and session-pinning does not fix it, because
-  sentinel events have no session id to filter on. Read a touch list as *"what
-  changed on this machine while I worked"*, never as authorship. This is the one
-  open defect that produces a confidently wrong answer rather than a missing
-  one, and it is architectural, not a patch.
+- **The standalone Sentinel's writes carry no session id** (P0-2). With `watch`
+  or `watch-fs`, correlation is purely by time window, so on a machine running
+  two agent sessions over one tree, each **adopts the other's writes**. Read
+  that touch list as *"what changed on this machine while I worked"*, never as
+  authorship. The intake's record does not have this defect: it notes in each
+  session's log which other sessions shared its folder and when they were
+  working, credits a change only to the session that made it, and the judge
+  calls a change it cannot pin to one session "cannot be pinned" (R10), never
+  guessed.
 - **A pipe launders an exit code in the Stain Map** (P1-5). `npm test | tail`
   exits 0 with the suite on fire, and the Stain Map still scores a "tests
   pass" claim behind it as `verified`. The Closeout Gate does not count an
@@ -1032,7 +1059,7 @@ said it did.
 | | |
 |---|---|
 | [**I measured how often AI coding agents claim work they didn't do**](MEASURING_AGENT_CLAIMS.md) | The findings piece: 10 models, 3 harnesses, 29 runs — and the three false-green defects found in this tool itself. Every figure names its source. |
-| [`review/ISSUES.md`](../review/ISSUES.md) | Every known issue, open and closed, with a reproduction and an acceptance test. Dated and re-derived from code, not carried forward. |
+| [`review/ISSUES.md`](../review/ISSUES.md) | Issues open and closed as of 2026-10-28, each with a reproduction and an acceptance test, re-derived from code then. Findings since are in the changelog. |
 | [`skills/`](../skills/) | Four packaged agent skills: a free core audit, plus gate setup, a review workflow, and writing laws for your own codebase. |
 | [`bench-results/README.md`](../bench-results/README.md) | All 29 benchmark runs, the metric definitions, and the framework-effect analysis. |
 | [`docs/SCHEMA.md`](SCHEMA.md) | The `orunmila json` contract (`schema_version` 1.0). |

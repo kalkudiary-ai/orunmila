@@ -152,7 +152,7 @@ Every source's output is turned into marks of this one shape by its adapter, and
 | `detail.stamped_by` | `"intake"` | no | If a source cannot stamp mono_ns, intake stamps arrival time and records that here. | brief v3 line 238 |
 | `detail.what` | one of `"hook_settings"`, `"frozen_config"`, `"log_location"`, `"orunmila_code"`, `"foreign_sender"`, `"intake_stop"` | no | On a tampered mark, what was tampered with: `hook_settings`, `frozen_config`, `log_location`, `orunmila_code`, `foreign_sender`, or `intake_stop` (the intake stopped by a signal that no one asked for through `orunmila intake stop`; target the process `intake`). | brief v4 line 245; intake_stop is TE2's kind (LD283, Phase 5 plan section 4), approved by O as part of Q41 (2026-11-24) |
 | `detail.signal` | one of `"SIGTERM"`, `"SIGINT"`, `"SIGHUP"` | no | On a tampered mark for an intake stop no one asked for: the signal that stopped it. | agent's proposal (TE2, LD283), approved by O as part of Q41 (2026-11-24) |
-| `detail.channel` | one of `"http"`, `"command"` | no | Glove marks: how the mark reached intake. `http` for HTTP hooks, whose sender intake pins to the session's process at first contact; `command` for a command hook, which the agent can forge until the separate-user setup (Phase 5). | brief v4 line 247 (decision I-3, 2026-11-16) |
+| `detail.channel` | one of `"http"`, `"command"` | no | Glove marks: how the mark reached intake. `http` for HTTP hooks, whose sender intake pins to the session's process at first contact; `command` for a command hook, which the agent can forge: it runs as the agent's own account (a separate account for Orunmila is not part of the free version). | brief v4 line 247 (decision I-3, 2026-11-16) |
 | `detail.from` | string | no | On a renamed mark, the old path, normalised like `target.path`. | brief v4 line 265 (open point P3, decided 2026-11-16) |
 | `detail.from_human` | boolean | no | On a prompted mark: false for a prompt the agent's tool wrote itself (a task notification, a sub-agent hand-back), which does not refill the gate's block budget. | brief v4 line 276 (open question 2, decided 2026-11-16) |
 | `detail.redactions` | list of string | no | Noting the redaction: the kinds of secret replaced with [REDACTED:<kind>], never the values. | brief v3 line 248; a list of kinds is the agent's choice, LD15 |
@@ -445,7 +445,7 @@ Every session's raw log begins with a header record, and the hash chain starts f
 | `os` | object | yes | The operating system. | brief v3 line 282 |
 | `os.platform` | string | yes | For example `darwin`, `linux`, `win32`. | brief v3 line 282 |
 | `os.release` | string | no | The operating system release. | brief v3 line 282 |
-| `accounts` | object | yes | User accounts: the agent's, and the one Orunmila's files belong to (the same account until the separate-user setup in Phase 5). | brief v3 lines 282, 587 |
+| `accounts` | object | yes | User accounts: the agent's, and the one Orunmila's files belong to (in the free version, the same account). | brief v3 lines 282, 587 |
 | `accounts.agent_user` | string | yes | The account the agent runs as. | brief v3 line 282 |
 | `accounts.orunmila_user` | string | yes | The account that owns Orunmila's logs. | brief v3 lines 282, 342 |
 | `project_root` | string | yes | The session header records the project root, so a Glove mark and a sentinel mark for one file always join. | brief v3 line 339. An absolute path (POSIX, or a Windows drive). |

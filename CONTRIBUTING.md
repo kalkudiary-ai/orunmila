@@ -74,7 +74,7 @@ flowchart LR
 | `test/` | Every suite, and the labelled cases in `test/cases/` |
 | `scripts/` | Tools for working on Orunmila: the mutation gate, the browser check of the trail page, benchmarks. Not in the package |
 | `docs/` | The guide, the measurement write-up, the JSON schema, the design history |
-| `review/` | Every known issue with its status (`review/ISSUES.md`) and the design notes |
+| `review/` | The issue tracker (`review/ISSUES.md`, as of 2026-10-28) and the design notes |
 
 ## Ground rules
 
@@ -83,9 +83,7 @@ flowchart LR
   `eslint`/`prettier`) is fine; a runtime dependency is almost never the right
   answer here and a PR that adds one needs a strong, specific reason.
 - **Node 18+ only, no transpile step.** Plain CommonJS, no build. If it doesn't
-  run on a clean `node 18`, it doesn't ship. A port to TypeScript is being
-  worked on its own branch, `ts-port`; until it becomes the main line, code here
-  stays JavaScript.
+  run on a clean `node 18`, it doesn't ship. Code here is JavaScript.
 - **Windows, Linux and macOS.** CI runs every suite on all three, on Node 18, 20
   and 22. Build paths with `path.join`, never assume `/`, and say in a PR what
   differs by OS.
@@ -126,8 +124,10 @@ real improvement lowers a metric, say so in the PR and we'll talk about it.
 
 ## Adding an agent (the most wanted contribution)
 
-orunmila is agent-agnostic by design. Supporting a new agent (Gemini CLI, Zed,
-whatever) is usually a **registry entry, not a code fork**:
+orunmila is agent-agnostic by design. Supporting a new agent (Zed, Windsurf,
+whatever) is usually a **registry entry, not a code fork**, and testing an
+experimental one (Cursor, Gemini CLI, Codex, Continue) on real sessions is just as
+wanted:
 
 1. Add an entry to the `REGISTRY` in `src/capture/agents.js` — its id, where its
    hook config lives, the event names it uses per lifecycle phase, and any tool
@@ -143,8 +143,8 @@ in the guide.
 
 The single most valuable code contribution is improving claim/subtask extraction
 (`src/reconcile/claim-extractor.js`, `task-extractor.js`) **without** adding paid
-API calls. Every issue, open and closed, is tracked with its status in
-`review/ISSUES.md`; the accuracy fixtures live in `test/cases/`, and the
+API calls. Issues are tracked with their status in `review/ISSUES.md` (as of
+2026-10-28; findings since are in `CHANGELOG.md`); the accuracy fixtures live in `test/cases/`, and the
 real-log-derived negative corpus (the false-positive guard) in
 `test/cases/precision/`. Add a fixture that reproduces a
 mis-detection, then fix it — that's the ideal PR shape.
@@ -155,7 +155,7 @@ mis-detection, then fix it — that's the ideal PR shape.
       all pass locally.
 - [ ] New behaviour has a test you saw fail first (and a labelled fixture if it
       changes a verdict).
-- [ ] No new runtime dependency; no network call by the tool itself.
+- [ ] No new runtime dependency; no new network call (the update check is the only one).
 - [ ] Any new heuristic is labelled as one where the user can see it.
 - [ ] What differs on Windows, Linux and macOS is said.
 - [ ] `CHANGELOG.md` has an `Unreleased` entry describing the change.

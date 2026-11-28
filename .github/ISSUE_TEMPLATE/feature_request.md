@@ -20,12 +20,12 @@ orunmila stays zero-runtime-dependency, local-first, and honest about its
 limits. Please confirm your idea fits (or explain why it's worth an exception):
 
 - [ ] No new runtime dependency, or a strong specific reason for one.
-- [ ] No network call by the tool itself; no telemetry/phone-home.
+- [ ] No new network call (Orunmila's only one is its update check); no telemetry/phone-home.
 - [ ] If it's a new heuristic, it can be labelled as one where the user sees it.
 
 ## Adding a new agent?
 
-If you're asking for a new agent (Gemini CLI, Zed, ...), it's usually a
+If you're asking for a new agent (Zed, Windsurf, ...), it's usually a
 **registry entry**, not a code fork — see "Adding an agent" in CONTRIBUTING.md.
 PRs very welcome.
 

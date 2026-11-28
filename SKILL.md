@@ -24,7 +24,7 @@ before installing anything.**
 | when | after each turn | before a turn is allowed to end | at each session's closeout |
 | can it stop the agent? | never | yes - 2 of its 6 laws block | never |
 | agents | all supported agents | `claude-code` only | `claude-code` (through the intake) |
-| install | `npx orunmila install` | `npx orunmila install --with-gate` | `npx orunmila install --with-judge` |
+| install | `npx orunmila install` | `npx orunmila install --with-gate` | `npx orunmila install --intake`, then `npx orunmila install --with-judge` |
 
 If the user says *"show me what my agent did"*, *"audit"*, *"stain map"*,
 *"dye trace"* - they want **the Stain Map**.
@@ -190,7 +190,7 @@ engine stops enforcing, it never stops the agent.
   semantic claims is not part of the free version; only updates of Orunmila
   itself may reach the internet.
 
-Full status for every known issue, open and closed: `review/ISSUES.md`.
+Status for each known issue, open and closed: `review/ISSUES.md` (as of 2026-10-28); findings since are in `CHANGELOG.md`.
 
 ## If something looks wrong
 

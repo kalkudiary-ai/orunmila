@@ -2,13 +2,13 @@
 
 ## Supported versions
 
-orunmila is pre-1.0. Security fixes land on the latest `0.x` release; please
-upgrade to the newest version before reporting.
+Security fixes land on the latest `1.x` release; please upgrade to the newest
+version before reporting (`orunmila update`, or your package manager).
 
 | Version | Supported |
 |---|---|
-| latest `0.x` | yes |
-| older | no |
+| latest `1.x` | yes |
+| `0.x` and older | no |
 
 ## The tool's security posture
 
@@ -66,7 +66,7 @@ format, and the agent runs as your own user, so it can read and change these
 files. Logs written by 0.1.0 to 0.2.1 are unredacted until you run
 `orunmila log redact` or `orunmila log delete --yes`. The HTML report is the artifact you're likely to share, and
 it has a render-time redaction pass (home-prefix collapse on by default, plus an
-opt-in `.orunmila/redact` list) — see "Sharing a report (privacy)" in the README.
+opt-in `.orunmila/redact` list) — see "Sharing a report (privacy)" in `docs/GUIDE.md`.
 
 ### Known limits
 

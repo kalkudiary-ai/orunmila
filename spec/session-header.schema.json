@@ -66,7 +66,7 @@
       }
     },
     "accounts": {
-      "description": "User accounts: the agent's, and the one Orunmila's files belong to (the same account until the separate-user setup in Phase 5).",
+      "description": "User accounts: the agent's, and the one Orunmila's files belong to (in the free version, the same account).",
       "$comment": "brief v3 lines 282, 587",
       "type": "object",
       "required": ["agent_user", "orunmila_user"],

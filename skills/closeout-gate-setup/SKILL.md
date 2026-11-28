@@ -79,7 +79,7 @@ test`). A miss is `no-green-without-command`'s finding. Prose is still read.
 The defaults are set on measurement, not taste, and it is worth explaining why
 before changing them. On real sessions only `no-green-without-command` proved
 precise enough to be worth stopping a turn over. The current figures are in the
-README, under "Why only two block".
+guide (`docs/GUIDE.md`), under "Why only two block".
 
 The asymmetry drives everything: a false advisory costs the agent a sentence of
 attention, a false block costs the whole session — and an agent that learns the

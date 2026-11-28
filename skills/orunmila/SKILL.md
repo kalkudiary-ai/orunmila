@@ -99,4 +99,4 @@ nothing touched in their real log.
   touch list as "what changed on this machine while I worked", never as
   authorship. The intake's record (`orunmila install --intake`) names the
   sessions that overlapped and credits a change only to the one that made it.
-- Every known issue, open and closed, with status: `review/ISSUES.md` in the repo.
+- Known issues, open and closed, with status: `review/ISSUES.md` in the repo (as of 2026-10-28), and `CHANGELOG.md` for findings since.

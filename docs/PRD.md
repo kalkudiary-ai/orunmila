@@ -6,6 +6,14 @@
 >
 > For what is built: [README.md](../README.md). For what is broken, with status
 > per item: [review/ISSUES.md](../review/ISSUES.md).
+>
+> **Superseded since, so do not quote these from here:** the licence is the Apache
+> License 2.0 from 0.2.2 (versions up to 0.2.1 were MIT and stay MIT), not "MIT"
+> as §14 and the header say. No AI model judges anything in the free version: the
+> optional LLM judge of §4, §10 and M9 is not part of it. The free tool stays
+> free; later outputs plan paid team and compliance features beside it, never a
+> paid record format or verifier. Windsurf has no adapter. The tool can now
+> refuse a turn (the Closeout Gate), which §4 ruled out for v1.
 
 # PRD: Orunmila — Claim-vs-Reality Verification for AI Coding Agents
 

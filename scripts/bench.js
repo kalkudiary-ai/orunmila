@@ -57,7 +57,7 @@ function callOpenRouter(model, systemPrompt, userPrompt) {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://github.com/AYKcode/Orunmila',
+        'HTTP-Referer': 'https://github.com/kalkudiary-ai/orunmila',
       },
     }, (res) => {
       let data = '';

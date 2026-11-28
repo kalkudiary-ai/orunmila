@@ -156,9 +156,10 @@ does not replace the look. The edges to know first:
   their changes apart; the intake's record can.
 - A command's exit 0 means it ran and passed, not that it tested the right thing.
 
-Every limit, and every known defect with its status:
-[What it cannot see](docs/GUIDE.md#what-it-cannot-see) in the guide, and
-[`review/ISSUES.md`](review/ISSUES.md).
+Every limit, and the known defects with their status:
+[What it cannot see](docs/GUIDE.md#what-it-cannot-see) in the guide,
+[`review/ISSUES.md`](review/ISSUES.md) (as of 2026-10-28), and the
+[changelog](CHANGELOG.md) for findings since.
 
 ## How accurate is it?
 
@@ -188,8 +189,9 @@ a preview (`orunmila install --intake`, then `orunmila intake start`), writes
 each Claude Code session to its own hash-chained log outside the project, runs
 the disk watcher for that session's folder, and puts back any change to the
 log it did not make; `orunmila verify` checks a log. Session verdicts, off by
-default (`ORUNMILA_JUDGE_LIVE=1`), judge each session with fixed rules, no
-model (`orunmila report --verdicts`). The hooks now run a copy of Orunmila
+default (`orunmila install --with-judge`, which also keeps the record the judge
+reads), judge each session the intake records with fixed rules, no model
+(`orunmila report --verdicts`). The hooks now run a copy of Orunmila
 kept in `~/.orunmila/`, so clearing an `npx` cache no longer silences them;
 after you upgrade, `orunmila install` moves the hooks an earlier version wrote
 onto that copy, adding none. `orunmila install` also turns on a once-a-day

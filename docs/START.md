@@ -46,6 +46,12 @@ answers "Record intact" or names the first line that was changed. No separate
 user account is needed: the intake watches its own logs and records any change it
 did not make.
 
+For a verdict on each whole session, like the report below, turn the judge on
+too: `orunmila install --with-judge`, then restart the intake (`orunmila intake
+stop`, then `orunmila intake start`). From then on each session the intake
+records is judged at its end, and `orunmila report --verdicts --session <id>`
+shows it.
+
 ## Reading a session report
 
 This is a real session report: Orunmila's own build work from October 2026,

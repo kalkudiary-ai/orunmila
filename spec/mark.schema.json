@@ -528,7 +528,7 @@
           "enum": ["SIGTERM", "SIGINT", "SIGHUP"]
         },
         "channel": {
-          "description": "Glove marks: how the mark reached intake. `http` for HTTP hooks, whose sender intake pins to the session's process at first contact; `command` for a command hook, which the agent can forge until the separate-user setup (Phase 5).",
+          "description": "Glove marks: how the mark reached intake. `http` for HTTP hooks, whose sender intake pins to the session's process at first contact; `command` for a command hook, which the agent can forge: it runs as the agent's own account (a separate account for Orunmila is not part of the free version).",
           "$comment": "brief v4 line 247 (decision I-3, 2026-11-16)",
           "enum": ["http", "command"]
         },

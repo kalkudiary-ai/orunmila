@@ -38,14 +38,20 @@ Codex, and any other agent, and the reconciled results are directly comparable.
 
 ## Running the benchmark
 
+In a git clone (the runner is not in the npm package):
+
 ```bash
-node bin/bench.js --agent claude-code --corpus corpus/
-node bin/bench.js --agent antigravity --corpus corpus/
-node bin/bench.js --agent cursor --corpus corpus/
+node scripts/bench.js --agent claude-code --corpus corpus/
+node scripts/bench.js --agent gemini-cli --corpus corpus/
+node scripts/bench.js --agent aider --corpus corpus/
 
 # Then compare:
 orunmila stats
 ```
+
+The runner drives `claude-code`, `gemini-cli`, `codex`, `aider` and `direct-api`.
+For an agent it cannot drive (Cursor, Antigravity), run the tasks by hand with
+Orunmila's hooks installed, then compare with `orunmila stats`.
 
 ## Adding tasks
 

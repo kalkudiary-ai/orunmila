@@ -2,7 +2,9 @@
 
 *2026-10-28. Every number here comes from this repository. The file that
 produced each one is named next to it, and the commands to reproduce them are at
-the bottom.*
+the bottom. Updated 2026-11-28: the field figures below say which were retired and
+what replaced them, and the closing paragraph says what the tool is today (Apache
+2.0, one network call). The three findings are as measured then.*
 
 ---
 
@@ -186,11 +188,12 @@ git clone https://github.com/kalkudiary-ai/orunmila.git
 cd orunmila
 
 npm run accuracy          # detection accuracy, glove completeness, phantom precision
-npm test                  # 15 suites
+npm test                  # every suite (113 on 2026-11-28)
 cat bench-results/README.md   # all 29 benchmark runs, with methodology
 
-# re-run a benchmark yourself
-OPENROUTER_API_KEY=<key> node bin/bench.js --agent direct-api --model <provider/model>
+# re-run a benchmark yourself (a clone only: the runner is not in the npm package,
+# and it calls AI models over the internet, which Orunmila itself never does)
+OPENROUTER_API_KEY=<key> node scripts/bench.js --agent direct-api --model <provider/model>
 ```
 
 Current detection accuracy: **100% on a labelled set of 17 turns / 38
@@ -199,24 +202,41 @@ precision 100% (15/15 real-log-derived non-work cases stayed clean). The labelle
 set is small, and after finding #3 above I'd rather say so twice than round it
 up once.
 
-The field numbers come from real use rather than fixtures: **194 sessions /
-1,174 turns**, over which the evidentiary laws fire on 18% of claimed turns, and
-the one law precise enough to block on fired 8 times — every one genuine
-(`src/laws/gate.js`).
+The field numbers come from real use rather than fixtures, and from **one
+person's work on one machine** (mostly Claude Code sessions in one repository):
+a case study, not a benchmark.
 
-One caveat on that last figure, found the same day as the three defects above
-and for the same reason. That law's assertion extractor requires a copula, so it
-sees *"The build is green"* and *"Tests are passing"* but **not** *"Tests
-pass."*, *"I ran the tests and they pass."* or *"It works."* A law that cannot
-see the dominant phrasing of its own target has high precision partly *because*
-it has narrow recall. "8 firings, all genuine" is true; "8 firings out of an
-unknown number of real occurrences" is the whole of it. Tracked as P0-3. I'd
-rather print this next to the number than let the number flatter the tool.
+The first field run, **194 sessions / 1,174 turns**, had the evidentiary laws
+firing on 18% of claimed turns and the one law then strict enough to block
+(`no-green-without-command`) firing 8 times, every one genuine. **That figure is
+retired and should not be quoted.** It was found the same day as the three
+defects above, and for the same reason, to rest on two faults: the law's
+assertion extractor required a copula, so it saw *"The build is green"* but not
+*"Tests pass."*, *"I ran the tests and they pass."* or *"It works."* (P0-3), and
+its receipt side read a command with no recorded exit code as a failure, so 98.4%
+of captured commands counted as failed (P0-5). Both were fixed in 0.2.2.
+
+The run that replaces it, re-derived on 2026-10-28 with both fixes: **111
+sessions / 796 claimed turns**, the evidentiary laws touching 414 turns (52%), and
+`no-green-without-command` blocking 13 turns (1.6% of claimed turns), **12 of its
+14 findings genuine**; 8 of those 14 are phrasings the old extractor could not
+match (`scripts/measure-laws.js`; the guide's "Why only two block"). It is a
+different measurement, not a correction: the first run was taken from another
+repository root, where project laws apply on top of the canon, over a larger
+corpus. Today two of the
+six laws block (`no-green-without-command` and `no-grep-as-basis`); the other
+four advise.
+
+Claims are still read by fixed rules, not a model, so an agent can word a claim
+the rules do not see. I'd rather print that next to the number than let the
+number flatter the tool.
 
 ---
 
-**Orunmila** is MIT licensed, has zero runtime dependencies, and runs entirely
-on your machine. The CLI makes no outbound requests; the HTML report's optional
-3D Graph tab fetches a rendering library from a CDN when opened, which is noted
-in the README rather than left for someone to discover in a packet trace.
+**Orunmila** is free, licensed under the Apache License 2.0 (since 0.2.2; versions
+up to 0.2.1 were MIT and stay MIT), has zero runtime dependencies, and runs
+entirely on your machine. No internet call does its work: the one call it makes
+asks the npm registry for a newer Orunmila, at most once a day after `orunmila
+install`, sending only the package's name (`orunmila install --without-updates`
+turns it off). The pages it renders load nothing from the network.
 [github.com/kalkudiary-ai/orunmila](https://github.com/kalkudiary-ai/orunmila)

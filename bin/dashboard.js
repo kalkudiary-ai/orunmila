@@ -7,7 +7,8 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { renderSessionHtml } = require('../src/render/html');
+const { renderSessionHtml, headerVerdict } = require('../src/render/html');
+const { sessionFacts } = require('../src/render/session-facts');
 const { listSessionReports } = require('../src/reconcile');
 const { listArchives, listArchivedSessionReports } = require('../src/reconcile/rescore');
 const { trailForSession } = require('../src/trail');
@@ -18,20 +19,9 @@ const { redactForRender } = require('../src/render/redact');
 const PORT = process.env.PORT || 3773;
 const ORUNMILA_HOME = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
 
-/**
- * DOC3 (LD340; MR3, LD316): a session's witness gap from its odù log in <home>/sessions/<id>/, as `orunmila trail` and
- * the session report give it, or null when it has none that verifies (the trail page then says the gap is not shown).
- */
-function witnessGapOf(sessionId) {
-  try {
-    const { sessionFolderName } = require('../src/opon/intake/paths');
-    const text = fs.readFileSync(path.join(ORUNMILA_HOME, 'sessions', sessionFolderName(sessionId), 'odu.jsonl'), 'utf8');
-    if (!require('../src/verify/chain').verifyText(text).ok) return null;
-    return require('../src/babalawo/report').witnessGap(text.split('\n').slice(0, -1).map((l) => JSON.parse(l)));
-  } catch {
-    return null;
-  }
-}
+// DOC3 (LD340; MR3, LD316), PG1 (F33): a session's witness gap and the Babaláwo's verdict, from its logs in
+// <home>/sessions/<id>/, as `orunmila trail` reads them (src/render/session-facts.js); each null when its log is missing
+// or does not verify.
 
 function esc(s) { return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
@@ -67,34 +57,39 @@ function loadSessions() {
           turnReports.push({ turn: f.replace('.json', ''),
             verified: sm.verified || 0, partial: sm.partial || 0, phantom: sm.phantom || 0,
             phantom_verification: sm.phantom_verification || 0, unverifiable: sm.unverifiable || 0,
-            silently_dropped: sm.silently_dropped || 0, untracked_writes: sm.untracked_writes || 0 });
+            silently_dropped: sm.silently_dropped || 0, untracked_writes: sm.untracked_writes || 0,
+            undisclosed_changes: sm.undisclosed_changes || 0 });
         } catch { /* skip */ }
       }
     }
-    let totV = 0, totPa = 0, totPh = 0, totPhv = 0, totDr = 0, totWild = 0, totClaims = 0;
+    let totV = 0, totPa = 0, totPh = 0, totPhv = 0, totDr = 0, totWild = 0, totClaims = 0, totUnv = 0, totUnd = 0;
     for (const t of turnReports) {
       totV += t.verified; totPa += t.partial; totPh += t.phantom; totPhv += t.phantom_verification;
-      totDr += t.silently_dropped; totWild += t.untracked_writes;
+      totDr += t.silently_dropped; totWild += t.untracked_writes; totUnv += t.unverifiable; totUnd += t.undisclosed_changes;
       totClaims += t.verified + t.partial + t.phantom + t.phantom_verification + t.unverifiable;
     }
     const reliability = totClaims ? Math.round(100 * (totV + totPa * 0.5) / totClaims) : null;
     const phantoms = totPh + totPhv;
     const phRate = totClaims ? Math.round(100 * phantoms / totClaims) : null;
+    // PG1 (F33): the card's words are the trail page's header rule over the same summed summaries, never a trust word.
+    const sev = turnReports.length
+      ? headerVerdict({ verified: totV, partial: totPa, unverifiable: totUnv, phantom: totPh, phantom_verification: totPhv, silently_dropped: totDr, undisclosed_changes: totUnd, untracked_writes: totWild })
+      : null;
+    const facts = sessionFacts(ORUNMILA_HOME, id);
     sessions.push({ id, agent: s.agent, firstTs: s.firstTs, lastTs: s.lastTs,
       eventCount: s.events, turnCount: s.turns.size, reportedTurns: turnReports.length,
       turnReports, verified: totV, partial: totPa, phantom: totPh, phv: totPhv,
-      dropped: totDr, wild: totWild, claims: totClaims, reliability, phRate, witnesses: witnessGapOf(id) });
+      dropped: totDr, wild: totWild, claims: totClaims, reliability, phRate, sev, witnesses: facts.witnesses, judge: facts.judge });
   }
   return sessions.sort((a, b) => (b.lastTs || '').localeCompare(a.lastTs || ''));
 }
 
 // ── verdict helpers ──
 
-function verdictLabel(reliability) {
-  if (reliability === null) return { text: 'No data', cls: 'verdict-none' };
-  if (reliability >= 70) return { text: 'Trustworthy', cls: 'verdict-good' };
-  if (reliability >= 50) return { text: 'Review recommended', cls: 'verdict-warn' };
-  return { text: 'Low trust', cls: 'verdict-bad' };
+// PG1 (F33): the card's label is the trail page's header phrase (src/render/html.js headerVerdict), in its colour.
+function verdictLabel(s) {
+  if (!s.sev) return { text: 'Not checked', color: 'var(--text3)' };
+  return { text: s.sev.txt, color: s.sev.c };
 }
 
 function timeDiff(a, b) {
@@ -249,8 +244,9 @@ function html() {
   <h1><span>◉</span> Orunmila</h1>
   <div class="sub">Claim vs. reality reconciliation for AI coding agents</div>
   <p style="color:var(--text2);font-size:13px;max-width:680px;margin-top:8px;line-height:1.6;">
-    Orunmila watches AI coding agents at work and checks every claim against reality.
-    When an agent says <em>"I fixed the bug and ran the tests"</em>, Orunmila checks: was the file actually changed? Did a test actually run and pass?
+    Orunmila records what AI coding agents do, then checks what they claim against that record with fixed rules.
+    When an agent says <em>"I fixed the bug and ran the tests"</em>, Orunmila checks: was the file changed? Did a test run and pass?
+    A claim worded in a way the rules do not expect can be missed, so a finding means &ldquo;recheck this&rdquo;.
     <strong>Monitor</strong> shows live and recent work sessions.
   </p>
 </div>
@@ -312,7 +308,7 @@ function narrativeFor(s) {
     parts.push(`claimed "tested and works" ${s.phv} time${s.phv === 1 ? '' : 's'} without running a test`);
   }
   if (s.dropped > 0) {
-    parts.push(`${s.dropped} part${s.dropped === 1 ? '' : 's'} of the original request with no evidence and not mentioned again`);
+    parts.push(`${s.dropped} part${s.dropped === 1 ? '' : 's'} of the original request no later message seems to cover (this check is often wrong)`);
   }
   if (s.wild > 0) {
     parts.push(`${s.wild} file${s.wild === 1 ? '' : 's'} changed on disk without disclosure`);
@@ -325,10 +321,11 @@ function narrativeFor(s) {
 
 function renderSessionRow(s, activeSessions) {
   const isActive = activeSessions.some(a => a.id === s.id);
-  const v = verdictLabel(s.reliability);
+  const v = verdictLabel(s);
   const dateStr = s.lastTs ? new Date(s.lastTs).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
   const elapsed = s.firstTs && s.lastTs ? timeDiff(s.firstTs, s.lastTs) : '';
-  const rColor = s.reliability >= 70 ? 'var(--green)' : s.reliability >= 50 ? 'var(--yellow)' : s.reliability !== null ? 'var(--red)' : 'var(--text3)';
+  // PG1: the score takes its label's colour, so a high score never reads green beside an untracked write.
+  const rColor = v.color;
   const narrative = narrativeFor(s);
 
   return `<a href="/session/${encodeURIComponent(s.id)}" class="s-card" target="_blank">
@@ -339,6 +336,7 @@ function renderSessionRow(s, activeSessions) {
         <div class="s-id">${esc(s.id)}</div>
         ${narrative ? `<div class="s-narrative">${esc(narrative)}</div>` : ''}
         ${s.witnesses ? `<div class="s-narrative">${esc(s.witnesses.sentence)}</div>` : ''}
+        ${s.judge ? `<div class="s-narrative">${esc(s.judge.sentence)}</div>` : ''}
       </div>
     </div>
     <div class="s-card-right">
@@ -346,8 +344,8 @@ function renderSessionRow(s, activeSessions) {
       <div class="s-bar-wrap" title="Proportion of claim outcomes: ${s.verified} verified, ${s.partial} partial, ${s.phantom} phantom, ${s.phv} false verification">
         ${proportionBar(s.verified, s.partial, s.phantom, s.phv, s.claims - s.verified - s.partial - s.phantom - s.phv)}
       </div>
-      <div class="s-reliability" style="color:${rColor}" title="Reliability: weighted score 0-100. Verified claims score 1.0, partial 0.5, phantom/dropped score 0.">${s.reliability !== null ? s.reliability + '%' : '—'}</div>
-      <div class="s-verdict ${v.cls}">${v.text}</div>
+      <div class="s-reliability" style="color:${rColor}" title="Claims verified, weighted 0-100: a verified claim scores 1, a partial one 0.5, a phantom or phantom verification 0, an unverifiable one 0; dropped parts of the request are not scored, nor are undisclosed changes or untracked writes.">${s.reliability !== null ? s.reliability + '%' : '—'}</div>
+      <div class="s-verdict" style="background:color-mix(in srgb, ${v.color} 14%, transparent);color:${v.color}">${esc(v.text)}</div>
     </div>
   </a>`;
 }
@@ -376,7 +374,7 @@ const server = http.createServer((req, res) => {
       const { reports, trail } = redactForRender(liveReports, rawTrail, { home: true, root: process.cwd() });
       if (!reports.length) { res.writeHead(404); return res.end('No reports for session ' + sessionId + (stamp ? ` (archive ${stamp})` : '')); }
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      return res.end(renderSessionHtml(sessionId, reports, trail, { witnesses: witnessGapOf(sessionId) })); // DOC3: as orunmila trail
+      return res.end(renderSessionHtml(sessionId, reports, trail, sessionFacts(ORUNMILA_HOME, sessionId))); // DOC3, PG1: as orunmila trail
     } catch (e) { res.writeHead(500); return res.end('Error: ' + e.message); }
   }
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });

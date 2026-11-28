@@ -855,21 +855,12 @@ function cmdHtml() {
 }
 
 /**
- * MR3 (LD316): the witness gap of a session, from its odù log in <home>/sessions/<id>/ (counts and one sentence; no
- * path), or null when it has none that verifies, so the page says it is not shown rather than show nothing as clean.
+ * MR3 (LD316), PG1 (F33): what the page reads from the session's logs in <home>/sessions/<id>/: the witness gap from its
+ * odù log and the Babaláwo's verdict from its verdict log, each null when its log is missing or does not verify, so
+ * the page says it is not shown rather than show nothing as clean (src/render/session-facts.js, shared with the dashboard).
  */
-function witnessGapOf(sessionId) {
-  const { sessionFolderName } = require('../src/opon/intake/paths');
-  const { verifyText } = require('../src/verify/chain');
-  const { witnessGap } = require('../src/babalawo/report');
-  try {
-    const home = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
-    const text = fs.readFileSync(path.join(home, 'sessions', sessionFolderName(sessionId), 'odu.jsonl'), 'utf8');
-    if (!verifyText(text).ok) return null;
-    return witnessGap(text.split('\n').slice(0, -1).map((l) => JSON.parse(l)));
-  } catch {
-    return null;
-  }
+function sessionFactsOf(sessionId) {
+  return require('../src/render/session-facts').sessionFacts(orunmilaHome(), sessionId);
 }
 
 function cmdTrail() {
@@ -908,7 +899,7 @@ function cmdTrail() {
   }
 
   const { reports, trail } = applyRedaction(rawReports, rawTrail);
-  const html = renderSessionHtml(sessionId, reports, trail, { witnesses: witnessGapOf(sessionId) });
+  const html = renderSessionHtml(sessionId, reports, trail, sessionFactsOf(sessionId));
   const suffix = fromArchive ? `-archive-${fromArchive}` : '';
   const outPath = flag('out', path.join(process.cwd(), `orunmila-trail-${sessionId}${suffix}.html`));
   fs.writeFileSync(outPath, html);

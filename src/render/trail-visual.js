@@ -41,7 +41,7 @@ const EXPLAIN = {
   undisclosed: 'This file changed but no claim or request mentioned it.',
   silently_dropped: 'Part of your request no later message seems to cover. Often wrong: pasted text can look like a request.',
   untracked_write: 'The disk changed but no tool call ever disclosed it.',
-  clean: 'Touched during the session; nothing flagged.',
+  clean: 'Touched during the session; no check flagged it (not a verdict that it is right).',
   read: 'A file the agent read (a source of information).',
   write: 'A file the agent changed.',
   disk: 'A change seen directly on disk by the independent watcher.',
@@ -49,6 +49,10 @@ const EXPLAIN = {
   network: 'The agent reached out to the internet.',
   tool: 'Another tool the agent used.',
 };
+
+// PG1 (F35): what a stain key reads as on the page. "clean" is the Babaláwo's word for a judged verdict; a thing no
+// check flagged was never judged, so it reads "nothing flagged". Other keys read as themselves, underscores as spaces.
+const LABEL = { clean: 'nothing flagged' };
 
 function buildVizData(model, stainByKey, reports) {
   const nodes = [];
@@ -170,7 +174,7 @@ function buildVizData(model, stainByKey, reports) {
     totals: model.totals || { turns: turns.length, artifacts: nodes.length, touches: trail.length },
     nodes, edges: [...edgeSet.values()], trail, turns,
     channelTally, stainTally, findings,
-    palette: { stain: STAIN_COLORS, channel: CHANNEL_COLORS, glyph: CHANNEL_GLYPH, explain: EXPLAIN },
+    palette: { stain: STAIN_COLORS, channel: CHANNEL_COLORS, glyph: CHANNEL_GLYPH, explain: EXPLAIN, label: LABEL },
   };
 }
 
@@ -402,6 +406,7 @@ function renderTrailVisual(vizData) {
   var DATA = ${json};
   var P = DATA.palette;
   function colorOf(stain, channel){ return (stain && P.stain[stain]) || P.channel[channel] || '#888'; }
+  function label(k){ return (P.label && P.label[k]) || String(k).replace(/_/g,' '); }
   function explainOf(stain, channel){ return (stain && P.explain[stain]) || P.explain[channel] || ''; }
   var root = document.getElementById('gv-root');
   var tip = document.getElementById('gv-tip');
@@ -788,7 +793,20 @@ ${graph3d.source()}
     html += '<div style="padding:8px 16px;margin:4px 0;background:#0e1219;border-radius:8px;font-size:.84rem;color:#cfd8e3;">'
       + '<b>Touches</b>: every recorded contact (a read, a write, a command, a network call, a tool use). '
       + '<b>Things</b>: the distinct files, commands and endpoints touched. '
-      + '<b>Turns checked</b>: turns whose claims were compared with the record; with none, the page says <b>Not checked</b>, never clean.</div>';
+      + '<b>Turns checked</b>: turns whose claims were compared with the record; with none, the page says <b>Not checked</b>, never clean. '
+      + '<b>nothing flagged</b>: touched, and no check flagged it; that is not a verdict that it is right.</div>';
+    // PG1: the words the header uses (the witness line, the judge's line) defined where a reader looks for them.
+    var words = [
+      ['The Glove', 'Orunmila\\u2019s record of what the agent\\u2019s own hooks reported: each prompt, tool call, command and claim.'],
+      ['The Sentinel', 'Orunmila\\u2019s own watcher of the disk, which sees a file change whoever made it, inside the folders it watches.'],
+      ['Both witnesses', 'A change both the Glove and the Sentinel recorded. One witness alone is still a fact; the page says which one, and why the other has nothing.'],
+      ['odù', 'One thing that happened, put together from every mark of it (an edit, a command, a change on disk), as the session log keeps it.'],
+      ['The Babaláwo', 'Orunmila\\u2019s judge. At a session\\u2019s closeout it reads the whole sealed record with fixed rules (no model) and gives each odù, and the session, one verdict: <b>Clean</b> (nothing to look at), <b>Look at this</b> (worth a look, not wrong by itself), or <b>Violation</b> (the record breaks a rule). <b>Incomplete</b> means part of the record is missing. Its findings: orunmila report --verdicts --session ID.'],
+    ];
+    html += '<h4 style="color:#e7edf3;font-size:1rem;margin:28px 0 6px;">Words on this page</h4>';
+    for (var w = 0; w < words.length; w++) {
+      html += '<div style="padding:8px 16px;margin:4px 0;background:#0e1219;border-radius:8px;font-size:.84rem;color:#cfd8e3;"><b>'+words[w][0]+'</b>: '+words[w][1]+'</div>';
+    }
     html += '</div>';
     el.innerHTML = html;
   }
@@ -873,7 +891,7 @@ ${graph3d.source()}
       return keys.map(function(k){
         var c = kind==='stain' ? (P.stain[k]||'#888') : (P.channel[k]||'#888');
         var w = 8 + (tally[k]/max)*150;
-        return '<div class="b" title="'+escjs(P.explain[k]||k)+'"><span class="v">'+tally[k]+'</span><span class="fill" style="width:'+w+'px;background:'+c+';color:'+c+'"></span><span style="color:#aeb8c4">'+escjs(k.replace(/_/g,' '))+'</span></div>';
+        return '<div class="b" title="'+escjs(P.explain[k]||k)+'"><span class="v">'+tally[k]+'</span><span class="fill" style="width:'+w+'px;background:'+c+';color:'+c+'"></span><span style="color:#aeb8c4">'+escjs(label(k))+'</span></div>';
       }).join('');
     }
 
@@ -906,7 +924,7 @@ ${graph3d.source()}
       + '<text x="'+donutSvgW/2+'" y="'+(donutSvgW/2+14)+'" text-anchor="middle" fill="#7d8694" font-size="10">things</text></svg>';
     var donutLegend = stainKeys.map(function(k){
       var pct = Math.round(DATA.stainTally[k]/stainTotal*100);
-      return '<div class="it"><span class="gv-dot" style="background:'+(P.stain[k]||'#888')+'"></span>'+escjs(k.replace(/_/g,' '))+' '+pct+'%</div>';
+      return '<div class="it"><span class="gv-dot" style="background:'+(P.stain[k]||'#888')+'"></span>'+escjs(label(k))+' '+pct+'%</div>';
     }).join('');
 
     var topNodes = DATA.nodes.slice().sort(function(a,b){return b.touches-a.touches;}).slice(0,8);

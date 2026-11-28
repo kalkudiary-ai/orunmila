@@ -288,6 +288,30 @@ function stainByKeyFrom(files) {
   return m;
 }
 
+/**
+ * The header's phrase for checked turns, from their summed summaries. PG1 (F33): the dashboard's card uses this same
+ * rule, so one session never reads "Trustworthy" there and "Untracked writes: investigate" here. Severity drives the
+ * phrase: untracked writes (disk changed, never disclosed) outrank everything; then claim problems; undisclosed changes
+ * are worth a look too (they once read "looks clean").
+ */
+function headerVerdict(totals) {
+  const verified = totals.verified || 0;
+  const caution = (totals.partial || 0) + (totals.unverifiable || 0);
+  const problems = (totals.phantom || 0) + (totals.phantom_verification || 0) + (totals.silently_dropped || 0);
+  const totalClaims = verified + caution + problems;
+  const undisclosed = totals.undisclosed_changes || 0;
+  const untracked = totals.untracked_writes || 0;
+  return untracked > 0
+    ? { txt: 'Untracked writes: investigate', c: COLORS.untracked_write }
+    : problems > 0
+    ? { txt: 'Review recommended', c: COLORS.phantom }
+    : caution > 0 || undisclosed > 0
+    ? { txt: 'Worth a look', c: COLORS.partial }
+    : totalClaims === 0
+    ? { txt: 'Nothing to check', c: NEUTRAL }
+    : { txt: 'Clean', c: COLORS.verified };
+}
+
 // The headline. Instead of eight equal-weight pills (where "phantom 140" reads
 // the same as "verified 61"), lead with ONE number and a single proportion bar,
 // so the first glance answers "do I need to look?" before any detail.
@@ -313,18 +337,7 @@ function renderVerdict(totals, turnCount, trail) {
   </div>`;
   }
 
-  // Severity drives the accent colour and the verdict phrase. Untracked writes
-  // (disk changed, never disclosed) outrank everything; then claim problems;
-  // undisclosed changes are worth a look too (they once read "looks clean").
-  const sev = untracked > 0
-    ? { txt: 'Untracked writes: investigate', c: COLORS.untracked_write }
-    : problems > 0
-    ? { txt: 'Review recommended', c: COLORS.phantom }
-    : caution > 0 || undisclosed > 0
-    ? { txt: 'Worth a look', c: COLORS.partial }
-    : totalClaims === 0
-    ? { txt: 'Nothing to check', c: NEUTRAL }
-    : { txt: 'Clean', c: COLORS.verified };
+  const sev = headerVerdict(totals);
 
   const headNum = untracked > 0 ? untracked : problems > 0 ? problems : totalClaims === 0 ? '&mdash;' : verified;
   const headLabel = untracked > 0
@@ -372,7 +385,18 @@ function renderGap(witnesses) {
   return `<p class="gap">${esc(witnesses.sentence)}</p>`;
 }
 
-function renderSessionHtml(sessionId, reports, trail, { witnesses } = {}) {
+/**
+ * PG1 (F33): the Babaláwo's verdict under the witness gap, from the session's verdict log (src/render/session-facts.js),
+ * with why it can differ from the header and where its findings are. `judge` undefined: the caller read no session folder
+ * (`orunmila html`), and nothing is shown; null: no verdict log that verifies, and the page says so.
+ */
+function renderJudge(judge, sessionId) {
+  if (judge === undefined) return '';
+  if (judge === null) return '<p class="gap gap-none">Not judged: this session has no verdict log. The Babaláwo writes one at the session\'s closeout when it is on (orunmila install --with-judge).</p>';
+  return `<p class="gap judge">${esc(judge.sentence)} The header above checks each turn's claims; the Babaláwo judges the whole record with its own rules, so the two can differ. Its findings: <code>orunmila report --verdicts --session ${esc(sessionId)}</code>.</p>`;
+}
+
+function renderSessionHtml(sessionId, reports, trail, { witnesses, judge } = {}) {
   const files = buildFileStains(reports);
   const trailByPath = indexTrailByPath(trail);
   // The rich, tabbed, stain-first visual (Graph/Tree/Timeline/Dashboard). Only
@@ -446,6 +470,7 @@ function renderSessionHtml(sessionId, reports, trail, { witnesses } = {}) {
   <h1>orunmila &mdash; session ${esc(sessionId)}</h1>
   ${renderVerdict(totals, reports.length, trail)}
   ${renderGap(witnesses)}
+  ${renderJudge(judge, sessionId)}
 
   <h4>Files worth a look (ranked by severity)</h4>
   ${renderFindings(files, trailByPath, reports.length > 0)}
@@ -462,4 +487,4 @@ function renderSessionHtml(sessionId, reports, trail, { witnesses } = {}) {
 </html>`;
 }
 
-module.exports = { renderSessionHtml, COLORS };
+module.exports = { renderSessionHtml, COLORS, headerVerdict };

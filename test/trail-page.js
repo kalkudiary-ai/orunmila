@@ -101,4 +101,29 @@ it('MR3 (LD316): the trail page carries the witness gap under its header; with n
   assert.ok(!renderSessionHtml('s1', [], trail).includes('What changed on disk'), '`orunmila html`, which passes nothing, is unchanged');
 });
 
+it("PG1 (F33): the trail page gives the Babaláwo's own verdict when there is a verdict log, says why it can differ, and says plainly when there is none", () => {
+  const judge = { verdict: 'violation', label: 'Violation', counts: { violation: 30, look_at_this: 2, clean: 5 }, sentence: "The Babaláwo's verdict on this session's whole record: Violation (30 violations, 2 things to look at in its verdict log)." };
+  const html = renderSessionHtml('s1', [], trail, { witnesses: null, judge });
+  assert.ok(header(html).includes(judge.sentence.replace(/'/g, '&#39;')), header(html));
+  assert.ok(header(html).includes('so the two can differ'), 'why the header and the judge can differ');
+  assert.ok(header(html).includes('orunmila report --verdicts --session s1'), 'where its findings are');
+  const none = renderSessionHtml('s1', [], trail, { witnesses: null, judge: null });
+  assert.ok(header(none).includes('Not judged: this session has no verdict log'), header(none));
+  assert.ok(!renderSessionHtml('s1', [], trail).includes('Not judged'), '`orunmila html`, which passes nothing, is unchanged');
+});
+
+it('PG1 (F35): the Dashboard tab calls an unflagged thing "nothing flagged", never "clean", the word the judge uses for a verdict', () => {
+  const viz = tv.buildVizData(trail, new Map(), [{ turn_id: 't1', claims: [], subtasks: [], undisclosed: [], untracked: [], summary: summary({}) }]);
+  assert.strictEqual(viz.palette.label.clean, 'nothing flagged');
+  const html = renderSessionHtml('s1', [{ turn_id: 't1', claims: [], subtasks: [], undisclosed: [], untracked: [], summary: summary({}) }], trail);
+  assert.ok(html.includes("escjs(label(k))+' '+pct+'%</div>'"), 'the donut legend names each part by its label');
+  assert.ok(!html.includes("escjs(k.replace(/_/g,' '))+' '+pct"), 'and no longer by its bare key');
+});
+
+it('PG1: the Glossary defines the words the header uses (Glove, Sentinel, both witnesses, odù) and the judge\'s three verdicts', () => {
+  const html = renderSessionHtml('s1', [], trail);
+  const g = html.slice(html.indexOf('function renderGlossary'), html.indexOf('// ---- TREE ----'));
+  for (const w of ['The Glove', 'The Sentinel', 'Both witnesses', 'odù', 'The Babaláwo', 'Clean', 'Look at this', 'Violation']) assert.ok(g.includes(w), `the Glossary has "${w}"`);
+});
+
 runAll('trail-page');

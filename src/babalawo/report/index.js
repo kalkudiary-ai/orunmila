@@ -416,9 +416,25 @@ function renderHtml(rep) {
   ].join('\n');
 }
 
+/**
+ * PG1 (F33): the judge's verdict on a session, in one sentence for the pages that show a session beside it (the trail
+ * page, the dashboard), from the verdict log's latest session verdict and its counts. Null with no session verdict.
+ * The findings themselves stay in `orunmila report --verdicts`; the pages name it.
+ */
+function verdictLine(records) {
+  const s = (records || []).filter((r) => r && r.record === 'session_verdict').pop();
+  if (!s) return null;
+  const c = s.counts || {};
+  const parts = [];
+  if (c.violation) parts.push(plural(c.violation, 'violation', 'violations'));
+  if (c.look_at_this) parts.push(plural(c.look_at_this, 'thing to look at', 'things to look at'));
+  const label = LABEL[s.verdict] || String(s.verdict);
+  return { verdict: s.verdict, label, counts: c, sentence: `The Babaláwo's verdict on this session's whole record: ${label}${parts.length ? ` (${parts.join(', ')} in its verdict log)` : ''}.` };
+}
+
 /** The same findings as JSON, for the agent's own self-correction loop (line 691). */
 function renderJson(rep) {
   return JSON.stringify({ schema_version: 1, ...rep }, null, 2);
 }
 
-module.exports = { buildReport, renderText, renderHtml, renderJson, witnessWords, witnessGap };
+module.exports = { buildReport, renderText, renderHtml, renderJson, witnessWords, witnessGap, verdictLine };

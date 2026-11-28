@@ -1232,6 +1232,39 @@
       "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
       "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
     },
+    "process_closeout_completeness": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "process",
+        "name": "closeout"
+      },
+      "says": "exited",
+      "detail": {
+        "exit_status": "pass",
+        "completeness": {
+          "transcript": "read",
+          "calls": 12,
+          "unmarked": [
+            {
+              "id": "toolu_9",
+              "tool": "mcp__db__query"
+            }
+          ],
+          "cut": 2
+        }
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
     "hook_exited_interrupted": {
       "schema_version": 1,
       "session_id": "ses_test_0001",
@@ -3768,6 +3801,24 @@
     {"name": "an outside change whose path is not text (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_changed": [{"path": 1, "fingerprint_before": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "fingerprint": "hmac-sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}, "unset": [], "error": {"path": "/detail/outside_changed/0/path", "keyword": "type"}},
     {"name": "an outside change with an empty path (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_changed": [{"path": "", "fingerprint_before": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "fingerprint": "hmac-sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}, "unset": [], "error": {"path": "/detail/outside_changed/0/path", "keyword": "minLength"}},
     {"name": "an outside change whose fingerprint before is of the wrong shape (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_changed": [{"path": "/home/u/.zshrc", "fingerprint_before": "x", "fingerprint": "hmac-sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}, "unset": [], "error": {"path": "/detail/outside_changed/0/fingerprint_before", "keyword": "pattern"}},
-    {"name": "an outside change whose fingerprint is of the wrong shape (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_changed": [{"path": "/home/u/.zshrc", "fingerprint_before": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "fingerprint": "x"}]}, "unset": [], "error": {"path": "/detail/outside_changed/0/fingerprint", "keyword": "pattern"}}
+    {"name": "an outside change whose fingerprint is of the wrong shape (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_changed": [{"path": "/home/u/.zshrc", "fingerprint_before": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "fingerprint": "x"}]}, "unset": [], "error": {"path": "/detail/outside_changed/0/fingerprint", "keyword": "pattern"}},
+    {"name": "completeness that is not an object (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": "x"}, "unset": [], "error": {"path": "/detail/completeness", "keyword": "type"}},
+    {"name": "completeness with a field the spec does not name (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": 12, "unmarked": [{"id": "toolu_9", "tool": "mcp__db__query"}], "cut": 2, "extra": 1}}, "unset": [], "error": {"path": "/detail/completeness/extra", "keyword": "additionalProperties"}},
+    {"name": "completeness with no transcript (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"calls": 12, "unmarked": [{"id": "toolu_9", "tool": "mcp__db__query"}], "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/transcript", "keyword": "required"}},
+    {"name": "completeness with no calls (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "unmarked": [{"id": "toolu_9", "tool": "mcp__db__query"}], "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/calls", "keyword": "required"}},
+    {"name": "completeness with no unmarked (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": 12, "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/unmarked", "keyword": "required"}},
+    {"name": "a transcript state the spec does not name (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "partial", "calls": 12, "unmarked": [{"id": "toolu_9", "tool": "mcp__db__query"}], "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/transcript", "keyword": "enum"}},
+    {"name": "a call count that is not a whole number (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": "12", "unmarked": [{"id": "toolu_9", "tool": "mcp__db__query"}], "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/calls", "keyword": "type"}},
+    {"name": "a call count below zero (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": -1, "unmarked": [{"id": "toolu_9", "tool": "mcp__db__query"}], "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/calls", "keyword": "minimum"}},
+    {"name": "unmarked calls that are not a list (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": 12, "unmarked": "x", "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/unmarked", "keyword": "type"}},
+    {"name": "an unmarked call that is not an object (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": 12, "unmarked": [1], "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/unmarked/0", "keyword": "type"}},
+    {"name": "an unmarked call with a field the spec does not name (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": 12, "unmarked": [{"id": "toolu_9", "tool": "mcp__db__query", "input": {}}], "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/unmarked/0/input", "keyword": "additionalProperties"}},
+    {"name": "an unmarked call with no id (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": 12, "unmarked": [{"tool": "mcp__db__query"}], "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/unmarked/0/id", "keyword": "required"}},
+    {"name": "an unmarked call with no tool (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": 12, "unmarked": [{"id": "toolu_9"}], "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/unmarked/0/tool", "keyword": "required"}},
+    {"name": "an unmarked call whose id is not text (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": 12, "unmarked": [{"id": 9, "tool": "mcp__db__query"}], "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/unmarked/0/id", "keyword": "type"}},
+    {"name": "an unmarked call with an empty id (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": 12, "unmarked": [{"id": "", "tool": "mcp__db__query"}], "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/unmarked/0/id", "keyword": "minLength"}},
+    {"name": "an unmarked call whose tool is not text (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": 12, "unmarked": [{"id": "toolu_9", "tool": 9}], "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/unmarked/0/tool", "keyword": "type"}},
+    {"name": "a cut that is not a whole number (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": 12, "unmarked": [{"id": "toolu_9", "tool": "mcp__db__query"}], "cut": "2"}}, "unset": [], "error": {"path": "/detail/completeness/cut", "keyword": "type"}},
+    {"name": "a cut below one (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": 12, "unmarked": [{"id": "toolu_9", "tool": "mcp__db__query"}], "cut": 0}}, "unset": [], "error": {"path": "/detail/completeness/cut", "keyword": "minimum"}}
   ]
 }

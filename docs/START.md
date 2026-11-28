@@ -144,7 +144,9 @@ who", never guessed.
   output kept. With `ORUNMILA_COMMAND_FACTS=1`, a test run's report also gives
   its runner's own pass, fail and skip counts, as the runner printed them.
 - Whether a record is complete. It can prove a record was not altered, not that
-  nothing was left out.
+  nothing was left out. With `ORUNMILA_COMMAND_FACTS=1`, the closeout checks the
+  record against the agent's own transcript and names each tool call that left
+  no mark; a call the transcript itself leaves out is still not seen.
 
 **What comes next.** Output 2 (Ọ̀pẹ̀lẹ̀) has the agent declare its intent before
 it starts, turns that into a lease scoped to the session, and fences the agent

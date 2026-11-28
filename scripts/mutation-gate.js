@@ -4655,6 +4655,24 @@ MUTANTS.push(
     from: '  if (ow && ow.changed.length) out.push(', to: '  if (false) out.push(', fails: ['CF4 (LD385)'] },
 );
 
+// CF5 (LD385): the record checked against the agent's transcript at the closeout.
+MUTANTS.push(
+  { id: "CF5-1 a sub-agent's calls are counted", file: 'src/capture/completeness.js', test: 'test/completeness.js',
+    from: " || r.isSidechain === true || ", to: ' || ', fails: ["CF5 (LD385): the transcript's tool calls"] },
+  { id: "CF5-2 calls from before the session count", file: 'src/capture/completeness.js', test: 'test/completeness.js',
+    from: '    if (sinceIso && r.timestamp < sinceIso) continue;', to: '', fails: ["CF5 (LD385): the transcript's tool calls"] },
+  { id: 'CF5-3 a repeated id counts twice', file: 'src/capture/completeness.js', test: 'test/completeness.js',
+    from: " || seen.has(b.id)) continue;", to: ') continue;', fails: ["CF5 (LD385): the transcript's tool calls"] },
+  { id: 'CF5-4 the list is never cut', file: 'src/capture/completeness.js', test: 'test/completeness.js',
+    from: 'unmarked: unmarked.slice(0, MAX_NAMED) };', to: 'unmarked };', fails: ['CF5: the calls with no mark are named'] },
+  { id: 'CF5-5 the closeout never counts', file: 'src/opon/intake/router.js', test: 'test/completeness.js',
+    from: '        end.completeness = completeness(readTranscriptCalls(s.transcriptPath, s.startedAt), marked);', to: '', fails: ['CF5 at the router'] },
+  { id: 'CF5-6 the router never learns the transcript', file: 'src/opon/intake/router.js', test: 'test/completeness.js',
+    from: "    if (typeof tp === 'string' && tp) s.transcriptPath = tp; // CF5: the transcript the closeout reads", to: '', fails: ['CF5 at the router'] },
+  { id: 'CF5-7 the report says complete whatever is missing', file: 'src/babalawo/report/index.js', test: 'test/report.js',
+    from: '  else if (cp && !cp.unmarked.length) out.push(', to: '  else if (cp) out.push(', fails: ['CF5 (LD385)'] },
+);
+
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };
 
 if (require.main === module) process.exit(runGate());

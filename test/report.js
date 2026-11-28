@@ -284,7 +284,7 @@ it('CF1 (LD385): the report names the commands that asked for administrator righ
     odus: [],
     verdicts: [],
   });
-  assert.deepStrictEqual(rep.commands, { elevated: [{ turn: 't1', text: 'sudo apt-get install x', ref: 'b1' }], hosts: ['a.example', 'github.com'], test_counts: [], packages: [], outside: null });
+  assert.deepStrictEqual(rep.commands, { elevated: [{ turn: 't1', text: 'sudo apt-get install x', ref: 'b1' }], hosts: ['a.example', 'github.com'], test_counts: [], packages: [], outside: null, completeness: null });
   const text = renderText(rep);
   assert.ok(text.includes('1 command asked for administrator rights (turn t1: `sudo apt-get install x`); what it did with them is outside what Orunmila sees.'), text);
   assert.ok(text.includes("The agent's commands named these hosts: a.example, github.com (named, not proof of contact)."), text);
@@ -341,6 +341,18 @@ it("CF4 (LD385): the report names each file outside the watched folders that run
   assert.strictEqual(changed.verdict, 'clean', 'facts, not verdicts');
   assert.ok(renderText(one({ outside_checked: 24, outside_changed: [] })).includes("Outside the watched folders, 24 files and folders that run code as you were fingerprinted at the session's start and its closeout; none changed."));
   assert.ok(!renderText(one({})).includes('Outside the watched folders'), 'no tripwire, no line');
+});
+
+it("CF5 (LD385): the report says how many of the transcript's tool calls have a mark, and names each that has none, or why the transcript was not read; never a verdict", () => {
+  const end = (detail) => ({ ...M.claimed(90), source: 'process', agent: null, turn: null, says: 'exited', target: { kind: 'process', name: 'closeout' }, detail: { exit_status: 'pass', ...detail } });
+  const one = (c) => buildReport({ header: { session_id: 's1', agent: { name: 'claude-code' } }, marks: [end({ completeness: c })], odus: [], verdicts: [] });
+  const lost = one({ transcript: 'read', calls: 12, unmarked: [{ id: 'toolu_9', tool: 'mcp__db__query' }] });
+  assert.deepStrictEqual(lost.commands.completeness, { transcript: 'read', calls: 12, unmarked: [{ id: 'toolu_9', tool: 'mcp__db__query' }] });
+  assert.ok(renderText(lost).includes("Completeness: the agent's transcript shows 12 tool calls since the session started; 1 has no mark in this record: mcp__db__query (toolu_9)."), renderText(lost));
+  assert.strictEqual(lost.verdict, 'clean', 'facts, not verdicts');
+  assert.ok(renderText(one({ transcript: 'read', calls: 12, unmarked: [] })).includes("Completeness: each of the 12 tool calls the agent's transcript shows since the session started has a mark in this record."));
+  assert.ok(renderText(one({ transcript: 'none', calls: 0, unmarked: [] })).includes("Completeness: the agent's transcript was not found, so the record was not checked against it."));
+  assert.ok(renderText(one({ transcript: 'too_large', calls: 0, unmarked: [] })).includes("Completeness: the agent's transcript is over 128 MiB, so the record was not checked against it."));
 });
 
 runAll('report');

@@ -298,6 +298,8 @@ hook scripts by their paths in the package (`src/capture/claude-code/`),
   git and ssh config, `authorized_keys`, `~/.npmrc`, the agents' user hook
   settings, the start-up folders of each OS) at session start (the header's
   `tripwire`) and at the closeout, which names each that changed by path only.
+  The closeout also checks the record against the agent's own transcript and
+  names each tool call with no mark (`detail.completeness`).
 - **A limit on a flooded Sentinel, off by default
   (`ORUNMILA_SENTINEL_MAX_PENDING=N`).** Past N changed paths waiting at once
   under one folder, the rest of the flood is dropped and one gap in each

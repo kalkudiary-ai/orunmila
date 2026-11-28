@@ -125,6 +125,7 @@ const { prepareOffThread } = require('./start-worker');
 const { canonicalize } = require('../../verify/canonical');
 const { installManager, readLock, lockChange } = require('../../capture/package-lock');
 const { tripwirePaths, tripwireFingerprints, tripwireChanges } = require('../../capture/outside-tripwire');
+const { readTranscriptCalls, completeness } = require('../../capture/completeness');
 const crypto = require('crypto');
 
 const CC = getAdapter('claude-code');
@@ -317,7 +318,7 @@ function createRouter(o) {
   }
 
   /** K5 (LD208): what the closeout needs of a session: its baseline, exclusions and lag grace (from its header). */
-  const closeoutFacts = (header, baseMap) => ({ baseMap, exclusions: header.config.exclusions || [], graceNs: BigInt(header.config.lag_grace_ms) * NS_PER_MS, closeoutAt: null, tripwire: header.tripwire || null });
+  const closeoutFacts = (header, baseMap) => ({ baseMap, exclusions: header.config.exclusions || [], graceNs: BigInt(header.config.lag_grace_ms) * NS_PER_MS, closeoutAt: null, tripwire: header.tripwire || null, startedAt: header.observed_at });
 
   /** CF4 (LD385), with commandFacts: the outside tripwire's fingerprints of the files that run code as the user. */
   function tripwireNow() {
@@ -429,6 +430,15 @@ function createRouter(o) {
       } catch (e) {
         delete end.outside_checked;
         error(`the outside tripwire at the closeout of session ${id} failed: ${e.message}`, { session_id: id });
+      }
+    }
+    if (o.commandFacts === true) {
+      // CF5 (LD385): the transcript's tool calls since the session started that have no mark in the record.
+      try {
+        const marked = new Set(checkLog(path.join(sessionsDir, sessionFolderName(id)), 'raw').records.map((r) => r.rec && r.rec.cause_hint).filter(Boolean));
+        end.completeness = completeness(readTranscriptCalls(s.transcriptPath, s.startedAt), marked);
+      } catch (e) {
+        error(`the completeness count at the closeout of session ${id} failed: ${e.message}`, { session_id: id });
       }
     }
     engine.receive(mark(who, 'exited', end), {});
@@ -675,6 +685,8 @@ function createRouter(o) {
       if (s.lv) live.pair(s.lv); // L2 (LD202): the sessions sharing its folder, named in each other's logs
     }
     s.last = BigInt(clock().mono);
+    const tp = CC.fields.transcriptPath(p);
+    if (typeof tp === 'string' && tp) s.transcriptPath = tp; // CF5: the transcript the closeout reads
     watchFor(s);
     // What was frozen at session start, fingerprinted again at every payload (B3, LD147).
     const tampered = s.tamper.check().map((m) => engine.receive(normalise(s, { ...m, session_id: id }), {}));

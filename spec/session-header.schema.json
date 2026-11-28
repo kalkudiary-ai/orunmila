@@ -52,7 +52,7 @@
       "required": ["name"],
       "properties": {
         "name": { "description": "The agent, for example `claude-code`.", "$comment": "brief v3 line 282", "type": "string", "minLength": 1 },
-        "version": { "description": "The agent's version, null when unknown.", "$comment": "brief v3 line 282", "type": ["string", "null"] }
+        "version": { "description": "The agent's version, null when unknown. Orunmila's intake writes null: Claude Code's hook payloads name no version.", "$comment": "brief v3 line 282", "type": ["string", "null"] }
       }
     },
     "os": {
@@ -87,10 +87,10 @@
       "type": "object",
       "required": ["quiet_window_ms", "ceiling_ms", "lag_grace_ms", "exclusions", "diff_size_limit_bytes"],
       "properties": {
-        "quiet_window_ms": { "description": "The quiet window.", "$comment": "brief v3 line 282", "type": "integer", "minimum": 0 },
-        "ceiling_ms": { "description": "The ceiling.", "$comment": "brief v3 line 282", "type": "integer", "minimum": 0 },
-        "lag_grace_ms": { "description": "The lag grace.", "$comment": "brief v3 line 282", "type": "integer", "minimum": 0 },
-        "exclusions": { "description": "Exclusions.", "$comment": "brief v3 line 282", "type": "array", "items": { "type": "string" } },
+        "quiet_window_ms": { "description": "The quiet window: how long, in milliseconds, a group of marks for one target waits with no new mark before it settles.", "$comment": "brief v3 line 282", "type": "integer", "minimum": 0 },
+        "ceiling_ms": { "description": "The ceiling: the longest, in milliseconds from its first mark, a group stays open before it is settled however busy it is.", "$comment": "brief v3 line 282", "type": "integer", "minimum": 0 },
+        "lag_grace_ms": { "description": "The lag grace: how long, in milliseconds, a settled group waits for a slower source's late marks before it is sealed.", "$comment": "brief v3 line 282", "type": "integer", "minimum": 0 },
+        "exclusions": { "description": "What the Sentinel and the baseline skip under the project: the Sentinel's ignore list (its defaults, then the lines of `.orunmila/ignore`), less `.orunmila/`, which is watched; each entry as written there, a folder's ending in `/`, matched as the ignore list's entries are; empty when the intake runs no Sentinel.", "$comment": "brief v3 line 282", "type": "array", "items": { "type": "string" } },
         "diff_size_limit_bytes": {
           "description": "The size limit over which a diff is not kept (`no_diff: too_large`), a configured value recorded in the session header.",
           "$comment": "brief v3 line 266",
@@ -131,13 +131,13 @@
         "byproducts": { "description": "`.orunmila/byproducts`.", "$comment": "brief v3 line 342", "$ref": "#/definitions/fingerprint" },
         "ignore": { "description": "`.orunmila/ignore`.", "$comment": "brief v3 line 342", "$ref": "#/definitions/fingerprint" },
         "law_packs": {
-          "description": "Every law pack in use (Orunmila's canon and any project law pack), by name.",
+          "description": "Every law pack in use (Orunmila's canon and any project law pack), by name. Orunmila names them `canon` (its own pack) and `project` (`.orunmila/laws.json`), each null when its file is not there.",
           "$comment": "brief v3 line 343",
           "type": "object",
           "additionalProperties": { "$ref": "#/definitions/fingerprint" }
         },
         "hook_settings": {
-          "description": "The agent's own hook configuration files, by path. A change mid-session is recorded as a tampering mark; it cannot be held back (NF42, approved by O 2026-11-15).",
+          "description": "The agent's own hook configuration files, by path. A change mid-session is recorded as a tampering mark; it cannot be held back (NF42, approved by O 2026-11-15). Orunmila keys each by its absolute path as the operating system writes it (backslashes on Windows): the project's `.claude/settings.json` and `.claude/settings.local.json`, and the user's `~/.claude/settings.json`, each null when absent.",
           "$comment": "brief v3 line 343, as amended for hook settings by O's NF42 decision",
           "type": "object",
           "additionalProperties": { "$ref": "#/definitions/fingerprint" }
@@ -150,8 +150,8 @@
       "type": "object",
       "required": ["before", "after"],
       "properties": {
-        "before": { "description": "Tools reported before they run.", "$comment": "brief v3 line 337", "type": "array", "items": { "type": "string", "minLength": 1 } },
-        "after": { "description": "Tools reported after they run.", "$comment": "brief v3 line 337", "type": "array", "items": { "type": "string", "minLength": 1 } }
+        "before": { "description": "Tools reported before they run. Orunmila lists each matcher of its own pre-tool-use hooks, split at `|`, each once; `*` means every tool.", "$comment": "brief v3 line 337", "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "after": { "description": "Tools reported after they run. Orunmila lists each matcher of its own post-tool-use hooks, split at `|`, each once; `*` means every tool.", "$comment": "brief v3 line 337", "type": "array", "items": { "type": "string", "minLength": 1 } }
       }
     },
     "test_command": {

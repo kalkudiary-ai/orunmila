@@ -75,7 +75,7 @@
       "$ref": "#/definitions/rule"
     },
     "also": {
-      "description": "Every other rule that fired on the odù, by id, sorted; empty when none did.",
+      "description": "Every other rule that fired on the odù, by id, sorted by rule number (R2 before R10); empty when none did.",
       "$comment": "agent's choice, Q34: line 659 cites one rule, and an odù can break more than one",
       "type": "array",
       "items": { "$ref": "#/definitions/rule" }

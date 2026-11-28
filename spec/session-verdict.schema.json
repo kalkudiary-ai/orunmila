@@ -190,6 +190,6 @@
     "fingerprint": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
     "verdict_id": { "type": "string", "pattern": "^v_[0-9]{4,}$" },
     "rule": { "type": "string", "pattern": "^R[0-9]+$" },
-    "count": { "type": "integer", "minimum": 0 }
+    "count": { "description": "A whole number of things counted, 0 or more.", "type": "integer", "minimum": 0 }
   }
 }

@@ -69,11 +69,14 @@ UTF-16 code-unit order, and the header's `baseline.fingerprint` is the plain SHA
   Orunmila's own home, so two such fingerprints can be compared but a reader cannot recompute one, and the file's
   contents cannot be recovered from it.
 - **`orunmila.code_fingerprint`** in the session header covers Orunmila's own code: for every regular file under its
-  code folder, the line `<path relative to that folder, with />` + NUL + `<lowercase hex SHA-256 of the file>` + line
-  feed; the lines sorted; `sha256:` and the SHA-256 of their joined bytes.
+  code folder (the `src` folder of the Orunmila copy that wrote the header), the line `<path relative to that folder,
+  with />` + NUL + `<lowercase hex SHA-256 of the file>` + line feed; the lines sorted in UTF-16 code-unit order;
+  `sha256:` and the SHA-256 of their joined bytes.
 - **`mono_ns`** is the machine's monotonic clock in nanoseconds, so it compares only within one boot. It is not
   required to rise with `seq`: `seq` is the order intake received marks, `mono_ns` the time each was observed, and a
   slower source's mark can arrive after a later one.
+- **A list in an odù or a verdict whose order its schema does not state** holds its items in no order this spec
+  defines.
 - **Redaction** runs before anything is hashed or written. A reader sees that text was redacted (`[REDACTED:<kind>]`
   in place of the secret, and the kinds in `detail.redactions` or a quarantined record's `redactions`), never what was
   removed. Which kinds Orunmila looks for is its own choice (`src/store/secrets.js`), not part of the format.
@@ -86,7 +89,8 @@ or "agent's choice" where the brief names no field.
 The schemas are JSON Schema draft-07 and use only these keywords: `type`, `enum`, `const`, `required`, `properties`,
 `additionalProperties`, `items`, `minimum`, `minLength`, `maxLength`, `pattern`, `minItems`, `allOf`, `anyOf`, `oneOf`,
 `not`, `if`, `then`, `else`, `$ref` and `definitions` (and `description`, `$comment`, `title`, `$id` and `$schema`,
-which check nothing). Any JSON Schema draft-07 checker can read them. Orunmila checks them with its own small checker,
+which check nothing); Orunmila's checker implements `oneOf`, but no schema here uses it. Any JSON Schema draft-07 checker
+can read them. Orunmila checks them with its own small checker,
 `src/verify/schema.js` (no dependencies), which refuses any keyword not on that list, so a misspelt keyword cannot
 check nothing.
 

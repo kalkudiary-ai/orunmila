@@ -312,7 +312,7 @@
       }
     },
     "witnesses": {
-      "description": "The sources whose marks are behind the event.",
+      "description": "The sources whose marks are behind the event. Sorted by name.",
       "$comment": "brief v4 line 308",
       "type": "array",
       "items": {
@@ -717,7 +717,7 @@
       }
     },
     "mark_seqs": {
-      "description": "The receipt. Every odù points back to every mark behind it, so any verdict can be audited down to the raw evidence. An odù with no marks cannot exist.",
+      "description": "The receipt. Every odù points back to every mark behind it, so any verdict can be audited down to the raw evidence. An odù with no marks cannot exist. In ascending order.",
       "$comment": "brief v4 lines 316, 330; guarantee 2 (line 489)",
       "type": "array",
       "minItems": 1,
@@ -811,7 +811,7 @@
           ]
         },
         "mark_seqs": {
-          "description": "That witness's own marks in this odù.",
+          "description": "That witness's own marks in this odù. In ascending order.",
           "$comment": "brief v4 line 331",
           "type": "array",
           "items": {

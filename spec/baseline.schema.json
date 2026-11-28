@@ -37,7 +37,7 @@
       "minLength": 1
     },
     "redactions": {
-      "description": "The kinds of secret redacted from `path`, when any was.",
+      "description": "The kinds of secret redacted from `path`, when any was. Sorted in UTF-16 code-unit order, each kind once.",
       "$comment": "brief v4 line 248; agent's choice, LD170",
       "type": "array",
       "items": { "type": "string", "minLength": 1 },

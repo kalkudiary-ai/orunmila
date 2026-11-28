@@ -13,7 +13,7 @@
       "const": 1
     },
     "session_id": {
-      "description": "The session the mark belongs to. A sub-agent's work belongs to its session.",
+      "description": "The session the mark belongs to. A sub-agent's work belongs to its session. Orunmila uses the id the agent's hooks give the session (Claude Code's `session_id`), never one of its own, the same in every record of the session.",
       "$comment": "brief v3 lines 218, 256 (the example's field; its format is not set by the brief)",
       "type": "string",
       "minLength": 1
@@ -30,13 +30,13 @@
       "enum": ["agent_claim", "hook", "sentinel", "git", "process", "law_gate"]
     },
     "agent": {
-      "description": "The agent whose session this is, for example `claude-code`; null when the source cannot know it.",
+      "description": "The agent whose session this is, for example `claude-code`; null when the source cannot know it. Orunmila writes it on hook, agent_claim and law_gate marks, and null on sentinel, git and process marks.",
       "$comment": "brief v3 line 221 (the example's field; null allowed is the agent's choice, LD11)",
       "type": ["string", "null"],
       "minLength": 1
     },
     "turn": {
-      "description": "Every Glove mark, and every law-gate mark, names the agent's turn. Sources that know nothing of turns (sentinel, git, process) write `null`. The session's end belongs to no turn, so its mark writes `null` too.",
+      "description": "Every Glove mark, and every law-gate mark, names the agent's turn. Sources that know nothing of turns (sentinel, git, process) write `null`. The session's end belongs to no turn, so its mark writes `null` too. It is a string or null, by the rules below; Orunmila writes `t` and the turn's number, counted from 1 in each session (`t1`, `t2`, ...).",
       "$comment": "brief v3 line 255; the session end's null is the agent's choice, LD55 (format change approved by O 2026-11-17). Its type is set by the turn rules, allOf/0 to /2, which cover every source (LD87).",
       "minLength": 1
     },
@@ -68,7 +68,7 @@
       "$ref": "#/definitions/target"
     },
     "says": {
-      "description": "A fixed verb list: created, modified, deleted, renamed, started, exited, ended (a turn finished, a tool call failed, or the session ended), prompted (a user prompt arrived), read, contacted, called, claimed, checked (the law gate checked a turn), fingerprinted (the Opon recorded a file's fingerprint), gap (a source lost or dropped events), tampered (source process: Orunmila's own logs, frozen configuration, code or the agent's hook settings changed during the session, or a payload arrived from a process other than the one pinned to the session), overlapped (source process: the intake names in this session's log another session sharing its folder, when it first sees it and when that one ends). Also tick (heartbeat).",
+      "description": "A fixed verb list: created, modified, deleted, renamed, started, exited, ended (a turn finished, a tool call failed, or the session ended), prompted (a user prompt arrived), read, contacted, called, claimed, checked (the law gate checked a turn), fingerprinted (the Opon recorded a file's fingerprint), gap (a source lost or dropped events), tampered (source process: Orunmila's own logs, frozen configuration, code or the agent's hook settings changed during the session, or a payload arrived from a process other than the one pinned to the session), overlapped (source process: the intake names in this session's log another session sharing its folder, when it first sees it and when that one ends). Also tick (heartbeat). A tool call's started mark has the same target as its outcome mark. A hook write's outcome is created, modified or deleted by whether the file existed when the intake read it before and after the call; with no read before it, modified.",
       "$comment": "brief v3 line 245; brief v4 line 245 adds tampered (decision I-1, 2026-11-16); ended for the session is the agent's choice, LD55; overlapped is the agent's proposal, Q11 (2) (a), adopted LD184, LD202",
       "enum": ["created", "modified", "deleted", "renamed", "started", "exited", "ended", "prompted", "read", "contacted", "called", "claimed", "checked", "fingerprinted", "gap", "tampered", "overlapped", "tick"]
     },
@@ -78,7 +78,7 @@
       "$ref": "#/definitions/detail"
     },
     "cause_hint": {
-      "description": "Filled by sources that know their cause, for example a hook mark carries the tool call id. Sentinel marks usually leave it null.",
+      "description": "Filled by sources that know their cause, for example a hook mark carries the tool call id. Orunmila sets it on a tool call's hook marks, to the call's id (Claude Code's `tool_use_id`), and on the gap for a write's lost diff, to that write's call id; every other mark has null.",
       "$comment": "brief v3 line 246",
       "type": ["string", "null"],
       "minLength": 1
@@ -324,7 +324,7 @@
           "enum": ["file", "dir", "command", "process", "claim", "turn", "tool", "network", "session"]
         },
         "path": {
-          "description": "The file or folder. Normalise paths: convert to repo-relative, resolve symlinks, and normalise case on case-insensitive filesystems.",
+          "description": "The file or folder. Normalise paths: convert to repo-relative, resolve symlinks, and normalise case on case-insensitive filesystems. Orunmila writes it with `/` between names on every operating system, and `.` for the project root itself.",
           "$comment": "brief v3 lines 226, 339; brief v4 line 345: a path outside the project root is absolute, with outside: true. Normalisation is slice A7.",
           "type": "string",
           "minLength": 1
@@ -334,7 +334,7 @@
           "$comment": "brief v4 line 345 (open point P2, decided 2026-11-16)",
           "type": "boolean"
         },
-        "text": { "description": "A command targets `{ \"kind\": \"command\", \"text\": ... }`.", "$comment": "brief v3 line 259", "type": "string" },
+        "text": { "description": "A command targets `{ \"kind\": \"command\", \"text\": ... }`. Orunmila writes the command line exactly as the agent's tool was given it (Bash's `command`), redacted.", "$comment": "brief v3 line 259", "type": "string" },
         "id": {
           "description": "A turn, target `{ \"kind\": \"turn\", \"id\": ... }`. The session itself, `{ \"kind\": \"session\", \"id\": ... }`, with its session id.",
           "$comment": "brief v3 line 257; the session target is the agent's choice, LD55",
@@ -342,7 +342,7 @@
           "minLength": 1
         },
         "name": {
-          "description": "Any other tool targets `{ \"kind\": \"tool\", \"name\": ... }`. A process target may name the process: `intake` for Orunmila's own intake.",
+          "description": "Any other tool targets `{ \"kind\": \"tool\", \"name\": ... }`. A process target may name the process: `intake` for Orunmila's own intake, `closeout` for the closeout's sweep.",
           "$comment": "brief v3 line 259; the process name is the agent's choice, LD56",
           "type": "string",
           "minLength": 1
@@ -392,7 +392,7 @@
           "$comment": "agent's choice, NF66 (written since Phase 1); declared in the spec by F21, O's yes 2026-11-28",
           "const": true
         },
-        "output_excerpt": { "description": "The first 2,000 characters of output.", "$comment": "brief v3 line 262", "type": "string", "maxLength": 2000 },
+        "output_excerpt": { "description": "The start of the command's output: its standard output, then a line feed and its standard error when it wrote any (for a failed command whose hook gives only an error text, that text after its `Exit code` line), cut after redaction to at most 2,000 Unicode code points; when the output is longer, the whole of it is kept beside the log, named by `output_ref`.", "$comment": "brief v3 line 262", "type": "string", "maxLength": 2000 },
         "output_ref": {
           "description": "When the output is longer, the fingerprint of the full output, which is kept beside the log.",
           "$comment": "brief v3 lines 262, 266",
@@ -405,7 +405,7 @@
           "items": { "type": "object" }
         },
         "hosts": {
-          "description": "On a command's exited mark: every host the command line names (a URL's host with its port, and the host of a `user@host` argument to ssh, scp, sftp, rsync or git), sorted, each once. The agent's testimony: a name is not a contact, and a command can reach a host it never names. Absent when it names none, or when command facts are off.",
+          "description": "On a command's exited mark: every host the command line names (a URL's host with its port, and the host of a `user@host` argument to ssh, scp, sftp, rsync or git), sorted in UTF-16 code-unit order, each once. The agent's testimony: a name is not a contact, and a command can reach a host it never names. Absent when it names none, or when command facts are off.",
           "$comment": "agent's proposal CF1 (LD385; O, 2026-11-28: the in-roads, all but the one that needs administrator rights); written only with ORUNMILA_COMMAND_FACTS=1",
           "type": "array",
           "items": { "type": "string", "minLength": 1 },
@@ -434,7 +434,7 @@
               "enum": ["npm-shrinkwrap.json", "package-lock.json", null]
             },
             "added": {
-              "description": "Packages in the lock after the command and not before, sorted by name. A name is the package's folder under node_modules/, a nested one with its parent's (`b/node_modules/c`).",
+              "description": "Packages in the lock after the command and not before, sorted by name in UTF-16 code-unit order. A name is the package's folder under node_modules/, a nested one with its parent's (`b/node_modules/c`).",
               "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
               "type": "array",
               "items": {
@@ -452,7 +452,7 @@
               }
             },
             "changed": {
-              "description": "Packages whose version in the lock changed, sorted by name.",
+              "description": "Packages whose version in the lock changed, sorted by name in UTF-16 code-unit order.",
               "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
               "type": "array",
               "items": {
@@ -468,7 +468,7 @@
               }
             },
             "removed": {
-              "description": "Packages in the lock before the command and not after, sorted by name.",
+              "description": "Packages in the lock before the command and not after, sorted by name in UTF-16 code-unit order.",
               "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
               "type": "array",
               "items": {
@@ -482,7 +482,7 @@
               }
             },
             "not_read": {
-              "description": "Every other lock file at the project's root, named, not read.",
+              "description": "Every other lock file at the project's root, named, not read. In this order: `npm-shrinkwrap.json`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `bun.lock`, `bun.lockb`.",
               "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
               "type": "array",
               "items": { "enum": ["npm-shrinkwrap.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lock", "bun.lockb"] }
@@ -512,7 +512,7 @@
           "minimum": 0
         },
         "outside_changed": {
-          "description": "On the closeout's exited mark: each path of the outside tripwire whose fingerprint at the closeout differs from the one in the session header, sorted, by path and fingerprints only, never content. Who made the change is not recorded, and a change made and put back between the two reads is not seen. Absent when command facts are off.",
+          "description": "On the closeout's exited mark: each path of the outside tripwire whose fingerprint at the closeout differs from the one in the session header, sorted in UTF-16 code-unit order, by path and fingerprints only, never content. Who made the change is not recorded, and a change made and put back between the two reads is not seen. Absent when command facts are off.",
           "$comment": "agent's proposal CF4 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
           "type": "array",
           "items": {
@@ -553,7 +553,7 @@
           }
         },
         "test_counts": {
-          "description": "On a command's exited mark, when the command runs a test runner: that runner's own pass, fail and skip counts, read from the whole output, one entry for each runner whose summary it holds. The runner's testimony: what it printed, not proof of which tests exist. `skipped` is every test it neither passed nor failed (skipped, todo, pending, ignored, xfailed). Absent when no summary is found, or when command facts are off.",
+          "description": "On a command's exited mark, when the command runs a test runner: that runner's own pass, fail and skip counts, read from the whole output, one entry for each runner whose summary it holds. The runner's testimony: what it printed, not proof of which tests exist. `skipped` is every test it neither passed nor failed (skipped, todo, pending, ignored, xfailed). Absent when no summary is found, or when command facts are off. Its entries follow this order of runners: node:test, jest, vitest, mocha, pytest, cargo, go.",
           "$comment": "agent's proposal CF2 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
           "type": "array",
           "minItems": 1,
@@ -628,9 +628,9 @@
           "enum": ["binary", "too_large"]
         },
         "tool_input": { "description": "What a called tool was given.", "$comment": "brief v3 line 263" },
-        "tool_result_excerpt": { "description": "Only when the user switches result capture on.", "$comment": "brief v3 line 263", "type": "string" },
-        "tool_result_size": { "description": "Only when the user switches result capture on.", "$comment": "brief v3 line 263", "type": "integer", "minimum": 0 },
-        "text": { "description": "The claim.", "$comment": "brief v3 line 265", "type": "string" },
+        "tool_result_excerpt": { "description": "Only on a mark whose capture kept the tool's result; the intake's own adapter never writes it.", "$comment": "brief v3 line 263", "type": "string" },
+        "tool_result_size": { "description": "Only on a mark whose capture kept the tool's result; the intake's own adapter never writes it.", "$comment": "brief v3 line 263", "type": "integer", "minimum": 0 },
+        "text": { "description": "The claim. Orunmila writes the turn's final message as the agent's Stop payload carries it (Claude Code's `last_assistant_message`), whole and redacted, or `''` with `claim_unconfirmed` when the payload carried none; a turn's claimed mark comes before its ended mark.", "$comment": "brief v3 line 265", "type": "string" },
         "claim_unconfirmed": {
           "description": "On a claimed mark: true when the agent's host gave no final text for the turn, so the claim's text could not be confirmed as the turn's own and is empty (N10). Absent otherwise.",
           "$comment": "agent's choice, LD85: today's turn_claim field (docs/SCHEMA.md), which the A8 adapter already carries",
@@ -643,7 +643,7 @@
           "enum": ["passed", "warned", "blocked", "skipped"]
         },
         "findings": {
-          "description": "Each law the check found broken, with the quoted text it judged; empty when it passed or skipped.",
+          "description": "Each law the check found broken, with the quoted text it judged; empty when it passed or skipped. In the order the gate's laws found them.",
           "$comment": "brief v3 line 242 (\"with the law and the quoted text\"), test 61 (\"laws and quoted text\"); the shape is the agent's choice, LD36",
           "type": "array",
           "items": {
@@ -668,7 +668,7 @@
           "type": "string"
         },
         "root": {
-          "description": "The folder the Sentinel watches, as an absolute real path, on each of its marks and its watch gaps, so a Glove mark and a Sentinel mark for one file always join.",
+          "description": "The folder the Sentinel watches, as an absolute real path, on each of its marks and its watch gaps, so a Glove mark and a Sentinel mark for one file always join. The schema does not require it on Sentinel marks.",
           "$comment": "brief v4 line 345 (NF11); the field name is the agent's choice, LD145",
           "type": "string",
           "minLength": 1
@@ -695,7 +695,7 @@
           "enum": ["SIGTERM", "SIGINT", "SIGHUP"]
         },
         "channel": {
-          "description": "Glove marks: how the mark reached intake. `http` for HTTP hooks, whose sender intake pins to the session's process at first contact; `command` for a command hook, which the agent can forge: it runs as the agent's own account (a separate account for Orunmila is not part of the free version).",
+          "description": "Glove marks: how the mark reached intake. `http` for HTTP hooks, whose sender intake pins to the session's process at first contact; `command` for a command hook, which the agent can forge: it runs as the agent's own account (a separate account for Orunmila is not part of the free version). Of Glove marks, only the pinning mark carries `sender_pid`: `http` alone does not mean the mark has one.",
           "$comment": "brief v4 line 247 (decision I-3, 2026-11-16)",
           "enum": ["http", "command"]
         },
@@ -711,7 +711,7 @@
           "type": "boolean"
         },
         "redactions": {
-          "description": "Noting the redaction: the kinds of secret replaced with [REDACTED:<kind>], never the values.",
+          "description": "Noting the redaction: the kinds of secret replaced with [REDACTED:<kind>], never the values. Sorted in UTF-16 code-unit order, each kind once.",
           "$comment": "brief v3 line 248; a list of kinds is the agent's choice, LD15",
           "type": "array",
           "items": { "type": "string", "pattern": "^[a-z0-9_]+$" }
@@ -725,7 +725,7 @@
           "$ref": "#/definitions/instant"
         },
         "sessions": {
-          "description": "On a gap for intake's downtime: every session intake was serving when it stopped, each of which gets this same gap.",
+          "description": "On a gap for intake's downtime: every session intake was serving when it stopped, each of which gets this same gap. Only sessions not yet ended are named, sorted in UTF-16 code-unit order.",
           "$comment": "brief v4 line 851 (test 84: naming the sessions active at its last tick); the name is the agent's choice, wording approved by O 2026-11-17",
           "type": "array",
           "items": { "type": "string", "minLength": 1 }
@@ -779,7 +779,7 @@
           "type": "string"
         },
         "received": {
-          "description": "On a tampered mark for a foreign sender: the payload as it arrived, kept as text for evidence and redacted like any mark. It is never the session's own mark.",
+          "description": "On a tampered mark for a foreign sender: the mark the payload was translated into, as `JSON.stringify` text (not the bytes as they arrived), kept for evidence and redacted like any mark. It is never the session's own mark.",
           "$comment": "brief v4 line 245; the name is the agent's choice, B1b, wording approved by O 2026-11-17",
           "type": "string"
         },
@@ -789,13 +789,13 @@
           "enum": ["appended", "cut", "edited", "deleted"]
         },
         "removed": {
-          "description": "On a tampered mark for one of Orunmila's own logs: the text the change took out, cut to its first 2,000 characters and redacted like any mark; empty when nothing was taken out.",
+          "description": "On a tampered mark for one of Orunmila's own logs: the text the change took out, cut to its first 2,000 Unicode code points and redacted like any mark; empty when nothing was taken out.",
           "$comment": "agent's proposal (TE1, LD279), approved by O as Q41 (2026-11-24, LD282)",
           "type": "string",
           "maxLength": 2000
         },
         "added": {
-          "description": "On a tampered mark for one of Orunmila's own logs: the text the change put in, cut to its first 2,000 characters and redacted like any mark; empty when nothing was put in.",
+          "description": "On a tampered mark for one of Orunmila's own logs: the text the change put in, cut to its first 2,000 Unicode code points and redacted like any mark; empty when nothing was put in.",
           "$comment": "agent's proposal (TE1, LD279), approved by O as Q41 (2026-11-24, LD282)",
           "type": "string",
           "maxLength": 2000

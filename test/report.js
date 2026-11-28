@@ -161,6 +161,26 @@ it('line 434: silent changes are one finding for the session, and it names what 
   assert.ok(/The agent changed 2 files its turns' claims never mention: src\/a\.ts \(The Glove recorded started, modified \(Edit, tool call e0\); the Sentinel recorded it modified\); src\/b\.ts/.test(silent[0].sentence), silent[0].sentence);
 });
 
+// F31 (found by DOC6): a finding quoted each command whole, so one heredoc filled the report (R25: about 70 lines).
+it('F31: a command a finding quotes is its first line, at most 120 characters, and a cut is marked', () => {
+  const heredoc = "cat ~/.orunmila/events.jsonl <<'EOF'\nthe second line of a heredoc\nEOF";
+  const long = `wc -l ~/.orunmila/events.jsonl ${'x'.repeat(200)}`;
+  const rep = reportOf((s) => {
+    s.append(M.prompted(0));
+    for (const [i, cmd] of [heredoc, long].entries()) {
+      s.append(M.started(10 + i * 100, `c${i}`, { kind: 'command', text: cmd }, 'Bash'));
+      s.append(M.exited(50 + i * 100, `c${i}`, cmd));
+    }
+    closedTurn(s, 900);
+    s.append(M.tick(10000));
+  });
+  const look = rep.findings.find((f) => f.rule === 'R25');
+  assert.ok(look, JSON.stringify(rep.findings.map((f) => f.rule)));
+  assert.ok(look.sentence.includes("it ran `cat ~/.orunmila/events.jsonl <<'EOF' …`"), look.sentence);
+  assert.ok(!look.sentence.includes('the second line'), look.sentence);
+  assert.ok(look.sentence.includes(`it ran \`${long.slice(0, 120)}…\``), look.sentence);
+});
+
 it('test 28: quarantined marks are mentioned', () => {
   const rep = reportOf((s) => {
     s.append(M.prompted(0));

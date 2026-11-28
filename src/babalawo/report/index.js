@@ -245,9 +245,16 @@ function buildReport({ header, marks, odus, verdicts, quarantined = 0, judgedNow
     findings.push({ kind: 'verdict', verdict: 'look_at_this', rule: 'R2', odu_id: silent[0].v.odu_id, odu_ids: silent.map((x) => x.v.odu_id), target: paths.join(', '), mark_seqs: silent.flatMap((x) => x.v.mark_seqs), sentence: `The agent changed ${plural(paths.length, 'file', 'files')} its turns' claims never mention: ${each.join('; ')}.` });
   }
   if (looks.length) {
+    // F31: a command is quoted by its first line, at most 120 characters, a cut marked; the record keeps it whole.
+    const quoted = (s) => {
+      const text = String(s);
+      const first = text.split('\n')[0];
+      if (first.length > 120) return `${first.slice(0, 120)}…`;
+      return first === text ? text : `${first} …`;
+    };
     const each = looks.map(({ v, o }) => {
       const call = v.mark_seqs.map((n) => bySeq.get(n)).find((m) => m && m.cause_hint);
-      if (o.target.kind === 'command') return `it ran \`${o.target.text}\`${call ? ` (tool call ${call.cause_hint})` : ''}`;
+      if (o.target.kind === 'command') return `it ran \`${quoted(o.target.text)}\`${call ? ` (tool call ${call.cause_hint})` : ''}`;
       return `it read ${o.target.path}${call ? ` (${call.detail && call.detail.tool ? `${call.detail.tool}, ` : ''}tool call ${call.cause_hint})` : ''}`;
     });
     findings.push({ kind: 'verdict', verdict: 'look_at_this', rule: 'R25', odu_id: looks[0].v.odu_id, odu_ids: looks.map((x) => x.v.odu_id), target: "Orunmila's record", mark_seqs: looks.flatMap((x) => x.v.mark_seqs), sentence: `The agent looked at Orunmila's record of its work ${plural(looks.length, 'time', 'times')}: ${each.join('; ')}.` });

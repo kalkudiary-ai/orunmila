@@ -314,6 +314,10 @@ hook scripts by their paths in the package (`src/capture/claude-code/`),
 
 ### Fixed
 
+- **A session report no longer quotes a whole command.** A finding about the
+  agent reading Orunmila's record quoted each command whole, so one heredoc
+  could fill the report with tens of lines. It now quotes the first line, at
+  most 120 characters, and marks the cut; the record keeps every command whole.
 - **`orunmila watch` no longer stops about 1.5 seconds after it starts.** On
   its first check for new reports it took the disk watcher's records, which
   belong to no session, for a session, and crashed. Any record of a change

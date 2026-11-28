@@ -4345,6 +4345,26 @@ MUTANTS.push(
   },
 );
 
+// F31 (Phase 7, found by DOC6): a finding quotes a command by its first line, at most 120 characters.
+MUTANTS.push(
+  {
+    id: 'F31-1 a long command is quoted whole',
+    file: 'src/babalawo/report/index.js',
+    test: 'test/report.js',
+    from: 'if (first.length > 120) return `${first.slice(0, 120)}…`;',
+    to: 'if (false) return first;',
+    fails: ['F31: a command a finding quotes'],
+  },
+  {
+    id: 'F31-2 a heredoc is quoted whole',
+    file: 'src/babalawo/report/index.js',
+    test: 'test/report.js',
+    from: 'return first === text ? text : `${first} …`;',
+    to: 'return text;',
+    fails: ['F31: a command a finding quotes'],
+  },
+);
+
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };
 
 if (require.main === module) process.exit(runGate());

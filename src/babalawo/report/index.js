@@ -319,9 +319,13 @@ function buildReport({ header, marks, odus, verdicts, quarantined = 0, judgedNow
   }
   // CF1 (LD385): what the commands' own text said, from their exited marks (ORUNMILA_COMMAND_FACTS=1): each that asked for
   // administrator rights, and every host they named. Facts beside the findings, never a verdict.
-  const commands = { elevated: [], hosts: [], test_counts: [], packages: [] };
+  const commands = { elevated: [], hosts: [], test_counts: [], packages: [], outside: null };
   const hosts = new Set();
   for (const m of marks) {
+    // CF4 (LD385): the outside tripwire, on the closeout's exited mark: how many paths it checked, and which changed.
+    if (m.source === 'process' && m.says === 'exited' && m.target && m.target.name === 'closeout' && m.detail && Array.isArray(m.detail.outside_changed)) {
+      commands.outside = { checked: m.detail.outside_checked, changed: m.detail.outside_changed.map((c) => c.path) };
+    }
     if (m.source !== 'hook' || m.says !== 'exited' || !m.detail) continue;
     if (m.detail.elevated === true) commands.elevated.push({ turn: m.turn, text: m.target && m.target.text, ref: m.cause_hint });
     for (const h of Array.isArray(m.detail.hosts) ? m.detail.hosts : []) hosts.add(h);
@@ -426,6 +430,9 @@ function lines(rep) {
   }
   const unread = pk.filter((p) => !p.lock && p.not_read.length);
   if (unread.length) out.push(`Packages not read: ${unread.map((p) => `turn ${p.turn} \`${quoteCmd(p.text)}\`: ${p.not_read.join(', ')} ${p.not_read.length === 1 ? 'is' : 'are'} not read, so what it installed is not recorded`).join('; ')}.`);
+  const ow = cmds.outside;
+  if (ow && ow.changed.length) out.push(`Outside the watched folders, ${ow.changed.length} of ${ow.checked} files and folders that run code as you changed between the session's start and its closeout: ${ow.changed.join(', ')} (named by path, never by content; who changed ${ow.changed.length === 1 ? 'it' : 'them'} is not recorded).`);
+  else if (ow) out.push(`Outside the watched folders, ${ow.checked} files and folders that run code as you were fingerprinted at the session's start and its closeout; none changed.`);
   if (rep.quarantined) out.push(`${plural(rep.quarantined, 'badly formatted mark was', 'badly formatted marks were')} kept in the quarantine log, nothing dropped.`);
   if (rep.overlapped.length) out.push(`Sessions overlapped with this one in the same folder: ${rep.overlapped.join(', ')}.`);
   if (rep.not_done && rep.not_done.length) out.push(`The agent said it did not do: ${rep.not_done.map((x) => `"${x.text}" (turn ${x.turn})`).join('; ')}.`); // MR1b3

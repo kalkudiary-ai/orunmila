@@ -1202,6 +1202,36 @@
       "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
       "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
     },
+    "process_closeout_tripwire": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "process",
+        "name": "closeout"
+      },
+      "says": "exited",
+      "detail": {
+        "exit_status": "pass",
+        "outside_checked": 24,
+        "outside_changed": [
+          {
+            "path": "/home/u/.zshrc",
+            "fingerprint_before": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "fingerprint": "hmac-sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ]
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
     "hook_exited_interrupted": {
       "schema_version": 1,
       "session_id": "ses_test_0001",
@@ -3726,6 +3756,18 @@
     {"name": "a cut that is not a whole number (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": "3"}}, "unset": [], "error": {"path": "/detail/packages/cut", "keyword": "type"}},
     {"name": "a cut below one (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 0}}, "unset": [], "error": {"path": "/detail/packages/cut", "keyword": "minimum"}},
     {"name": "a before_unknown that is not true (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3, "before_unknown": false}}, "unset": [], "error": {"path": "/detail/packages/before_unknown", "keyword": "const"}},
-    {"name": "an unreadable that is not true (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3, "unreadable": false}}, "unset": [], "error": {"path": "/detail/packages/unreadable", "keyword": "const"}}
+    {"name": "an unreadable that is not true (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3, "unreadable": false}}, "unset": [], "error": {"path": "/detail/packages/unreadable", "keyword": "const"}},
+    {"name": "an outside count that is not a whole number (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_checked": "24"}, "unset": [], "error": {"path": "/detail/outside_checked", "keyword": "type"}},
+    {"name": "an outside count below zero (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_checked": -1}, "unset": [], "error": {"path": "/detail/outside_checked", "keyword": "minimum"}},
+    {"name": "outside changes that are not a list (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_changed": "x"}, "unset": [], "error": {"path": "/detail/outside_changed", "keyword": "type"}},
+    {"name": "an outside change that is not an object (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_changed": [1]}, "unset": [], "error": {"path": "/detail/outside_changed/0", "keyword": "type"}},
+    {"name": "an outside change with a field the spec does not name (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_changed": [{"path": "/home/u/.zshrc", "fingerprint_before": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "fingerprint": "hmac-sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "content": "x"}]}, "unset": [], "error": {"path": "/detail/outside_changed/0/content", "keyword": "additionalProperties"}},
+    {"name": "an outside change with no path (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_changed": [{"fingerprint_before": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "fingerprint": "hmac-sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}, "unset": [], "error": {"path": "/detail/outside_changed/0/path", "keyword": "required"}},
+    {"name": "an outside change with no fingerprint_before (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_changed": [{"path": "/home/u/.zshrc", "fingerprint": "hmac-sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}, "unset": [], "error": {"path": "/detail/outside_changed/0/fingerprint_before", "keyword": "required"}},
+    {"name": "an outside change with no fingerprint (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_changed": [{"path": "/home/u/.zshrc", "fingerprint_before": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}, "unset": [], "error": {"path": "/detail/outside_changed/0/fingerprint", "keyword": "required"}},
+    {"name": "an outside change whose path is not text (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_changed": [{"path": 1, "fingerprint_before": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "fingerprint": "hmac-sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}, "unset": [], "error": {"path": "/detail/outside_changed/0/path", "keyword": "type"}},
+    {"name": "an outside change with an empty path (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_changed": [{"path": "", "fingerprint_before": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "fingerprint": "hmac-sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}, "unset": [], "error": {"path": "/detail/outside_changed/0/path", "keyword": "minLength"}},
+    {"name": "an outside change whose fingerprint before is of the wrong shape (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_changed": [{"path": "/home/u/.zshrc", "fingerprint_before": "x", "fingerprint": "hmac-sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}, "unset": [], "error": {"path": "/detail/outside_changed/0/fingerprint_before", "keyword": "pattern"}},
+    {"name": "an outside change whose fingerprint is of the wrong shape (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_changed": [{"path": "/home/u/.zshrc", "fingerprint_before": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "fingerprint": "x"}]}, "unset": [], "error": {"path": "/detail/outside_changed/0/fingerprint", "keyword": "pattern"}}
   ]
 }

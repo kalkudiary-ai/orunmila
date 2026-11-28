@@ -293,7 +293,11 @@ hook scripts by their paths in the package (`src/capture/claude-code/`),
   pass" beside a skipped test shows. An install command's mark names what npm's
   lock file gained, changed and lost across it (`detail.packages`), each package
   with its version and whether it runs an install script; another manager's lock
-  file is named as not read.
+  file is named as not read. Where the closeout runs, a tripwire fingerprints the
+  files outside the watched folders that run code as you (shell start-up files,
+  git and ssh config, `authorized_keys`, `~/.npmrc`, the agents' user hook
+  settings, the start-up folders of each OS) at session start (the header's
+  `tripwire`) and at the closeout, which names each that changed by path only.
 - **A limit on a flooded Sentinel, off by default
   (`ORUNMILA_SENTINEL_MAX_PENDING=N`).** Past N changed paths waiting at once
   under one folder, the rest of the flood is dropped and one gap in each

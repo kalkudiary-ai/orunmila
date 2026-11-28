@@ -10,7 +10,7 @@
  *
  *   buildHeader({ sessionId, root, agent, orunmilaVersion, codeRoot, lawPacks,
  *                 hookSettings, config?, observedAt?, monoNs?, envValues?,
- *                 byproducts? })
+ *                 byproducts?, tripwire? })
  *     -> the header without seq / prev_hash / hash (intake seals it); with a
  *        boolean `caseInsensitive` (the intake's probe of the root, Q25,
  *        LD233), config.case_insensitive, so replay matches a claim's path
@@ -140,6 +140,8 @@ function buildHeader(o) {
     },
     hooks_report: hooksReportFrom(settings),
     test_command: testCommandFrom(o.root, o.envValues),
+    // CF4 (LD385): the outside tripwire's start fingerprints, given by the intake with ORUNMILA_COMMAND_FACTS=1
+    ...(o.tripwire ? { tripwire: o.tripwire } : {}),
   };
 }
 

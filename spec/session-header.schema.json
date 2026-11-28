@@ -179,6 +179,12 @@
         }
       }
     },
+    "tripwire": {
+      "description": "The outside tripwire's start: each file or folder outside the watched folders that runs code as the user (shell start-up files, git and ssh config, ssh's authorized_keys, ~/.npmrc, the agents' own user hook settings, the operating system's start-up folders), by its absolute path with `/` separators, and its keyed HMAC-SHA-256 fingerprint (a folder's covers every entry under it), null when nothing is there. The closeout fingerprints the same paths again and names each one that changed. Paths and fingerprints only, never content. Absent when command facts are off.",
+      "$comment": "agent's proposal CF4 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/fingerprint" }
+    },
     "baseline": {
       "description": "The baseline snapshot taken at session start: a fingerprint of every file in the workspace, kept beside the log as `baseline.jsonl` (one canonical JSON line per entry, sorted by path). The walk skips what `config.exclusions` names, so the exclusion itself is in this header. Its fingerprint is here, so the hash chain covers it too. Absent when no snapshot was taken.",
       "$comment": "brief v4 lines 385, 387; the field's name and shape are the agent's (LD170). Counts of entries and bytes are left out: the brief does not name them and the file gives them",

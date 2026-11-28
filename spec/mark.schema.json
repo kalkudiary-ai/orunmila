@@ -505,6 +505,27 @@
             }
           }
         },
+        "outside_checked": {
+          "description": "On the closeout's exited mark: how many paths the outside tripwire fingerprinted again (the session header's `tripwire`). Absent when command facts are off, or when the tripwire could not run.",
+          "$comment": "agent's proposal CF4 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+          "type": "integer",
+          "minimum": 0
+        },
+        "outside_changed": {
+          "description": "On the closeout's exited mark: each path of the outside tripwire whose fingerprint at the closeout differs from the one in the session header, sorted, by path and fingerprints only, never content. Who made the change is not recorded, and a change made and put back between the two reads is not seen. Absent when command facts are off.",
+          "$comment": "agent's proposal CF4 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "fingerprint_before", "fingerprint"],
+            "properties": {
+              "path": { "description": "The absolute path, with `/` separators.", "type": "string", "minLength": 1 },
+              "fingerprint_before": { "description": "Its fingerprint at session start; null when nothing was there.", "$ref": "#/definitions/fingerprint" },
+              "fingerprint": { "description": "Its fingerprint at the closeout; null when nothing is there.", "$ref": "#/definitions/fingerprint" }
+            }
+          }
+        },
         "test_counts": {
           "description": "On a command's exited mark, when the command runs a test runner: that runner's own pass, fail and skip counts, read from the whole output, one entry for each runner whose summary it holds. The runner's testimony: what it printed, not proof of which tests exist. `skipped` is every test it neither passed nor failed (skipped, todo, pending, ignored, xfailed). Absent when no summary is found, or when command facts are off.",
           "$comment": "agent's proposal CF2 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",

@@ -126,7 +126,9 @@ who", never guessed.
   With `ORUNMILA_COMMAND_FACTS=1` where the intake starts, the session report at
   least names each command that asked for those rights.
 - Anything outside the folders it watches: your home folder, other projects,
-  system files. Dependency folders such as `node_modules/` are on the ignore
+  system files. With `ORUNMILA_COMMAND_FACTS=1`, a tripwire checks the files there
+  that run code as you (shell start-up files, git and ssh config, start-up
+  folders) at the session's start and its closeout, and names any that changed. Dependency folders such as `node_modules/` are on the ignore
   list (`orunmila status` prints it), so what a package install or a package's
   own scripts change inside them is not watched; the package files you edit
   (`package.json`, the lock file) are. With `ORUNMILA_COMMAND_FACTS=1`, an npm

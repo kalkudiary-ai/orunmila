@@ -284,7 +284,7 @@ it('CF1 (LD385): the report names the commands that asked for administrator righ
     odus: [],
     verdicts: [],
   });
-  assert.deepStrictEqual(rep.commands, { elevated: [{ turn: 't1', text: 'sudo apt-get install x', ref: 'b1' }], hosts: ['a.example', 'github.com'], test_counts: [], packages: [] });
+  assert.deepStrictEqual(rep.commands, { elevated: [{ turn: 't1', text: 'sudo apt-get install x', ref: 'b1' }], hosts: ['a.example', 'github.com'], test_counts: [], packages: [], outside: null });
   const text = renderText(rep);
   assert.ok(text.includes('1 command asked for administrator rights (turn t1: `sudo apt-get install x`); what it did with them is outside what Orunmila sees.'), text);
   assert.ok(text.includes("The agent's commands named these hosts: a.example, github.com (named, not proof of contact)."), text);
@@ -330,6 +330,17 @@ it("CF3 (LD385): the report names what each install changed in its lock file, th
   assert.strictEqual(rep.verdict, 'clean', 'facts, not verdicts');
   const none = renderText(buildReport({ header: { session_id: 's2', agent: { name: 'claude-code' } }, marks: [], odus: [], verdicts: [] }));
   assert.ok(!none.includes('Packages'), none);
+});
+
+it("CF4 (LD385): the report names each file outside the watched folders that runs code as you and changed between the session's start and its closeout, by path only, or says none did; never a verdict", () => {
+  const end = (detail) => ({ ...M.claimed(90), source: 'process', agent: null, turn: null, says: 'exited', target: { kind: 'process', name: 'closeout' }, detail: { exit_status: 'pass', ...detail } });
+  const one = (detail) => buildReport({ header: { session_id: 's1', agent: { name: 'claude-code' } }, marks: [end(detail)], odus: [], verdicts: [] });
+  const changed = one({ outside_checked: 24, outside_changed: [{ path: '/home/u/.zshrc', fingerprint_before: 'hmac-sha256:' + 'a'.repeat(64), fingerprint: 'hmac-sha256:' + 'b'.repeat(64) }] });
+  assert.deepStrictEqual(changed.commands.outside, { checked: 24, changed: ['/home/u/.zshrc'] });
+  assert.ok(renderText(changed).includes("Outside the watched folders, 1 of 24 files and folders that run code as you changed between the session's start and its closeout: /home/u/.zshrc (named by path, never by content; who changed it is not recorded)."), renderText(changed));
+  assert.strictEqual(changed.verdict, 'clean', 'facts, not verdicts');
+  assert.ok(renderText(one({ outside_checked: 24, outside_changed: [] })).includes("Outside the watched folders, 24 files and folders that run code as you were fingerprinted at the session's start and its closeout; none changed."));
+  assert.ok(!renderText(one({})).includes('Outside the watched folders'), 'no tripwire, no line');
 });
 
 runAll('report');

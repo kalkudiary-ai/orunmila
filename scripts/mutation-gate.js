@@ -2101,7 +2101,7 @@ const MUTANTS = [
     from: "for (const p of gone) {", to: "for (const p of []) {",
     fails: ['K5'] },
   { id: 'K5-4 the sweep never ends', file: 'src/opon/intake/router.js', test: 'test/opon-live.js',
-    from: "    engine.receive(mark(who, 'exited', { exit_status: walked }), {});\n", to: '',
+    from: "    engine.receive(mark(who, 'exited', end), {});\n", to: '',
     fails: ['K5'] },
   // Slice K4: the session footer (LD209; provisional, Q17).
   { id: 'K4-1 no footer is written', file: 'src/opon/intake/live.js', test: 'test/opon-live.js',
@@ -4633,6 +4633,26 @@ MUTANTS.push(
     from: '      if (ctx.packages) detail.packages = ctx.packages;', to: '', fails: ['CF3 (LD385)'] },
   { id: 'CF3-10 the report leaves the install scripts out', file: 'src/babalawo/report/index.js', test: 'test/report.js',
     from: '.filter((e) => e.install_script === true)', to: '.filter(() => false)', fails: ['CF3 (LD385)'] },
+);
+
+// CF4 (LD385): the outside tripwire, at session start and the closeout.
+MUTANTS.push(
+  { id: "CF4-1 a folder's links are not seen", file: 'src/capture/outside-tripwire.js', test: 'test/outside-tripwire.js',
+    from: "        lines.push(`l ${r} -> ${to}`);", to: '', fails: ['CF4: fingerprints are keyed'] },
+  { id: 'CF4-2 the fingerprint is plain SHA-256', file: 'src/capture/outside-tripwire.js', test: 'test/outside-tripwire.js',
+    from: "      out[slash(p)] = 'hmac-sha256:' + h.digest('hex');", to: "      out[slash(p)] = 'sha256:' + crypto.createHash('sha256').update(parts.join('')).digest('hex');", fails: ['CF4: fingerprints are keyed'] },
+  { id: "CF4-3 macOS's LaunchAgents left out", file: 'src/capture/outside-tripwire.js', test: 'test/outside-tripwire.js',
+    from: "  if (platform === 'darwin') out.push(", to: "  if (false) out.push(", fails: ["CF4 (LD385): the files that run code as you"] },
+  { id: "CF4-4 Windows's Startup folder left out", file: 'src/capture/outside-tripwire.js', test: 'test/outside-tripwire.js',
+    from: "    out.push({ path: path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup'), kind: 'dir' });", to: '', fails: ["CF4 (LD385): the files that run code as you"] },
+  { id: 'CF4-5 a removed file is not a change', file: 'src/capture/outside-tripwire.js', test: 'test/outside-tripwire.js',
+    from: '    if (a !== b) out.push(', to: '    if (a !== b && b !== null) out.push(', fails: ['CF4: fingerprints are keyed'] },
+  { id: 'CF4-6 the header never holds the start', file: 'src/opon/intake/router.js', test: 'test/outside-tripwire.js',
+    from: '      tripwire: o.commandFacts === true ? tripwireNow() : null, // CF4 (LD385)', to: '      tripwire: null,', fails: ['CF4 at the router'] },
+  { id: 'CF4-7 the closeout never names a change', file: 'src/opon/intake/router.js', test: 'test/outside-tripwire.js',
+    from: '        end.outside_changed = tripwireChanges(s.tripwire, tripwireFingerprints(Object.keys(s.tripwire), o.installKey));', to: '        end.outside_changed = [];', fails: ['CF4 at the router'] },
+  { id: 'CF4-8 the report says none changed whatever changed', file: 'src/babalawo/report/index.js', test: 'test/report.js',
+    from: '  if (ow && ow.changed.length) out.push(', to: '  if (false) out.push(', fails: ['CF4 (LD385)'] },
 );
 
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };

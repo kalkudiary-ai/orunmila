@@ -124,6 +124,7 @@ const { createLive } = require('./live');
 const { prepareOffThread } = require('./start-worker');
 const { canonicalize } = require('../../verify/canonical');
 const { installManager, readLock, lockChange } = require('../../capture/package-lock');
+const { tripwirePaths, tripwireFingerprints, tripwireChanges } = require('../../capture/outside-tripwire');
 const crypto = require('crypto');
 
 const CC = getAdapter('claude-code');
@@ -316,7 +317,18 @@ function createRouter(o) {
   }
 
   /** K5 (LD208): what the closeout needs of a session: its baseline, exclusions and lag grace (from its header). */
-  const closeoutFacts = (header, baseMap) => ({ baseMap, exclusions: header.config.exclusions || [], graceNs: BigInt(header.config.lag_grace_ms) * NS_PER_MS, closeoutAt: null });
+  const closeoutFacts = (header, baseMap) => ({ baseMap, exclusions: header.config.exclusions || [], graceNs: BigInt(header.config.lag_grace_ms) * NS_PER_MS, closeoutAt: null, tripwire: header.tripwire || null });
+
+  /** CF4 (LD385), with commandFacts: the outside tripwire's fingerprints of the files that run code as the user. */
+  function tripwireNow() {
+    let home = o.outsideHome || os.homedir();
+    try {
+      home = fs.realpathSync(home);
+    } catch {
+      /* a home that is not there: its paths read as absent */
+    }
+    return tripwireFingerprints(tripwirePaths(home, o.outsidePlatform || process.platform, process.env), o.installKey);
+  }
 
   /**
    * K5 (LD208; lines 445-452): the closeout, with the live flag: the sweep's started mark, a rescan mark
@@ -408,7 +420,18 @@ function createRouter(o) {
       }
     }
     if (o.judge) heartbeatGaps(id, s, mark); // BB5a, with the judge's flag only (Leopard rule 2)
-    engine.receive(mark(who, 'exited', { exit_status: walked }), {});
+    const end = { exit_status: walked };
+    if (s.tripwire) {
+      // CF4 (LD385): the start's paths fingerprinted again; each that changed is named, never its content.
+      try {
+        end.outside_checked = Object.keys(s.tripwire).length;
+        end.outside_changed = tripwireChanges(s.tripwire, tripwireFingerprints(Object.keys(s.tripwire), o.installKey));
+      } catch (e) {
+        delete end.outside_checked;
+        error(`the outside tripwire at the closeout of session ${id} failed: ${e.message}`, { session_id: id });
+      }
+    }
+    engine.receive(mark(who, 'exited', end), {});
   }
 
   /**
@@ -479,6 +502,7 @@ function createRouter(o) {
       envValues: entries.map((e) => e.value),
       byproducts: Boolean(o.baseline), // the live path's flag (LD166): the byproducts list in the header (A1a, LD175)
       rules: Boolean(o.judge), // the judge's flag (BB6): the rules file's text in the header (Q34)
+      tripwire: o.commandFacts === true ? tripwireNow() : null, // CF4 (LD385)
     });
     return { root, entries, ci, header, at };
   }

@@ -803,6 +803,9 @@ it(
       // footer-*-named-cut: the same edit, the line left without its line feed, as a crash leaves a line
       const cut = verdict(k, [...before, edited].join('\n'));
       assert.deepStrictEqual([cut[0], cut[1].startsWith('Record broken')], [false, true], `${k}: the named line edited and cut short: ${cut[1]}`);
+      // MG5 (the Phase 7 close-out's mutation gate; K4b-3 survived once V1 checked the odù log too): the footer's own
+      // chain check is what names the edit in a named odù line cut short; without it the words would only say the line is not held.
+      if (k === 'odu') assert.strictEqual(cut[1], `Record broken at line ${named + 1} of the odù log: this line is not in canonical form (it was edited, or written by something else).`);
       // footer-raw-before-edited (the odù log's is K4b's): a line before the named one edited
       if (k === 'raw') assert.deepStrictEqual(verdict(k, [lines(k)[0], canonicalize({ ...JSON.parse(lines(k)[1]), observed_at: '2000-01-01T00:00:00.000Z' }), ...lines(k).slice(2)].join('\n') + '\n')[0], false, 'raw: a line before');
       // footer-*-after-appended: a whole line after the named one, sealed to it (a late delivery)

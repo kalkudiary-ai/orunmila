@@ -2136,7 +2136,7 @@ const MUTANTS = [
     fails: ['K4b'] },
   { id: 'K4b-3 the odù log the footer names is not chain-checked', file: 'src/verify/session.js', test: 'test/opon-live.js',
     from: 'if (!chain.ok && (!chain.cut || chain.line <= f.odu.seq + 1)) return', to: 'if (false) return',
-    fails: ['K4b'] },
+    fails: ['K4c (LD211 (4), LD214'] },
   // Slice C3d3b: a mention in a table row or a code block (LD210 (4)).
   { id: 'C3d3b-1 the text is cleaned before mentions are read', file: 'src/opon/corroborate/claims.js', test: 'test/conflicts.js',
     from: 'const own = stripWrapperTags(text);', to: "const own = require('../../reconcile/sanitize').sanitize(text);",

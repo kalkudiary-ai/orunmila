@@ -151,4 +151,23 @@ it('BJ1: intake run follows the switch at its start and says so; the environment
   }
 });
 
+it('F38 (LD382): with ORUNMILA_OPON_LIVE unset, the live path follows the judge, so --with-judge alone gives the judge the record it reads; =0 still turns it off, and says the judge has nothing to judge', async () => {
+  const base = tmpDir();
+  const home = path.join(base, 'h');
+  const env = { ORUNMILA_HOME: home, ORUNMILA_INTAKE_PORT: '0', ORUNMILA_JUDGE_LIVE: '', ORUNMILA_OPON_LIVE: '' };
+  try {
+    const off = await startLine(env, 'ses_off');
+    assert.strictEqual(off.header.baseline, undefined, 'judge off, nothing set: no live path (no baseline at session start)');
+    setJudge(home, true);
+    const on = await startLine(env, 'ses_judge');
+    assert.ok(on.header.baseline && on.header.baseline.fingerprint, 'judge on: the live path runs (a baseline at session start)');
+    assert.ok(on.out.includes('the record the judge reads is on (the judge is on)'), on.out);
+    const forcedOff = await startLine({ ...env, ORUNMILA_OPON_LIVE: '0' }, 'ses_forced_off');
+    assert.strictEqual(forcedOff.header.baseline, undefined, 'ORUNMILA_OPON_LIVE=0 wins');
+    assert.ok(forcedOff.out.includes('the judge has no record to judge (ORUNMILA_OPON_LIVE=0)'), forcedOff.out);
+  } finally {
+    rmrf(base);
+  }
+});
+
 runAll('judge-switch');

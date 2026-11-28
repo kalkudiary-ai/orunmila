@@ -1466,7 +1466,7 @@ const MUTANTS = [
     from: '    if (o.baseline) {', to: '    if (true) {',
     fails: ['N1b: with the baseline off', 'N1b: `orunmila intake run`'] },
   { id: 'N1b-3 the intake never passes the flag', file: 'bin/orunmila.js', test: 'test/baseline.js',
-    from: '      baseline: oponLive(),', to: '      baseline: false,',
+    from: '      baseline: livePath.on,', to: '      baseline: false,',
     fails: ['N1b: `orunmila intake run`'] },
   { id: 'N1b-4 any value turns the live path on', file: 'src/opon/intake/server.js', test: 'test/baseline.js',
     from: "env.ORUNMILA_OPON_LIVE === '1';", to: 'Boolean(env.ORUNMILA_OPON_LIVE);',
@@ -3763,7 +3763,7 @@ MUTANTS.push(
     id: 'DOC3-3 SKILL.md drops the Babaláwo',
     file: 'SKILL.md',
     test: 'test/docs-surfaces.js',
-    from: '| install | `npx orunmila install` | `npx orunmila install --with-gate` | `npx orunmila install --with-judge` |',
+    from: '| install | `npx orunmila install` | `npx orunmila install --with-gate` | `npx orunmila install --intake`, then `npx orunmila install --with-judge` |',
     to: '| install | `npx orunmila install` | `npx orunmila install --with-gate` | |',
     fails: ['DOC3 (LD340)'],
   },
@@ -4446,6 +4446,16 @@ MUTANTS.push(
     fails: ['F32 (brief v4 line 747)'],
   },
 );
+
+// F38 (LD382): the record the judge reads comes on with the judge.
+MUTANTS.push({
+  id: 'F38-1 the live path ignores the judge',
+  file: 'src/opon/intake/switches.js',
+  test: 'test/judge-switch.js',
+  from: "return judgeOn(env, home).on ? { on: true, from: 'judge' } : { on: false, from: 'default' };",
+  to: "return { on: false, from: 'default' };",
+  fails: ['F38 (LD382)'],
+});
 
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };
 

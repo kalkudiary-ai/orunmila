@@ -72,6 +72,18 @@ function judgeOn(env, home) {
 }
 
 /**
+ * F38 (LD382): the Ọpọ́n's live path (the baseline at session start, stations 2-6 and the odù log), which the judge
+ * reads. ORUNMILA_OPON_LIVE=1 or 0 decides where it is set; otherwise it follows the judge, so `orunmila install
+ * --with-judge` alone gives the judge a record to judge (before, the judge on with the live path unset judged nothing).
+ *   -> { on, from: 'environment' | 'judge' | 'default' }
+ */
+function livePathOn(env, home) {
+  const v = env && env.ORUNMILA_OPON_LIVE;
+  if (v === '1' || v === '0') return { on: v === '1', from: 'environment' }; // set: it decides, whatever the judge
+  return judgeOn(env, home).on ? { on: true, from: 'judge' } : { on: false, from: 'default' };
+}
+
+/**
  * PM2c2 (LD333): the daily update check, `{"updates": true | false}` in the same file, written by `orunmila install
  * --with-updates | --without-updates`; ORUNMILA_UPDATES=1 or 0 wins where set. Off with no switch at all; a plain
  * install sets it on unless it is set already (UD1, setUpdatesDefault below); the starter reads the same key itself
@@ -118,4 +130,4 @@ const onUnlessZero = (v) => (v === '0' || v === '1' ? { on: v === '1', from: 'en
 const logGuardOn = (env) => onUnlessZero(env && env.ORUNMILA_LOG_GUARD);
 const peerBusyOn = (env) => onUnlessZero(env && env.ORUNMILA_PEER_BUSY);
 
-module.exports = { switchesFile, readSwitches, setJudge, judgeOn, setUpdates, updatesOn, setUpdatesDefault, logGuardOn, peerBusyOn };
+module.exports = { switchesFile, readSwitches, setJudge, judgeOn, livePathOn, setUpdates, updatesOn, setUpdatesDefault, logGuardOn, peerBusyOn };

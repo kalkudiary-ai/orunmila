@@ -315,6 +315,8 @@ function installJudge(on) {
     console.log(`${LENSES.babalawo.name} is on (${file}).`);
     console.log('At each session\'s closeout the intake judges the sealed record: every event Clean, Look at this or Violation,');
     console.log('and the session as a whole, into verdict.jsonl beside the other two logs. It only reads the record; it never stops the agent.');
+    console.log('The record it reads comes on with it: a baseline at each session\'s start and the session\'s odù log (ORUNMILA_OPON_LIVE=0 turns that off, and the judge then has nothing to judge).');
+    console.log('It judges sessions the intake records: orunmila install --intake, then orunmila intake start.');
     console.log('Read a session\'s verdicts with: orunmila report --verdicts --session ID');
   } else {
     console.log(`${LENSES.babalawo.name} is off (${file}). No verdict log is written; the record is kept as before.`);
@@ -1734,7 +1736,7 @@ function intakeArgv(home, sub = 'run') {
 }
 
 async function cmdIntake() {
-  const { createServer, intakePaths, readInstallKey, statusOf, intakePort, oponLive } = require('../src/opon/intake/server');
+  const { createServer, intakePaths, readInstallKey, statusOf, intakePort } = require('../src/opon/intake/server');
   const home = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
   const p = intakePaths(home);
   const sub = args[1];
@@ -1748,8 +1750,9 @@ async function cmdIntake() {
   if (sub === 'run') {
     const { createRouter } = require('../src/opon/intake/router');
     const { nowMono } = require('../src/opon/intake/mono');
-    const { judgeOn, switchesFile, logGuardOn, peerBusyOn } = require('../src/opon/intake/switches');
+    const { judgeOn, livePathOn, switchesFile, logGuardOn, peerBusyOn } = require('../src/opon/intake/switches');
     const judge = judgeOn(process.env, home); // BJ1 (LD326): the install's switch, the environment winning where set
+    const livePath = livePathOn(process.env, home); // F38 (LD382): ORUNMILA_OPON_LIVE where set, else the judge's switch
     const logGuard = logGuardOn(process.env); // MR7: on unless ORUNMILA_LOG_GUARD=0
     const peerBusy = peerBusyOn(process.env); // PB1: on unless ORUNMILA_PEER_BUSY=0
     const router = createRouter({
@@ -1760,7 +1763,7 @@ async function cmdIntake() {
       orunmilaVersion: require('../package.json').version,
       installKey: readInstallKey(home),
       sentinel: true, // the Sentinel runs inside the intake (B4, LD145)
-      baseline: oponLive(), // the Ọpọ́n's live path, only with ORUNMILA_OPON_LIVE=1: the baseline at session start (N1b, LD170), stations 2-6 and odu.jsonl (L1c, LD200)
+      baseline: livePath.on, // the Ọpọ́n's live path: the baseline at session start (N1b, LD170), stations 2-6 and odu.jsonl (L1c, LD200); ORUNMILA_OPON_LIVE where set, else on with the judge (F38)
       guard: logGuard.on, // TE1 (LD279): every session's logs watched for a change Orunmila did not make, and put back; on by default since MR7
       judge: judge.on, // the judge at each closeout (BB6), only when switched on (BJ1: install --with-judge, or ORUNMILA_JUDGE_LIVE=1; Q38)
       // Q12 (a) (LD289): extra folders the Sentinel watches, absolute paths joined by the path delimiter (none by default)
@@ -1819,6 +1822,9 @@ async function cmdIntake() {
     console.log(r.http.listening ? `orunmila intake: HTTP on 127.0.0.1:${r.http.port}` : `orunmila intake: HTTP port 127.0.0.1:${r.http.port} is held by another process (recorded in ${p.errors}); tried again every second`);
     const why = judge.from === 'environment' ? `ORUNMILA_JUDGE_LIVE=${judge.on ? 1 : 0}` : judge.from === 'switch' ? `the switch in ${switchesFile(home)}` : 'turn it on with: orunmila install --with-judge';
     console.log(`orunmila intake: the judge is ${judge.on ? 'on' : 'off'} (${why})`);
+    // F38: the record the judge reads, and why it is on or off; a judge with none says it has nothing to judge.
+    if (judge.on && !livePath.on) console.log('orunmila intake: the judge has no record to judge (ORUNMILA_OPON_LIVE=0): no odù log is written, so no session is judged');
+    else if (livePath.on) console.log(`orunmila intake: the record the judge reads is on (${livePath.from === 'environment' ? 'ORUNMILA_OPON_LIVE=1' : 'the judge is on'}): a baseline at each session's start, and its odù log`);
     const dflt = (name, sw) => (sw.from === 'environment' ? `${name}=${sw.on ? 1 : 0}` : `on by default; ${name}=0 turns it off`);
     console.log(logGuard.on ? `orunmila intake: every session's logs are guarded: a change Orunmila did not make is recorded and put back (${dflt('ORUNMILA_LOG_GUARD', logGuard)})` : 'orunmila intake: the logs are not guarded (ORUNMILA_LOG_GUARD=0)');
     console.log(peerBusy.on ? `orunmila intake: each session's log notes when a peer sharing its folder is working (${dflt('ORUNMILA_PEER_BUSY', peerBusy)})` : "orunmila intake: a peer's busy time is not noted (ORUNMILA_PEER_BUSY=0)");

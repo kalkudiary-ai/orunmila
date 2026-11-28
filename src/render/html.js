@@ -392,7 +392,7 @@ function renderGap(witnesses) {
  */
 function renderJudge(judge, sessionId) {
   if (judge === undefined) return '';
-  if (judge === null) return '<p class="gap gap-none">Not judged: this session has no verdict log. The Babaláwo writes one at the session\'s closeout when it is on (orunmila install --with-judge).</p>';
+  if (judge === null) return '<p class="gap gap-none">Not judged: this session has no verdict log. The Babaláwo writes one at the closeout of each session the intake records, when it is on (orunmila install --with-judge).</p>';
   return `<p class="gap judge">${esc(judge.sentence)} The header above checks each turn's claims; the Babaláwo judges the whole record with its own rules, so the two can differ. Its findings: <code>orunmila report --verdicts --session ${esc(sessionId)}</code>.</p>`;
 }
 

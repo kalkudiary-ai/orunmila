@@ -18,10 +18,11 @@ watches your project folder on disk, whoever changes it, so a change the agent
 never reported still shows. No AI model judges anything: every verdict is fixed
 code over the recorded facts, and it all runs on your machine.
 
-[**See a live report →**](https://kalkudiary-ai.github.io/orunmila/) — a real
-rendered session, no install required.
+[**See a live report →**](https://kalkudiary-ai.github.io/orunmila/) — a scripted
+session showing one of every claim outcome, rendered by the real renderer
+(`npx orunmila demo` makes the same page), no install required.
 
-Here is that session at the terminal — one ordinary ask, one honest write, one
+And an ordinary session at the terminal — one ask, one honest write, one
 invented file, one unbacked "tests pass":
 
 ```

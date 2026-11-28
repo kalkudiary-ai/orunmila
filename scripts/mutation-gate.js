@@ -4572,6 +4572,23 @@ MUTANTS.push(
     to: "  cursor: { status: 'experimental', words:",
     fails: ['DOC6: every adapter has its support line', 'DOC6 (line 733), CU2:'],
   },
+  // DM1 (F36): the demo shows one of everything.
+  {
+    id: "DM1-1 the agent's edits have no Sentinel row",
+    file: 'src/demo/seed.js',
+    test: 'test/demo.js',
+    from: '  return eventlog.append({ session_id: SESSION, turn_id: null, ts: ts(), type: TYPES.FILE_WRITE, agent: ',
+    to: '  return path && diff && null && eventlog.append({ session_id: SESSION, turn_id: null, ts: ts(), type: TYPES.FILE_WRITE, agent: ',
+    fails: ['DM1 (F36)'],
+  },
+  {
+    id: 'DM1-2 no unverifiable claim',
+    file: 'src/demo/seed.js',
+    test: 'test/demo.js',
+    from: ' The tests now pass and the feature is verified working. I fixed it.',
+    to: ' The tests now pass and the feature is verified working.',
+    fails: ['DM1 (F36)'],
+  },
 );
 
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };

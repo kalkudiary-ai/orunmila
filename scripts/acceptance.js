@@ -56,7 +56,7 @@ const MAP = {
   23: { kind: 'deferred', approval: 'LD261: O, 2026-11-24, Q36 (c): the explainer deferred to output 3, with tests 23 and 36' },
   24: A(C('verify', 'an untouched session: "Record intact"'), C('verify-verdict', 'BB7 test 24'), C('verify-fresh', 'V2 test 24')),
   25: A(C('verify-verdict', 'BB7 test 25')),
-  26: { kind: 'manual', record: 'O, or someone O chooses (brief line 793): not yet run' },
+  26: { kind: 'manual', record: 'done: O, 2026-11-28, session f9298e75: "this has been done already" (O\'s word; no result sheet: who ran it, the date, the minutes and where they hesitated are not recorded here) (LD384)' },
   27: A(C('spec', 'SP2 test 27')),
   28: A(C('session-log', 'test 28:'), C('intake-router', 'test 28, LD124'), C('report', 'test 28:')),
   29: A(C('verify-odu', 'V1 test 29'), C('verify-verdict', "BB7 test 29's form")),

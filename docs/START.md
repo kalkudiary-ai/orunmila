@@ -16,8 +16,9 @@ said with what the two witnesses recorded, and everything runs on your machine.
 
 ## Install, and your first session
 
-You need Node.js 18 or later and an agent (Claude Code is the one fully
-supported; see the support table below). In the project you want to watch:
+You need Node.js 18 or later and an agent (Claude Code is fully supported, and
+Cursor for the Stain Map; see the support table below). In the project you want
+to watch (for Cursor: `orunmila install --agent cursor` in place of the second line):
 
 ```bash
 npm install -g orunmila
@@ -170,7 +171,7 @@ your `.env` values and names where each one is, never the value.
 | Agent | Support |
 |---|---|
 | Claude Code | Fully supported, tested on real sessions. |
-| Cursor | Experimental until it passes the real-session tests (test 49, not yet run). |
+| Cursor | Supported, tested on real sessions in Cursor's command-line agent (test 49): the Stain Map only, no Closeout Gate. The editor's agent reads the same hooks file; not yet run there. |
 | Gemini CLI, Codex, Continue, Antigravity, Generic | Experimental: built, tested only with sample data; results may be wrong. |
 | Aider | Experimental, sentinel only (Aider has no hooks). |
 | Windsurf | No adapter exists. |

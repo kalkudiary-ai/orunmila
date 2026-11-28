@@ -79,7 +79,7 @@ const MAP = {
   46: A(C('report', 'test 46:')),
   47: A(C('compat-shapes', 'EU1 test 47'), C('trail-marks', 'test 47:')),
   48: A(C('intake-router', 'NF30:'), C('intake-sentinel', 'B4 (N2):')),
-  49: { kind: 'manual', record: "real Cursor sessions with O (brief line 816): not yet run; until then Cursor is experimental in the support table" },
+  49: { kind: 'manual', record: "done: 2026-11-28, session b4096a3b, run by the agent on O's word (\"install, at this point lets just move alone\"), not with O: Cursor's command-line agent 2026.11.22-e9042b2, logged in by O. The first install wrote a hooks file Cursor does not read (CU1 fixed it, test/cursor.js holds the measured shapes); then four real sessions, every check right: each prompt, edit with its diff, read, command with its exit and final message recorded, both witnesses on every edit, and the false \"All tests pass.\" read as a phantom verification. Cursor's row set from it (CU2): supported, the Stain Map only; the editor's agent not run" },
   50: { ...A(C('strip', 'relevance at the mark level'), C('strip', "F26: an exact-capture read's read_range"), C('relevance', 'R50 test 50'), C('relevance', 'R50: a planted difference')), record: "on O's machine, 2026-11-28, scripts/relevance.js: the one stripped fixture (c5426624, test/cases/compat/0.2.4) against its raw recording, rebuilt exactly: 149 odù records, 20 conflicts, 149 verdicts and 1 session verdict each, the same kinds; stated limit F29 (LD375)" },
   51: A(C('judge', 'test 51:'), C('report', 'line 692, test 51')),
   52: A(C('tamper', 'test 52:'), C('judge', 'tests 10, 30, 42, 52')),

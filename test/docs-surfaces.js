@@ -124,7 +124,8 @@ it("DOC6 (lines 727-732): the support table is the same in START.md, the README 
   assert.deepStrictEqual(rows(read('README.md')), start);
   assert.ok(start.every((r) => read('docs/GUIDE.md').includes(r)));
   assert.strictEqual(supportOf('claude-code').status, 'supported');
-  assert.ok(start[1].includes('test 49, not yet run') && supportOf('cursor').words.includes('test 49, not yet run'), 'Cursor: one wording, until test 49');
+  // CU2: Cursor's row from test 49's result, the same limits the report's source states.
+  for (const w of ['tested on real sessions', "Cursor's command-line agent", 'test 49', 'the Stain Map only', 'not yet run there']) assert.ok(start[1].includes(w) && supportOf('cursor').words.includes(w), `Cursor row: ${w}`);
   assert.ok(start[3].includes('sentinel only') && start[4].includes('No adapter exists'));
 });
 

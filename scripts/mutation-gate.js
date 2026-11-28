@@ -4333,14 +4333,14 @@ MUTANTS.push(
     test: 'test/support.js',
     from: "    if (note) console.log(note + '\\n');",
     to: '',
-    fails: ["DOC6 (line 733): a Cursor session's report says its adapter is experimental"],
+    fails: ['DOC6 (line 733), CU2:'],
   },
   {
-    id: 'DOC6-2 Cursor reads as supported',
+    id: 'DOC6-2 an experimental adapter (Codex) reads as supported',
     file: 'src/capture/support.js',
     test: 'test/support.js',
-    from: "cursor: { status: 'experimental',",
-    to: "cursor: { status: 'supported',",
+    from: "codex: { status: 'experimental',",
+    to: "codex: { status: 'supported',",
     fails: ['DOC6: every adapter has its support line'],
   },
 );
@@ -4563,6 +4563,14 @@ MUTANTS.push(
     from: "  (line) => (typeof line.role === 'string' && line.message && line.message.content !== undefined ? { role: line.role, text: textOf(line.message.content) } : null),",
     to: '  () => null,',
     fails: ['CU1: sessionEnd closes a turn no response hook closed'],
+  },
+  {
+    id: 'CU2-1 Cursor back to experimental after test 49',
+    file: 'src/capture/support.js',
+    test: 'test/support.js',
+    from: "  cursor: { status: 'supported', words:",
+    to: "  cursor: { status: 'experimental', words:",
+    fails: ['DOC6: every adapter has its support line', 'DOC6 (line 733), CU2:'],
   },
 );
 

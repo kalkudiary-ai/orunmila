@@ -18,8 +18,10 @@ it('DOC6: every adapter has its support line, as the brief states it: Claude Cod
   const { listAgents } = require('../src/capture/agents');
   assert.deepStrictEqual(listAgents().map((a) => a.id).sort(), Object.keys(SUPPORT).sort(), 'one line per adapter, no more');
   assert.strictEqual(supportOf('claude-code').status, 'supported');
-  for (const id of ['cursor', 'gemini-cli', 'codex', 'continue', 'antigravity', 'generic', 'aider']) assert.strictEqual(supportOf(id).status, 'experimental', id);
-  assert.ok(/real-session tests/.test(supportOf('cursor').words), supportOf('cursor').words);
+  // CU2 (test 49, 2026-11-28): Cursor's row set from the result, its limits in its words.
+  assert.strictEqual(supportOf('cursor').status, 'supported');
+  for (const id of ['gemini-cli', 'codex', 'continue', 'antigravity', 'generic', 'aider']) assert.strictEqual(supportOf(id).status, 'experimental', id);
+  for (const w of ['tested on real sessions', "Cursor's command-line agent", 'test 49', 'the Stain Map only', 'not yet run there']) assert.ok(supportOf('cursor').words.includes(w), `${w}: ${supportOf('cursor').words}`);
   assert.ok(/sentinel only/.test(supportOf('aider').words), supportOf('aider').words);
   for (const id of ['gemini-cli', 'codex', 'continue', 'antigravity', 'generic']) assert.ok(/tested only with sample data; results may be wrong/.test(supportOf(id).words), id);
   assert.strictEqual(supportOf('windsurf').status, 'none', 'no Windsurf adapter exists');
@@ -36,10 +38,11 @@ function report(agent) {
   }
 }
 
-it("DOC6 (line 733): a Cursor session's report says its adapter is experimental, first; a Claude Code session's does not", () => {
-  const cursor = report('cursor');
-  assert.ok(cursor.startsWith('Experimental adapter (Cursor):'), cursor);
+it("DOC6 (line 733), CU2: an experimental adapter's session report says so, first (Codex); a Claude Code or Cursor session's does not", () => {
+  const codex = report('codex');
+  assert.ok(codex.startsWith('Experimental adapter (Codex CLI):'), codex);
   assert.ok(!report('claude-code').includes('Experimental adapter'));
+  assert.ok(!report('cursor').includes('Experimental adapter'), 'Cursor passed test 49');
 });
 
 runAll('support');

@@ -11,14 +11,16 @@
  *   supportOf(id)           that entry, or { status: 'none', words } for an agent with no adapter (Windsurf has none)
  *   experimentalNote(id, label)  the line a session report opens with for an experimental adapter's session, or null
  *
- * Cursor's line changes only with the result of the brief's real-session tests (test 49), run with O.
+ * Cursor's line is set from the result of the brief's real-session tests (test 49, CU2).
  */
 
 const SAMPLE = 'experimental: built, tested only with sample data; results may be wrong';
 
 const SUPPORT = {
   'claude-code': { status: 'supported', words: 'fully supported, tested on real sessions' },
-  cursor: { status: 'experimental', words: "experimental until it passes the brief's real-session tests (test 49, not yet run); results may be wrong" },
+  // CU2 (test 49, 2026-11-28, session b4096a3b): four real sessions in Cursor's command-line agent 2026.11.22, every
+  // check right and the false claim caught, after CU1. The editor's agent was not run.
+  cursor: { status: 'supported', words: "supported, tested on real sessions in Cursor's command-line agent (test 49): the Stain Map only, no Closeout Gate; the editor's agent reads the same hooks file, not yet run there" },
   'gemini-cli': { status: 'experimental', words: SAMPLE },
   codex: { status: 'experimental', words: SAMPLE },
   continue: { status: 'experimental', words: SAMPLE },

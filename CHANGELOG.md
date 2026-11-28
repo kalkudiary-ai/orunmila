@@ -31,6 +31,12 @@ new major version, and named in this file first.
   says so when it runs.
 - **`orunmila prune` stays for the old event log**; the intake's per-session logs
   are removed whole, and recorded, by `orunmila retention`.
+- **Cursor is supported for the Stain Map** (test 49, on Cursor's command-line
+  agent). Before, `install --agent cursor` wrote a hooks file Cursor does not read,
+  so nothing was recorded; it now writes Cursor's own format and reads the hooks
+  Cursor sends (tool calls with their exit codes, the final message, and a print
+  mode session's end). Run `orunmila install --agent cursor` again in each Cursor
+  project: it replaces the old entries and keeps your own hooks.
 
 **What to do**
 

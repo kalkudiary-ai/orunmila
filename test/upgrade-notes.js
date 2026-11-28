@@ -34,9 +34,12 @@ it('EU3: orunmila prune names what replaces it for the intake\'s logs (retention
   assert.ok(out.includes('`orunmila retention`') && out.includes('~/.orunmila/events.jsonl'), out);
 });
 
-it("EU3: the changelog's Unreleased section has upgrade notes (what changes, what to do, what still works) naming every S4.9 command", () => {
+it("EU3: the changelog's section for the version package.json names has upgrade notes (what changes, what to do, what still works) naming every S4.9 command", () => {
+  // Read from [Unreleased] until 1.0.0 was dated (LD395); the notes ship with the version the package says it is.
   const text = fs.readFileSync(path.join(ROOT, 'CHANGELOG.md'), 'utf8');
-  const unreleased = text.slice(text.indexOf('## [Unreleased]'), text.indexOf('\n## [', text.indexOf('## [Unreleased]') + 5));
+  const head = `## [${require('../package.json').version}]`;
+  assert.ok(text.includes(head), `the changelog has a ${head} section`);
+  const unreleased = text.slice(text.indexOf(head), text.indexOf('\n## [', text.indexOf(head) + 5));
   const notes = unreleased.slice(unreleased.indexOf('### Upgrading from 0.2.x'));
   assert.ok(unreleased.includes('### Upgrading from 0.2.x'), 'the section');
   for (const part of ['**What changes**', '**What to do**', '**What still works**']) assert.ok(notes.includes(part), part);

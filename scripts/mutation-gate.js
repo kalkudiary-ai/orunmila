@@ -4721,6 +4721,20 @@ MUTANTS.push(
     from: '                     claude-code and cursor. 2 of its 6 laws block; the rest advise.', to: '                     claude-code only. 2 of its 6 laws block; the rest advise.', fails: ['SW4'] },
 );
 
+// DF1 (O's word, 2026-11-28; LD395): git state on a command's mark and the command facts, on by default for 1.0.0.
+MUTANTS.push(
+  { id: 'DF1-1 vcsMarksOn reads the command facts variable', file: 'src/opon/intake/switches.js', test: 'test/intake-defaults.js',
+    from: 'onUnlessZero(env && env.ORUNMILA_VCS_MARKS)', to: 'onUnlessZero(env && env.ORUNMILA_COMMAND_FACTS)', fails: ['DF1: vcsMarksOn and commandFactsOn'] },
+  { id: 'DF1-2 commandFactsOn reads the git state variable', file: 'src/opon/intake/switches.js', test: 'test/intake-defaults.js',
+    from: 'onUnlessZero(env && env.ORUNMILA_COMMAND_FACTS)', to: 'onUnlessZero(env && env.ORUNMILA_VCS_MARKS)', fails: ['DF1: vcsMarksOn and commandFactsOn'] },
+  { id: 'DF1-3 intake run never passes the git state switch', file: 'bin/orunmila.js', test: 'test/intake-defaults.js',
+    from: '      vcsMarks: vcsMarks.on, //', to: '      vcsMarks: false, //', fails: ['DF1 test 60:', 'DF1: with each set to 1'] },
+  { id: 'DF1-4 intake run never passes the command facts switch', file: 'bin/orunmila.js', test: 'test/intake-defaults.js',
+    from: '      commandFacts: commandFacts.on, //', to: '      commandFacts: false, //', fails: ['DF1 test 60:', 'DF1: with each set to 1'] },
+  { id: 'DF1-5 command facts off by default again', file: 'src/opon/intake/switches.js', test: 'test/intake-defaults.js',
+    from: 'const commandFactsOn = (env) => onUnlessZero(env && env.ORUNMILA_COMMAND_FACTS);', to: "const commandFactsOn = (env) => ({ on: Boolean(env) && env.ORUNMILA_COMMAND_FACTS === '1', from: env && env.ORUNMILA_COMMAND_FACTS === '1' ? 'environment' : 'default' });", fails: ['DF1 test 60:', 'DF1: vcsMarksOn and commandFactsOn'] },
+);
+
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };
 
 if (require.main === module) process.exit(runGate());

@@ -130,4 +130,11 @@ const onUnlessZero = (v) => (v === '0' || v === '1' ? { on: v === '1', from: 'en
 const logGuardOn = (env) => onUnlessZero(env && env.ORUNMILA_LOG_GUARD);
 const peerBusyOn = (env) => onUnlessZero(env && env.ORUNMILA_PEER_BUSY);
 
-module.exports = { switchesFile, readSwitches, setJudge, judgeOn, livePathOn, setUpdates, updatesOn, setUpdatesDefault, logGuardOn, peerBusyOn };
+/**
+ * DF1 (O's word, 2026-11-28, on R5's five switches; LD395): two more on by default for 1.0.0, the same way: git,
+ * pull-request and CI state on a command's mark (VC1, LD372, test 60) and the command facts (CF1-CF5, LD385).
+ */
+const vcsMarksOn = (env) => onUnlessZero(env && env.ORUNMILA_VCS_MARKS);
+const commandFactsOn = (env) => onUnlessZero(env && env.ORUNMILA_COMMAND_FACTS);
+
+module.exports = { switchesFile, readSwitches, setJudge, judgeOn, livePathOn, setUpdates, updatesOn, setUpdatesDefault, logGuardOn, peerBusyOn, vcsMarksOn, commandFactsOn };

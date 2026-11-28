@@ -124,29 +124,30 @@ who", never guessed.
 **It does not see:**
 
 - An agent with administrator rights (`sudo`), which can attack Orunmila itself.
-  With `ORUNMILA_COMMAND_FACTS=1` where the intake starts, the session report at
-  least names each command that asked for those rights.
+  With the intake, the session report at least names each command that asked
+  for those rights. (These command facts, here and below, are on by default;
+  `ORUNMILA_COMMAND_FACTS=0` where the intake starts turns them off.)
 - Anything outside the folders it watches: your home folder, other projects,
-  system files. With `ORUNMILA_COMMAND_FACTS=1`, a tripwire checks the files there
+  system files. With the intake, a tripwire checks the files there
   that run code as you (shell start-up files, git and ssh config, start-up
   folders) at the session's start and its closeout, and names any that changed.
   Dependency folders such as `node_modules/` are on the ignore list (`orunmila
   status` prints it), so what a package install or a package's
   own scripts change inside them is not watched; the package files you edit
-  (`package.json`, the lock file) are. With `ORUNMILA_COMMAND_FACTS=1`, an npm
+  (`package.json`, the lock file) are. With the intake, an npm
   install's report names the packages its lock file gained, changed and lost,
   and which of them run an install script.
 - Most network activity: only a web fetch or search tool's host and query, never
   what was sent or received, nor traffic from programs the agent runs. With
-  `ORUNMILA_COMMAND_FACTS=1`, the hosts a command's own text names (`curl`,
+  the intake, the hosts a command's own text names (`curl`,
   `git push` and the like) are recorded too: named, not proof of contact.
 - Which program wrote a file. The Sentinel sees that bytes changed, not who
   changed them.
 - What happens inside a command beyond its file changes, how it ended and the
-  output kept. With `ORUNMILA_COMMAND_FACTS=1`, a test run's report also gives
+  output kept. With the intake, a test run's report also gives
   its runner's own pass, fail and skip counts, as the runner printed them.
 - Whether a record is complete. It can prove a record was not altered, not that
-  nothing was left out. With `ORUNMILA_COMMAND_FACTS=1`, the closeout checks the
+  nothing was left out. With the intake, the closeout checks the
   record against the agent's own transcript and names each tool call that left
   no mark; a call the transcript itself leaves out is still not seen.
 

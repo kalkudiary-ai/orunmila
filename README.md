@@ -199,11 +199,14 @@ onto that copy, adding none. `orunmila install` also turns on a once-a-day
 update check, the package's one network call (`--without-updates` turns it
 off). `orunmila watch` no longer stops 1.5 seconds after it starts. The trail
 page's Graph tab is a flowchart on a canvas you scroll both ways and zoom, with
-nothing held back. Cursor gets the Closeout Gate. Off by default,
-`ORUNMILA_COMMAND_FACTS=1` adds to the intake's record a test run's own counts,
-an npm install's package changes, a tripwire on the files outside the project
-that run code as you, and a check of the record against the agent's
-transcript. Details in the [changelog](CHANGELOG.md#unreleased).
+nothing held back. Cursor gets the Closeout Gate. The intake's record also
+holds what a command's own text and output say (the hosts it names, a `sudo`, a
+test run's own counts, an npm install's package changes, the git, pull-request
+and CI state a `git` or `gh` command shows), a tripwire on the files outside
+the project that run code as you, and a check of the record against the agent's
+transcript, all on by default (`ORUNMILA_COMMAND_FACTS=0` and
+`ORUNMILA_VCS_MARKS=0` turn them off). Details in the
+[changelog](CHANGELOG.md#100--2026-11-28).
 
 **0.2.3 fixes the Closeout Gate judging stale text.** When Claude Code's Stop
 hook fired, the gate could block a turn on a sentence the agent had already

@@ -9,6 +9,8 @@ new major version, and named in this file first.
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-11-28
+
 ### Upgrading from 0.2.x
 
 **What changes**
@@ -278,11 +280,11 @@ hook scripts by their paths in the package (`src/capture/claude-code/`),
 - **Edit verbs for the claim reader, off by default (`ORUNMILA_EDIT_VERBS=1`):**
   "I edited X", "modified", "rewrote" and "patched" are read as claims of
   changed work.
-- **Git, pull-request and CI state in the intake's record, off by default
-  (`ORUNMILA_VCS_MARKS=1`).** A `git` or `gh` command's output (its branch and
+- **Git, pull-request and CI state in the intake's record, on by default
+  (`ORUNMILA_VCS_MARKS=0` turns it off).** A `git` or `gh` command's output (its branch and
   commit, each pull request and its state, each set of checks) goes on that
   command's mark in the session's log, as the event log has always kept it.
-- **What a command's own text says, off by default (`ORUNMILA_COMMAND_FACTS=1`).**
+- **What a command's own text says, on by default (`ORUNMILA_COMMAND_FACTS=0` turns it off).**
   Each command's mark in the intake's record names the hosts its command line
   names (`detail.hosts`) and whether a step of it asked for administrator rights
   (`detail.elevated`: `sudo`, `doas`, `su`, `pkexec`, `runas`, `gsudo`); the
@@ -935,10 +937,8 @@ renders the result as a colored map of the codebase.
 - Zero runtime dependencies; no network calls by the tool itself; no account
   or API key. Everything stays local in `~/.orunmila/`.
 
-[Unreleased]: https://github.com/kalkudiary-ai/orunmila/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/kalkudiary-ai/orunmila/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/kalkudiary-ai/orunmila/compare/v0.2.4...v1.0.0
 [0.2.4]: https://github.com/kalkudiary-ai/orunmila/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/kalkudiary-ai/orunmila/compare/v0.2.2...v0.2.3
-[0.2.2]: https://github.com/kalkudiary-ai/orunmila/compare/v0.2.1...v0.2.2
-[0.2.1]: https://github.com/kalkudiary-ai/orunmila/compare/v0.2.0...v0.2.1
-[0.2.0]: https://github.com/kalkudiary-ai/orunmila/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/kalkudiary-ai/orunmila/releases/tag/v0.1.0
+[0.2.2]: https://github.com/kalkudiary-ai/orunmila/releases/tag/v0.2.2

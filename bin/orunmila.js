@@ -1834,11 +1834,13 @@ async function cmdIntake() {
   if (sub === 'run') {
     const { createRouter } = require('../src/opon/intake/router');
     const { nowMono } = require('../src/opon/intake/mono');
-    const { judgeOn, livePathOn, switchesFile, logGuardOn, peerBusyOn } = require('../src/opon/intake/switches');
+    const { judgeOn, livePathOn, switchesFile, logGuardOn, peerBusyOn, vcsMarksOn, commandFactsOn } = require('../src/opon/intake/switches');
     const judge = judgeOn(process.env, home); // BJ1 (LD326): the install's switch, the environment winning where set
     const livePath = livePathOn(process.env, home); // F38 (LD382): ORUNMILA_OPON_LIVE where set, else the judge's switch
     const logGuard = logGuardOn(process.env); // MR7: on unless ORUNMILA_LOG_GUARD=0
     const peerBusy = peerBusyOn(process.env); // PB1: on unless ORUNMILA_PEER_BUSY=0
+    const vcsMarks = vcsMarksOn(process.env); // DF1 (LD395): on unless ORUNMILA_VCS_MARKS=0
+    const commandFacts = commandFactsOn(process.env); // DF1 (LD395): on unless ORUNMILA_COMMAND_FACTS=0
     const router = createRouter({
       home,
       clock: () => ({ mono: nowMono(), wall: new Date().toISOString() }),
@@ -1854,8 +1856,8 @@ async function cmdIntake() {
       watchExtra: (process.env.ORUNMILA_WATCH_EXTRA || '').split(path.delimiter).filter((x) => x && path.isAbsolute(x)),
       asyncStart: process.env.ORUNMILA_ASYNC_START === '1', // SN1 (LD294): a session's start off the intake's thread (F16)
       peerBusy: peerBusy.on, // AT1b (LD330): a peer's working time noted in each session's log; on by default since PB1
-      vcsMarks: process.env.ORUNMILA_VCS_MARKS === '1', // VC1 (LD372, test 60): git, PR and CI state on a command's mark; off by default
-      commandFacts: process.env.ORUNMILA_COMMAND_FACTS === '1', // CF1 (LD385): the hosts a command names, and a sudo, on its mark; off by default
+      vcsMarks: vcsMarks.on, // VC1 (LD372, test 60): git, PR and CI state on a command's mark; on by default since DF1 (LD395)
+      commandFacts: commandFacts.on, // CF1-CF5 (LD385): a command's own facts, the tripwire and the transcript check; on by default since DF1 (LD395)
       // T32 (LD374, test 32): past this many paths waiting at once, the Sentinel drops the flood and writes a gap; no limit unless set
       sentinelMaxPending: Number.isInteger(Number(process.env.ORUNMILA_SENTINEL_MAX_PENDING)) && Number(process.env.ORUNMILA_SENTINEL_MAX_PENDING) > 0 ? Number(process.env.ORUNMILA_SENTINEL_MAX_PENDING) : undefined,
     });
@@ -1913,6 +1915,9 @@ async function cmdIntake() {
     const dflt = (name, sw) => (sw.from === 'environment' ? `${name}=${sw.on ? 1 : 0}` : `on by default; ${name}=0 turns it off`);
     console.log(logGuard.on ? `orunmila intake: every session's logs are guarded: a change Orunmila did not make is recorded and put back (${dflt('ORUNMILA_LOG_GUARD', logGuard)})` : 'orunmila intake: the logs are not guarded (ORUNMILA_LOG_GUARD=0)');
     console.log(peerBusy.on ? `orunmila intake: each session's log notes when a peer sharing its folder is working (${dflt('ORUNMILA_PEER_BUSY', peerBusy)})` : "orunmila intake: a peer's busy time is not noted (ORUNMILA_PEER_BUSY=0)");
+    // DF1 (LD395): the two switches on by default for 1.0.0, each with where its state came from.
+    console.log(vcsMarks.on ? `orunmila intake: a git or gh command's mark carries the git, pull-request and CI state its output shows (${dflt('ORUNMILA_VCS_MARKS', vcsMarks)})` : "orunmila intake: git, pull-request and CI state is not put on a command's mark (ORUNMILA_VCS_MARKS=0)");
+    console.log(commandFacts.on ? `orunmila intake: command facts are on: each command's hosts and a sudo, a test run's counts, an install's packages, the outside tripwire and the transcript check (${dflt('ORUNMILA_COMMAND_FACTS', commandFacts)})` : 'orunmila intake: command facts are off (ORUNMILA_COMMAND_FACTS=0)');
     // PM2c2 (LD333): the daily update check, read at each tick so the switch takes effect without a restart; the update
     // runs as its own process (src/runtime/daily.js), never in the intake's. ORUNMILA_UPDATE_POLL_MS is for tests.
     const { updatesOn } = require('../src/opon/intake/switches');

@@ -90,7 +90,7 @@ const MAP = {
   57: A(C('adapter-claude-code', 'test 57:')),
   58: A(C('redact-intake', 'test 58:')),
   59: A(C('adapter-claude-code', 'test 59, mark side'), C('trail', 'a sub-agent touch carries its attribution')),
-  60: { ...A(C('adapter-events-v0', 'test 60, mark side'), C('adapter-claude-code', 'test 60:'), C('intake-router', 'test 60 at the router')), unshown: "on by default: the live path writes detail.vcs only with ORUNMILA_VCS_MARKS=1, off until O's word (LD372)" },
+  60: A(C('adapter-events-v0', 'test 60, mark side'), C('adapter-claude-code', 'test 60:'), C('intake-router', 'test 60 at the router'), C('intake-defaults', 'DF1 test 60:')), // on by default since DF1 (O's word, 2026-11-28; LD395)
   61: A(C('adapter-law-gate', 'test 61:'), C('gate-marks', 'test 61:')),
   62: A(C('session-log', 'test 62, kept-whole half'), C('intake-router', 'test 62, mark side')),
   63: A(C('intake-router', 'test 63:')),

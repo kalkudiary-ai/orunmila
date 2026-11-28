@@ -406,36 +406,36 @@
         },
         "hosts": {
           "description": "On a command's exited mark: every host the command line names (a URL's host with its port, and the host of a `user@host` argument to ssh, scp, sftp, rsync or git), sorted in UTF-16 code-unit order, each once. The agent's testimony: a name is not a contact, and a command can reach a host it never names. Absent when it names none, or when command facts are off.",
-          "$comment": "agent's proposal CF1 (LD385; O, 2026-11-28: the in-roads, all but the one that needs administrator rights); written only with ORUNMILA_COMMAND_FACTS=1",
+          "$comment": "agent's proposal CF1 (LD385; O, 2026-11-28: the in-roads, all but the one that needs administrator rights); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
           "type": "array",
           "items": { "type": "string", "minLength": 1 },
           "minItems": 1
         },
         "elevated": {
           "description": "On a command's exited mark: true when a step of the command line starts with sudo, doas, su, pkexec, runas or gsudo, so it asked for administrator rights; what it did with them is outside what Orunmila sees. Absent otherwise, or when command facts are off.",
-          "$comment": "agent's proposal CF1 (LD385); written only with ORUNMILA_COMMAND_FACTS=1",
+          "$comment": "agent's proposal CF1 (LD385); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
           "const": true
         },
         "packages": {
           "description": "On an install command's exited mark (npm, yarn, pnpm or bun installing, adding, updating or removing packages): what npm's lock file at the project's root gained, changed and lost between the command's start and its end, as the intake read the file each time. The lock file's own words, not proof of what is under node_modules/. Only npm's lock is read; every other lock file there is named in not_read. Absent for other commands, or when command facts are off.",
-          "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+          "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
           "type": "object",
           "additionalProperties": false,
           "required": ["manager", "lock", "added", "changed", "removed", "not_read"],
           "properties": {
             "manager": {
               "description": "The package manager the command ran.",
-              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
               "enum": ["npm", "yarn", "pnpm", "bun"]
             },
             "lock": {
               "description": "The lock file read: npm-shrinkwrap.json when there is one, else package-lock.json (npm's own order); null when the manager is not npm or no npm lock file was there after the command.",
-              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
               "enum": ["npm-shrinkwrap.json", "package-lock.json", null]
             },
             "added": {
               "description": "Packages in the lock after the command and not before, sorted by name in UTF-16 code-unit order. A name is the package's folder under node_modules/, a nested one with its parent's (`b/node_modules/c`).",
-              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
               "type": "array",
               "items": {
                 "type": "object",
@@ -453,7 +453,7 @@
             },
             "changed": {
               "description": "Packages whose version in the lock changed, sorted by name in UTF-16 code-unit order.",
-              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
               "type": "array",
               "items": {
                 "type": "object",
@@ -469,7 +469,7 @@
             },
             "removed": {
               "description": "Packages in the lock before the command and not after, sorted by name in UTF-16 code-unit order.",
-              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
               "type": "array",
               "items": {
                 "type": "object",
@@ -483,37 +483,37 @@
             },
             "not_read": {
               "description": "Every other lock file at the project's root, named, not read. In this order: `npm-shrinkwrap.json`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `bun.lock`, `bun.lockb`.",
-              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
               "type": "array",
               "items": { "enum": ["npm-shrinkwrap.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lock", "bun.lockb"] }
             },
             "cut": {
               "description": "How many entries were left out of the three lists, past the first 200. Absent when none was.",
-              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
               "type": "integer",
               "minimum": 1
             },
             "before_unknown": {
               "description": "true when the intake saw no start of the command, so the lock before it is not known and no change is named.",
-              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
               "const": true
             },
             "unreadable": {
               "description": "true when the lock file was there but could not be read as JSON, before or after, so no change is named.",
-              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
               "const": true
             }
           }
         },
         "outside_checked": {
           "description": "On the closeout's exited mark: how many paths the outside tripwire fingerprinted again (the session header's `tripwire`). Absent when command facts are off, or when the tripwire could not run.",
-          "$comment": "agent's proposal CF4 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+          "$comment": "agent's proposal CF4 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
           "type": "integer",
           "minimum": 0
         },
         "outside_changed": {
           "description": "On the closeout's exited mark: each path of the outside tripwire whose fingerprint at the closeout differs from the one in the session header, sorted in UTF-16 code-unit order, by path and fingerprints only, never content. Who made the change is not recorded, and a change made and put back between the two reads is not seen. Absent when command facts are off.",
-          "$comment": "agent's proposal CF4 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+          "$comment": "agent's proposal CF4 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
           "type": "array",
           "items": {
             "type": "object",
@@ -528,16 +528,16 @@
         },
         "completeness": {
           "description": "On the closeout's exited mark: the record checked against the agent's own transcript. Every tool call the transcript shows on its main thread since the session started is looked for by its call id; `unmarked` names each with no mark in the record, in transcript order, at most 50 (`cut` counts the rest). The transcript is the agent's testimony too: a call it leaves out is not seen. Absent when command facts are off.",
-          "$comment": "agent's proposal CF5 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+          "$comment": "agent's proposal CF5 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
           "type": "object",
           "additionalProperties": false,
           "required": ["transcript", "calls", "unmarked"],
           "properties": {
-            "transcript": { "description": "`read`; `none` when no transcript was named or found; `too_large` when it is over 128 MiB, so it was not read.", "$comment": "agent's proposal CF5 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1", "enum": ["read", "none", "too_large"] },
-            "calls": { "description": "How many tool calls the transcript shows since the session started.", "$comment": "agent's proposal CF5 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1", "type": "integer", "minimum": 0 },
+            "transcript": { "description": "`read`; `none` when no transcript was named or found; `too_large` when it is over 128 MiB, so it was not read.", "$comment": "agent's proposal CF5 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)", "enum": ["read", "none", "too_large"] },
+            "calls": { "description": "How many tool calls the transcript shows since the session started.", "$comment": "agent's proposal CF5 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)", "type": "integer", "minimum": 0 },
             "unmarked": {
               "description": "Each call with no mark in the record: its call id and tool name.",
-              "$comment": "agent's proposal CF5 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+              "$comment": "agent's proposal CF5 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
               "type": "array",
               "items": {
                 "type": "object",
@@ -549,12 +549,12 @@
                 }
               }
             },
-            "cut": { "description": "How many more calls have no mark, past the 50 named. Absent when none.", "$comment": "agent's proposal CF5 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1", "type": "integer", "minimum": 1 }
+            "cut": { "description": "How many more calls have no mark, past the 50 named. Absent when none.", "$comment": "agent's proposal CF5 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)", "type": "integer", "minimum": 1 }
           }
         },
         "test_counts": {
           "description": "On a command's exited mark, when the command runs a test runner: that runner's own pass, fail and skip counts, read from the whole output, one entry for each runner whose summary it holds. The runner's testimony: what it printed, not proof of which tests exist. `skipped` is every test it neither passed nor failed (skipped, todo, pending, ignored, xfailed). Absent when no summary is found, or when command facts are off. Its entries follow this order of runners: node:test, jest, vitest, mocha, pytest, cargo, go.",
-          "$comment": "agent's proposal CF2 (LD385; O, 2026-11-28); written only with ORUNMILA_COMMAND_FACTS=1",
+          "$comment": "agent's proposal CF2 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
           "type": "array",
           "minItems": 1,
           "items": {

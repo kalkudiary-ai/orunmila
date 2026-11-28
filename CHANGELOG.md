@@ -304,6 +304,15 @@ hook scripts by their paths in the package (`src/capture/claude-code/`),
   "`npm test` passed (`1 test passed`)" and "Ran `npm test`: **1 test passed**" are read
   as test claims, for the gate and the judge, for every agent (F40). With
   `ORUNMILA_EDIT_VERBS=1`, "wired" is a work verb too.
+- **The Closeout Gate in Cursor (`orunmila install --agent cursor --with-gate`).**
+  Two hooks: `afterAgentResponse` keeps the turn's text, and `stop` waits for that
+  same response's text (Cursor fires both at once), judges the turn with the same
+  laws as Claude Code's gate, and answers a block as a follow-up message, which
+  Cursor submits as the next user message (`loop_limit` 2, the gate's block
+  budget). Advice is not shown in Cursor, whose stop hook takes nothing else; it
+  stays in the gate's record. Run in a real session of Cursor's command-line agent:
+  "All tests pass." with no run behind it was blocked, and the agent then ran the
+  tests and answered with their output.
 - **`status`, `lenses` and `watch` read the folder's own agent (F24, F41).** In a
   Cursor project they read `.cursor/hooks.json`: `status` no longer says the
   Stain Map is off there, names a Cursor hook whose script is gone, and `watch`

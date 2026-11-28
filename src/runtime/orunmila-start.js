@@ -34,6 +34,7 @@ const SCRIPTS = new Set([
   'src/capture/claude-code/law-gate.js',
   'src/capture/claude-code/intake-send.js',
   'src/capture/connector.js',
+  'src/capture/cursor/law-gate.js', // CG1 (LD394): the Closeout Gate's Cursor hooks
   'bin/orunmila.js',
 ]);
 const NAME = /^[0-9A-Za-z][0-9A-Za-z._+-]*$/; // a folder name: no separator, never `.` or `..`

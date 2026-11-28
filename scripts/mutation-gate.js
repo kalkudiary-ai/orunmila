@@ -4697,6 +4697,22 @@ MUTANTS.push(
     from: "'patched', 'wired']; // wired: F40 (LD392)", to: "'patched'];", fails: ['F40: with ORUNMILA_EDIT_VERBS=1'] },
 );
 
+// CG1 (LD394): the Closeout Gate in Cursor.
+MUTANTS.push(
+  { id: "CG1-1 any generation's text is judged", file: 'src/capture/cursor/law-gate.js', test: 'test/cursor.js',
+    from: "update(String(generation)).digest('hex')", to: "update('any').digest('hex')", fails: ['CG1: with no text for this generation'] },
+  { id: 'CG1-2 a block is never answered', file: 'src/capture/cursor/law-gate.js', test: 'test/cursor.js',
+    from: "  if (out && out.decision === 'block') {", to: '  if (false) {', fails: ['CG1: the gate judges the turn'] },
+  { id: 'CG1-3 an aborted turn is judged', file: 'src/capture/cursor/law-gate.js', test: 'test/cursor.js',
+    from: "  if (mode !== 'stop' || payload.status !== 'completed') return;", to: "  if (mode !== 'stop') return;", fails: ['CG1: with no text for this generation'] },
+  { id: 'CG1-4 the stop hook has no loop limit', file: 'bin/orunmila.js', test: 'test/cursor.js',
+    from: "  hooks.stop = (hooks.stop || []).concat([{ command: `${gate} stop`, loop_limit: 2 }]);", to: "  hooks.stop = (hooks.stop || []).concat([{ command: `${gate} stop` }]);", fails: ['CG1 (LD394)'] },
+  { id: 'CG1-5 the starter refuses the gate', file: 'src/runtime/orunmila-start.js', test: 'test/cursor.js',
+    from: "  'src/capture/cursor/law-gate.js', // CG1 (LD394): the Closeout Gate's Cursor hooks\n", to: '', fails: ['CG1 (LD394)'] },
+  { id: "CG1-6 status never sees Cursor's gate", file: 'bin/orunmila.js', test: 'test/cursor.js',
+    from: " : adapter.id === 'cursor' ? findCursorGateHooks(settings) : [],", to: ' : [],', fails: ['CG1 (LD394)'] },
+);
+
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };
 
 if (require.main === module) process.exit(runGate());

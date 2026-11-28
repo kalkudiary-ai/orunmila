@@ -99,7 +99,7 @@ is supported:
 | Agent | Support |
 |---|---|
 | Claude Code | Fully supported, tested on real sessions. |
-| Cursor | Supported, tested on real sessions in Cursor's command-line agent (test 49): the Stain Map only, no Closeout Gate. The editor's agent reads the same hooks file; not yet run there. |
+| Cursor | Supported, tested on real sessions in Cursor's command-line agent (test 49): the Stain Map, and the Closeout Gate, whose block arrives as an automatic follow-up message (advice is not shown). The editor's agent reads the same hooks file; not yet run there. |
 | Gemini CLI, Codex, Continue, Antigravity, Generic | Experimental: built, tested only with sample data; results may be wrong. |
 | Aider | Experimental, sentinel only (Aider has no hooks). |
 | Windsurf | No adapter exists. |

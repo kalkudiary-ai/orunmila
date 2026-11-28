@@ -728,7 +728,7 @@ How far each is supported, stated plainly:
 | Agent | Support |
 |---|---|
 | Claude Code | Fully supported, tested on real sessions. |
-| Cursor | Supported, tested on real sessions in Cursor's command-line agent (test 49): the Stain Map only, no Closeout Gate. The editor's agent reads the same hooks file; not yet run there. |
+| Cursor | Supported, tested on real sessions in Cursor's command-line agent (test 49): the Stain Map, and the Closeout Gate, whose block arrives as an automatic follow-up message (advice is not shown). The editor's agent reads the same hooks file; not yet run there. |
 | Gemini CLI, Codex, Continue, Antigravity, Generic | Experimental: built, tested only with sample data; results may be wrong. |
 | Aider | Experimental, sentinel only (Aider has no hooks). |
 | Windsurf | No adapter exists. |
@@ -740,16 +740,19 @@ What each adapter writes and where:
 |---|---|---|---|---|---|
 | Claude Code | `claude-code` (default) | ✅ | ✅ | `.claude/settings.json` | Richest hook surface; the original target |
 | Antigravity | `antigravity` | ✅ | — | `.agents/hooks.json` | Google's agent-first IDE; nested `toolCall` payload mapped automatically |
-| Cursor | `cursor` | ✅ | — | `.cursor/hooks.json` | `edit_file` / `run_terminal_cmd` mapped automatically |
+| Cursor | `cursor` | ✅ | ✅ (a block arrives as a follow-up message) | `.cursor/hooks.json` | Cursor's own tool names (`Read`, `Write`, `Grep`, `Shell`) mapped automatically, as measured in test 49 |
 | Aider | `aider` | ✅ | — | `.aider/hooks.json` | No native hooks — pair with `watch-fs` (disk sentinel) |
 | Codex CLI | `codex` | ✅ | — | `.codex/hooks.json` | `apply_patch` / exec mapped automatically |
 | Continue | `continue` | ✅ | — | `.continue/hooks.json` | VS Code / JetBrains |
 | Generic | `generic` | ✅ | — | `.orunmila/agent-hooks.json` | Any agent that can run a command per event with JSON on stdin |
 
-The **Closeout Gate is `claude-code` only** — it needs a hook that can refuse
-a turn, and Claude Code's Stop hook is the only one that currently offers it.
-Every other agent gets the Stain Map: full capture, full reconciliation, full
-reports.
+The **Closeout Gate runs for `claude-code` and `cursor`**: it needs a hook that
+can answer the end of a turn. Claude Code's Stop hook can refuse the turn and
+hand the agent a note. Cursor's stop hook can only submit a follow-up message,
+so in Cursor (`orunmila install --agent cursor --with-gate`) a block arrives as
+an automatic message the agent then answers, at most twice per prompt, and
+advice is not shown (it stays in the gate's record). Every other agent gets the
+Stain Map: full capture, full reconciliation, full reports.
 
 All agents write the **same** `~/.orunmila/events.jsonl`. The stain model, the
 glove, and the HTML report never know or care which agent produced an event.

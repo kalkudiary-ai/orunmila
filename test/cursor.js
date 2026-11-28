@@ -168,6 +168,71 @@ it('CU1: the claim is the final message: afterAgentResponse joins the turn\'s te
   rmrf(work);
 });
 
+it('CG1 (LD394): install --agent cursor --with-gate adds the gate on afterAgentResponse (the text) and stop (the check, loop_limit 2) beside capture; twice adds nothing; status and lenses show it on', () => {
+  const home = tmpHome();
+  const work = tmpDir();
+  for (let i = 0; i < 2; i++) {
+    const r = run('bin/orunmila.js', { args: ['install', '--agent', 'cursor', '--with-gate'], env: { ORUNMILA_HOME: home }, cwd: work });
+    assert.strictEqual(r.status, 0, r.stderr);
+  }
+  const cfg = JSON.parse(fs.readFileSync(path.join(work, '.cursor', 'hooks.json'), 'utf8'));
+  const gate = (ev) => cfg.hooks[ev].filter((h) => /cursor[\\/]law-gate\.js/.test(h.command));
+  assert.deepStrictEqual(gate('afterAgentResponse').map((h) => h.command.split(' ').pop()), ['text']);
+  assert.deepStrictEqual(gate('stop').map((h) => [h.command.split(' ').pop(), h.loop_limit]), [['stop', 2]]);
+  assert.strictEqual(cfg.hooks.afterAgentResponse.length, 2, 'capture and the gate, once each');
+  const st = run('bin/orunmila.js', { args: ['status'], env: { ORUNMILA_HOME: home }, cwd: work });
+  assert.ok(st.stdout.includes('Lenses (Cursor): Stain Map \x1b[32mon\x1b[0m  |  Closeout Gate \x1b[32mon\x1b[0m'), st.stdout);
+  // The installed command itself, through the starter, as Cursor runs it (found live: the starter refused the script).
+  const words = (c) => [...c.matchAll(/"([^"]*)"|(\S+)/g)].map((m) => (m[1] !== undefined ? m[1] : m[2]));
+  const [node, ...argv] = words(gate('afterAgentResponse')[0].command);
+  const r = require('child_process').spawnSync(node, argv, { input: JSON.stringify({ ...common('conv-installed'), generation_id: 'gen-i', hook_event_name: 'afterAgentResponse', text: 'All tests pass.' }), env: { ...process.env, ORUNMILA_HOME: home }, cwd: work, encoding: 'utf8' });
+  assert.deepStrictEqual([r.status, r.stderr], [0, ''], 'the starter runs the gate');
+  assert.strictEqual(fs.readdirSync(path.join(home, 'laws-state', 'conv-installed')).length, 1, 'the text is kept');
+  rmrf(home);
+  rmrf(work);
+});
+
+it('CG1: the gate judges the turn whose text afterAgentResponse gave (the same generation), and a block reaches Cursor as a follow-up message; a turn with its passing run behind it gets nothing', () => {
+  const home = tmpHome();
+  const work = tmpDir();
+  const env = { ORUNMILA_HOME: home, ORUNMILA_CURSOR_GATE_WAIT_MS: '2000' };
+  const C = (phase, payload) => run(CONNECTOR, { args: ['cursor', phase], input: JSON.stringify(payload), env });
+  const G = (arg, payload) => run('src/capture/cursor/law-gate.js', { args: [arg], input: JSON.stringify(payload), env });
+  const tp = cursorTranscript(work, 'is it done?', 'All tests pass.');
+  const turn = (conv, gen, withRun) => {
+    const c = { ...common(conv), generation_id: gen };
+    C('prompt', { ...c, hook_event_name: 'beforeSubmitPrompt', prompt: 'is it done?', transcript_path: null });
+    if (withRun) C('postTool', { ...c, hook_event_name: 'postToolUse', tool_name: 'Shell', tool_input: { command: 'npm test' }, tool_output: JSON.stringify({ output: '1 test passed\n', exitCode: 0 }), tool_use_id: 'r1', transcript_path: tp });
+    const resp = { ...c, hook_event_name: 'afterAgentResponse', text: 'All tests pass.', transcript_path: tp };
+    C('stop', resp);
+    assert.strictEqual(G('text', resp).stdout, '', 'the text hook answers nothing');
+    return G('stop', { ...c, hook_event_name: 'stop', status: 'completed', loop_count: 0, transcript_path: tp });
+  };
+  const blocked = turn('conv-g1', 'gen-1', false);
+  assert.strictEqual(blocked.status, 0);
+  const out = JSON.parse(blocked.stdout);
+  assert.deepStrictEqual(Object.keys(out), ['followup_message']);
+  assert.ok(/no-green-without-command/.test(out.followup_message) && /All tests pass\./.test(out.followup_message), out.followup_message);
+  assert.strictEqual(turn('conv-g2', 'gen-2', true).stdout, '', 'a passing run behind the claim: nothing');
+  rmrf(home);
+  rmrf(work);
+});
+
+it("CG1: with no text for this generation the gate judges nothing and records the skip (never a stale message, N10); an aborted turn is not judged; a broken payload exits 0 silently", () => {
+  const home = tmpHome();
+  const env = { ORUNMILA_HOME: home, ORUNMILA_CURSOR_GATE_WAIT_MS: '200' };
+  const G = (arg, input) => run('src/capture/cursor/law-gate.js', { args: [arg], input, env });
+  const c = { ...common('conv-g3'), generation_id: 'gen-old' };
+  G('text', JSON.stringify({ ...c, hook_event_name: 'afterAgentResponse', text: 'All tests pass.' }));
+  const r = G('stop', JSON.stringify({ ...c, generation_id: 'gen-new', hook_event_name: 'stop', status: 'completed', loop_count: 0 }));
+  assert.deepStrictEqual([r.status, r.stdout], [0, ''], 'the older generation\'s text is never judged for this one');
+  const state = fs.readdirSync(path.join(home, 'laws-state', 'conv-g3')).map((f) => JSON.parse(fs.readFileSync(path.join(home, 'laws-state', 'conv-g3', f), 'utf8')));
+  assert.ok(state.some((s) => s.skipped_unconfirmed_claim === true), JSON.stringify(state));
+  assert.deepStrictEqual([G('stop', JSON.stringify({ ...c, hook_event_name: 'stop', status: 'aborted', loop_count: 0 })).stdout], [''], 'aborted: nothing');
+  for (const bad of ['', 'not json', '{}']) assert.deepStrictEqual([G('stop', bad).status, G('stop', bad).stdout], [0, ''], JSON.stringify(bad));
+  rmrf(home);
+});
+
 it("F41: orunmila watch names the agent whose hooks the folder holds (Cursor), never Claude Code there; with none, it names no agent", () => {
   const project = fs.realpathSync(tmpDir());
   const home = tmpDir();

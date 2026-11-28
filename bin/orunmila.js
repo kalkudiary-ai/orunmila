@@ -189,7 +189,7 @@ const LENSES = {
     verb: 'refuses',
     one_line: "Stops a turn ending on a claim the turn's own evidence does not support.",
     refuses: true,
-    agents: 'claude-code only',
+    agents: 'claude-code and cursor',
     install: 'orunmila install --with-gate',
   },
   // BJ1 (LD326): the judge, an install option, off by default (O: "not everyone will appreciate the feature").
@@ -226,7 +226,7 @@ function lensState({ agentId = 'claude-code', global = false } = {}) {
     configPath: p,
     exists: true,
     stainMap: captureHooks,
-    gate: adapter.id === 'claude-code' ? findExistingGateHooks(settings) : [],
+    gate: adapter.id === 'claude-code' ? findExistingGateHooks(settings) : adapter.id === 'cursor' ? findCursorGateHooks(settings) : [],
     adapter,
   };
 }
@@ -309,6 +309,31 @@ function installCursor(adapter, root, p) {
       hooks[ev] = (Array.isArray(hooks[ev]) ? hooks[ev] : []).concat([{ command: `${hookFor('src/capture/connector.js')} ${adapter.id} ${phase}` }]);
     }
   }
+  settings.version = settings.version || 1;
+  settings.hooks = hooks;
+  fs.writeFileSync(p, JSON.stringify(settings, null, 2));
+}
+
+// CG1 (LD394): the Closeout Gate's two Cursor hooks, by the script they run (src/capture/cursor/law-gate.js).
+const isCursorGate = (c) => {
+  const { words, at } = scriptOf(c);
+  return at >= 0 && path.basename(words[at]) === 'orunmila-start.js' ? /(^|\/)cursor\/law-gate\.js$/.test(String(words[at + 1] || '')) : words.some((w) => /[\\/]cursor[\\/]law-gate\.js$/.test(w));
+};
+function findCursorGateHooks(settings) {
+  const out = [];
+  for (const [event, list] of Object.entries((settings && settings.hooks) || {})) {
+    for (const h of Array.isArray(list) ? list : []) if (h && typeof h.command === 'string' && isCursorGate(h.command)) out.push({ event, command: h.command });
+  }
+  return out;
+}
+/** The gate on afterAgentResponse (its text) and stop (its check, loop_limit 2: the block budget), any earlier ones replaced. */
+function installCursorGate(p) {
+  const settings = readJson(p, {});
+  const hooks = settings.hooks && typeof settings.hooks === 'object' ? settings.hooks : {};
+  for (const ev of Object.keys(hooks)) if (Array.isArray(hooks[ev])) hooks[ev] = hooks[ev].filter((h) => !(h && typeof h.command === 'string' && isCursorGate(h.command)));
+  const gate = hookFor('src/capture/cursor/law-gate.js');
+  hooks.afterAgentResponse = (hooks.afterAgentResponse || []).concat([{ command: `${gate} text` }]);
+  hooks.stop = (hooks.stop || []).concat([{ command: `${gate} stop`, loop_limit: 2 }]);
   settings.version = settings.version || 1;
   settings.hooks = hooks;
   fs.writeFileSync(p, JSON.stringify(settings, null, 2));
@@ -497,8 +522,8 @@ function cmdInstall() {
   // nothing to judge and it will pass every turn in silence. Say so out loud
   // rather than installing something inert.
   if (gateOnly) {
-    if (adapter.id !== 'claude-code') {
-      console.error(`--gate-only is claude-code only; ${adapter.label} can run the Stain Map but not the Closeout Gate.`);
+    if (adapter.id !== 'claude-code' && adapter.id !== 'cursor') {
+      console.error(`--gate-only is for claude-code and cursor; ${adapter.label} can run the Stain Map but not the Closeout Gate.`);
       process.exitCode = 1;
       return;
     }
@@ -509,11 +534,16 @@ function cmdInstall() {
       console.log('nothing to read and will pass every turn silently. Install both with:');
       console.log('  orunmila install --with-gate\n');
     }
-    const settings = readJson(p, {});
-    const gate = hookFor('src/capture/claude-code/law-gate.js');
-    mergeClaudeHook(settings, 'Stop', '*', gate);
-    fs.writeFileSync(p, JSON.stringify(settings, null, 2));
-    console.log(`${LENSES['closeout-gate'].name} installed on the Stop hook in ${p}.\n`);
+    if (adapter.id === 'cursor') {
+      installCursorGate(p);
+      console.log(`${LENSES['closeout-gate'].name} installed for Cursor in ${p}: on afterAgentResponse and stop; a block reaches the agent as an automatic follow-up message.\n`);
+    } else {
+      const settings = readJson(p, {});
+      const gate = hookFor('src/capture/claude-code/law-gate.js');
+      mergeClaudeHook(settings, 'Stop', '*', gate);
+      fs.writeFileSync(p, JSON.stringify(settings, null, 2));
+      console.log(`${LENSES['closeout-gate'].name} installed on the Stop hook in ${p}.\n`);
+    }
     printLawsForReview({ root: process.cwd() });
     console.log(`\nRestart ${adapter.label} (or start a new session) for this to take effect.`);
     return;
@@ -545,8 +575,13 @@ function cmdInstall() {
   // interrupted — so installing it prints every law in force, its severity, and
   // the file to edit to change it.
   if (wantsGate) {
-    if (adapter.id !== 'claude-code') {
-      console.log(`\nThe ${LENSES['closeout-gate'].name} is claude-code only; the Stain Map is installed, the gate is not.`);
+    if (adapter.id === 'cursor') {
+      installCursorGate(p);
+      console.log(`${LENSES['closeout-gate'].name} installed for Cursor: on afterAgentResponse and stop. A block reaches the agent as an automatic`);
+      console.log("follow-up message (Cursor's stop hook takes nothing else); advice is kept in the gate's record, not shown.\n");
+      printLawsForReview({ root: process.cwd() });
+    } else if (adapter.id !== 'claude-code') {
+      console.log(`\nThe ${LENSES['closeout-gate'].name} is for claude-code and cursor; the Stain Map is installed, the gate is not.`);
     } else {
       const settings = readJson(p, {});
       const gate = hookFor('src/capture/claude-code/law-gate.js');
@@ -560,7 +595,7 @@ function cmdInstall() {
     console.log('The Stain Map you just installed only ever reports. The gate can REFUSE a turn whose');
     console.log('claims its own evidence does not support. See exactly what it would enforce first:');
     console.log('  orunmila laws');
-    console.log('Then add it with:  orunmila install --agent claude-code --with-gate');
+    console.log(`Then add it with:  orunmila install --agent ${adapter.id === 'cursor' ? 'cursor' : 'claude-code'} --with-gate`);
     console.log('Compare the two lenses any time with:  orunmila lenses');
   }
 
@@ -663,7 +698,7 @@ function cmdLenses() {
     ['what it does', 'records + reports', 'refuses', 'judges the record'],
     ['when', 'after each turn', 'before a turn is allowed to end', "at each session's closeout"],
     ['can it stop the agent?', 'never', 'yes — 2 of its laws block', 'never'],
-    ['agents', 'all supported agents', 'claude-code only', 'claude-code (through the intake)'],
+    ['agents', 'all supported agents', 'claude-code and cursor', 'claude-code (through the intake)'],
     ['install', 'orunmila install', 'orunmila install --with-gate', 'orunmila install --with-judge'],
     ['add to an existing install', '—', 'orunmila install --gate-only', 'orunmila install --with-judge'],
     ['turn off', '—', 'ORUNMILA_LAWS=off (one session)', 'orunmila install --without-judge'],
@@ -688,11 +723,11 @@ function cmdLenses() {
     const mark = (on) => (on ? '\x1b[32m✓ installed\x1b[0m' : '\x1b[2m· not installed\x1b[0m');
     console.log(`  ${pad('The Stain Map', 20)} ${mark(st.stainMap.length)}`);
     for (const h of st.stainMap) console.log(dim(`      [${h.event}] ${h.command}`));
-    if (st.adapter.id === 'claude-code') {
+    if (st.adapter.id === 'claude-code' || st.adapter.id === 'cursor') {
       console.log(`  ${pad('The Closeout Gate', 20)} ${mark(st.gate.length)}`);
       for (const h of st.gate) console.log(dim(`      [${h.event}] ${h.command}`));
     } else {
-      console.log(`  ${pad('The Closeout Gate', 20)} ${dim('· unavailable for this agent (claude-code only)')}`);
+      console.log(`  ${pad('The Closeout Gate', 20)} ${dim('· unavailable for this agent (claude-code and cursor only)')}`);
     }
   }
 
@@ -735,9 +770,9 @@ function cmdStatus() {
   const shown = lensStatesShown(); // F24: every agent with Orunmila's hooks in this folder, or the one --agent names
   for (const ls of shown) {
     const mk = (on) => (on ? '\x1b[32mon\x1b[0m' : '\x1b[2moff\x1b[0m');
-    const gateCell = ls.adapter.id === 'claude-code'
+    const gateCell = ls.adapter.id === 'claude-code' || ls.adapter.id === 'cursor'
       ? mk(ls.gate.length)
-      : '\x1b[2mn/a (claude-code only)\x1b[0m';
+      : '\x1b[2mn/a (claude-code and cursor only)\x1b[0m';
     const who = ls.adapter.id === 'claude-code' ? '' : ` (${ls.adapter.label})`;
     console.log(`Lenses${who}: Stain Map ${mk(ls.stainMap.length)}  |  Closeout Gate ${gateCell}  |  Babaláwo ${mk(judgeState().on)}`);
     if (String(process.env.ORUNMILA_LAWS || '').toLowerCase() === 'off') {

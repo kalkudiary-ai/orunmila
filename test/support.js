@@ -21,7 +21,7 @@ it('DOC6: every adapter has its support line, as the brief states it: Claude Cod
   // CU2 (test 49, 2026-11-28): Cursor's row set from the result, its limits in its words.
   assert.strictEqual(supportOf('cursor').status, 'supported');
   for (const id of ['gemini-cli', 'codex', 'continue', 'antigravity', 'generic', 'aider']) assert.strictEqual(supportOf(id).status, 'experimental', id);
-  for (const w of ['tested on real sessions', "Cursor's command-line agent", 'test 49', 'the Stain Map only', 'not yet run there']) assert.ok(supportOf('cursor').words.includes(w), `${w}: ${supportOf('cursor').words}`);
+  for (const w of ['tested on real sessions', "Cursor's command-line agent", 'test 49', 'the Closeout Gate, whose block arrives as an automatic follow-up message', 'not yet run there']) assert.ok(supportOf('cursor').words.includes(w), `${w}: ${supportOf('cursor').words}`);
   assert.ok(/sentinel only/.test(supportOf('aider').words), supportOf('aider').words);
   for (const id of ['gemini-cli', 'codex', 'continue', 'antigravity', 'generic']) assert.ok(/tested only with sample data; results may be wrong/.test(supportOf(id).words), id);
   assert.strictEqual(supportOf('windsurf').status, 'none', 'no Windsurf adapter exists');

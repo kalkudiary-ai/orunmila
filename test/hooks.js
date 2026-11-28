@@ -1116,9 +1116,10 @@ it('lenses: the lenses command names both and reports which are installed', () =
 it('lenses: --gate-only is refused for an agent that cannot run the gate', () => {
   const home = tmpHome();
   const work = tmpDir();
-  const r = run('bin/orunmila.js', { args: ['install', '--agent', 'cursor', '--gate-only'], env: { ORUNMILA_HOME: home }, cwd: work });
+  // CG1 (LD394): Cursor runs the gate now; Codex has no hook that can answer a turn's end.
+  const r = run('bin/orunmila.js', { args: ['install', '--agent', 'codex', '--gate-only'], env: { ORUNMILA_HOME: home }, cwd: work });
   assert.notStrictEqual(r.status, 0, 'refuses rather than installing a gate that cannot fire');
-  assert.ok(r.stderr.includes('claude-code only'), 'says why');
+  assert.ok(r.stderr.includes('for claude-code and cursor'), 'says why');
   rmrf(home);
   rmrf(work);
 });

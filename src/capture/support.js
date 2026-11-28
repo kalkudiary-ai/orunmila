@@ -20,7 +20,9 @@ const SUPPORT = {
   'claude-code': { status: 'supported', words: 'fully supported, tested on real sessions' },
   // CU2 (test 49, 2026-11-28, session b4096a3b): four real sessions in Cursor's command-line agent 2026.11.22, every
   // check right and the false claim caught, after CU1. The editor's agent was not run.
-  cursor: { status: 'supported', words: "supported, tested on real sessions in Cursor's command-line agent (test 49): the Stain Map only, no Closeout Gate; the editor's agent reads the same hooks file, not yet run there" },
+  // CG1 (LD394, 2026-11-28, session 946e60e0): the Closeout Gate run in a real session of the same agent, a block answered
+  // as an automatic follow-up message that the agent then acted on.
+  cursor: { status: 'supported', words: "supported, tested on real sessions in Cursor's command-line agent (test 49): the Stain Map, and the Closeout Gate, whose block arrives as an automatic follow-up message (advice is not shown); the editor's agent reads the same hooks file, not yet run there" },
   'gemini-cli': { status: 'experimental', words: SAMPLE },
   codex: { status: 'experimental', words: SAMPLE },
   continue: { status: 'experimental', words: SAMPLE },

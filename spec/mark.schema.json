@@ -1,0 +1,830 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:orunmila:spec:v1:mark",
+  "title": "Orunmila mark (raw observation), schema version 1",
+  "description": "Every source's output is turned into marks of this one shape by its adapter, and intake appends them to the session's raw log (JSON Lines, one mark per line, never edited). Sources never write to the log themselves.",
+  "$comment": "brief v3 lines 209-268. Draft from Phase 1 slice A1: nothing writes or reads this format yet. Unknown fields are allowed, because the brief lets v1 add fields without a version bump (line 209); a reader must ignore what it does not know. Rules the brief states but a schema cannot hold (seq strictly increasing, the hash chain, redaction before hashing) are checked elsewhere (A3a, A4, A5, A6).",
+  "type": "object",
+  "required": ["schema_version", "session_id", "seq", "source", "agent", "turn", "sub_agent", "observed_at", "mono_ns", "target", "says", "detail", "cause_hint", "prev_hash", "hash"],
+  "properties": {
+    "schema_version": {
+      "description": "All carry a `schema_version`. Once v1 ships, fields may be added but never renamed or removed without a version bump.",
+      "$comment": "brief v3 line 209",
+      "const": 1
+    },
+    "session_id": {
+      "description": "The session the mark belongs to. A sub-agent's work belongs to its session. Orunmila uses the id the agent's hooks give the session (Claude Code's `session_id`), never one of its own, the same in every record of the session.",
+      "$comment": "brief v3 lines 218, 256 (the example's field; its format is not set by the brief)",
+      "type": "string",
+      "minLength": 1
+    },
+    "seq": {
+      "description": "One counter per session, assigned by the Opon's intake, strictly increasing. This is the true order of arrival.",
+      "$comment": "brief v3 line 237. Marks start at 1; 0 is the session header (agent's choice, LD10).",
+      "type": "integer",
+      "minimum": 1
+    },
+    "source": {
+      "description": "One of `agent_claim`, `hook`, `sentinel`, `git`, `process`, `law_gate`. New sources are added to this list by contract change.",
+      "$comment": "brief v3 line 243",
+      "enum": ["agent_claim", "hook", "sentinel", "git", "process", "law_gate"]
+    },
+    "agent": {
+      "description": "The agent whose session this is, for example `claude-code`; null when the source cannot know it. Orunmila writes it on hook, agent_claim and law_gate marks, and null on sentinel, git and process marks.",
+      "$comment": "brief v3 line 221 (the example's field; null allowed is the agent's choice, LD11)",
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "turn": {
+      "description": "Every Glove mark, and every law-gate mark, names the agent's turn. Sources that know nothing of turns (sentinel, git, process) write `null`. The session's end belongs to no turn, so its mark writes `null` too. It is a string or null, by the rules below; Orunmila writes `t` and the turn's number, counted from 1 in each session (`t1`, `t2`, ...).",
+      "$comment": "brief v3 line 255; the session end's null is the agent's choice, LD55 (format change approved by O 2026-11-17). Its type is set by the turn rules, allOf/0 to /2, which cover every source (LD87).",
+      "minLength": 1
+    },
+    "sub_agent": {
+      "description": "`{ \"id\": ..., \"type\": ... }` when the action happened inside a sub-agent, otherwise `null`.",
+      "$comment": "brief v3 line 256",
+      "type": ["object", "null"],
+      "required": ["id", "type"],
+      "properties": {
+        "id": { "description": "The sub-agent's id.", "$comment": "brief v3 line 256", "type": "string", "minLength": 1 },
+        "type": { "description": "The sub-agent's type.", "$comment": "brief v3 line 256", "type": "string", "minLength": 1 }
+      }
+    },
+    "observed_at": {
+      "description": "`observed_at` is wall-clock time for humans only.",
+      "$comment": "brief v3 line 238. UTC ISO 8601 with a Z, as the example (line 224); the exact pattern is the agent's choice, LD12.",
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$"
+    },
+    "mono_ns": {
+      "description": "The system-wide monotonic clock (never goes backwards), stamped as close to the moment of observation as the source allows; if a source cannot stamp it, intake stamps arrival time and records that in `detail.stamped_by`. Use it for all timing maths.",
+      "$comment": "brief v3 line 238; brief v4 line 238: written as a decimal string of the integer, because a JSON number is exact only up to 2^53 (about 104 days of nanoseconds since boot); compared as a big integer (open point P1, decided 2026-11-16).",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "target": {
+      "description": "What the mark is about. `target.kind`: `file`, `dir`, `command`, `process`, `claim`, `turn`, `tool`, `network`, or `session`.",
+      "$comment": "brief v3 lines 244, 259; `session` is the agent's choice, LD55",
+      "$ref": "#/definitions/target"
+    },
+    "says": {
+      "description": "A fixed verb list: created, modified, deleted, renamed, started, exited, ended (a turn finished, a tool call failed, or the session ended), prompted (a user prompt arrived), read, contacted, called, claimed, checked (the law gate checked a turn), fingerprinted (the Opon recorded a file's fingerprint), gap (a source lost or dropped events), tampered (source process: Orunmila's own logs, frozen configuration, code or the agent's hook settings changed during the session, or a payload arrived from a process other than the one pinned to the session), overlapped (source process: the intake names in this session's log another session sharing its folder, when it first sees it and when that one ends). Also tick (heartbeat). A tool call's started mark has the same target as its outcome mark. A hook write's outcome is created, modified or deleted by whether the file existed when the intake read it before and after the call; with no read before it, modified.",
+      "$comment": "brief v3 line 245; brief v4 line 245 adds tampered (decision I-1, 2026-11-16); ended for the session is the agent's choice, LD55; overlapped is the agent's proposal, Q11 (2) (a), adopted LD184, LD202",
+      "enum": ["created", "modified", "deleted", "renamed", "started", "exited", "ended", "prompted", "read", "contacted", "called", "claimed", "checked", "fingerprinted", "gap", "tampered", "overlapped", "tick"]
+    },
+    "detail": {
+      "description": "Named detail slots (the spec gives each a schema).",
+      "$comment": "brief v3 line 260",
+      "$ref": "#/definitions/detail"
+    },
+    "cause_hint": {
+      "description": "Filled by sources that know their cause, for example a hook mark carries the tool call id. Orunmila sets it on a tool call's hook marks, to the call's id (Claude Code's `tool_use_id`), and on the gap for a write's lost diff, to that write's call id; every other mark has null.",
+      "$comment": "brief v3 line 246",
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "prev_hash": {
+      "description": "Each mark's hash covers its own content plus the previous mark's hash. The first mark's previous hash is the session header's.",
+      "$comment": "brief v3 lines 247, 282",
+      "$ref": "#/definitions/hash"
+    },
+    "hash": {
+      "description": "Content is serialised in one canonical form before hashing (RFC 8785 JSON Canonicalization, or an equally exact rule written into the spec), so anyone can recompute the same hash.",
+      "$comment": "brief v3 line 247. The exact bytes hashed are slice A3a.",
+      "$ref": "#/definitions/hash"
+    }
+  },
+  "allOf": [
+    {
+      "$comment": "brief v3 line 255: Glove and law-gate marks name the turn, except the session's end (LD55)",
+      "if": {
+        "properties": { "source": { "enum": ["hook", "agent_claim", "law_gate"] } },
+        "not": { "$ref": "#/definitions/session_target" }
+      },
+      "then": { "properties": { "turn": { "type": "string" } } }
+    },
+    {
+      "$comment": "agent's choice, LD55: only the agent's own hook ends a session, outside any turn",
+      "if": { "$ref": "#/definitions/session_target" },
+      "then": { "properties": { "source": { "const": "hook" }, "says": { "const": "ended" }, "turn": { "type": "null" } } }
+    },
+    {
+      "$comment": "brief v3 line 255: sentinel, git and process write null",
+      "if": { "properties": { "source": { "enum": ["sentinel", "git", "process"] } } },
+      "then": { "properties": { "turn": { "type": "null" } } }
+    },
+    {
+      "$comment": "brief v3 line 253: agent_claim is the agent's closing claim",
+      "if": { "properties": { "source": { "const": "agent_claim" } } },
+      "then": { "properties": { "says": { "const": "claimed" } } }
+    },
+    {
+      "$comment": "brief v3 lines 257, 265: the claim stays a claimed mark, with its text",
+      "if": { "properties": { "says": { "const": "claimed" } } },
+      "then": { "properties": { "target": { "properties": { "kind": { "const": "claim" } } }, "detail": { "required": ["text"] } } }
+    },
+    {
+      "$comment": "brief v3 line 242: each check is a checked mark on the turn, with detail.result",
+      "if": { "properties": { "source": { "const": "law_gate" } } },
+      "then": { "properties": { "says": { "const": "checked" } } }
+    },
+    {
+      "$comment": "brief v3 lines 242, 245: checked means the law gate checked a turn",
+      "if": { "properties": { "says": { "const": "checked" } } },
+      "then": {
+        "properties": { "source": { "const": "law_gate" }, "target": { "properties": { "kind": { "const": "turn" } } }, "detail": { "required": ["result"] } }
+      }
+    },
+    {
+      "$comment": "brief v3 line 346: tick marks have source process",
+      "if": { "properties": { "says": { "const": "tick" } } },
+      "then": { "properties": { "source": { "const": "process" } } }
+    },
+    {
+      "$comment": "agent's choice, LD13: only tick and gap may have a null target",
+      "if": { "properties": { "says": { "enum": ["tick", "gap"] } } },
+      "else": { "properties": { "target": { "type": "object" } } }
+    },
+    {
+      "$comment": "brief v3 line 341: a gap mark names what was lost",
+      "if": { "properties": { "says": { "const": "gap" } } },
+      "then": { "properties": { "detail": { "required": ["lost"] } } }
+    },
+    {
+      "$comment": "brief v3 line 257: each user prompt is a prompted mark on the turn, with the text in detail.prompt",
+      "if": { "properties": { "says": { "const": "prompted" } } },
+      "then": { "properties": { "target": { "properties": { "kind": { "const": "turn" } } }, "detail": { "required": ["prompt"] } } }
+    },
+    {
+      "$comment": "brief v3 line 258: every tool call gives a started mark and one outcome mark, both with the tool call id in cause_hint and the tool's name in detail.tool",
+      "if": { "$ref": "#/definitions/glove_tool_mark" },
+      "then": { "properties": { "cause_hint": { "type": "string" }, "detail": { "required": ["tool"] } } }
+    },
+    {
+      "$comment": "brief v3 line 258: every outcome mark carries detail.exit_status",
+      "if": { "allOf": [{ "$ref": "#/definitions/glove_tool_mark" }, { "properties": { "says": { "not": { "const": "started" } } } }] },
+      "then": { "properties": { "detail": { "required": ["exit_status"] } } }
+    },
+    {
+      "$comment": "brief v3 line 240: exited marks always carry detail.exit_status",
+      "if": { "properties": { "says": { "const": "exited" } } },
+      "then": { "properties": { "detail": { "required": ["exit_status"] } } },
+      "else": { "properties": { "detail": { "not": { "required": ["exit_code"] } } } }
+    },
+    {
+      "$comment": "brief v3 line 259: a command targets { kind: command, text }",
+      "if": { "properties": { "source": { "const": "hook" }, "says": { "const": "exited" } } },
+      "then": { "properties": { "target": { "properties": { "kind": { "const": "command" } } } } }
+    },
+    {
+      "$comment": "brief v3 lines 245, 264: file changes, the Glove's edit outcomes and the sentinel's marks alike",
+      "if": { "properties": { "says": { "enum": ["created", "modified", "deleted", "renamed"] } } },
+      "then": { "properties": { "target": { "properties": { "kind": { "enum": ["file", "dir"] } } } } }
+    },
+    {
+      "$comment": "brief v3 line 264: a created mark leaves fingerprint_before out",
+      "if": { "properties": { "says": { "const": "created" } } },
+      "then": { "properties": { "detail": { "not": { "required": ["fingerprint_before"] } } } }
+    },
+    {
+      "$comment": "brief v3 lines 259, 261: a read targets the file, or the folder searched",
+      "if": { "properties": { "says": { "const": "read" } } },
+      "then": { "properties": { "target": { "properties": { "kind": { "enum": ["file", "dir"] } } }, "detail": { "required": ["read_kind"] } } },
+      "else": { "properties": { "detail": { "not": { "required": ["read_range"] } } } }
+    },
+    {
+      "$comment": "agent's choice, LD121 (O's go, 2026-11-22): a folder listing reads the folder",
+      "if": { "properties": { "detail": { "required": ["read_kind"], "properties": { "read_kind": { "const": "listing" } } } } },
+      "then": { "properties": { "target": { "properties": { "kind": { "const": "dir" } } } } }
+    },
+    {
+      "$comment": "brief v3 line 259: a network contact targets { kind: network, host, url }",
+      "if": { "properties": { "says": { "const": "contacted" } } },
+      "then": { "properties": { "target": { "properties": { "kind": { "const": "network" } } } } }
+    },
+    {
+      "$comment": "brief v3 lines 259, 263: any other tool targets { kind: tool, name }; called carries tool_input",
+      "if": { "properties": { "says": { "const": "called" } } },
+      "then": { "properties": { "target": { "properties": { "kind": { "const": "tool" } } }, "detail": { "required": ["tool_input"] } } }
+    },
+    {
+      "$comment": "brief v4 line 245: a tampered mark has source process and says what was tampered with",
+      "if": { "properties": { "says": { "const": "tampered" } } },
+      "then": { "properties": { "source": { "const": "process" }, "detail": { "required": ["what"] } } }
+    },
+    {
+      "$comment": "brief v4 line 265: a renamed mark also carries from, the old path",
+      "if": { "properties": { "says": { "const": "renamed" } } },
+      "then": { "properties": { "detail": { "required": ["from"] } } }
+    },
+    {
+      "$comment": "brief v4 lines 245, 386: the Opon records a file's fingerprint at settle time; the mark's shape is the agent's proposal (LD171, Q8): a file that exists has its size and fingerprint, null only when unknown; a file that does not has none",
+      "if": { "properties": { "says": { "const": "fingerprinted" } } },
+      "then": {
+        "properties": {
+          "source": { "const": "process" },
+          "target": { "properties": { "kind": { "const": "file" } } },
+          "detail": {
+            "required": ["exists"],
+            "if": { "properties": { "exists": { "const": true } } },
+            "then": { "required": ["size", "fingerprint"] },
+            "else": { "not": { "required": ["fingerprint"] } }
+          }
+        }
+      }
+    },
+    {
+      "$comment": "brief v4 lines 344, 402-405, guarantee 3; the agent's proposal, Q11 (2) (a), adopted LD184, LD202: the intake names in this session's own log another session sharing its folder (its id, root and start), and later its end, so replay reads overlap from this log alone; AT1 (LD330, O approved Q45): `busy`, when present, says whether the session named was working at this mark (from its prompt to its turn's end, or with work left running), so a peer idle then is not counted as overlapping",
+      "if": { "properties": { "says": { "const": "overlapped" } } },
+      "then": {
+        "properties": {
+          "source": { "const": "process" },
+          "target": { "properties": { "kind": { "const": "process" } } },
+          "detail": {
+            "required": ["session", "root", "from", "ended"],
+            "properties": {
+              "from": { "pattern": "^[0-9]+$" },
+              "to": { "pattern": "^[0-9]+$" }
+            },
+            "if": { "properties": { "ended": { "const": true } } },
+            "then": { "required": ["to"] },
+            "else": { "not": { "required": ["to"] } }
+          }
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "hash": {
+      "description": "A chain hash: sha256 and 64 lowercase hex digits.",
+      "$comment": "brief v3 line 247; the prefix is the example's (lines 230-231)",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "fingerprint": {
+      "description": "A file or output fingerprint: plain SHA-256, or keyed HMAC-SHA-256 for files on the redaction list. null when unknown.",
+      "$comment": "brief v3 lines 228, 249. The hmac-sha256 prefix is the agent's choice, LD14.",
+      "type": ["string", "null"],
+      "pattern": "^(sha256|hmac-sha256):[0-9a-f]{64}$"
+    },
+    "count": {
+      "description": "A line count; null unless both states are known.",
+      "$comment": "brief v3 line 264",
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "line_number": {
+      "description": "A line number or a number of lines, as the agent asked or the tool's result stated; null when not given.",
+      "$comment": "agent's choice, LD94",
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "instant": {
+      "description": "On a gap for intake's downtime: one end of the window. since is when intake last wrote before it stopped (the latest record among the sessions it was serving); until is when it ran again.",
+      "$comment": "agent's choice, B1c-2 (test 84); wording approved by O 2026-11-17",
+      "type": "object",
+      "required": ["mono_ns", "observed_at"],
+      "properties": {
+        "mono_ns": {
+          "description": "The monotonic clock at that moment, as a decimal string.",
+          "$comment": "brief v4 line 238",
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "observed_at": {
+          "description": "Wall-clock time at that moment, for humans, and the only clock that compares across a reboot.",
+          "$comment": "brief v4 line 238",
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$"
+        }
+      }
+    },
+    "glove_tool_mark": {
+      "$comment": "A Glove (source hook) mark about one tool call: started, an outcome verb, or ended on something other than a turn (brief v3 line 258). It names no required keys: the root requires source, says and target (LD81, LD87).",
+      "allOf": [{ "properties": { "source": { "const": "hook" } } }],
+      "anyOf": [
+        { "properties": { "says": { "enum": ["started", "created", "modified", "deleted", "renamed", "exited", "read", "contacted", "called"] } } },
+        {
+          "properties": { "says": { "const": "ended" }, "target": { "properties": { "kind": { "not": { "enum": ["turn", "session"] } } } } }
+        }
+      ]
+    },
+    "session_target": {
+      "$comment": "A mark about the session itself: target { kind: session } (LD55).",
+      "required": ["target"],
+      "allOf": [{ "properties": { "target": { "type": "object", "required": ["kind"], "properties": { "kind": { "const": "session" } } } } }]
+    },
+    "target": {
+      "type": ["object", "null"],
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "description": "`file`, `dir`, `command`, `process`, `claim`, `turn`, `tool`, `network`, or `session` (the session itself, for its end).",
+          "$comment": "brief v3 line 244; `session` is the agent's choice, LD55",
+          "enum": ["file", "dir", "command", "process", "claim", "turn", "tool", "network", "session"]
+        },
+        "path": {
+          "description": "The file or folder. Normalise paths: convert to repo-relative, resolve symlinks, and normalise case on case-insensitive filesystems. Orunmila writes it with `/` between names on every operating system, and `.` for the project root itself.",
+          "$comment": "brief v3 lines 226, 339; brief v4 line 345: a path outside the project root is absolute, with outside: true. Normalisation is slice A7.",
+          "type": "string",
+          "minLength": 1
+        },
+        "outside": {
+          "description": "A path outside the project root keeps its absolute real path, with `target.outside: true`.",
+          "$comment": "brief v4 line 345 (open point P2, decided 2026-11-16)",
+          "type": "boolean"
+        },
+        "text": { "description": "A command targets `{ \"kind\": \"command\", \"text\": ... }`. Orunmila writes the command line exactly as the agent's tool was given it (Bash's `command`), redacted.", "$comment": "brief v3 line 259", "type": "string" },
+        "id": {
+          "description": "A turn, target `{ \"kind\": \"turn\", \"id\": ... }`. The session itself, `{ \"kind\": \"session\", \"id\": ... }`, with its session id.",
+          "$comment": "brief v3 line 257; the session target is the agent's choice, LD55",
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "description": "Any other tool targets `{ \"kind\": \"tool\", \"name\": ... }`. A process target may name the process: `intake` for Orunmila's own intake, `closeout` for the closeout's sweep.",
+          "$comment": "brief v3 line 259; the process name is the agent's choice, LD56",
+          "type": "string",
+          "minLength": 1
+        },
+        "host": {
+          "description": "A network contact targets `{ \"kind\": \"network\", \"host\": ..., \"url\": ... }`; for a web search `host` is `null`, because the agent's tool picks the hosts and Orunmila does not see them.",
+          "$comment": "brief v3 line 259",
+          "type": ["string", "null"]
+        },
+        "url": { "description": "The address contacted.", "$comment": "brief v3 line 259", "type": "string" },
+        "query": { "description": "For a web search, the query goes in `query`.", "$comment": "brief v3 line 259", "type": "string" }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "enum": ["file", "dir"] } } }, "then": { "required": ["path"] } },
+        { "if": { "properties": { "kind": { "const": "command" } } }, "then": { "required": ["text"] } },
+        { "if": { "properties": { "kind": { "enum": ["turn", "session"] } } }, "then": { "required": ["id"] } },
+        { "if": { "properties": { "kind": { "const": "tool" } } }, "then": { "required": ["name"] } },
+        { "if": { "properties": { "kind": { "const": "network" } } }, "then": { "required": ["host"] } }
+      ]
+    },
+    "detail": {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "description": "The tool's name, on both marks of a tool call; null when the source did not record it (today's write and read records name no tool).",
+          "$comment": "brief v3 lines 241, 258; null allowed is the agent's choice, LD33",
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "exit_status": {
+          "description": "`pass`, `fail` or `unknown`. Every outcome mark carries it.",
+          "$comment": "brief v3 lines 240, 258",
+          "enum": ["pass", "fail", "unknown"]
+        },
+        "exit_code": {
+          "description": "Only when it is truly known. Never invent a code. Only a command's outcome carries it. Claude Code gives a passing command no code, and states a failed one's only in its failure text (\"Exit code N\"); the code is carried when stated, and a failure that states none has no exit_code.",
+          "$comment": "brief v3 lines 240, 258; the stated code is LD121 (O's go, 2026-11-22), from X1's measurement (238 of 285 failure texts open with it)",
+          "type": "integer"
+        },
+        "background": {
+          "description": "On a command's exited mark: true when the agent launched the command to run in the background, so the hook saw it start, not finish, and its exit_status is `unknown`. Absent otherwise.",
+          "$comment": "agent's choice, NF66 (written since Phase 1); declared in the spec by F21, O's yes 2026-11-28",
+          "const": true
+        },
+        "interrupted": {
+          "description": "On a command's exited mark: true when the agent's tool says the command was interrupted before it finished, so its exit_status is `unknown`. Absent otherwise.",
+          "$comment": "agent's choice, NF66 (written since Phase 1); declared in the spec by F21, O's yes 2026-11-28",
+          "const": true
+        },
+        "output_excerpt": { "description": "The start of the command's output: its standard output, then a line feed and its standard error when it wrote any (for a failed command whose hook gives only an error text, that text after its `Exit code` line), cut after redaction to at most 2,000 Unicode code points; when the output is longer, the whole of it is kept beside the log, named by `output_ref`.", "$comment": "brief v3 line 262", "type": "string", "maxLength": 2000 },
+        "output_ref": {
+          "description": "When the output is longer, the fingerprint of the full output, which is kept beside the log.",
+          "$comment": "brief v3 lines 262, 266",
+          "$ref": "#/definitions/hash"
+        },
+        "vcs": {
+          "description": "Git state in a command's output, the agent's testimony: one entry for each record today's capture writes (a commit and branch, each pull request, each set of CI checks), with today's field names.",
+          "$comment": "brief v3 line 267. Entry shapes are today's capture records, not restated here.",
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "hosts": {
+          "description": "On a command's exited mark: every host the command line names (a URL's host with its port, and the host of a `user@host` argument to ssh, scp, sftp, rsync or git), sorted in UTF-16 code-unit order, each once. The agent's testimony: a name is not a contact, and a command can reach a host it never names. Absent when it names none, or when command facts are off.",
+          "$comment": "agent's proposal CF1 (LD385; O, 2026-11-28: the in-roads, all but the one that needs administrator rights); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        },
+        "elevated": {
+          "description": "On a command's exited mark: true when a step of the command line starts with sudo, doas, su, pkexec, runas or gsudo, so it asked for administrator rights; what it did with them is outside what Orunmila sees. Absent otherwise, or when command facts are off.",
+          "$comment": "agent's proposal CF1 (LD385); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
+          "const": true
+        },
+        "packages": {
+          "description": "On an install command's exited mark (npm, yarn, pnpm or bun installing, adding, updating or removing packages): what npm's lock file at the project's root gained, changed and lost between the command's start and its end, as the intake read the file each time. The lock file's own words, not proof of what is under node_modules/. Only npm's lock is read; every other lock file there is named in not_read. Absent for other commands, or when command facts are off.",
+          "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["manager", "lock", "added", "changed", "removed", "not_read"],
+          "properties": {
+            "manager": {
+              "description": "The package manager the command ran.",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
+              "enum": ["npm", "yarn", "pnpm", "bun"]
+            },
+            "lock": {
+              "description": "The lock file read: npm-shrinkwrap.json when there is one, else package-lock.json (npm's own order); null when the manager is not npm or no npm lock file was there after the command.",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
+              "enum": ["npm-shrinkwrap.json", "package-lock.json", null]
+            },
+            "added": {
+              "description": "Packages in the lock after the command and not before, sorted by name in UTF-16 code-unit order. A name is the package's folder under node_modules/, a nested one with its parent's (`b/node_modules/c`).",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "version", "install_script"],
+                "properties": {
+                  "name": { "description": "The package's folder under node_modules/.", "type": "string", "minLength": 1 },
+                  "version": { "description": "Its version in the lock.", "type": "string", "minLength": 1 },
+                  "install_script": {
+                    "description": "true when the lock says it runs an install script, false when it says not, null when the lock (lockfileVersion 1) does not say.",
+                    "enum": [true, false, null]
+                  }
+                }
+              }
+            },
+            "changed": {
+              "description": "Packages whose version in the lock changed, sorted by name in UTF-16 code-unit order.",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "from", "to", "install_script"],
+                "properties": {
+                  "name": { "description": "The package's folder under node_modules/.", "type": "string", "minLength": 1 },
+                  "from": { "description": "Its version before the command.", "type": "string", "minLength": 1 },
+                  "to": { "description": "Its version after it.", "type": "string", "minLength": 1 },
+                  "install_script": { "description": "As in added, for the version after.", "enum": [true, false, null] }
+                }
+              }
+            },
+            "removed": {
+              "description": "Packages in the lock before the command and not after, sorted by name in UTF-16 code-unit order.",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "version"],
+                "properties": {
+                  "name": { "description": "The package's folder under node_modules/.", "type": "string", "minLength": 1 },
+                  "version": { "description": "Its version before the command.", "type": "string", "minLength": 1 }
+                }
+              }
+            },
+            "not_read": {
+              "description": "Every other lock file at the project's root, named, not read. In this order: `npm-shrinkwrap.json`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `bun.lock`, `bun.lockb`.",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
+              "type": "array",
+              "items": { "enum": ["npm-shrinkwrap.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lock", "bun.lockb"] }
+            },
+            "cut": {
+              "description": "How many entries were left out of the three lists, past the first 200. Absent when none was.",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
+              "type": "integer",
+              "minimum": 1
+            },
+            "before_unknown": {
+              "description": "true when the intake saw no start of the command, so the lock before it is not known and no change is named.",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
+              "const": true
+            },
+            "unreadable": {
+              "description": "true when the lock file was there but could not be read as JSON, before or after, so no change is named.",
+              "$comment": "agent's proposal CF3 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
+              "const": true
+            }
+          }
+        },
+        "outside_checked": {
+          "description": "On the closeout's exited mark: how many paths the outside tripwire fingerprinted again (the session header's `tripwire`). Absent when command facts are off, or when the tripwire could not run.",
+          "$comment": "agent's proposal CF4 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
+          "type": "integer",
+          "minimum": 0
+        },
+        "outside_changed": {
+          "description": "On the closeout's exited mark: each path of the outside tripwire whose fingerprint at the closeout differs from the one in the session header, sorted in UTF-16 code-unit order, by path and fingerprints only, never content. Who made the change is not recorded, and a change made and put back between the two reads is not seen. Absent when command facts are off.",
+          "$comment": "agent's proposal CF4 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "fingerprint_before", "fingerprint"],
+            "properties": {
+              "path": { "description": "The absolute path, with `/` separators.", "type": "string", "minLength": 1 },
+              "fingerprint_before": { "description": "Its fingerprint at session start; null when nothing was there.", "$ref": "#/definitions/fingerprint" },
+              "fingerprint": { "description": "Its fingerprint at the closeout; null when nothing is there.", "$ref": "#/definitions/fingerprint" }
+            }
+          }
+        },
+        "completeness": {
+          "description": "On the closeout's exited mark: the record checked against the agent's own transcript. Every tool call the transcript shows on its main thread since the session started is looked for by its call id; `unmarked` names each with no mark in the record, in transcript order, at most 50 (`cut` counts the rest). The transcript is the agent's testimony too: a call it leaves out is not seen. Absent when command facts are off.",
+          "$comment": "agent's proposal CF5 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["transcript", "calls", "unmarked"],
+          "properties": {
+            "transcript": { "description": "`read`; `none` when no transcript was named or found; `too_large` when it is over 128 MiB, so it was not read.", "$comment": "agent's proposal CF5 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)", "enum": ["read", "none", "too_large"] },
+            "calls": { "description": "How many tool calls the transcript shows since the session started.", "$comment": "agent's proposal CF5 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)", "type": "integer", "minimum": 0 },
+            "unmarked": {
+              "description": "Each call with no mark in the record: its call id and tool name.",
+              "$comment": "agent's proposal CF5 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "tool"],
+                "properties": {
+                  "id": { "description": "The call's id in the transcript.", "type": "string", "minLength": 1 },
+                  "tool": { "description": "The tool's name; empty when the transcript gives none.", "type": "string" }
+                }
+              }
+            },
+            "cut": { "description": "How many more calls have no mark, past the 50 named. Absent when none.", "$comment": "agent's proposal CF5 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)", "type": "integer", "minimum": 1 }
+          }
+        },
+        "test_counts": {
+          "description": "On a command's exited mark, when the command runs a test runner: that runner's own pass, fail and skip counts, read from the whole output, one entry for each runner whose summary it holds. The runner's testimony: what it printed, not proof of which tests exist. `skipped` is every test it neither passed nor failed (skipped, todo, pending, ignored, xfailed). Absent when no summary is found, or when command facts are off. Its entries follow this order of runners: node:test, jest, vitest, mocha, pytest, cargo, go.",
+          "$comment": "agent's proposal CF2 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["format", "unit", "passed", "failed", "skipped", "summaries"],
+            "properties": {
+              "format": { "description": "The runner whose summary was read.", "enum": ["node:test", "jest", "vitest", "mocha", "pytest", "cargo", "go"] },
+              "unit": { "description": "`tests`, or `packages` for go without -v, which names packages, not tests.", "enum": ["tests", "packages"] },
+              "passed": { "description": "Passed, as the runner counted them (pytest's xpassed included).", "type": "integer", "minimum": 0 },
+              "failed": { "description": "Failed, as the runner counted them (node:test's cancelled and pytest's errors included).", "type": "integer", "minimum": 0 },
+              "skipped": { "description": "Neither passed nor failed: skipped, todo, pending, ignored, xfailed; for go packages, those with no test files.", "type": "integer", "minimum": 0 },
+              "summaries": { "description": "How many of this runner's summaries the output held; the counts are their sum.", "type": "integer", "minimum": 1 }
+            }
+          }
+        },
+        "read_kind": {
+          "description": "`full` only when the adapter can show the tool returned the whole file, `range` when it returned only part, `pattern` when the agent only searched, `listing` when the tool listed a folder's entries (their names, no file's content), `null` when the adapter cannot tell.",
+          "$comment": "brief v3 line 261 (open question 3); listing is LD121 (O's go, 2026-11-22)",
+          "type": ["string", "null"],
+          "enum": ["full", "range", "pattern", "listing", null]
+        },
+        "read_range": {
+          "description": "On a read: the lines the agent asked for and the lines the tool's own result says it returned, each null when not given. Its read_kind is `range` when the tool returned fewer lines than the file holds, or cut its content at a token cap; `full` when its counts show the whole file came back.",
+          "$comment": "agent's choice, LD94 and LD121 (format change, O's go 2026-11-22)",
+          "type": "object",
+          "required": ["asked_offset", "asked_limit", "start_line", "lines", "total_lines"],
+          "properties": {
+            "asked_offset": { "$ref": "#/definitions/line_number" },
+            "asked_limit": { "$ref": "#/definitions/line_number" },
+            "start_line": { "$ref": "#/definitions/line_number" },
+            "lines": {
+              "description": "How many lines the tool's result says it returned, as the tool counts them. Claude Code's Read counts the empty piece after a file's last newline as a line, here and in total_lines alike, so a whole read has lines equal to total_lines.",
+              "$comment": "agent's choice, LD125 (measured: 1,342 of 1,342 Read results count the content's newlines + 1)",
+              "$ref": "#/definitions/line_number"
+            },
+            "total_lines": {
+              "description": "How many lines the tool's result says the file holds, as the tool counts them: for Claude Code's Read, a file ending in a newline counts one more than its newlines (890 newlines: 891). Kept as the tool stated it, never recounted.",
+              "$comment": "agent's choice, LD125 (Fable cold verify C2, 2026-11-22)",
+              "$ref": "#/definitions/line_number"
+            },
+            "truncated_by_token_cap": {
+              "description": "True when the tool's result says it cut the file's content at its token cap. Absent otherwise.",
+              "$comment": "agent's choice, LD94 (Claude Code's Read result field truncatedByTokenCap)",
+              "const": true
+            }
+          }
+        },
+        "pattern": { "description": "The pattern, for a search.", "$comment": "brief v3 line 261", "type": "string" },
+        "size": { "description": "The file's size in bytes; null when unknown (a fingerprinted mark for an entry that is not a regular file, or one the Opon could not read).", "$comment": "brief v3 lines 228, 261, 264; null as brief v4 line 241 (unknown, nothing else) and Q8's approved shape (LD171, LD174: null only when unknown), which this schema had refused (F11, LD235)", "type": ["integer", "null"], "minimum": 0 },
+        "fingerprint": {
+          "description": "The file's fingerprint (for a read, of the whole file as it was when the hook ran; it does not prove what the agent saw).",
+          "$comment": "brief v3 lines 261, 264",
+          "$ref": "#/definitions/fingerprint"
+        },
+        "fingerprint_before": {
+          "description": "`null` when the before-state is unknown; a `created` mark leaves the field out.",
+          "$comment": "brief v3 line 264",
+          "$ref": "#/definitions/fingerprint"
+        },
+        "lines_added": { "description": "Never counted against an assumed-empty file.", "$comment": "brief v3 line 264", "$ref": "#/definitions/count" },
+        "lines_removed": { "description": "Never counted against an assumed-empty file.", "$comment": "brief v3 line 264", "$ref": "#/definitions/count" },
+        "diff_ref": {
+          "description": "The fingerprint of the diff, which is kept beside the log. Plain SHA-256 of the redacted copy.",
+          "$comment": "brief v3 lines 264, 266",
+          "$ref": "#/definitions/hash"
+        },
+        "no_diff": {
+          "description": "When there is no diff, says why: `binary`, or `too_large` (over the size limit recorded in the session header).",
+          "$comment": "brief v3 line 266",
+          "enum": ["binary", "too_large"]
+        },
+        "tool_input": { "description": "What a called tool was given.", "$comment": "brief v3 line 263" },
+        "tool_result_excerpt": { "description": "Only on a mark whose capture kept the tool's result; the intake's own adapter never writes it.", "$comment": "brief v3 line 263", "type": "string" },
+        "tool_result_size": { "description": "Only on a mark whose capture kept the tool's result; the intake's own adapter never writes it.", "$comment": "brief v3 line 263", "type": "integer", "minimum": 0 },
+        "text": { "description": "The claim. Orunmila writes the turn's final message as the agent's Stop payload carries it (Claude Code's `last_assistant_message`), whole and redacted, or `''` with `claim_unconfirmed` when the payload carried none; a turn's claimed mark comes before its ended mark.", "$comment": "brief v3 line 265", "type": "string" },
+        "claim_unconfirmed": {
+          "description": "On a claimed mark: true when the agent's host gave no final text for the turn, so the claim's text could not be confirmed as the turn's own and is empty (N10). Absent otherwise.",
+          "$comment": "agent's choice, LD85: today's turn_claim field (docs/SCHEMA.md), which the A8 adapter already carries",
+          "const": true
+        },
+        "prompt": { "description": "The user prompt's text.", "$comment": "brief v3 line 257", "type": "string" },
+        "result": {
+          "description": "`passed`, `warned`, `blocked` or `skipped`.",
+          "$comment": "brief v3 line 242",
+          "enum": ["passed", "warned", "blocked", "skipped"]
+        },
+        "findings": {
+          "description": "Each law the check found broken, with the quoted text it judged; empty when it passed or skipped. In the order the gate's laws found them.",
+          "$comment": "brief v3 line 242 (\"with the law and the quoted text\"), test 61 (\"laws and quoted text\"); the shape is the agent's choice, LD36",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["law", "severity", "quote"],
+            "properties": {
+              "law": { "description": "The law's id.", "$comment": "brief v3 line 242", "type": "string", "minLength": 1 },
+              "severity": { "description": "block or warn, as the law set it.", "$comment": "agent's choice, LD36", "enum": ["block", "warn"] },
+              "quote": { "description": "The sentence the law judged; null when the finding has none.", "$comment": "brief v3 line 242", "type": ["string", "null"] }
+            }
+          }
+        },
+        "law_errors": {
+          "description": "On a law-gate check, what the law loader said about a law file it could not read or a law it could not use, in its own words: a law that quietly stopped applying is never silent.",
+          "$comment": "agent's choice, LD146: NF6 (Phase 1 plan B5), a malformed law file recorded, not silent",
+          "type": "array",
+          "items": { "description": "One message from the law loader.", "$comment": "NF6; LD146", "type": "string", "minLength": 1 }
+        },
+        "reason": {
+          "description": "Why a check was skipped, for example: could not confirm the current turn. On the session's end, the reason the agent gave; on the intake's closing note, why it stopped.",
+          "$comment": "brief v3 lines 242, 575; agent's choice of name, LD36; the session end's and the closing note's use, LD55 and LD56",
+          "type": "string"
+        },
+        "root": {
+          "description": "The folder the Sentinel watches, as an absolute real path, on each of its marks and its watch gaps, so a Glove mark and a Sentinel mark for one file always join. The schema does not require it on Sentinel marks.",
+          "$comment": "brief v4 line 345 (NF11); the field name is the agent's choice, LD145",
+          "type": "string",
+          "minLength": 1
+        },
+        "lost": {
+          "description": "A gap mark names what was lost.",
+          "$comment": "brief v3 line 341; the field name is the agent's choice, LD15",
+          "type": "string",
+          "minLength": 1
+        },
+        "stamped_by": {
+          "description": "If a source cannot stamp mono_ns, intake stamps arrival time and records that here.",
+          "$comment": "brief v3 line 238",
+          "const": "intake"
+        },
+        "what": {
+          "description": "On a tampered mark, what was tampered with: `hook_settings`, `frozen_config`, `log_location`, `orunmila_code`, `foreign_sender`, or `intake_stop` (the intake stopped by a signal that no one asked for through `orunmila intake stop`; target the process `intake`).",
+          "$comment": "brief v4 line 245; intake_stop is TE2's kind (LD283, Phase 5 plan section 4), approved by O as part of Q41 (2026-11-24)",
+          "enum": ["hook_settings", "frozen_config", "log_location", "orunmila_code", "foreign_sender", "intake_stop"]
+        },
+        "signal": {
+          "description": "On a tampered mark for an intake stop no one asked for: the signal that stopped it.",
+          "$comment": "agent's proposal (TE2, LD283), approved by O as part of Q41 (2026-11-24)",
+          "enum": ["SIGTERM", "SIGINT", "SIGHUP"]
+        },
+        "channel": {
+          "description": "Glove marks: how the mark reached intake. `http` for HTTP hooks, whose sender intake pins to the session's process at first contact; `command` for a command hook, which the agent can forge: it runs as the agent's own account (a separate account for Orunmila is not part of the free version). Of Glove marks, only the pinning mark carries `sender_pid`: `http` alone does not mean the mark has one.",
+          "$comment": "brief v4 line 247 (decision I-3, 2026-11-16)",
+          "enum": ["http", "command"]
+        },
+        "from": {
+          "description": "On a renamed mark, the old path, normalised like `target.path`.",
+          "$comment": "brief v4 line 265 (open point P3, decided 2026-11-16)",
+          "type": "string",
+          "minLength": 1
+        },
+        "from_human": {
+          "description": "On a prompted mark: false for a prompt the agent's tool wrote itself (a task notification, a sub-agent hand-back), which does not refill the gate's block budget.",
+          "$comment": "brief v4 line 276 (open question 2, decided 2026-11-16)",
+          "type": "boolean"
+        },
+        "redactions": {
+          "description": "Noting the redaction: the kinds of secret replaced with [REDACTED:<kind>], never the values. Sorted in UTF-16 code-unit order, each kind once.",
+          "$comment": "brief v3 line 248; a list of kinds is the agent's choice, LD15",
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z0-9_]+$" }
+        },
+        "since": {
+          "$comment": "agent's choice, B1c-2 (test 84); wording approved by O 2026-11-17",
+          "$ref": "#/definitions/instant"
+        },
+        "until": {
+          "$comment": "agent's choice, B1c-2 (test 84); wording approved by O 2026-11-17",
+          "$ref": "#/definitions/instant"
+        },
+        "sessions": {
+          "description": "On a gap for intake's downtime: every session intake was serving when it stopped, each of which gets this same gap. Only sessions not yet ended are named, sorted in UTF-16 code-unit order.",
+          "$comment": "brief v4 line 851 (test 84: naming the sessions active at its last tick); the name is the agent's choice, wording approved by O 2026-11-17",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "clock_reset": {
+          "description": "On a gap for intake's downtime: true when the machine's monotonic clock restarted meanwhile (a reboot), so since and until compare only by wall time. Absent otherwise.",
+          "$comment": "agent's choice, B1c-2 (test 84); wording approved by O 2026-11-17",
+          "const": true
+        },
+        "sender_pid": {
+          "description": "On a tampered mark for a foreign sender: the process that sent the payload. On the Glove mark that pinned the session (its first HTTP payload): the pinned process, so a restarted intake re-pins from the record. Only intake writes it.",
+          "$comment": "brief v4 line 245 (\"with the evidence\"); the name is the agent's choice, B1b, wording approved by O 2026-11-17; the pinning mark's use, LD58 (approved by O 2026-11-17)",
+          "type": "integer",
+          "minimum": 0
+        },
+        "pinned_pid": {
+          "description": "On a tampered mark for a foreign sender: the process the session is pinned to, its first HTTP sender.",
+          "$comment": "brief v4 line 247; the name is the agent's choice, B1b, wording approved by O 2026-11-17",
+          "type": "integer",
+          "minimum": 0
+        },
+        "exists": {
+          "description": "On a fingerprinted mark: whether a file was at the target's path when the Opon fingerprinted it. False is a known absence, never an unknown.",
+          "$comment": "agent's choice, LD171 (Q8): brief v4 line 241, null means unknown and nothing else, so an absence needs a value of its own",
+          "type": "boolean"
+        },
+        "rescan": {
+          "description": "On a fingerprinted mark: true when the closeout's full rescan took it, between the sweep's started and exited marks.",
+          "$comment": "brief v4 line 450; the field is the agent's proposal (LD207, Q19; provisional, Q17)",
+          "type": "boolean"
+        },
+        "entry": {
+          "description": "On a rescan's fingerprinted mark whose fingerprint is unknown: what the closeout's walk found at the path, which it could not fingerprint: a symbolic link (never followed), another kind of entry that is not a regular file, or one it could not read.",
+          "$comment": "agent's proposal for F9, approved by O as Q26 (2026-11-23), LD234",
+          "enum": ["link", "other", "unreadable"]
+        },
+        "session": {
+          "description": "On an overlapped mark: the other session sharing this one's folder that the intake names (its `root` and `from` beside it: its project root and its header's mono_ns).",
+          "$comment": "agent's choice, Q11 (2) (a), adopted LD184, LD202",
+          "type": "string",
+          "minLength": 1
+        },
+        "ended": {
+          "description": "On an overlapped mark: whether the session it names has ended; when true, `to` is its end mark's mono_ns.",
+          "$comment": "agent's choice, Q11 (2) (a), adopted LD184, LD202",
+          "type": "boolean"
+        },
+        "to": {
+          "description": "On an overlapped mark naming a session's end: that end mark's mono_ns, a decimal string.",
+          "$comment": "agent's choice, Q11 (2) (a), adopted LD184, LD202",
+          "type": "string"
+        },
+        "received": {
+          "description": "On a tampered mark for a foreign sender: the mark the payload was translated into, as `JSON.stringify` text (not the bytes as they arrived), kept for evidence and redacted like any mark. It is never the session's own mark.",
+          "$comment": "brief v4 line 245; the name is the agent's choice, B1b, wording approved by O 2026-11-17",
+          "type": "string"
+        },
+        "change": {
+          "description": "On a tampered mark for one of Orunmila's own logs: how the log differed from what Orunmila wrote: appended (lines after its end), cut (its end gone), edited (any other difference, a delete then a rewrite included) or deleted (no file: deleted or moved away).",
+          "$comment": "agent's proposal (TE1, LD279), approved by O as Q41 (2026-11-24, LD282)",
+          "enum": ["appended", "cut", "edited", "deleted"]
+        },
+        "removed": {
+          "description": "On a tampered mark for one of Orunmila's own logs: the text the change took out, cut to its first 2,000 Unicode code points and redacted like any mark; empty when nothing was taken out.",
+          "$comment": "agent's proposal (TE1, LD279), approved by O as Q41 (2026-11-24, LD282)",
+          "type": "string",
+          "maxLength": 2000
+        },
+        "added": {
+          "description": "On a tampered mark for one of Orunmila's own logs: the text the change put in, cut to its first 2,000 Unicode code points and redacted like any mark; empty when nothing was put in.",
+          "$comment": "agent's proposal (TE1, LD279), approved by O as Q41 (2026-11-24, LD282)",
+          "type": "string",
+          "maxLength": 2000
+        },
+        "restored": {
+          "description": "On a tampered mark for one of Orunmila's own logs: true when Orunmila put the log back from its own copy; false when its copy had been changed too, so nothing was put back.",
+          "$comment": "agent's proposal (TE1, LD279), approved by O as Q41 (2026-11-24, LD282)",
+          "type": "boolean"
+        },
+        "busy": {
+          "description": "On an overlapped mark: whether the session it names was working at this mark's mono_ns (from its prompt to its turn's end, or with work it left running). A session never given this note counts as working all along.",
+          "$comment": "agent's proposal (AT1, LD327), approved by O as Q45 (2026-11-26, LD330)",
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        { "$comment": "brief v3 line 266: diffs stay out of the raw log", "not": { "required": ["diff"] } },
+        { "$comment": "brief v3 line 266: no_diff only when there is no diff", "not": { "required": ["diff_ref", "no_diff"] } },
+        {
+          "$comment": "brief v3 line 264: line counts are null unless both states are known",
+          "if": { "required": ["fingerprint_before"], "properties": { "fingerprint_before": { "type": "null" } } },
+          "then": { "properties": { "lines_added": { "type": "null" }, "lines_removed": { "type": "null" } } }
+        },
+        {
+          "$comment": "brief v3 line 261: pattern for a search",
+          "if": { "required": ["read_kind"], "properties": { "read_kind": { "const": "pattern" } } },
+          "then": { "required": ["pattern"] }
+        }
+      ]
+    }
+  }
+}

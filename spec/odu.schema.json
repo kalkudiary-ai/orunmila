@@ -1,0 +1,850 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:orunmila:spec:v1:odu",
+  "title": "Orunmila odù record, schema version 1",
+  "description": "The single trustworthy record of one real event. The Ọpọ́n writes one odù record per real event to a second log, hash-chained and canonically serialised like the raw log. The judge reads only this log.",
+  "$comment": "brief v4 lines 285-333. Fields the brief names keep its names; `record` and `seq` are the agent's choice (the hash chain checks seq, spec/hash-chain.md), and so is `continues`, rule 2's link back (line 364), which the brief requires and names no field for (LD167). `continues`, `ceiling` and each witness's `slots` were proposed to O as Q6 and approved (2026-11-22, LD174). Phase 3 slice O1 builds the fields replay can fill from a group; net_change came with station 4 (N2), cause and attribution with station 5 (A1b), confidence with station 6 (C1, LD185); conflicts come with station 6's C3 and are optional until then. Unknown fields are allowed (line 209).",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "record",
+    "seq",
+    "odu_id",
+    "session_id",
+    "parent_id",
+    "children",
+    "amends",
+    "continues",
+    "ceiling",
+    "state",
+    "target",
+    "action",
+    "window",
+    "witnesses",
+    "witness_status",
+    "cause",
+    "attribution",
+    "confidence",
+    "conflicts",
+    "lease",
+    "mark_seqs",
+    "prev_hash",
+    "hash"
+  ],
+  "properties": {
+    "schema_version": {
+      "description": "All carry a `schema_version`.",
+      "$comment": "brief v4 line 209",
+      "const": 1
+    },
+    "record": {
+      "description": "Marks this line as an odù record, so a reader tells it from the log's header without guessing.",
+      "$comment": "agent's choice, LD167",
+      "const": "odu"
+    },
+    "seq": {
+      "description": "The record's place in the odù log: the log's header is 0, records follow from 1.",
+      "$comment": "agent's choice, LD167 (spec/hash-chain.md)",
+      "type": "integer",
+      "minimum": 1
+    },
+    "odu_id": {
+      "description": "The record's id, unique in its session.",
+      "$comment": "brief v4 line 292",
+      "type": "string",
+      "pattern": "^odu_[0-9]{4,}$"
+    },
+    "session_id": {
+      "description": "The session the event happened in.",
+      "$comment": "brief v4 line 293",
+      "type": "string",
+      "minLength": 1
+    },
+    "parent_id": {
+      "description": "One command that touches many files becomes one parent odù with child odùs: a child names its parent; null for none.",
+      "$comment": "brief v4 lines 294, 325",
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^odu_[0-9]{4,}$"
+    },
+    "children": {
+      "description": "A parent's child odùs, in the order they opened.",
+      "$comment": "brief v4 lines 295, 325",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^odu_[0-9]{4,}$"
+      }
+    },
+    "amends": {
+      "description": "An earlier sealed odù this one amends, when late marks arrived after sealing (station 2, rule 8); null for none.",
+      "$comment": "brief v4 lines 296, 325, 370",
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^odu_[0-9]{4,}$"
+    },
+    "continues": {
+      "description": "The odù this one continues, when the target never went quiet and the earlier one was force-settled at the ceiling (station 2, rule 2); null for none.",
+      "$comment": "brief v4 line 364 (\"a continuation group opens and links back to it\"); the field name is the agent's choice, LD153, LD167; approved by O as Q6 (LD174)",
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^odu_[0-9]{4,}$"
+    },
+    "ceiling": {
+      "description": "True when the target never went quiet and the record was force-settled at the ceiling (station 2, rule 2); its continuation names it in `continues`.",
+      "$comment": "brief v4 line 364; the field name is the agent's (LD153); approved by O as Q6 (LD174)",
+      "type": "boolean"
+    },
+    "state": {
+      "description": "open (still collecting), settled (quiet, decided), sealed (final, hashed, never changes). Only sealed records reach the judge.",
+      "$comment": "brief v4 lines 297, 324",
+      "enum": [
+        "open",
+        "settled",
+        "sealed"
+      ]
+    },
+    "target": {
+      "description": "The thing the event is about: usually a file path; can also be a folder, a command, a process, a claim, a turn, a tool or a network host. null when the marks behind it name no target (a gap mark), as the mark itself.",
+      "$comment": "brief v4 lines 298, 244; null as the mark's target is (LD167)",
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "action": {
+      "description": "What happened to the target. `action` takes the mark verbs, every one but tick (a heartbeat is never an event).",
+      "$comment": "brief v4 lines 299, 377; overlapped, the mark verb of Q11 (2) (a) (LD184, LD202), added by O's approval of Q39 (2026-11-24, LD265, LD281)",
+      "enum": [
+        "created",
+        "modified",
+        "deleted",
+        "renamed",
+        "started",
+        "exited",
+        "ended",
+        "prompted",
+        "read",
+        "contacted",
+        "called",
+        "claimed",
+        "checked",
+        "fingerprinted",
+        "gap",
+        "tampered",
+        "overlapped"
+      ]
+    },
+    "window": {
+      "description": "The first and last seq of the marks behind the event.",
+      "$comment": "brief v4 line 300",
+      "type": "object",
+      "required": [
+        "first_seq",
+        "last_seq"
+      ],
+      "properties": {
+        "first_seq": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "last_seq": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "net_change": {
+      "description": "Whether anything actually changed: the target's fingerprint before and after, and whether they differ. Odùs of marks that change nothing on disk leave it out: nothing on disk was meant to change, and null would mean unknown.",
+      "$comment": "brief v4 lines 301-305, 381-390; station 4 (slice N2). `absent` for a known absence is the agent's (LD171), approved by O as Q8 (2026-11-22, LD174): null means unknown and nothing else (line 241), so a created file's before and a deleted file's after need a value of their own",
+      "type": "object",
+      "required": [
+        "before",
+        "after",
+        "changed"
+      ],
+      "properties": {
+        "before": {
+          "description": "The target's state before the event: its fingerprint at its last sealed odù, else the baseline snapshot's; `absent` when no file was there; null when unknown (no baseline, a path the baseline does not cover, a link).",
+          "$comment": "brief v4 lines 302, 386; LD171",
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^((sha256|hmac-sha256):[0-9a-f]{64}|absent)$"
+        },
+        "after": {
+          "description": "The target's state after the event: the fingerprint the Opon recorded when the group settled (a `fingerprinted` mark); `absent` when no file was there; null when unknown (no fingerprint taken, or a mark came after it).",
+          "$comment": "brief v4 lines 303, 386; LD171",
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^((sha256|hmac-sha256):[0-9a-f]{64}|absent)$"
+        },
+        "changed": {
+          "description": "Same fingerprint = `changed: false` (the record is still sealed and kept, just hidden from the judge's default view); different = true; null when before or after is unknown.",
+          "$comment": "brief v4 lines 304, 388; LD171",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "cause": {
+      "description": "The cause attribution found, by station 5's steps in order; null when nothing matches (`unexplained`).",
+      "$comment": "brief v4 lines 306, 392-400, 413; station 5 (slice A1b). The kinds beside the brief's `agent_tool_call`, and `also`, are the agent's proposal (LD176, Q9)",
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "kind",
+        "ref"
+      ],
+      "properties": {
+        "kind": {
+          "description": "agent_tool_call: a Glove mark of the tool call that changed the target (step 1), or, for marks that change nothing, the call's own outcome; time_match: the change fell inside that tool call's start and end (step 2); agent_command: the change happened while that agent command ran (step 3); byproduct: the path matched that entry of the byproducts list (step 4); turn: a turn's own marks; session: the session's end.",
+          "$comment": "brief v4 lines 306 (`agent_tool_call`), 396-399, 413; the other names are the agent's (LD176, Q9)",
+          "enum": [
+            "agent_tool_call",
+            "time_match",
+            "agent_command",
+            "byproduct",
+            "turn",
+            "session"
+          ]
+        },
+        "ref": {
+          "description": "What caused it: a tool call id, a turn id, a session id, or the byproducts entry that matched.",
+          "$comment": "brief v4 line 306",
+          "type": "string",
+          "minLength": 1
+        },
+        "also": {
+          "description": "When more than one tool call or command qualified at the same step: the others, after `ref`.",
+          "$comment": "agent's proposal (LD176, Q9): the brief's example names one cause",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "attribution": {
+      "description": "Exactly one of explained, byproduct, unexplained.",
+      "$comment": "brief v4 lines 307, 326; station 5 (slice A1)",
+      "enum": [
+        "explained",
+        "byproduct",
+        "unexplained"
+      ]
+    },
+    "not_credited": {
+      "description": "On an unexplained change on disk only: the agent activity beside it that station 5's steps did not credit, from recorded facts, so the label never hides that the agent was there. It credits nothing: a failed or reading tool call does not change a file, and the change may be a person's, a formatter's or another program's. Left out when there is none.",
+      "$comment": "agent's proposal (slice A1c, LD178, Q10), from O's question on LD177 (1): the brief names no such field; unknown fields are allowed (line 209)",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "kind",
+          "ref",
+          "seen"
+        ],
+        "properties": {
+          "kind": {
+            "description": "agent_tool_call: a Glove tool call with marks in this odù; agent_command: an agent command that exited within one quiet window before the change was first seen.",
+            "enum": [
+              "agent_tool_call",
+              "agent_command"
+            ]
+          },
+          "ref": {
+            "description": "The tool call id or the command's id.",
+            "type": "string",
+            "minLength": 1
+          },
+          "says": {
+            "description": "For a tool call: its verbs in this odù.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "seen": {
+            "description": "Where the Sentinel's sighting of the change falls against the Glove's record of the call: after_end, before_start, partly_inside, no_start (no start recorded), no_end (no outcome recorded), inside (only while sessions overlap, when a time match does not credit); for a command, after_exit, or while_running (only while sessions overlap); null when the change has no Sentinel sighting to place.",
+            "enum": [
+              "after_end",
+              "before_start",
+              "partly_inside",
+              "inside",
+              "no_start",
+              "no_end",
+              "after_exit",
+              "while_running",
+              null
+            ]
+          },
+          "gap_ms": {
+            "description": "For after_end, before_start and after_exit: the milliseconds, on the session's monotonic clock, between the change's nearest sighting and the call's end, its start, or the command's exit.",
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "witnesses": {
+      "description": "The sources whose marks are behind the event. Sorted by name.",
+      "$comment": "brief v4 line 308",
+      "type": "array",
+      "items": {
+        "enum": [
+          "agent_claim",
+          "hook",
+          "sentinel",
+          "git",
+          "process",
+          "law_gate"
+        ]
+      }
+    },
+    "witness_status": {
+      "description": "One entry for each witness, glove and sentinel, always present, plus git when Orunmila ran git for that target, and law_gate when the law gate checked the turn (its slots hold each check's result). A status is set only from recorded facts; Orunmila never guesses why a witness recorded nothing.",
+      "$comment": "brief v4 lines 309-312, 331 (the G2b amendment); law_gate approved by O as Q40 (2026-11-24, LD267, LD284), so the verdict log alone carries the law gate's results",
+      "type": "object",
+      "required": [
+        "glove",
+        "sentinel"
+      ],
+      "properties": {
+        "glove": {
+          "$ref": "#/definitions/witness"
+        },
+        "sentinel": {
+          "$ref": "#/definitions/witness"
+        },
+        "git": {
+          "$ref": "#/definitions/witness"
+        },
+        "law_gate": {
+          "$ref": "#/definitions/witness"
+        }
+      }
+    },
+    "confidence": {
+      "description": "high, medium or low, by the rules in station 6: how sure we are of the cause. High: a direct cause (a Glove outcome mark naming its tool call on this target), or a change with no agent cause that the Sentinel or git saw. Medium: the cause comes only from a time match or a running command. Low: only a claim, with no witness observation. Never lowered because one witness recorded nothing.",
+      "$comment": "brief v4 lines 313, 327, 409, 413, 419-427; station 6 (slice C1). The cases the table is silent on (a turn, the session's end, a call with only `started`, a gap or note, a change on disk only a Glove mark step 1 does not credit reports) are read in LD185",
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "conflicts": {
+      "description": "A list of disagreements, each naming the sources and what each said. Never dropped: on every odù, empty when there is none.",
+      "$comment": "brief v4 lines 314, 328, 405, 411, 429-439; station 6 (slices C3a-C3e). `sources` and `said` are the agent's names for line 328's \"naming the sources and what each said\" (LD188, Q13); concurrent_sessions's `sessions` (LD180, Q11 (1), approved LD184); outcome_missing's `ref` and `why` (LD189, Q14); silent_change's `turns` and `claim_seqs` (LD194, Q16) and `downtime` (LD245, Q29); unfingerprinted's `entry` and `marks` (LD234, Q26)",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "kind",
+          "sources",
+          "said"
+        ],
+        "if": {
+          "properties": {
+            "kind": {
+              "const": "outcome_missing"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        "then": {
+          "required": [
+            "ref",
+            "why"
+          ],
+          "properties": {
+            "why": {
+              "enum": [
+                "interrupted",
+                "denied",
+                "gap",
+                null
+              ]
+            }
+          }
+        },
+        "allOf": [
+          {
+            "$comment": "brief v4 lines 431-433, 441; the fields are the agent's proposal (LD191, Q15)",
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "phantom_claim"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "required": [
+                "claim",
+                "hedged",
+                "why"
+              ],
+              "if": {
+                "properties": {
+                  "claim": {
+                    "const": "file"
+                  }
+                },
+                "required": [
+                  "claim"
+                ]
+              },
+              "then": {
+                "required": [
+                  "path",
+                  "targets"
+                ],
+                "properties": {
+                  "why": {
+                    "enum": [
+                      "no_event",
+                      "unchanged",
+                      "not_credited"
+                    ]
+                  }
+                }
+              },
+              "else": {
+                "required": [
+                  "phrases",
+                  "runs"
+                ],
+                "properties": {
+                  "why": {
+                    "enum": [
+                      "no_command",
+                      "failed",
+                      "unknown"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "$comment": "brief v4 line 434; test 5; the fields are the agent's proposal (LD194, Q16); `downtime` (Q29, LD245): the intake's downtime gaps inside its turns, by mark seq",
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "silent_change"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "required": [
+                "turns",
+                "claim_seqs"
+              ],
+              "properties": {
+                "downtime": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "minItems": 1
+                }
+              }
+            }
+          },
+          {
+            "$comment": "brief v4 line 450; the field is the agent's proposal (LD207, Q19; provisional, Q17)",
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "missed_live"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "required": [
+                "marks"
+              ]
+            }
+          },
+          {
+            "$comment": "agent's proposal for F9, approved by O as Q26 (2026-11-23), LD234",
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "unfingerprinted"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "required": [
+                "entry",
+                "marks"
+              ]
+            }
+          }
+        ],
+        "properties": {
+          "kind": {
+            "description": "The conflict's kind. concurrent_sessions: a change during overlapping sessions that cannot be pinned to one session. unconfirmed_by_filesystem: an agent reported an edit inside the Sentinel's root that the Sentinel and git never saw. outcome_missing: a tool call's `started` mark with no outcome by the end of its turn, or an outcome its payload says was interrupted. phantom_claim: on a claim's own odù, a claim the evidence does not support. silent_change: an agent-caused change of a file that its turn's claims never mention. contradiction: the Glove's and the Sentinel's own marks of a file disagree on whether it is there at the end, one saying only that it is (created, modified, renamed) and the other only that it is gone (deleted). missed_live: a change the closeout's full rescan found that no odù of the session holds. unfingerprinted: the closeout's full rescan found an entry it could not fingerprint (a link, another kind of entry, or one it could not read) where the session last knew a regular file or nothing, so whether the file changed is unknown; files under such a folder are hidden from the walk.",
+            "type": "string",
+            "minLength": 1
+          },
+          "ref": {
+            "description": "For outcome_missing: the tool call's id.",
+            "$comment": "agent's proposal (LD189, Q14)",
+            "type": "string",
+            "minLength": 1
+          },
+          "why": {
+            "description": "For outcome_missing: interrupted or denied only when the agent's own hook payload says so; gap only when a capture gap mark overlaps the call's wait, from its start until it stopped waiting; null otherwise, since the record does not guess why. For a command phantom_claim: no_command (no matching run in the claim's turn), failed (the last matching run that settled failed) or unknown (no matching run settled: a pipe, or an unknown status). For a file phantom_claim: no_event (no change on a matching path), unchanged (every change of the claim's turn on it has a net change of false) or not_credited (a change on it in the turn's time that was not credited to this session).",
+            "$comment": "brief v4 lines 406, 432, 433, 439; the field is the agent's proposal (LD189, Q14; LD191 and LD192, Q15). No adapter records a denial today, so `denied` is not yet written",
+            "enum": [
+              "interrupted",
+              "denied",
+              "gap",
+              null,
+              "no_command",
+              "failed",
+              "unknown",
+              "no_event",
+              "unchanged",
+              "not_credited"
+            ]
+          },
+          "path": {
+            "description": "For a file phantom_claim: the path as the agent wrote it.",
+            "$comment": "brief v4 line 432; agent's proposal (LD192, Q15)",
+            "type": "string",
+            "minLength": 1
+          },
+          "targets": {
+            "description": "For a file phantom_claim: the targets of the changes it cites (unchanged, not_credited), sorted; empty for no_event.",
+            "$comment": "agent's proposal (LD192, Q15)",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "turns": {
+            "description": "For silent_change: the turns whose claims judged the change (those its cause's tool calls name), sorted.",
+            "$comment": "agent's proposal (LD194, Q16)",
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "marks": {
+            "description": "For missed_live and unfingerprinted: the seq of each of the rescan's fingerprinted marks behind it, in order.",
+            "$comment": "brief v4 line 450 (its missed_live conflict names the rescan's fingerprinted marks); agent's proposal (LD207, Q19)",
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "claim_seqs": {
+            "description": "For silent_change: the seq of each claimed mark read for those turns (claims that could not be confirmed are not read), in order; none of them mentions the change's path.",
+            "$comment": "brief v4 line 330 (every verdict audited down to its marks); agent's proposal (LD194, Q16)",
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "claim": {
+            "description": "For phantom_claim: the claim's kind, command (\"tests pass\") or file (\"I updated config.ts\").",
+            "$comment": "brief v4 lines 431-433; agent's proposal (LD191, Q15)",
+            "enum": [
+              "command",
+              "file"
+            ]
+          },
+          "phrases": {
+            "description": "For a command phantom_claim: the execution phrases the rule-based reader found in the claim.",
+            "$comment": "brief v4 line 443; agent's proposal (LD191, Q15)",
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "hedged": {
+            "description": "For phantom_claim: the reader's hedge tag on the claim.",
+            "$comment": "agent's proposal (LD191, Q15)",
+            "type": "boolean"
+          },
+          "runs": {
+            "description": "For a command phantom_claim: every run in the claim's turn that matches it, in the order they started, each with its status as Orunmila reads it; empty when none ran.",
+            "$comment": "brief v4 line 433 and test 4b (\"citing the command's exit code or its absence\"); agent's proposal (LD191, Q15)",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "ref",
+                "text",
+                "status"
+              ],
+              "properties": {
+                "ref": {
+                  "description": "The command's tool call id.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "text": {
+                  "description": "The command as recorded.",
+                  "type": "string"
+                },
+                "status": {
+                  "description": "pass, fail, or unknown: no outcome recorded, an unknown exit status, or a pass through a pipe with no pipe-failure detection set (line 433).",
+                  "enum": [
+                    "pass",
+                    "fail",
+                    "unknown"
+                  ]
+                },
+                "exit_code": {
+                  "description": "Only when the record states it.",
+                  "type": "integer"
+                },
+                "piped": {
+                  "description": "True when a pipe is why a pass is read as unknown. Absent otherwise.",
+                  "const": true
+                }
+              }
+            }
+          },
+          "sources": {
+            "description": "The mark sources behind the odù that bear on the conflict, sorted.",
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "enum": [
+                "agent_claim",
+                "hook",
+                "sentinel",
+                "git",
+                "process",
+                "law_gate"
+              ]
+            }
+          },
+          "said": {
+            "description": "For each source in `sources`: its verbs in this odù, in seq order; an empty list when it said nothing.",
+            "type": "object"
+          },
+          "sessions": {
+            "description": "For concurrent_sessions: every session active in the folder when the change was first seen, this one included, sorted.",
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "entry": {
+            "description": "For unfingerprinted: what the closeout's walk found at the path: link, other or unreadable.",
+            "$comment": "agent's proposal (LD234, Q26)",
+            "enum": [
+              "link",
+              "other",
+              "unreadable"
+            ]
+          }
+        }
+      }
+    },
+    "lease": {
+      "description": "Present from day one with `checked: false`. Ọ̀pẹ̀lẹ̀ fills it later.",
+      "$comment": "brief v4 lines 315, 329",
+      "type": "object",
+      "required": [
+        "checked",
+        "inside"
+      ],
+      "properties": {
+        "checked": {
+          "const": false
+        },
+        "inside": {
+          "const": null
+        }
+      }
+    },
+    "mark_seqs": {
+      "description": "The receipt. Every odù points back to every mark behind it, so any verdict can be audited down to the raw evidence. An odù with no marks cannot exist. In ascending order.",
+      "$comment": "brief v4 lines 316, 330; guarantee 2 (line 489)",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      }
+    },
+    "prev_hash": {
+      "description": "The previous line's hash.",
+      "$comment": "brief v4 line 287; spec/hash-chain.md",
+      "$ref": "#/definitions/fingerprint"
+    },
+    "hash": {
+      "description": "This record's hash.",
+      "$comment": "brief v4 line 287; spec/hash-chain.md",
+      "$ref": "#/definitions/fingerprint"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "attribution": {
+            "const": "unexplained"
+          }
+        },
+        "required": [
+          "attribution"
+        ]
+      },
+      "then": {
+        "properties": {
+          "cause": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "cause": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "not_credited"
+        ]
+      },
+      "then": {
+        "properties": {
+          "attribution": {
+            "const": "unexplained"
+          }
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "witness": {
+      "type": "object",
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "description": "saw (the witness has marks in this odù); saw_nothing (it recorded nothing, and no recorded fact gives out_of_scope or down; this does not say the witness was healthy); out_of_scope, with `scope` naming the recorded fact; down (a gap mark, a heartbeat gap or a health finding covers the window).",
+          "$comment": "brief v4 line 331",
+          "enum": [
+            "saw",
+            "saw_nothing",
+            "out_of_scope",
+            "down"
+          ]
+        },
+        "scope": {
+          "description": "For out_of_scope: the recorded fact.",
+          "$comment": "brief v4 line 331",
+          "enum": [
+            "outside_root",
+            "excluded",
+            "not_a_disk_event",
+            "no_hook_for_tool"
+          ]
+        },
+        "mark_seqs": {
+          "description": "That witness's own marks in this odù. In ascending order.",
+          "$comment": "brief v4 line 331",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "says": {
+          "description": "For saw: its verbs.",
+          "$comment": "brief v4 lines 310-311, 331",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "slots": {
+          "description": "For saw: each of its marks' key detail slots, in the order of `mark_seqs`: the mark's `seq`, and whichever of exit_status, read_kind, result, fingerprint_before and fingerprint the mark carries.",
+          "$comment": "brief v4 line 331 (\"its verbs and key detail slots\"); a field of its own beside `says`, as the example (line 310) shows verbs only; approved by O as Q6 (LD174)",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "seq"
+            ],
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

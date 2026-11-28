@@ -1,27 +1,36 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 KALKU DIGITAL SOLUTIONS LIMITED
 'use strict';
 
+const graph3d = require('./graph3d');
+const graph2d = require('./graph2d');
+
+// HTML1 (LD305): one palette for the whole page (html.js reads it too), calmer than the first neon one: colour is
+// for what needs a look, so the reds and ambers stand out and the rest recedes.
 const STAIN_COLORS = {
-  untracked_write: '#ff1744',
-  phantom_verification: '#d50000',
-  phantom: '#ff5252',
-  silently_dropped: '#aa00ff',
-  undisclosed: '#d500f9',
-  partial: '#ffd600',
-  unverifiable: '#9e9e9e',
-  verified: '#00e676',
-  clean: '#00e676',
+  untracked_write: '#ff5c5c',
+  phantom_verification: '#f2545b',
+  phantom: '#f47c7c',
+  silently_dropped: '#b39ddb',
+  undisclosed: '#ce93d8',
+  partial: '#e6c35c',
+  unverifiable: '#9aa4ae',
+  verified: '#5cc38a',
+  clean: '#5cc38a',
 };
 
 const CHANNEL_COLORS = {
-  read: '#40c4ff',
-  write: '#69f0ae',
-  disk: '#1de9b6',
-  command: '#ffab40',
-  network: '#e040fb',
-  tool: '#b0bec5',
+  read: '#64b5f6',
+  write: '#81c995',
+  disk: '#4db6ac',
+  command: '#e0a458',
+  network: '#ba8fd6',
+  tool: '#9aa4ae',
 };
 
-const CHANNEL_GLYPH = { read: '\u{1F441}', write: '✎', disk: '\u{1F4BE}', command: '$', network: '\u{1F310}', tool: '⚙' };
+// Plain symbols, not emoji: an emoji draws in colour on one OS, as a box or not at all on another (Windows and Linux
+// fonts differ), so the same page read differently by OS.
+const CHANNEL_GLYPH = { read: '○', write: '✎', disk: '▣', command: '$', network: '⇄', tool: '◇' };
 
 const EXPLAIN = {
   verified: 'The agent said it did this, and the evidence backs it up.',
@@ -30,9 +39,9 @@ const EXPLAIN = {
   phantom_verification: 'Claimed it was tested/works, but no passing check ran.',
   unverifiable: 'The claim was too vague to check.',
   undisclosed: 'This file changed but no claim or request mentioned it.',
-  silently_dropped: 'Part of your request that was never done or mentioned again.',
+  silently_dropped: 'Part of your request no later message seems to cover. Often wrong: pasted text can look like a request.',
   untracked_write: 'The disk changed but no tool call ever disclosed it.',
-  clean: 'Touched during the session; nothing flagged.',
+  clean: 'Touched during the session; no check flagged it (not a verdict that it is right).',
   read: 'A file the agent read (a source of information).',
   write: 'A file the agent changed.',
   disk: 'A change seen directly on disk by the independent watcher.',
@@ -40,6 +49,10 @@ const EXPLAIN = {
   network: 'The agent reached out to the internet.',
   tool: 'Another tool the agent used.',
 };
+
+// PG1 (F35): what a stain key reads as on the page. "clean" is the Babaláwo's word for a judged verdict; a thing no
+// check flagged was never judged, so it reads "nothing flagged". Other keys read as themselves, underscores as spaces.
+const LABEL = { clean: 'nothing flagged' };
 
 function buildVizData(model, stainByKey, reports) {
   const nodes = [];
@@ -155,10 +168,13 @@ function buildVizData(model, stainByKey, reports) {
 
   return {
     session: model.session_id,
+    // F17 (LD303): whether any turn was checked; the tabs say "Not checked" rather than "clean" when none was.
+    checked: !!(reports && reports.length),
+    checkedTurns: (reports || []).length,
     totals: model.totals || { turns: turns.length, artifacts: nodes.length, touches: trail.length },
     nodes, edges: [...edgeSet.values()], trail, turns,
     channelTally, stainTally, findings,
-    palette: { stain: STAIN_COLORS, channel: CHANNEL_COLORS, glyph: CHANNEL_GLYPH, explain: EXPLAIN },
+    palette: { stain: STAIN_COLORS, channel: CHANNEL_COLORS, glyph: CHANNEL_GLYPH, explain: EXPLAIN, label: LABEL },
   };
 }
 
@@ -181,7 +197,7 @@ function renderTrailVisual(vizData) {
   .gv-seg button.on { background:#1c2530; color:#fff; }
   .gv-tabs { display:flex; gap:6px; padding:10px 18px 0; flex-wrap:wrap; }
   .gv-tab { background:#11151c; color:#9aa6b2; border:1px solid #1f2630; border-bottom:none; border-radius:9px 9px 0 0; padding:9px 16px; cursor:pointer; font-weight:600; font-size:.86rem; }
-  .gv-tab.on { background:#161c25; color:#fff; box-shadow:inset 0 2px 0 #00e676; }
+  .gv-tab.on { background:#161c25; color:#fff; box-shadow:inset 0 2px 0 #64b5f6; }
   .gv-stage { background:#0a0c10; min-height:440px; padding:16px 18px; position:relative; }
   .gv-view { display:none; }
   .gv-view.on { display:block; }
@@ -197,7 +213,7 @@ function renderTrailVisual(vizData) {
   /* legend */
   .gv-legend { display:flex; gap:14px; flex-wrap:wrap; margin:4px 0 14px; font-size:.78rem; color:#aeb8c4; }
   .gv-legend .it { display:flex; align-items:center; gap:6px; }
-  .gv-dot { width:11px; height:11px; border-radius:50%; box-shadow:0 0 8px currentColor; }
+  .gv-dot { width:10px; height:10px; border-radius:50%; }
   .gv-hint { color:#7d8694; font-size:.82rem; margin:0 0 12px; }
   .gv-explainable .gv-hint { display:block; }
   .gv-power .gv-hint { display:none; }
@@ -210,8 +226,20 @@ function renderTrailVisual(vizData) {
   .gv-node { cursor:pointer; }
   .gv-node circle { transition:r .12s, filter .12s; }
   .gv-node:hover circle { filter:brightness(1.4); }
-  .gv-edge { stroke-opacity:.06; transition:stroke-opacity .1s, stroke-width .1s; }
-  .gv-edge.hot { stroke-opacity:.85; stroke-width:2.1; }
+  .gv-edge { stroke-opacity:var(--o,.06); transition:stroke-opacity .1s, stroke-width .1s; }
+  .gv-edge.hot { stroke-opacity:.9; stroke-width:2.1; }
+  /* the Graph tab's levels (G2D) */
+  svg.gv-levels { background:#0a0d12; cursor:default; }
+  .gv-lvl-band { fill:#0e1219; stroke:#1a212b; }
+  .gv-lvl-title { fill:#cfd8e3; font-size:13px; font-weight:700; letter-spacing:.02em; }
+  .gv-lvl-count { fill:#6f7b88; font-size:10.5px; }
+  .gv-folder { fill:#5b6672; font-size:10px; font-family:ui-monospace,Menlo,monospace; }
+  .gv-nlabel { fill:#aeb8c4; font-size:11px; }
+  .gv-node.flagged .gv-nlabel { font-weight:700; }
+  .gv-node.match circle { stroke:#ffffff; stroke-width:2.2; }
+  .gv-levels .gv-node { transition:opacity .12s; }
+  .gv-levels.focus .gv-node { opacity:.2; }
+  .gv-levels.focus .gv-node.near { opacity:1; }
   .gv-gctl { display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
   .gv-gbtn { background:#11151c; color:#9aa6b2; border:1px solid #28313d; border-radius:8px; padding:5px 11px; font-size:.78rem; cursor:pointer; font-weight:600; }
   .gv-gbtn.on { background:#1c2530; color:#fff; }
@@ -222,12 +250,40 @@ function renderTrailVisual(vizData) {
   .gv-search { background:#11151c; color:#e7edf3; border:1px solid #28313d; border-radius:7px; padding:5px 10px; font-size:.78rem; width:160px; outline:none; margin-left:8px; }
   .gv-search:focus { border-color:#40c4ff; }
   .gv-search::placeholder { color:#6f7b88; }
+  /* CV1: the Graph tab as a canvas, moved and zoomed both ways (the dev's "like OneNote") */
+  .gv-canvas { position:relative; height:min(78vh, 900px); min-height:420px; border-radius:10px; overflow:hidden; outline:none; touch-action:none; background:#0a0d12; box-shadow:inset 0 0 0 1px #1a212b; cursor:grab; }
+  .gv-canvas.panning { cursor:grabbing; }
+  .gv-canvas:focus-visible { box-shadow:inset 0 0 0 2px #40c4ff; }
+  .gv-canvas:fullscreen { height:100vh; border-radius:0; }
+  .gv-canvas:-webkit-full-screen { height:100vh; border-radius:0; }
+  .gv-canvas svg.gv-svg { width:100%; height:100%; border-radius:0; cursor:inherit; }
+  .gv-box { transition:fill-opacity .12s; }
+  .gv-node:hover .gv-box { fill-opacity:.26; }
+  .gv-zlevel { color:#6f7b88; font-size:.74rem; min-width:3.2em; text-align:right; align-self:center; }
   .gv-edge-label { font-size:8px; fill:#6f7b88; pointer-events:none; opacity:0; transition:opacity .1s; }
   .gv-edge.hot + .gv-edge-label, .gv-svg:hover .gv-edge-label { opacity:1; }
 
-  /* 3D container */
-  .gv-3d-wrap { width:100%; height:520px; border-radius:10px; overflow:hidden; position:relative; background:#070809; }
-  .gv-3d-wrap canvas { display:block; width:100%!important; height:100%!important; }
+  /* 3D map (V3D, LD300): Orunmila's own WebGL2 engine, src/render/graph3d.js */
+  .g3-wrap { position:relative; width:100%; height:560px; border-radius:12px; overflow:hidden; background:#05070b; outline:none; cursor:grab; touch-action:none; box-shadow:inset 0 0 0 1px #1a212b; }
+  .g3-wrap:focus-visible { box-shadow:inset 0 0 0 2px #40c4ff; }
+  .g3-wrap:fullscreen { height:100vh; border-radius:0; }
+  .g3-canvas { display:block; width:100%; height:100%; }
+  .g3-labels { position:absolute; inset:0; pointer-events:none; overflow:hidden; }
+  .g3-label { position:absolute; left:0; top:0; font:600 11px/1.2 ui-sans-serif,-apple-system,"Segoe UI",sans-serif; color:#dfe7ef; background:rgba(8,11,16,.62); border:1px solid rgba(120,150,190,.18); padding:2px 7px; border-radius:6px; white-space:nowrap; backdrop-filter:blur(4px); transition:opacity .2s; }
+  .g3-label.on { color:#fff; border-color:#40c4ff; box-shadow:0 0 12px rgba(64,196,255,.45); }
+  .g3-hud { position:absolute; left:12px; bottom:12px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; background:rgba(8,11,16,.66); border:1px solid #1f2630; border-radius:10px; padding:7px 12px; font-size:.74rem; color:#aeb8c4; backdrop-filter:blur(6px); }
+  .g3-hud label { display:flex; align-items:center; gap:5px; cursor:pointer; }
+  .g3-hud input[type=range] { width:92px; accent-color:#40c4ff; }
+  .g3-look button { padding:4px 10px; font-size:.72rem; }
+  .g3-hud input[type=checkbox], .g3-replay input[type=checkbox] { accent-color:#40c4ff; }
+  .g3-msg[hidden] { display:none; }
+  .g3-msg { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; padding:40px; color:#9aa6b2; font-size:.9rem; background:#070809; }
+  .g3-replay { display:flex; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap; font-size:.78rem; color:#9aa6b2; }
+  .g3-replay input[type=range] { flex:1; min-width:160px; accent-color:#00e676; }
+  .g3-replay select { background:#11151c; color:#cfd8e3; border:1px solid #28313d; border-radius:7px; padding:4px 6px; font-size:.76rem; }
+  .g3-replay label { display:flex; align-items:center; gap:5px; cursor:pointer; }
+  .g3-step { color:#cfd8e3; font-family:ui-monospace,Menlo,monospace; font-size:.74rem; min-width:220px; }
+  .g3-step.turn { color:#00e676; }
 
   /* detail panel */
   .gv-detail { background:#0e1219; border:1px solid #1f2630; border-radius:10px; padding:14px 18px; margin:12px 0 0; animation:gv-slide .15s ease-out; }
@@ -255,7 +311,7 @@ function renderTrailVisual(vizData) {
   .gv-tree { font-family:ui-monospace,Menlo,monospace; font-size:.86rem; line-height:1.7; }
   .gv-tree .row { display:flex; align-items:center; gap:8px; padding:1px 0; cursor:pointer; border-radius:4px; }
   .gv-tree .row:hover { background:#11151c; }
-  .gv-tree .bar { height:9px; border-radius:5px; box-shadow:0 0 8px currentColor; }
+  .gv-tree .bar { height:8px; border-radius:4px; opacity:.85; }
   .gv-tree .nm { color:#cfd8e3; } .gv-tree .dir { color:#6f7b88; }
 
   /* timeline */
@@ -269,15 +325,19 @@ function renderTrailVisual(vizData) {
   .gv-tcol .prompt { color:#6f7b88; font-size:.72rem; margin-bottom:8px; min-height:2.2em; }
   .gv-tdot { display:flex; align-items:center; gap:7px; padding:4px 7px; border-radius:7px; background:#0e1219; margin:3px 0; font-size:.76rem; cursor:pointer; transition:background .1s; }
   .gv-tdot:hover { background:#161c25; }
-  .gv-tdot .pip { width:9px; height:9px; border-radius:50%; box-shadow:0 0 7px currentColor; flex:0 0 auto; }
+  .gv-tdot .pip { width:8px; height:8px; border-radius:50%; flex:0 0 auto; }
   .gv-tdot .tx { color:#c4cdd8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .gv-tdot .cnt { color:#7d8694; font-size:.7rem; margin-left:auto; padding-left:6px; }
+  .gv-tmore { margin-top:8px; }
+  .gv-unchecked { color:#8b96a3; font-size:.86rem; line-height:1.5; }
+  .gv-nothing.gv-unchecked { color:#8b96a3; }
 
   /* dashboard */
   .gv-dash { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:18px; }
   .gv-card { background:#0e1219; border:1px solid #1f2630; border-radius:12px; padding:16px; }
   .gv-card h5 { margin:0 0 12px; font-size:.82rem; color:#aeb8c4; text-transform:uppercase; letter-spacing:.04em; }
   .gv-bars .b { display:flex; align-items:center; gap:8px; margin:5px 0; font-size:.8rem; }
-  .gv-bars .b .fill { height:14px; border-radius:4px; box-shadow:0 0 8px currentColor; }
+  .gv-bars .b .fill { height:12px; border-radius:3px; opacity:.9; }
   .gv-bars .b .v { color:#9aa6b2; min-width:1.6em; }
   .gv-kpi { display:flex; gap:22px; }
   .gv-kpi .k { text-align:center; } .gv-kpi .k .n { font-size:1.9rem; font-weight:800; } .gv-kpi .k .l { font-size:.72rem; color:#7d8694; text-transform:uppercase; }
@@ -322,7 +382,7 @@ function renderTrailVisual(vizData) {
     <button class="gv-tab on" data-view="timeline">Timeline</button>
     <button class="gv-tab" data-view="tree">Tree</button>
     <button class="gv-tab" data-view="graph">Graph</button>
-    <button class="gv-tab" data-view="graph3d">3D Graph</button>
+    <button class="gv-tab" data-view="map3d">3D Map</button>
     <button class="gv-tab" data-view="dashboard">Dashboard</button>
     <button class="gv-tab" data-view="report">Report</button>
     <button class="gv-tab" data-view="glossary">Glossary</button>
@@ -332,7 +392,7 @@ function renderTrailVisual(vizData) {
     <div class="gv-view on" data-view="timeline" id="gv-timeline"></div>
     <div class="gv-view" data-view="tree" id="gv-tree"></div>
     <div class="gv-view" data-view="graph" id="gv-graph"></div>
-    <div class="gv-view" data-view="graph3d" id="gv-graph3d"></div>
+    <div class="gv-view" data-view="map3d" id="gv-map3d"></div>
     <div class="gv-view" data-view="dashboard" id="gv-dashboard"></div>
     <div class="gv-view" data-view="report" id="gv-report"></div>
     <div class="gv-view" data-view="glossary" id="gv-glossary"></div>
@@ -346,6 +406,7 @@ function renderTrailVisual(vizData) {
   var DATA = ${json};
   var P = DATA.palette;
   function colorOf(stain, channel){ return (stain && P.stain[stain]) || P.channel[channel] || '#888'; }
+  function label(k){ return (P.label && P.label[k]) || String(k).replace(/_/g,' '); }
   function explainOf(stain, channel){ return (stain && P.explain[stain]) || P.explain[channel] || ''; }
   var root = document.getElementById('gv-root');
   var tip = document.getElementById('gv-tip');
@@ -396,13 +457,13 @@ function renderTrailVisual(vizData) {
   }
 
   var HINTS = {
-    graph: 'Each dot is something the agent touched. Hover to light up connections, click for details. Scroll to zoom, drag to pan. Filter by channel or outcome above.',
-    graph3d: 'Drag to rotate, scroll to zoom, click a node for details. Loads a small 3D library from a CDN — needs internet.',
+    graph: 'The session as a flowchart, left to right: what the agent read, what it ran, what it changed, each in its folders, flagged things first; arrows point the way each link went. Everything is on the canvas. Scroll to move around (Shift and scroll to go sideways), drag the background to pan, Ctrl or \\u2318 and scroll, or pinch, to zoom; with the canvas selected, the arrow keys move, + and \\u2212 zoom, 0 fits it again. Hover to follow a thing\\u2019s links, click for details.',
+    map3d: 'The same map in 3D, drawn on this computer with no internet. Drag to turn it, right-drag or Shift-drag to move, scroll or pinch to zoom, click a sphere to fly to it. Flagged things pulse. Replay starts from a blank canvas and builds the map in the order the agent worked: each thing appears when first touched, each link grows when both its ends are there, the camera following the agent from file to file.',
     glossary: 'What every color, label, and metric means.',
     tree: 'Your project as folders. Each bar glows by how the agent touched that file. Click a file for details.',
     timeline: 'The session left to right, one column per turn. Click any pip for details.',
     dashboard: 'The numbers at a glance: outcome proportions, channel breakdown, busiest turns, and most-touched things.',
-    report: 'Everything the agent got wrong, plus a ready-to-paste prompt to send it back to fix its mistakes.'
+    report: 'What needs a second look in the checked turns, and a prompt you can paste back to the agent: it asks for the evidence or a fix on each item.'
   };
   function setHint(v){ document.getElementById('gv-hint').textContent = HINTS[v] || ''; }
 
@@ -458,131 +519,200 @@ function renderTrailVisual(vizData) {
     document.getElementById('gv-detail-close').addEventListener('click', function(){ detailSlot.innerHTML = ''; });
   }
 
-  // ---- GRAPH (2D radial + zoom/pan) ----
+  // ---- GRAPH (G2D: levels left to right, links as curves; the layout is src/render/graph2d.js) ----
+  // The ring it replaces drew every link through one centre point, so a busy session became one knot.
   var graphMode = 'flagged';
-  var vb = { x:0, y:0, w:900, h:520 };
+  var graphSearch = '';
+  // CV1: the camera (a viewBox). It stays where the reader left it when a filter, mode or search redraws the picture;
+  // Fit (or the 0 key) puts it back.
+  var vb = null;
+  var graphResize = null;
+  var ZOOM = { min: 0.05, max: 4 };
+${graph2d.source()}
+  function isFlaggedNode(n){ return !!(n.stain && n.stain !== 'verified' && n.stain !== 'clean'); }
 
   function renderGraph(){
     var el = document.getElementById('gv-graph');
-    var W=900, H=520, cx=W/2, cy=H/2;
-    vb = { x:0, y:0, w:W, h:H };
 
     var filtered = DATA.nodes.filter(nodePassesFilter);
-    var stainedCount = filtered.filter(function(n){return n.stain;}).length;
+    var stainedCount = filtered.filter(isFlaggedNode).length;
     var keep = {};
+    var flaggedNote = '';
     if (graphMode==='flagged' && stainedCount){
-      filtered.forEach(function(n){ if(n.stain) keep[n.id]=true; });
-      DATA.edges.forEach(function(e){ if(keep[e.from]||keep[e.to]){ keep[e.from]=true; keep[e.to]=true; } });
+      // HTML1: linked things come along only while they do not swamp the view (on 860f51e9 it showed 104 of 106).
+      var fv = orunmilaGraph2DCore.flaggedView(filtered, DATA.edges, { grow: 3 });
+      fv.ids.forEach(function(id){ keep[id] = true; });
+      flaggedNote = fv.withLinks ? ' &middot; flagged and what they link to' : ' &middot; flagged only (they link to too much to show)';
     } else {
       filtered.forEach(function(n){ keep[n.id]=true; });
     }
     var visible = DATA.nodes.filter(function(n){ return keep[n.id] && nodePassesFilter(n); });
-    var m = visible.length || 1;
-
-    var maxT = Math.max.apply(null, visible.map(function(x){return x.touches;}).concat([1]));
-    var positions = {};
-    visible.forEach(function(nd, k){
-      var ang = (k / m) * Math.PI * 2 - Math.PI/2;
-      var rad = 70 + (1 - nd.touches/maxT) * 150;
-      positions[nd.id] = { x: cx + Math.cos(ang)*rad, y: cy + Math.sin(ang)*rad };
-    });
+    // CV1: on the canvas nothing is held back; the reader moves to it instead.
+    var Lay = orunmilaGraph2DCore.layered(visible, DATA.edges, { cap: Infinity, search: graphSearch, width: 960 });
+    var W = Lay.width, H = Lay.height;
 
     var controls = renderFilterBar('graph');
     controls += '<div class="gv-gctl">'
-      + '<button class="gv-gbtn'+(graphMode==='flagged'?' on':'')+'" data-gmode="flagged">Flagged only</button>'
+      + '<button class="gv-gbtn'+(graphMode==='flagged'?' on':'')+'" data-gmode="flagged">Flagged</button>'
       + '<button class="gv-gbtn'+(graphMode==='all'?' on':'')+'" data-gmode="all">Everything</button>'
-      + '<span class="gv-gcount">'+visible.length+' of '+DATA.nodes.length+' things'
-      + (graphMode==='flagged'&&!stainedCount ? ' &middot; nothing flagged, showing all' : '')+'</span>'
-      + '<input class="gv-search" id="gv-search" placeholder="Search files\\u2026" autocomplete="off">'
-      + '<div class="gv-zoom-ctrl"><button id="gv-zin" title="Zoom in">+</button><button id="gv-zout" title="Zoom out">&minus;</button><button id="gv-zreset" title="Reset view">&#8634;</button></div>'
+      + '<span class="gv-gcount">'+Lay.placed.length+' shown of '+DATA.nodes.length+' things'
+      + (graphMode==='flagged'&&!stainedCount ? ' &middot; nothing flagged, showing all' : flaggedNote)+'</span>'
+      + '<input class="gv-search" id="gv-search" placeholder="Search files\\u2026" autocomplete="off" value="'+escjs(graphSearch)+'">'
+      + '<div class="gv-zoom-ctrl"><span class="gv-zlevel" id="gv-zlevel"></span><button id="gv-zin" title="Zoom in (+)">+</button><button id="gv-zout" title="Zoom out (\\u2212)">&minus;</button><button id="gv-zreset" title="Fit the width (0)">&#8634;</button><button id="gv-zfull" title="Full screen"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M1 4V1h3M8 1h3v3M11 8v3H8M4 11H1V8" stroke="currentColor" fill="none" stroke-width="1.5"/></svg></button></div>'
       + '</div>';
 
-    var svg = '<svg class="gv-svg" id="gv-svg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet">';
-    DATA.edges.forEach(function(e){
-      if(!keep[e.from]||!keep[e.to]) return;
-      if(!nodePassesFilter(DATA.nodes[e.from]) || !nodePassesFilter(DATA.nodes[e.to])) return;
-      var a=positions[e.from], b=positions[e.to]; if(!a||!b) return;
-      var c = colorOf(DATA.nodes[e.to].stain, DATA.nodes[e.to].channels[0]);
-      svg += '<path class="gv-edge" data-from="'+e.from+'" data-to="'+e.to+'" data-kind="'+escjs(e.kind)+'" d="M'+a.x.toFixed(1)+' '+a.y.toFixed(1)+' Q '+cx+' '+cy+' '+b.x.toFixed(1)+' '+b.y.toFixed(1)+'" fill="none" stroke="'+c+'" stroke-width="1.3"/>';
-      var mx = (a.x+b.x)/2*0.5 + cx*0.5, my = (a.y+b.y)/2*0.5 + cy*0.5;
-      svg += '<text class="gv-edge-label" x="'+mx.toFixed(1)+'" y="'+my.toFixed(1)+'" text-anchor="middle">'+escjs(e.kind)+'</text>';
+    // A dense session's links would cover everything: each link's ink scales with the square root of their count.
+    var density = Math.min(1, 21 / Math.sqrt(Math.max(Lay.links.length, 1)));
+    // CV1: a canvas of fixed height that the picture moves inside, both ways, with a dotted ground to show it is one.
+    var svg = '<div class="gv-canvas" id="gv-canvas" tabindex="0" role="application" aria-label="The session as a flowchart. Scroll or drag to move, Ctrl or Command and scroll to zoom, arrow keys to move, plus and minus to zoom, 0 to fit.">'
+      + '<svg class="gv-svg gv-levels" id="gv-svg" preserveAspectRatio="xMinYMin meet">'
+      + '<defs><pattern id="gv-grid" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#1b232e"/></pattern>'
+      + '<marker id="gv-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" fill="#8a96a3"/></marker></defs>'
+      + '<rect x="-20000" y="-20000" width="'+(40000+W)+'" height="'+(40000+H)+'" fill="url(#gv-grid)"/>';
+    Lay.levels.forEach(function(L, i){
+      svg += '<rect class="gv-lvl-band" x="'+(L.x+2).toFixed(1)+'" y="8" width="'+(L.width-4).toFixed(1)+'" height="'+(H-16)+'" rx="10"/>';
+      svg += '<text class="gv-lvl-title" x="'+(L.x+16).toFixed(1)+'" y="30">'+(i+1)+' &middot; '+escjs(L.title)+'</text>';
+      svg += '<text class="gv-lvl-count" x="'+(L.x+16).toFixed(1)+'" y="45">'+L.shown+' shown'+(L.hidden ? ' &middot; '+L.hidden+' more: search to find one' : '')+'</text>';
+      L.groups.forEach(function(g){ svg += '<text class="gv-folder" x="'+(L.x+16).toFixed(1)+'" y="'+g.y.toFixed(1)+'">'+escjs(trunc(g.folder, 44))+'</text>'; });
     });
-    visible.forEach(function(nd){
-      var p=positions[nd.id]; var c=colorOf(nd.stain, nd.primaryChannel);
-      var r = 6 + Math.min(18, nd.touches*1.4);
-      var g = P.glyph[nd.primaryChannel] || '';
-      svg += '<g class="gv-node" data-i="'+nd.id+'" transform="translate('+p.x.toFixed(1)+','+p.y.toFixed(1)+')">';
-      svg += '<circle r="'+r+'" fill="'+c+'" fill-opacity="0.28" stroke="'+c+'" stroke-width="1.8" style="filter:drop-shadow(0 0 6px '+c+')"/>';
-      svg += '<text text-anchor="middle" dy="3" font-size="11" fill="#dfe7ef">'+g+'</text>';
-      svg += '<text text-anchor="middle" y="'+(r+12)+'" font-size="9.5" fill="#8d99a6">'+escjs(trunc(nd.label,16))+'</text>';
+    Lay.links.forEach(function(l){
+      var t = DATA.nodes[l.to];
+      var c = colorOf(t.stain, t.primaryChannel);
+      svg += '<path class="gv-edge" data-from="'+l.from+'" data-to="'+l.to+'" d="'+l.d+'" fill="none" stroke="'+c+'" stroke-width="1.1" style="--o:'+(0.2*density).toFixed(3)+'" '+(l.arrow==='start'?'marker-start':'marker-end')+'="url(#gv-arrow)"/>';
+    });
+    Lay.placed.forEach(function(p){
+      var nd = DATA.nodes[p.id];
+      var c = colorOf(nd.stain, nd.primaryChannel);
+      svg += '<g class="gv-node'+(p.flagged?' flagged':'')+(p.match?' match':'')+'" data-i="'+p.id+'" transform="translate('+p.x.toFixed(1)+','+p.y.toFixed(1)+')">';
+      // CV1: the box the arrows land on, faint unless the thing is flagged.
+      svg += '<rect class="gv-box" x="'+(p.box.x-p.x).toFixed(1)+'" y="'+(p.box.y-p.y).toFixed(1)+'" width="'+p.box.w.toFixed(1)+'" height="'+p.box.h.toFixed(1)+'" rx="5" fill="'+c+'" fill-opacity="'+(p.flagged?'0.16':'0.06')+'" stroke="'+c+'" stroke-opacity="'+(p.flagged?'0.85':'0.3')+'"/>';
+      svg += '<circle r="'+p.r.toFixed(1)+'" fill="'+c+'" fill-opacity="'+(p.flagged?'0.9':'0.5')+'" stroke="'+c+'" stroke-width="'+(p.flagged?'2':'1')+'"/>';
+      svg += '<text class="gv-nlabel" x="'+(p.r+6).toFixed(1)+'" dy="3.5"'+(p.flagged?' fill="'+c+'"':'')+'>'+escjs(trunc(nd.label, 34))+'</text>';
       svg += '</g>';
     });
-    svg += '</svg>';
+    svg += '</svg></div>';
     el.innerHTML = legend() + controls + svg;
 
-    // zoom/pan
+    // CV1: the camera. Its arithmetic is the core's (src/render/graph2d.js, tested in Node); this part only reads the
+    // mouse, the touch screen and the keyboard.
+    var cv = document.getElementById('gv-canvas');
     var svgEl = document.getElementById('gv-svg');
-    var dragging = false, dragStart = {};
-    svgEl.addEventListener('wheel', function(e){
-      e.preventDefault();
-      var scale = e.deltaY > 0 ? 1.12 : 0.89;
-      var rect = svgEl.getBoundingClientRect();
-      var mx = (e.clientX - rect.left) / rect.width * vb.w + vb.x;
-      var my = (e.clientY - rect.top) / rect.height * vb.h + vb.y;
-      vb.w *= scale; vb.h *= scale;
-      vb.x = mx - (mx - vb.x) * scale;
-      vb.y = my - (my - vb.y) * scale;
-      svgEl.setAttribute('viewBox', vb.x+' '+vb.y+' '+vb.w+' '+vb.h);
-    });
-    svgEl.addEventListener('mousedown', function(e){
-      if (e.button !== 0) return;
-      var target = e.target.closest('.gv-node');
-      if (target) return;
-      dragging = true;
-      dragStart = {x:e.clientX, y:e.clientY, vbx:vb.x, vby:vb.y};
-      e.preventDefault();
-    });
-    svgEl.addEventListener('mousemove', function(e){
-      if (!dragging) return;
-      var rect = svgEl.getBoundingClientRect();
-      var dx = (e.clientX - dragStart.x) / rect.width * vb.w;
-      var dy = (e.clientY - dragStart.y) / rect.height * vb.h;
-      vb.x = dragStart.vbx - dx;
-      vb.y = dragStart.vby - dy;
-      svgEl.setAttribute('viewBox', vb.x+' '+vb.y+' '+vb.w+' '+vb.h);
-    });
-    svgEl.addEventListener('mouseup', function(){ dragging = false; });
-    svgEl.addEventListener('mouseleave', function(){ dragging = false; });
+    var content = { x0: 0, y0: 0, x1: W, y1: H };
+    function viewSize(){ var r = cv.getBoundingClientRect(); return { width: Math.max(1, r.width), height: Math.max(1, r.height) }; }
+    function apply(){
+      svgEl.setAttribute('viewBox', vb.x.toFixed(2)+' '+vb.y.toFixed(2)+' '+vb.w.toFixed(2)+' '+vb.h.toFixed(2));
+      var z = document.getElementById('gv-zlevel'); if (z) z.textContent = Math.round(viewSize().width / vb.w * 100) + '%';
+    }
+    function fit(){ vb = orunmilaGraph2DCore.fitWidth({ width: W, height: H }, viewSize(), { maxScale: 1.25 }); apply(); }
+    // The canvas changed shape (a resize, full screen): the view keeps its width and takes the canvas's shape.
+    function reshape(){ if (!vb) return; var s = viewSize(); vb = { x: vb.x, y: vb.y, w: vb.w, h: vb.w * s.height / s.width }; apply(); }
+    function toWorld(cx, cy){ var r = cv.getBoundingClientRect(); return [vb.x + (cx - r.left) * vb.w / Math.max(1, r.width), vb.y + (cy - r.top) * vb.h / Math.max(1, r.height)]; }
+    function zoom(f, cx, cy){
+      var r = cv.getBoundingClientRect();
+      if (cx == null) { cx = r.left + r.width / 2; cy = r.top + r.height / 2; }
+      var w = toWorld(cx, cy);
+      vb = orunmilaGraph2DCore.zoomAt(vb, f, w[0], w[1], viewSize(), ZOOM); apply();
+    }
+    function panPx(dx, dy){ var s = viewSize(); var res = orunmilaGraph2DCore.panBy(vb, dx * vb.w / s.width, dy * vb.h / s.height, content); vb = res.vb; apply(); return res.moved; }
+    if (!vb) fit(); else reshape();
+    if (graphResize) graphResize.disconnect();
+    graphResize = window.ResizeObserver ? new ResizeObserver(reshape) : null;
+    if (graphResize) graphResize.observe(cv);
 
-    document.getElementById('gv-zin').addEventListener('click', function(){ applyZoom(0.75); });
-    document.getElementById('gv-zout').addEventListener('click', function(){ applyZoom(1.33); });
-    document.getElementById('gv-zreset').addEventListener('click', function(){ vb={x:0,y:0,w:W,h:H}; svgEl.setAttribute('viewBox','0 0 '+W+' '+H); });
-    function applyZoom(s){ var mx=vb.x+vb.w/2, my=vb.y+vb.h/2; vb.w*=s; vb.h*=s; vb.x=mx-vb.w/2; vb.y=my-vb.h/2; svgEl.setAttribute('viewBox',vb.x+' '+vb.y+' '+vb.w+' '+vb.h); }
+    // Scroll moves the picture (Shift and scroll, sideways); Ctrl or Cmd and scroll, which is also what a trackpad
+    // pinch sends, zooms about the pointer. At the picture's edge the scroll is left to the page.
+    cv.addEventListener('wheel', function(e){
+      var unit = e.deltaMode === 1 ? 16 : (e.deltaMode === 2 ? viewSize().height : 1);
+      if (e.ctrlKey || e.metaKey) { e.preventDefault(); zoom(Math.exp(-e.deltaY * unit * 0.0022), e.clientX, e.clientY); return; }
+      var dx = e.deltaX * unit, dy = e.deltaY * unit;
+      if (e.shiftKey && !dx) { dx = dy; dy = 0; }
+      if (panPx(dx, dy)) e.preventDefault();
+    }, { passive: false });
 
-    // search: highlight matching nodes, dim everything else
+    // Drag the background to move; two fingers pinch to zoom. A thing's own clicks are left alone.
+    var pts = {}, drag = null, pinch = null;
+    function twoApart(){ var ids = Object.keys(pts); var a = pts[ids[0]], b = pts[ids[1]]; return { d: Math.hypot(a[0]-b[0], a[1]-b[1]), cx: (a[0]+b[0])/2, cy: (a[1]+b[1])/2 }; }
+    cv.addEventListener('pointerdown', function(e){
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (e.target.closest && e.target.closest('.gv-node')) return;
+      pts[e.pointerId] = [e.clientX, e.clientY];
+      try { cv.setPointerCapture(e.pointerId); } catch (x) { /* a pointer the page cannot hold */ }
+      if (Object.keys(pts).length === 2) { pinch = twoApart(); drag = null; }
+      else drag = { x: e.clientX, y: e.clientY };
+      cv.classList.add('panning');
+    });
+    cv.addEventListener('pointermove', function(e){
+      if (!pts[e.pointerId]) return;
+      pts[e.pointerId] = [e.clientX, e.clientY];
+      if (pinch && Object.keys(pts).length === 2) { var t = twoApart(); if (pinch.d > 0) zoom(t.d / pinch.d, t.cx, t.cy); pinch = t; return; }
+      if (drag) { panPx(drag.x - e.clientX, drag.y - e.clientY); drag.x = e.clientX; drag.y = e.clientY; }
+    });
+    function lift(e){
+      delete pts[e.pointerId];
+      if (Object.keys(pts).length < 2) pinch = null;
+      if (!Object.keys(pts).length) { drag = null; cv.classList.remove('panning'); }
+    }
+    cv.addEventListener('pointerup', lift);
+    cv.addEventListener('pointercancel', lift);
+
+    // The keyboard, once the canvas is selected (click it, or Tab to it).
+    cv.addEventListener('keydown', function(e){
+      var k = e.key, step = 60;
+      if (k === 'ArrowLeft') panPx(-step, 0);
+      else if (k === 'ArrowRight') panPx(step, 0);
+      else if (k === 'ArrowUp') panPx(0, -step);
+      else if (k === 'ArrowDown') panPx(0, step);
+      else if (k === '+' || k === '=') zoom(1.25);
+      else if (k === '-' || k === '_') zoom(0.8);
+      else if (k === '0') fit();
+      else return;
+      e.preventDefault();
+    });
+
+    document.getElementById('gv-zin').addEventListener('click', function(){ zoom(1.25); });
+    document.getElementById('gv-zout').addEventListener('click', function(){ zoom(0.8); });
+    document.getElementById('gv-zreset').addEventListener('click', function(){ fit(); });
+    document.getElementById('gv-zfull').addEventListener('click', function(){
+      if (document.fullscreenElement || document.webkitFullscreenElement) {
+        if (document.exitFullscreen) document.exitFullscreen(); else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+        return;
+      }
+      var ask = cv.requestFullscreen || cv.webkitRequestFullscreen;
+      var asked = ask ? ask.call(cv) : null;
+      if (asked && asked.catch) asked.catch(function(){ /* refused: the canvas stays in the page */ });
+    });
+
+    // search: lay the levels out again with the matches ringed, and brought in when a level was full
     var searchEl = document.getElementById('gv-search');
     if (searchEl) searchEl.addEventListener('input', function(){
-      var q = searchEl.value.toLowerCase();
-      el.querySelectorAll('.gv-node').forEach(function(g){
-        var nd = DATA.nodes[+g.dataset.i];
-        var match = !q || (nd.label||'').toLowerCase().includes(q) || (nd.path||'').toLowerCase().includes(q);
-        g.style.opacity = match ? '1' : '0.15';
-      });
+      graphSearch = searchEl.value;
+      var at = searchEl.selectionStart;
+      rendered.graph = false; renderGraph();
+      var again = document.getElementById('gv-search');
+      if (again) { again.focus(); try { again.setSelectionRange(at, at); } catch (e) { /* not a text field */ } }
     });
 
-    // node interaction
+    // node interaction: hovering a thing lights its links and its neighbours and dims the rest
     var paths = el.querySelectorAll('.gv-edge');
+    var nodesEls = el.querySelectorAll('.gv-node');
     el.querySelectorAll('.gv-node').forEach(function(g){
       g.addEventListener('mouseenter', function(){
         var i = +g.dataset.i;
-        paths.forEach(function(p){ p.classList.toggle('hot', +p.dataset.from===i || +p.dataset.to===i); });
+        var near = {}; near[i] = true;
+        paths.forEach(function(p){
+          var hot = +p.dataset.from===i || +p.dataset.to===i;
+          p.classList.toggle('hot', hot);
+          if (hot) { near[+p.dataset.from] = true; near[+p.dataset.to] = true; }
+        });
+        nodesEls.forEach(function(n){ n.classList.toggle('near', !!near[+n.dataset.i]); });
+        svgEl.classList.add('focus');
       });
       g.addEventListener('mousemove', function(ev){
         var nd = DATA.nodes[+g.dataset.i]; var xy=stageXY(ev);
         var label = (nd.stain ? nd.stain.replace(/_/g,' ') : nd.primaryChannel);
         tipShow('<b>'+escjs(nd.label)+'</b> &mdash; '+escjs(label)+'<br>'+nd.touches+' touches'+(nd.tainted_by?(' &middot; stained by '+nd.tainted_by):'')+'<span class="ex">'+escjs(explainOf(nd.stain,nd.primaryChannel))+'</span>', xy[0], xy[1]);
       });
-      g.addEventListener('mouseleave', function(){ paths.forEach(function(p){ p.classList.remove('hot'); }); tipHide(); });
+      g.addEventListener('mouseleave', function(){ paths.forEach(function(p){ p.classList.remove('hot'); }); svgEl.classList.remove('focus'); tipHide(); });
       g.addEventListener('click', function(e){
         e.stopPropagation();
         showDetail(DATA.nodes[+g.dataset.i]);
@@ -596,165 +726,18 @@ function renderTrailVisual(vizData) {
     bindFilters(el, function(){ rendered.graph=false; renderGraph(); });
   }
 
-  // ---- 3D GRAPH ----
-  // Lessons from the previous broken version:
-  //  - Three.js dropped examples/js in v0.148+; loading OrbitControls that way
-  //    404'd and the chain stalled.
-  //  - Loading three.js separately AND letting 3d-force-graph bundle its own
-  //    created two competing WebGL contexts -> the intermittent black screen.
-  //  - Custom nodeThreeObject referenced a global THREE that didn't reliably
-  //    exist; we now use the library's built-in spheres which need no THREE.
-  // Single-file UMD bundles three internally. We try unpkg, fall back to jsdelivr.
-  var fg3dLoaded = 0; // 0 not started, 1 loading, 2 ready, -1 failed
-  var fg3dInstance = null; // disposed on re-render so WebGL contexts don't leak
-  function load3DLib(done){
-    if (fg3dLoaded === 2) return done(null);
-    if (fg3dLoaded === -1) return done(new Error('previous load failed'));
-    fg3dLoaded = 1;
-    var urls = [
-      'https://unpkg.com/3d-force-graph@1.73.4/dist/3d-force-graph.min.js',
-      'https://cdn.jsdelivr.net/npm/3d-force-graph@1.73.4/dist/3d-force-graph.min.js',
-    ];
-    var i = 0;
-    function tryNext(){
-      if (i >= urls.length) { fg3dLoaded = -1; return done(new Error('all CDNs failed')); }
-      var s = document.createElement('script');
-      s.src = urls[i++];
-      s.onload = function(){
-        if (typeof ForceGraph3D === 'function') { fg3dLoaded = 2; done(null); }
-        else tryNext();
-      };
-      s.onerror = tryNext;
-      document.head.appendChild(s);
-    }
-    tryNext();
-  }
-
-  function render3DGraph(){
-    var el = document.getElementById('gv-graph3d');
-    el.innerHTML = renderFilterBar('graph3d')
-      + '<div class="gv-3d-wrap" id="gv-3d-container">'
-      + '<div id="gv-3d-status" style="text-align:center;color:#7d8694;padding:80px 20px;">Loading 3D engine\\u2026<br><span style="font-size:.72rem;color:#484f58;">Needs internet for 3d-force-graph (~150KB)</span></div>'
-      + '</div>';
-    bindFilters(el, function(){ rendered.graph3d=false; render3DGraph(); });
-
-    // Dispose any previous instance so we don't stack WebGL contexts (browsers
-    // cap them; stacking caused the "blacked out" symptom).
-    if (fg3dInstance) {
-      try { fg3dInstance._destructor && fg3dInstance._destructor(); } catch (e) {}
-      fg3dInstance = null;
-    }
-
-    load3DLib(function(err){
-      var container = document.getElementById('gv-3d-container');
-      if (!container) return;
-      if (err) {
-        container.innerHTML = '<div style="text-align:center;color:#ff5252;padding:60px 20px;">'
-          + 'Could not load the 3D library.<br>'
-          + '<span style="color:#7d8694;font-size:.78rem">Check your internet connection, then click the 3D Graph tab again.</span></div>';
-        return;
-      }
-      init3D(container);
+  // ---- 3D MAP (V3D, LD300) ----
+  // NI1 (LD264) removed the old 3D graph, which loaded a library from a CDN. This one is Orunmila's own WebGL2 code,
+  // put into the page whole (src/render/graph3d.js): no library, no internet.
+${graph3d.source()}
+  var map3d = null;
+  function renderMap3D(){
+    map3d = orunmilaGraph3D({
+      DATA: DATA, el: document.getElementById('gv-map3d'), colorOf: colorOf, explainOf: explainOf,
+      nodePassesFilter: nodePassesFilter, renderFilterBar: renderFilterBar, bindFilters: bindFilters,
+      showDetail: showDetail, tipShow: tipShow, tipHide: tipHide, stageXY: stageXY, escjs: escjs, trunc: trunc, legend: legend,
+      flaggedView: orunmilaGraph2DCore.flaggedView
     });
-  }
-
-  function init3D(container){
-    container.innerHTML = '';
-    var W = container.clientWidth || 800, H = 520;
-
-    var filtered = DATA.nodes.filter(nodePassesFilter);
-    var filteredIds = {};
-    filtered.forEach(function(n){ filteredIds[n.id] = true; });
-    var gNodes = filtered.map(function(nd){
-      return {
-        id: nd.id, label: nd.label, path: nd.path,
-        stain: nd.stain, channel: nd.primaryChannel, channels: nd.channels,
-        touches: nd.touches, tainted_by: nd.tainted_by,
-        color: colorOf(nd.stain, nd.primaryChannel),
-        _nd: nd,
-      };
-    });
-    var gLinks = DATA.edges.filter(function(e){
-      return filteredIds[e.from] && filteredIds[e.to];
-    }).map(function(e){
-      return {
-        source: e.from, target: e.to, kind: e.kind,
-        color: colorOf(DATA.nodes[e.to].stain, DATA.nodes[e.to].channels[0]),
-      };
-    });
-
-    if (!gNodes.length) {
-      container.innerHTML = '<div style="text-align:center;color:#7d8694;padding:80px 20px;">No nodes match the current filters.</div>';
-      return;
-    }
-
-    var graph;
-    try {
-      // rendererConfig is merged with {antialias:true, alpha:true} inside
-      // 3d-force-graph (confirmed by reading dist/3d-force-graph.min.js@1.73.4).
-      // Lenient options for restrictive Chrome states:
-      //   powerPreference 'low-power' -> integrated GPU, avoids discrete-GPU
-      //     handoff issues common on macOS dual-GPU Macs.
-      //   failIfMajorPerformanceCaveat false -> accept software fallback
-      //     instead of refusing the context outright.
-      //   antialias false -> fewer GPU requirements; quality cost is minor.
-      graph = ForceGraph3D({ rendererConfig: {
-        antialias: false,
-        powerPreference: 'low-power',
-        failIfMajorPerformanceCaveat: false,
-        preserveDrawingBuffer: false,
-      } })(container)
-        .width(W).height(H)
-        .backgroundColor('#070809')
-        .graphData({ nodes: gNodes, links: gLinks })
-        .nodeRelSize(4)
-        .nodeVal(function(n){ return 1 + Math.min(20, n.touches * 1.2); })
-        .nodeColor(function(n){ return n.color; })
-        .nodeOpacity(0.92)
-        .nodeLabel(function(n){
-          var outcome = n.stain ? n.stain.replace(/_/g, ' ') : 'clean';
-          var explain = (n.stain && P.explain[n.stain]) || '';
-          return '<div style="background:#0b0e13;border:1px solid #2a3340;border-radius:8px;padding:8px 11px;font-size:13px;color:#e7edf3;max-width:280px;font-family:-apple-system,sans-serif">'
-            + '<b>' + escjs(n.label) + '</b><br>'
-            + '<span style="color:' + n.color + '">' + escjs(outcome) + '</span> &middot; ' + n.touches + ' touches'
-            + (n.channels.length ? '<br><span style="color:#7d8694">' + escjs(n.channels.join(', ')) + '</span>' : '')
-            + (explain ? '<br><span style="color:#9abbe0;font-size:12px">' + escjs(explain) + '</span>' : '')
-            + '</div>';
-        })
-        .onNodeClick(function(n){ if (n && n._nd) showDetail(n._nd); })
-        .linkColor(function(l){ return l.color; })
-        .linkOpacity(0.35)
-        .linkWidth(0.6)
-        .linkDirectionalParticles(2)
-        .linkDirectionalParticleWidth(1.4)
-        .linkDirectionalParticleSpeed(0.006)
-        .linkDirectionalParticleColor(function(l){ return l.color; })
-        .linkLabel(function(l){ return l.kind; })
-        .enableNodeDrag(true)
-        .enableNavigationControls(true)
-        .showNavInfo(false);
-      // Tune forces for nicer layout; wrap in try since older builds may not expose d3Force.
-      try {
-        if (graph.d3Force) {
-          var charge = graph.d3Force('charge'); if (charge && charge.strength) charge.strength(-50);
-          var link = graph.d3Force('link'); if (link && link.distance) link.distance(34);
-        }
-      } catch (e) {}
-      graph.onNodeHover(function(node){ container.style.cursor = node ? 'pointer' : 'grab'; });
-      fg3dInstance = graph;
-
-      // Keep the canvas sized to its container on resize / tab re-show.
-      var resizeObs = null;
-      try {
-        resizeObs = new ResizeObserver(function(){
-          var w = container.clientWidth || W;
-          graph.width(w);
-        });
-        resizeObs.observe(container);
-      } catch (e) {}
-    } catch (e) {
-      container.innerHTML = '<div style="text-align:center;color:#ff5252;padding:60px 20px;">3D engine failed to initialize.<br><span style="color:#7d8694;font-size:.78rem">' + escjs(String(e && e.message || e)) + '</span></div>';
-    }
   }
 
   // ---- GLOSSARY ----
@@ -763,11 +746,11 @@ function renderTrailVisual(vizData) {
     var outcomes = [
       { key: 'verified', label: 'Verified', severity: 'None', desc: 'The agent said it did this, and the evidence backs it up. File changes, command output, or test results confirm the claim.' },
       { key: 'partial', label: 'Partial', severity: 'Low', desc: 'The agent touched the file, but the change looks like scaffolding only \\u2014 a comment, an empty function, a stub with no real logic. The claim is technically \\u201Cdone\\u201D but the implementation is hollow.' },
-      { key: 'phantom', label: 'Phantom', severity: 'High', desc: 'The agent claimed it did something (edited a file, added a function, fixed a bug) but there is zero matching evidence in the session. No file was changed, no command ran, nothing supports the claim. Pure fabrication.' },
-      { key: 'phantom_verification', label: 'Phantom Verification', severity: 'High', desc: 'The agent said \\u201Ctested and passing\\u201D or \\u201Cverified it works\\u201D but no test command ran, or the command that ran did not pass. The agent is expressing false confidence about verification it never performed.' },
-      { key: 'silently_dropped', label: 'Silently Dropped', severity: 'High', desc: 'Part of your original request that the agent never did and never mentioned again. It was in the ask, but the agent just ignored it without acknowledging the omission.' },
+      { key: 'phantom', label: 'Phantom', severity: 'High', desc: 'The agent said it did something (edited a file, added a function, fixed a bug) and nothing in the record shows it: no file changed, no command ran, no tool call supports it. Recheck it: the evidence may sit outside what Orunmila sees.' },
+      { key: 'phantom_verification', label: 'Phantom Verification', severity: 'High', desc: 'The agent said \\u201Ctested and passing\\u201D or \\u201Cverified it works\\u201D and no passing test or command ran in that turn. Run the check and read its result.' },
+      { key: 'silently_dropped', label: 'Silently Dropped', severity: 'Low', desc: 'Part of your request that no later message or action seems to cover. This check is often wrong: it can take pasted text, quotes or command output for a request. Treat it as a prompt to look, not a finding.' },
       { key: 'undisclosed', label: 'Undisclosed', severity: 'Medium', desc: 'This file changed during the session, but no claim or request mentioned it. The agent made a change it never told you about. Could be benign (auto-formatting) or concerning (unintended side effects).' },
-      { key: 'untracked_write', label: 'Untracked Write', severity: 'Critical', desc: 'The disk changed but no tool call ever disclosed it. The independent file watcher (fs-sentinel) saw a modification that the agent\\u2019s own tool stream never reported. This is the strongest signal Orunmila can produce \\u2014 something changed that was completely invisible to the normal audit trail.' },
+      { key: 'untracked_write', label: 'Untracked Write', severity: 'Critical', desc: 'The disk changed and no tool call in that turn disclosed it. The independent disk watcher saw a change the agent\\u2019s own tool stream never reported. It may be another program, another session, or a change made inside a shell command.' },
       { key: 'unverifiable', label: 'Unverifiable', severity: 'None', desc: 'The claim was too vague to check. Statements like \\u201CI improved the code\\u201D or \\u201Cthis should work better\\u201D have no concrete target to verify against.' },
     ];
     var channels = [
@@ -804,17 +787,25 @@ function renderTrailVisual(vizData) {
       html += '<span style="color:#cfd8e3;font-size:.84rem;">'+escjs(ch.desc)+'</span>';
       html += '</div>';
     }
-    html += '<h4 style="color:#e7edf3;font-size:1rem;margin:28px 0 6px;">Metrics</h4>';
-    html += '<p style="color:#7d8694;font-size:.82rem;margin:0 0 18px;">Aggregate numbers shown in the dashboard and benchmark results.</p>';
-    var metrics = [
-      { label: 'Reliability', desc: 'Weighted score 0\\u2013100. verified = 1.0, partial = 0.5, phantom/phantom_verification = 0. Higher means more of the agent\\u2019s claims are real.' },
-      { label: 'Phantom Rate', desc: 'Percentage of claims that are phantom or phantom verification. How often the agent fabricates.' },
-      { label: 'ConfIdx (False Confidence Index)', desc: 'phantom_verification / (phantom + phantom_verification). What fraction of fabrications are confidence claims like \\u201Ctested and passing.\\u201D Higher means the agent doesn\\u2019t just lie \\u2014 it lies confidently.' },
-      { label: 'Touches', desc: 'Total interactions: file reads, writes, commands, network calls, tool uses. Volume of activity in the session.' },
+    // HTML1: the Metrics section described three scores from the model comparison NI1 removed (LD264); nothing on
+    // this page shows them, so it is gone. What the page counts:
+    html += '<h4 style="color:#e7edf3;font-size:1rem;margin:28px 0 6px;">Counts on this page</h4>';
+    html += '<div style="padding:8px 16px;margin:4px 0;background:#0e1219;border-radius:8px;font-size:.84rem;color:#cfd8e3;">'
+      + '<b>Touches</b>: every recorded contact (a read, a write, a command, a network call, a tool use). '
+      + '<b>Things</b>: the distinct files, commands and endpoints touched. '
+      + '<b>Turns checked</b>: turns whose claims were compared with the record; with none, the page says <b>Not checked</b>, never clean. '
+      + '<b>nothing flagged</b>: touched, and no check flagged it; that is not a verdict that it is right.</div>';
+    // PG1: the words the header uses (the witness line, the judge's line) defined where a reader looks for them.
+    var words = [
+      ['The Glove', 'Orunmila\\u2019s record of what the agent\\u2019s own hooks reported: each prompt, tool call, command and claim.'],
+      ['The Sentinel', 'Orunmila\\u2019s own watcher of the disk, which sees a file change whoever made it, inside the folders it watches.'],
+      ['Both witnesses', 'A change both the Glove and the Sentinel recorded. One witness alone is still a fact; the page says which one, and why the other has nothing.'],
+      ['odù', 'One thing that happened, put together from every mark of it (an edit, a command, a change on disk), as the session log keeps it.'],
+      ['The Babaláwo', 'Orunmila\\u2019s judge. At a session\\u2019s closeout it reads the whole sealed record with fixed rules (no model) and gives each odù, and the session, one verdict: <b>Clean</b> (nothing to look at), <b>Look at this</b> (worth a look, not wrong by itself), or <b>Violation</b> (the record breaks a rule). <b>Incomplete</b> means part of the record is missing. Its findings: orunmila report --verdicts --session ID.'],
     ];
-    for (var m = 0; m < metrics.length; m++) {
-      html += '<div style="padding:8px 16px;margin:4px 0;background:#0e1219;border-radius:8px;font-size:.84rem;">';
-      html += '<span style="color:#40c4ff;font-weight:600;">'+escjs(metrics[m].label)+'</span> \\u2014 <span style="color:#cfd8e3;">'+escjs(metrics[m].desc)+'</span></div>';
+    html += '<h4 style="color:#e7edf3;font-size:1rem;margin:28px 0 6px;">Words on this page</h4>';
+    for (var w = 0; w < words.length; w++) {
+      html += '<div style="padding:8px 16px;margin:4px 0;background:#0e1219;border-radius:8px;font-size:.84rem;color:#cfd8e3;"><b>'+words[w][0]+'</b>: '+words[w][1]+'</div>';
     }
     html += '</div>';
     el.innerHTML = html;
@@ -828,16 +819,25 @@ function renderTrailVisual(vizData) {
     if(!withPath.length){
       rows = '<p class="gv-hint" style="display:block">No matching files. Try adjusting the filters, or the session was mostly commands.</p>';
     } else {
+      // HTML1: the Graph's folders (src/render/graph2d.js): the project's prefix off, one row per file however written.
+      var Fo = orunmilaGraph2DCore.folders(withPath);
       var byDir={};
-      withPath.forEach(function(n){ var parts=n.path.split(/[\\\\/]/); var f=parts.pop(); var d=parts.join('/')||'.'; (byDir[d]=byDir[d]||[]).push({f:f,n:n}); });
+      withPath.forEach(function(n){
+        if (Fo.repOf(n.id) !== n.id) return;
+        var f = String(n.path).split(/[\\\\/]/).pop();
+        var d = Fo.folder.get(n.id);
+        (byDir[d]=byDir[d]||[]).push({f:f,n:n,t:Fo.touches.get(n.id)});
+      });
+      var maxT = 1;
+      Object.keys(byDir).forEach(function(d){ byDir[d].forEach(function(it){ if (it.t > maxT) maxT = it.t; }); });
       Object.keys(byDir).sort().forEach(function(d){
         rows += '<div class="row"><span class="dir">'+escjs(d)+'/</span></div>';
-        byDir[d].forEach(function(it){
+        byDir[d].sort(function(a,b){ return b.t - a.t; }).forEach(function(it){
           var c=colorOf(it.n.stain, it.n.primaryChannel);
-          var w=20+Math.min(160, it.n.touches*10);
+          var w=8+Math.round(160*it.t/maxT);
           rows += '<div class="row" style="padding-left:16px" data-ni="'+it.n.id+'" title="'+escjs(explainOf(it.n.stain,it.n.primaryChannel))+'">'
-            + '<span class="bar" style="width:'+w+'px;background:'+c+';color:'+c+'"></span>'
-            + '<span class="nm">'+escjs(it.f)+'</span> <span class="dir">&middot; '+it.n.touches+'</span></div>';
+            + '<span class="bar" style="width:'+w+'px;background:'+c+'"></span>'
+            + '<span class="nm">'+escjs(it.f)+'</span> <span class="dir">&middot; '+it.t+'</span></div>';
         });
       });
     }
@@ -849,25 +849,35 @@ function renderTrailVisual(vizData) {
   }
 
   // ---- TIMELINE ----
+  // HTML1: touches of one thing in a row fold into one line with a count, and a turn shows its first 150 lines with
+  // a button for the rest (860f51e9's one turn was a single column of 877 lines).
+  var timelineAll = {};
   function renderTimeline(){
     var el = document.getElementById('gv-timeline');
+    var CAP = 150;
     var cols = DATA.turns.map(function(t){
-      var pips = DATA.trail.filter(function(r){ return r.turn===t.turn_id && trailPassesFilter(r); }).map(function(r, idx){
+      var rows = DATA.trail.filter(function(r){ return r.turn===t.turn_id && trailPassesFilter(r); });
+      var runs = orunmilaGraph2DCore.runs(rows);
+      var shown = timelineAll[t.turn_id] ? runs : runs.slice(0, CAP);
+      var pips = shown.map(function(run){
+        var r = rows[run.first];
         var c=colorOf(r.stain, r.channel);
-        return '<div class="gv-tdot" data-tidx="'+t.turn_id+'_'+idx+'" title="'+escjs(r.channel+': '+r.label)+'"><span class="pip" style="background:'+c+';color:'+c+'"></span><span class="tx">'+escjs(trunc(r.label,22))+'</span></div>';
+        return '<div class="gv-tdot" data-turn="'+escjs(t.turn_id)+'" data-first="'+run.first+'" title="'+escjs(r.channel+': '+r.label)+'"><span class="pip" style="background:'+c+'"></span><span class="tx">'+escjs(trunc(r.label,22))+'</span>'+(run.count > 1 ? '<span class="cnt">&times;'+run.count+'</span>' : '')+'</div>';
       }).join('');
-      return '<div class="gv-tcol"><h5>'+escjs(t.turn_id)+' &middot; '+t.touches+'</h5><div class="prompt">'+escjs(trunc(t.prompt,70))+'</div>'+(pips||'<span class="dir" style="font-size:.72rem">no touches</span>')+'</div>';
+      var more = runs.length > shown.length ? '<button class="gv-gbtn gv-tmore" data-turn="'+escjs(t.turn_id)+'">Show all '+runs.length+' lines</button>' : '';
+      return '<div class="gv-tcol"><h5>'+escjs(t.turn_id)+' &middot; '+t.touches+' touches</h5><div class="prompt">'+escjs(trunc(t.prompt,70))+'</div>'+(pips||'<span class="dir" style="font-size:.72rem">no touches</span>')+more+'</div>';
     }).join('');
     el.innerHTML = renderFilterBar('timeline') + legend() + '<div class="gv-time">'+cols+'</div>';
 
-    // click-to-detail on pips
     el.querySelectorAll('.gv-tdot').forEach(function(dot){
       dot.addEventListener('click', function(){
-        var parts = dot.dataset.tidx.split('_');
-        var turnId = parts[0], idx = parseInt(parts[1]);
+        var turnId = dot.dataset.turn, first = parseInt(dot.dataset.first, 10);
         var matching = DATA.trail.filter(function(r){ return r.turn===turnId && trailPassesFilter(r); });
-        if (matching[idx]) showTrailDetail(matching[idx]);
+        if (matching[first]) showTrailDetail(matching[first]);
       });
+    });
+    el.querySelectorAll('.gv-tmore').forEach(function(b){
+      b.addEventListener('click', function(){ timelineAll[b.dataset.turn] = true; rendered.timeline=false; renderTimeline(); });
     });
     bindFilters(el, function(){ rendered.timeline=false; renderTimeline(); });
   }
@@ -881,7 +891,7 @@ function renderTrailVisual(vizData) {
       return keys.map(function(k){
         var c = kind==='stain' ? (P.stain[k]||'#888') : (P.channel[k]||'#888');
         var w = 8 + (tally[k]/max)*150;
-        return '<div class="b" title="'+escjs(P.explain[k]||k)+'"><span class="v">'+tally[k]+'</span><span class="fill" style="width:'+w+'px;background:'+c+';color:'+c+'"></span><span style="color:#aeb8c4">'+escjs(k.replace(/_/g,' '))+'</span></div>';
+        return '<div class="b" title="'+escjs(P.explain[k]||k)+'"><span class="v">'+tally[k]+'</span><span class="fill" style="width:'+w+'px;background:'+c+';color:'+c+'"></span><span style="color:#aeb8c4">'+escjs(label(k))+'</span></div>';
       }).join('');
     }
 
@@ -914,7 +924,7 @@ function renderTrailVisual(vizData) {
       + '<text x="'+donutSvgW/2+'" y="'+(donutSvgW/2+14)+'" text-anchor="middle" fill="#7d8694" font-size="10">things</text></svg>';
     var donutLegend = stainKeys.map(function(k){
       var pct = Math.round(DATA.stainTally[k]/stainTotal*100);
-      return '<div class="it"><span class="gv-dot" style="background:'+(P.stain[k]||'#888')+'"></span>'+escjs(k.replace(/_/g,' '))+' '+pct+'%</div>';
+      return '<div class="it"><span class="gv-dot" style="background:'+(P.stain[k]||'#888')+'"></span>'+escjs(label(k))+' '+pct+'%</div>';
     }).join('');
 
     var topNodes = DATA.nodes.slice().sort(function(a,b){return b.touches-a.touches;}).slice(0,8);
@@ -933,7 +943,9 @@ function renderTrailVisual(vizData) {
         + '<div class="k" title="Unique files, commands, or endpoints the agent interacted with"><div class="n" style="color:#40c4ff">'+DATA.totals.artifacts+'</div><div class="l">things</div></div>'
         + '<div class="k" title="Number of conversation turns in this session"><div class="n" style="color:#ffab40">'+DATA.totals.turns+'</div><div class="l">turns</div></div>'
       + '</div></div>'
-      + '<div class="gv-card"><h5>What orunmila found</h5><div class="gv-donut-wrap">'+donutSvg+'<div class="gv-donut-legend">'+donutLegend+'</div></div></div>'
+      + (DATA.checked
+        ? '<div class="gv-card"><h5>What orunmila found</h5><div class="gv-donut-wrap">'+donutSvg+'<div class="gv-donut-legend">'+donutLegend+'</div></div></div>'
+        : '<div class="gv-card"><h5>What orunmila found</h5><p class="gv-unchecked">Not checked: no turn of this session has a report, so nothing here is called clean.</p></div>')
       + '<div class="gv-card"><h5>Kinds of contact</h5><div class="gv-bars">'+bars(DATA.channelTally,'channel')+'</div></div>'
       + '<div class="gv-card"><h5>Busiest turns</h5><div class="gv-bars">'+turnBars+'</div></div>'
       + '<div class="gv-card"><h5>Most-touched things</h5><div class="gv-bars">'+topBars+'</div></div>'
@@ -943,8 +955,12 @@ function renderTrailVisual(vizData) {
   function renderReport() {
     var el = document.getElementById('gv-report');
     var findings = DATA.findings || [];
+    if (!DATA.checked) {
+      el.innerHTML = '<div class="gv-nothing gv-unchecked">Not checked: no turn of this session has a report, so no claim was compared with the record.</div>';
+      return;
+    }
     if (!findings.length) {
-      el.innerHTML = '<div class="gv-nothing">✔ Nothing flagged &mdash; every claim checked out.</div>';
+      el.innerHTML = '<div class="gv-nothing">✓ No findings in the ' + DATA.checkedTurns + ' checked turn' + (DATA.checkedTurns === 1 ? '' : 's') + '.</div>';
       return;
     }
 
@@ -988,7 +1004,7 @@ function renderTrailVisual(vizData) {
     findingsHtml += '</div>';
 
     var promptLines = [];
-    promptLines.push('I ran Orunmila (a claim-vs-reality verifier) on our last session and found ' + findings.length + ' issue' + (findings.length === 1 ? '' : 's') + '. Please address each one:\\n');
+    promptLines.push('Orunmila compared what you said in our last session with what its record shows. These ' + findings.length + ' item' + (findings.length === 1 ? '' : 's') + ' need a second look. For each one: show me the evidence, or fix it, or tell me it was not done.\\n');
 
     var phantoms = findings.filter(function(f){ return f.type === 'phantom'; });
     var pvs = findings.filter(function(f){ return f.type === 'phantom_verification'; });
@@ -998,57 +1014,57 @@ function renderTrailVisual(vizData) {
     var untracked = findings.filter(function(f){ return f.type === 'untracked_write'; });
 
     if (phantoms.length) {
-      promptLines.push('## Phantom claims (said you did it, but no evidence exists)');
+      promptLines.push('## Claims the record does not show');
       for (var pi = 0; pi < phantoms.length; pi++) {
-        promptLines.push('- You claimed: "' + phantoms[pi].text + '" but no file change, command, or tool call supports this.');
+        promptLines.push('- You said: "' + phantoms[pi].text + '". No file change, command or tool call in that turn shows it.');
       }
       promptLines.push('');
     }
     if (pvs.length) {
-      promptLines.push('## Phantom verifications (said it was tested/working, but no test ran)');
+      promptLines.push('## Checks claimed with no passing run');
       for (var vi = 0; vi < pvs.length; vi++) {
-        promptLines.push('- You claimed: "' + pvs[vi].text + '" but no passing test or command backs this up. Actually run the verification.');
+        promptLines.push('- You said: "' + pvs[vi].text + '". No passing test or command ran in that turn. Run it and show me the result.');
       }
       promptLines.push('');
     }
     if (partials.length) {
-      promptLines.push('## Partial implementations (touched the file, but it is mostly scaffolding)');
+      promptLines.push('## Changes that look like scaffolding only');
       for (var ai = 0; ai < partials.length; ai++) {
         var pp = partials[ai].paths.length ? ' (' + partials[ai].paths.join(', ') + ')' : '';
-        promptLines.push('- "' + partials[ai].text + '"' + pp + ' — the change is stub/scaffolding only. Provide a real implementation.');
+        promptLines.push('- "' + partials[ai].text + '"' + pp + ': the change looks like a stub. Is the work finished?');
       }
       promptLines.push('');
     }
     if (dropped.length) {
-      promptLines.push('## Silently dropped tasks (part of the original request, never addressed)');
+      promptLines.push('## Parts of my request that may have been missed (this check is often wrong: skip any line that was not a request)');
       for (var di = 0; di < dropped.length; di++) {
-        promptLines.push('- "' + dropped[di].text + '" was in my original request but was never done or mentioned.');
+        promptLines.push('- "' + dropped[di].text + '": done, not done, or not a request?');
       }
       promptLines.push('');
     }
     if (undiscl.length) {
-      promptLines.push('## Undisclosed changes (files changed that no claim or request covers)');
+      promptLines.push('## Files changed that no claim or request mentions');
       for (var ui = 0; ui < undiscl.length; ui++) {
-        promptLines.push('- ' + undiscl[ui].text + ' was changed but you never mentioned why.');
+        promptLines.push('- ' + undiscl[ui].text + ': why did it change?');
       }
       promptLines.push('');
     }
     if (untracked.length) {
-      promptLines.push('## Untracked writes (disk changed with no tool call disclosed)');
+      promptLines.push('## Disk changes no tool call reported');
       for (var ti = 0; ti < untracked.length; ti++) {
-        promptLines.push('- ' + untracked[ti].text + ' was modified on disk but no tool call reported it.');
+        promptLines.push('- ' + untracked[ti].text + ' changed on disk, and no tool call in that turn reported it. What changed it?');
       }
       promptLines.push('');
     }
 
-    promptLines.push('Go back and actually complete each item above. For phantom claims, either do the work or remove the claim. For dropped tasks, implement them. For partial implementations, finish them. For phantom verifications, actually run the tests.');
+    promptLines.push('Answer item by item, with the command or file that shows each answer.');
 
     var promptText = promptLines.join('\\n');
 
     var promptHtml = '<div class="gv-report-section"><h4>Copy-paste prompt</h4>'
-      + '<p style="color:#7d8694;font-size:.78rem;margin:0 0 10px;">Copy this and paste it back into the agent to have it fix everything above.</p>'
+      + '<p style="color:#7d8694;font-size:.78rem;margin:0 0 10px;">Paste this back to the agent. It asks, item by item, for the evidence or a fix.</p>'
       + '<div class="gv-prompt-wrap">'
-      + '<button class="gv-copy-btn" id="gv-copy-prompt">\u{1F4CB} Copy</button>'
+      + '<button class="gv-copy-btn" id="gv-copy-prompt">Copy</button>'
       + '<pre class="gv-prompt" id="gv-prompt-text">' + escjs(promptText) + '</pre>'
       + '</div></div>';
 
@@ -1059,9 +1075,9 @@ function renderTrailVisual(vizData) {
       var btn = this;
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(function() {
-          btn.textContent = '✔ Copied!';
+          btn.textContent = '✓ Copied';
           btn.classList.add('copied');
-          setTimeout(function(){ btn.textContent = '\u{1F4CB} Copy'; btn.classList.remove('copied'); }, 2000);
+          setTimeout(function(){ btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
         });
       } else {
         var ta = document.createElement('textarea');
@@ -1072,29 +1088,31 @@ function renderTrailVisual(vizData) {
         ta.select();
         document.execCommand('copy');
         document.body.removeChild(ta);
-        btn.textContent = '✔ Copied!';
+        btn.textContent = '✓ Copied';
         btn.classList.add('copied');
-        setTimeout(function(){ btn.textContent = '\u{1F4CB} Copy'; btn.classList.remove('copied'); }, 2000);
+        setTimeout(function(){ btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
       }
     });
   }
 
+  // HTML1: closed by default (it sat open above every tab), and every channel the tabs draw (disk and tool were missing).
   function legend(){
     var stains=['verified','partial','phantom','undisclosed','untracked_write'];
-    var chans=['read','write','command','network'];
+    var chans=['read','write','disk','command','network','tool'];
     var s = stains.map(function(k){return '<span class="it" style="color:'+P.stain[k]+'" title="'+escjs(P.explain[k])+'"><span class="gv-dot" style="background:'+P.stain[k]+'"></span><span class="lbl-long">'+P.explain[k]+'</span><span class="lbl-short">'+k.replace(/_/g,' ')+'</span></span>';}).join('');
     var c = chans.map(function(k){return '<span class="it" style="color:'+P.channel[k]+'" title="'+escjs(P.explain[k])+'"><span class="gv-dot" style="background:'+P.channel[k]+'"></span><span class="lbl-long">'+P.explain[k]+'</span><span class="lbl-short">'+k+'</span></span>';}).join('');
-    return '<details class="gv-legbox" open><summary>Colour legend</summary><div class="gv-legend">'+s+c+'</div></details>';
+    return '<details class="gv-legbox"><summary>Colour legend</summary><div class="gv-legend">'+s+c+'</div></details>';
   }
 
   function trunc(s,n){ s=String(s||''); return s.length>n ? s.slice(0,n-1)+'\\u2026' : s; }
   function escjs(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 
-  var RENDERERS = { graph:renderGraph, tree:renderTree, timeline:renderTimeline, dashboard:renderDashboard, graph3d:render3DGraph, report:renderReport, glossary:renderGlossary };
+  var RENDERERS = { graph:renderGraph, map3d:renderMap3D, tree:renderTree, timeline:renderTimeline, dashboard:renderDashboard, report:renderReport, glossary:renderGlossary };
   var rendered = {};
   function show(view){
     document.querySelectorAll('.gv-tab').forEach(function(t){ t.classList.toggle('on', t.dataset.view===view); });
     document.querySelectorAll('.gv-view').forEach(function(v){ v.classList.toggle('on', v.dataset.view===view); });
+    if (map3d) { if (view === 'map3d') map3d.resume(); else map3d.pause(); }
     if(!rendered[view]){ RENDERERS[view](); rendered[view]=true; }
     setHint(view); tipHide(); detailSlot.innerHTML='';
   }
@@ -1106,10 +1124,12 @@ function renderTrailVisual(vizData) {
     root.classList.toggle('gv-power', e.target.dataset.aud==='power');
   });
 
-  show('timeline');
+  // A link may name the tab to open (#map3d, #graph, ...); anything else opens the timeline.
+  var asked = String(location.hash || '').slice(1);
+  show(Object.prototype.hasOwnProperty.call(RENDERERS, asked) ? asked : 'timeline');
 })();
 </script>
 `;
 }
 
-module.exports = { buildVizData, renderTrailVisual, STAIN_COLORS, CHANNEL_COLORS };
+module.exports = { buildVizData, renderTrailVisual, STAIN_COLORS, CHANNEL_COLORS, CHANNEL_GLYPH };

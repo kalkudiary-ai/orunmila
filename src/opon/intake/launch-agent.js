@@ -1,0 +1,132 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 KALKU DIGITAL SOLUTIONS LIMITED
+'use strict';
+
+/**
+ * src/opon/intake/launch-agent.js — the per-user launch agent that keeps one
+ * intake running (slice LA, LD143; design D-I 4.1: started by a per-user launch
+ * agent until Phase 5's separate user). macOS only; on any other platform every
+ * action refuses and says so (Linux's per-user service is not built).
+ *
+ *   plistFor({ node, script, home, env })   the property list, as text
+ *   createLaunchAgent({ platform, uid, dir, run })
+ *     dir   the LaunchAgents folder (~/Library/LaunchAgents)
+ *     run   (args) -> { status, stdout, stderr }: runs launchctl with args
+ *     .install({ node, script, home, env }) -> { ok, plist } or { ok: false, reason }
+ *           writes <dir>/<LABEL>.plist (0644), boots out any earlier agent of the
+ *           label, then bootstraps it into gui/<uid>; a failed bootstrap removes
+ *           the plist again and gives launchctl's words
+ *     .uninstall() -> { ok, removed: <plist path> | null }: boots it out, removes the plist
+ *     .status()    -> { ok, loaded, state, pid, plist }: from `launchctl print`
+ *
+ * The agent runs `<node> <script> intake run` (with PM2c3, LD334, the starter in
+ * Orunmila's home and `bin/orunmila.js intake run`, so a restart runs the
+ * version an update switched to), at load, and launchd restarts it
+ * only after a failed exit (KeepAlive SuccessfulExit false): a crash, an
+ * uncaught error, or a signal no one asked for (TE2, LD283: recorded as
+ * tampering, exit 1); `orunmila intake stop` asks over the socket and exits 0
+ * (LD132), so it stays a stop; a refused start (another intake runs: exit 3) is
+ * retried every ThrottleInterval seconds. Only ORUNMILA_HOME,
+ * ORUNMILA_INTAKE_PORT, ORUNMILA_OPON_LIVE (LA2, LD219), ORUNMILA_JUDGE_LIVE,
+ * ORUNMILA_LOG_GUARD and ORUNMILA_WATCH_EXTRA (LA3, LD290), ORUNMILA_ASYNC_START
+ * (SN1), ORUNMILA_PEER_BUSY (AT1b, LD330), and ORUNMILA_UPDATES and
+ * ORUNMILA_REGISTRY (PM2c2, LD333: the daily update check the intake starts),
+ * ORUNMILA_VCS_MARKS (VC1, LD372) and ORUNMILA_SENTINEL_MAX_PENDING (T32, LD374)
+ * are copied from the installing environment, and only when set.
+ */
+
+const fs = require('fs');
+const path = require('path');
+
+const LABEL = 'dev.orunmila.intake';
+// LA2 (LD219): the live flag kept across restarts; LA3 (LD290): every other flag the intake reads, too.
+const ENV_KEYS = ['ORUNMILA_HOME', 'ORUNMILA_VCS_MARKS', 'ORUNMILA_SENTINEL_MAX_PENDING', 'ORUNMILA_COMMAND_FACTS', 'ORUNMILA_INTAKE_PORT', 'ORUNMILA_OPON_LIVE', 'ORUNMILA_JUDGE_LIVE', 'ORUNMILA_LOG_GUARD', 'ORUNMILA_WATCH_EXTRA', 'ORUNMILA_ASYNC_START', 'ORUNMILA_PEER_BUSY', 'ORUNMILA_UPDATES', 'ORUNMILA_REGISTRY'];
+const THROTTLE_S = 10;
+
+const xml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const str = (s, pad) => `${pad}<string>${xml(s)}</string>`;
+
+/** `args`: what node runs (PM2c3, LD334: the starter and `bin/orunmila.js intake run`); `script intake run` by default. */
+function plistFor({ node, script, home, env = {}, args = null }) {
+  const out = path.posix.join(home, 'intake', 'intake.out'); // W3c: a plist is launchd's, so macOS paths on every OS that writes one
+  const lines = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
+    '<plist version="1.0">',
+    '<dict>',
+    '  <key>Label</key>',
+    str(LABEL, '  '),
+    '  <key>ProgramArguments</key>',
+    '  <array>',
+    ...[node, ...(Array.isArray(args) && args.length ? args : [script, 'intake', 'run'])].map((a) => str(a, '    ')),
+    '  </array>',
+    '  <key>RunAtLoad</key>',
+    '  <true/>',
+    '  <key>KeepAlive</key>',
+    '  <dict>',
+    '    <key>SuccessfulExit</key>',
+    '    <false/>',
+    '  </dict>',
+    '  <key>ThrottleInterval</key>',
+    `  <integer>${THROTTLE_S}</integer>`,
+    '  <key>StandardOutPath</key>',
+    str(out, '  '),
+    '  <key>StandardErrorPath</key>',
+    str(out, '  '),
+  ];
+  const set = ENV_KEYS.filter((k) => typeof env[k] === 'string' && env[k] !== '');
+  if (set.length) {
+    lines.push('  <key>EnvironmentVariables</key>', '  <dict>');
+    for (const k of set) lines.push(`    <key>${k}</key>`, str(env[k], '    '));
+    lines.push('  </dict>');
+  }
+  lines.push('</dict>', '</plist>', '');
+  return lines.join('\n');
+}
+
+const words = (r) => String((r && (r.stderr || r.stdout)) || '').trim() || `launchctl exited ${r && r.status}`;
+
+function createLaunchAgent({ platform = process.platform, uid, dir, run }) {
+  const plist = path.join(dir, `${LABEL}.plist`);
+  const service = `gui/${uid}/${LABEL}`;
+  const refuse = () => ({ ok: false, reason: `the launch agent is macOS only (this is ${platform}); start the intake with \`orunmila intake start\` instead` });
+
+  function install(o) {
+    if (platform !== 'darwin') return refuse();
+    fs.mkdirSync(dir, { recursive: true });
+    run(['bootout', service]); // an earlier agent of this label, if any; "no such process" otherwise
+    const tmp = `${plist}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, plistFor(o), { mode: 0o644 });
+    fs.chmodSync(tmp, 0o644);
+    fs.renameSync(tmp, plist);
+    const r = run(['bootstrap', `gui/${uid}`, plist]);
+    if (r.status !== 0) {
+      fs.rmSync(plist, { force: true });
+      return { ok: false, reason: `launchctl bootstrap refused the agent: ${words(r)}` };
+    }
+    return { ok: true, plist };
+  }
+
+  function uninstall() {
+    if (platform !== 'darwin') return refuse();
+    run(['bootout', service]);
+    if (!fs.existsSync(plist)) return { ok: true, removed: null };
+    fs.rmSync(plist, { force: true });
+    return { ok: true, removed: plist };
+  }
+
+  function status() {
+    if (platform !== 'darwin') return refuse();
+    const on = fs.existsSync(plist) ? plist : null;
+    const r = run(['print', service]);
+    if (r.status !== 0) return { ok: true, loaded: false, state: null, pid: null, plist: on };
+    const text = String(r.stdout || '');
+    const state = /^\s*state = (.+)$/m.exec(text);
+    const pid = /^\s*pid = ([0-9]+)$/m.exec(text);
+    return { ok: true, loaded: true, state: state ? state[1].trim() : null, pid: pid ? Number(pid[1]) : null, plist: on };
+  }
+
+  return { install, uninstall, status, plist, service };
+}
+
+module.exports = { createLaunchAgent, plistFor, LABEL, ENV_KEYS }; // ENV_KEYS: W2b's Startup script keeps the same (LD338)

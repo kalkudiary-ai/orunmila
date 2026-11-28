@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 KALKU DIGITAL SOLUTIONS LIMITED
 'use strict';
 
 /**
@@ -21,11 +23,19 @@ const { unifiedDiff } = require('../reconcile/difftool');
 const { sha256 } = require('./fs-sentinel/hasher');
 const { redactString } = require('../store/secrets');
 const legacy = require('../store/legacy');
-const { bumpTurn, writeTurnId, closeTurn, stopKey } = require('./turnstate');
+const { bumpTurn, writeTurnId, closeTurn, stopKey, isTurnOpen, turnId } = require('./turnstate');
 const { reconcileAndPersist } = require('../reconcile');
 const { renderTurn } = require('../render/terminal');
 const { deriveVcsEvents } = require('./vcs-evidence');
 const defaultTranscript = require('./transcript');
+const { LISTING_TOOLS, readRange } = require('./agents'); // readRange: LD94, shared with the mark adapters (LD121)
+
+// OFF BY DEFAULT: ORUNMILA_EXACT_CAPTURE=1 records a failed command's real exit
+// code and output (NF22) and how much of a file a read returned (LD94). Off,
+// capture writes exactly what it wrote before.
+function exactCapture() {
+  return process.env.ORUNMILA_EXACT_CAPTURE === '1';
+}
 
 // --- shared fs helpers (moved verbatim from the claude-code hooks) ----------
 
@@ -190,11 +200,13 @@ function handlePostTool(payload, adapter) {
       /* best effort */
     }
   } else if (kind === 'read' || kind === 'pattern_read') {
+    const exact = exactCapture();
+    const listing = exact && kind === 'read' && LISTING_TOOLS.test(String(toolName));
     const filePath = adapter.fields.filePath(input) || adapter.fields.pattern(input) || null;
-    const prov = kind === 'read' && adapter.fields.filePath(input)
+    const prov = kind === 'read' && !listing && adapter.fields.filePath(input)
       ? readProvenance(adapter.fields.filePath(input))
       : { hash: null, bytes: null };
-    append(Object.assign({}, base, {
+    const event = Object.assign({}, base, {
       type: TYPES.FILE_READ,
       path: filePath,
       hash: prov.hash,
@@ -207,23 +219,44 @@ function handlePostTool(payload, adapter) {
       // code does. Additive and backwards-compatible; events captured before
       // this field simply lack it, and readers fall back to the hash proxy.
       read_kind: kind === 'pattern_read' ? 'pattern' : 'full',
-    }));
+    });
+    if (listing) {
+      event.read_kind = 'listing';
+    } else if (exact && kind === 'read') {
+      const r = readRange(input, adapter.fields.readExtent(response));
+      if (r) {
+        event.read_kind = r.kind;
+        event.read_range = r.range;
+      }
+    }
+    append(event);
   } else if (kind === 'command') {
-    const full = adapter.fields.stdout(response) + (adapter.fields.stderr(response) ? '\n' + adapter.fields.stderr(response) : '');
+    let full = adapter.fields.stdout(response) + (adapter.fields.stderr(response) ? '\n' + adapter.fields.stderr(response) : '');
+    // Exit code from the response if present; otherwise, if the payload itself
+    // signalled failure (top-level error / a failure hook), record a non-zero
+    // exit rather than null — a known failure shouldn't read as "unknown".
+    // With ORUNMILA_EXACT_CAPTURE=1, a host that states the code in its failure
+    // payload gives that code, or null when it states none, and its output
+    // (NF22): no code is invented.
+    const code = adapter.fields.exitCode(response);
+    let exitCode = code === null && failed ? 1 : code;
+    if (code === null && failed && exactCapture()) {
+      const stated = adapter.fields.failureExit(payload);
+      if (stated) {
+        exitCode = stated.code;
+        if (!full) full = String(stated.output || '');
+      }
+    }
     // Redact the whole output before anything cuts it. Cutting first would
     // split a complete key at the 2000-char mark, and a key with no END line
     // can only be removed by guessing where it stops.
     const clean = redactString(full);
     const outputPath = full.length > 2000 ? writeOutputSidecar(sessionId, callId, full) : null;
-    // Exit code from the response if present; otherwise, if the payload itself
-    // signalled failure (top-level error / a failure hook), record a non-zero
-    // exit rather than null — a known failure shouldn't read as "unknown".
-    const code = adapter.fields.exitCode(response);
     const command = adapter.fields.command(input);
     const run = Object.assign({}, base, {
       type: TYPES.COMMAND_RUN,
       command,
-      exit_code: code === null && failed ? 1 : code,
+      exit_code: exitCode,
       stdout_excerpt: clean.text.slice(0, 2000),
       output_path: outputPath,
     });
@@ -343,6 +376,22 @@ function handleStop(payload, adapter) {
   return renderTurn(report);
 }
 
+/**
+ * sessionEnd phase (CU1, an agent whose adapter names it): the session is over. A turn that is still open, because no
+ * stop hook fired (Cursor's print mode fires none), is closed here, its claim the transcript's last assistant text,
+ * or none and unconfirmed. A turn a stop already closed, or a session with no record, gets nothing.
+ */
+function handleSessionEnd(payload, adapter) {
+  const sessionId = adapter.fields.sessionId(payload);
+  if (!isTurnOpen(sessionId) || !readTurn(sessionId, turnId(sessionId)).length) return null;
+  const transcript = adapter.transcript || defaultTranscript;
+  const text = transcript.lastAssistantText(adapter.fields.transcriptPath(payload));
+  const p = Object.assign({}, payload);
+  delete p.text;
+  if (text) p.text = text;
+  return handleStop(p, adapter);
+}
+
 // --- generic stdin runner ---------------------------------------------------
 // Each per-agent hook script is one line: `runHook('postTool', adapter)`. This
 // reads stdin, parses JSON, dispatches to the handler, and ALWAYS exits 0. The
@@ -365,6 +414,7 @@ const HANDLERS = {
   preTool: handlePreTool,
   postTool: handlePostTool,
   stop: handleStop,
+  sessionEnd: handleSessionEnd,
 };
 
 function runHook(phase, adapter) {
@@ -384,11 +434,15 @@ function runHook(phase, adapter) {
     // it to the agent; other agents read hook stdout differently (Cursor
     // treats some of it as a decision), so they get the warning from
     // `orunmila status` only.
-    if (phase === 'prompt' && adapter.id === 'claude-code' && legacy.isLegacy(dataDir())
-      && legacy.firstWarningForSession(dataDir(), adapter.fields.sessionId(payload))) {
-      process.stdout.write(JSON.stringify({ systemMessage: legacy.WARNING }) + '\n');
+    if (phase === 'prompt' && adapter.id === 'claude-code') {
+      const answer = {};
+      if (legacy.isLegacy(dataDir()) && legacy.firstWarningForSession(dataDir(), adapter.fields.sessionId(payload))) answer.systemMessage = legacy.WARNING;
+      // MR1b1 (LD339): with ORUNMILA_CLAIMS_BLOCK=1, the agent is asked for the claims block (brief line 443), as context
+      // Claude Code gives it with the prompt. The block's module loads only with the switch on (hook reach unchanged).
+      if (process.env.ORUNMILA_CLAIMS_BLOCK === '1') answer.hookSpecificOutput = { hookEventName: 'UserPromptSubmit', additionalContext: require('../reconcile/claims-block').ASK };
+      if (Object.keys(answer).length) process.stdout.write(JSON.stringify(answer) + '\n');
     }
-    if (phase === 'stop' && typeof out === 'string') {
+    if ((phase === 'stop' || phase === 'sessionEnd') && typeof out === 'string') {
       try {
         fs.writeFileSync(lastTurnReportPath(), out + '\n', { mode: 0o600 });
       } catch {
@@ -407,6 +461,7 @@ module.exports = {
   handlePreTool,
   handlePostTool,
   handleStop,
+  handleSessionEnd,
   runHook,
   // exported for tests / reuse
   cacheSlot,

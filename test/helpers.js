@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 KALKU DIGITAL SOLUTIONS LIMITED
 'use strict';
 
 /**
@@ -21,6 +23,11 @@ const path = require('path');
 const { execFileSync, spawnSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..');
+
+// UD1: a plain install now turns the daily update check on; every test, and every child it starts, keeps off the
+// network unless the test sets ORUNMILA_UPDATES itself (test/update-auto.js sets it empty and points the registry at
+// a port nothing answers on).
+if (process.env.ORUNMILA_UPDATES === undefined) process.env.ORUNMILA_UPDATES = '0';
 
 function freshTmp(prefix) {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -89,7 +96,36 @@ function runUntil(relScript, { env = {}, args = [], cwd, ms = 1200 } = {}) {
     timeout: ms,
     killSignal: 'SIGINT', // hit the command's own SIGINT shutdown path
   });
-  return { stdout: res.stdout || '', stderr: res.stderr || '', signal: res.signal };
+  // F20: `timedOut` is true only when the child was still running at `ms` and was stopped by us, on every OS (spawnSync
+  // sets ETIMEDOUT then). A command that crashed or exited on its own before `ms` has it false.
+  const timedOut = Boolean(res.error && res.error.code === 'ETIMEDOUT');
+  return { stdout: res.stdout || '', stderr: res.stderr || '', signal: res.signal, status: res.status, timedOut };
+}
+
+/** A path with `/` separators, as Orunmila records every path (paths.js, overlap.js): the same string on every OS. */
+const slash = (p) => String(p).split(path.sep).join('/');
+
+// --- what cannot be checked on this OS (W3d) ---------------------------------
+// Windows has no POSIX file modes, no SIGTERM a process can handle, and no Unix socket files. A check that depends
+// on one of those is skipped there, never passed: notOnWindows(what) records it and returns true, and runAll prints
+// every skipped check by name, so the count of what did not run is in the output (as secure.js has done since 0.2.2).
+const WINDOWS = process.platform === 'win32';
+const skipped = [];
+function notOnWindows(what) {
+  if (!WINDOWS) return false;
+  skipped.push(what);
+  return true;
+}
+
+/**
+ * W3g (LD342): a suite of a developer tool of the build machine (scripts/, which ships to no user: package.json
+ * `files`), built on POSIX (process groups, setsid, sandbox-exec, launchd, git hooks). On Windows it does not run,
+ * and says so with its suite header and why; on macOS and Linux this returns and the suite runs whole.
+ */
+function buildMachineOnly(suite, what) {
+  if (!WINDOWS) return;
+  console.log(`\n# ${suite}\n      (not run on Windows: ${what} is a developer tool of the build machine, POSIX by design, and ships to no user: LD342)\n\n0 passed, 0 failed`);
+  process.exit(0);
 }
 
 // --- tiny test collector ----------------------------------------------------
@@ -115,6 +151,11 @@ async function runAll(suiteName) {
       fail++;
     }
   }
+  if (skipped.length) {
+    console.log(`      (not run on Windows, ${skipped.length} checks:`);
+    for (const s of skipped) console.log(`        - ${s}`);
+    console.log('      )');
+  }
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 }
@@ -124,4 +165,41 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-module.exports = { assert, fs, os, path, ROOT, tmpHome, tmpDir, rmrf, run, runUntil, sleep, it, runAll };
+/**
+ * Wait until a watcher on `dir` is really delivering events, before a test's
+ * real write (NF65, P2-6). fs.watch can return before the OS delivers events:
+ * on macOS a write made at once was measured lost, never late, so no deadline
+ * brings it back. Writes probe files into `dir`, a new name every `everyMs`
+ * (one name would keep resetting the Sentinel's per-path debounce), until
+ * `isSeen(probePath)` holds for one of them. Returns true when seen, false at
+ * `deadlineMs`; the caller asserts it, so a dead watcher fails its own test.
+ */
+async function awaitWatching(dir, isSeen, { everyMs = 250, deadlineMs = 5000 } = {}) {
+  const end = Date.now() + deadlineMs;
+  const probes = [];
+  const seenOne = () => probes.some((p) => isSeen(p));
+  while (Date.now() < end) {
+    const probe = path.join(dir, `.watch-probe-${probes.length}`);
+    probes.push(probe);
+    fs.writeFileSync(probe, String(probes.length));
+    const next = Math.min(end, Date.now() + everyMs);
+    while (Date.now() < next) {
+      if (seenOne()) return true;
+      await sleep(5);
+    }
+  }
+  return seenOne();
+}
+
+/**
+ * W3e: wait until the intake of `home` answers its status on its own address (intakePaths: the socket file, or on
+ * Windows a named pipe, which has no file to wait for). True when it answers, false at `deadlineMs`.
+ */
+async function intakeAnswers(home, deadlineMs = 8000) {
+  const { intakePaths, statusOf } = require('../src/opon/intake/server');
+  const p = intakePaths(home); // W4b: p.sock is read at each try, since on Windows each start publishes a fresh pipe name
+  for (const end = Date.now() + deadlineMs; Date.now() < end; await sleep(50)) if (await statusOf(p.sock, 300)) return true;
+  return Boolean(await statusOf(p.sock, 300));
+}
+
+module.exports = { assert, fs, os, path, ROOT, tmpHome, tmpDir, rmrf, run, runUntil, sleep, awaitWatching, it, runAll, slash, WINDOWS, notOnWindows, intakeAnswers, buildMachineOnly };

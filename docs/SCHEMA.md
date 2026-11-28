@@ -119,6 +119,29 @@ Sanitization runs on **every string-valued field that exits**, defaults AND
 opt-ins — not only `--include` fields. `--include` controls which raw text
 fields *enter* the pipeline; sanitization always runs on what does.
 
+## `orunmila json` from the session logs
+
+Where the intake records a session, `orunmila json` can be built from its logs
+instead of the old event log: from the verdicts with
+`ORUNMILA_FEEDBACK_FROM_VERDICTS=1` (and by itself when the old event log has
+nothing for the session: it then says so on stderr), from the odù log with
+`ORUNMILA_FEEDBACK_FROM_ODU=1`, and beside the old payload with
+`--side-by-side`. It keeps `schema_version` `"1.0"`, `session_id`, `agent`,
+`generated_at`, `included_fields`, `turns[]` and `summary`, and differs as
+follows (read from real output, 2026-11-28):
+
+- **Added at the top:** `source` (`"verdict_log"` or `"odu_log"`) and `findings`;
+  from the verdicts also `session_verdict`, `top_line`, `judged_now`, `law_gate`
+  and `verdicts[]` (each `{ kind, verdict, rule, odu_id, target, sentence }`,
+  the session report's findings).
+- **Added on a turn:** `undisclosed_outside`, changes outside the project.
+- **A claim carries less:** `id`, `outcome`, `evidence`, `verdict_confidence`, and
+  from the verdicts `verdict`. It has no `claim_type`, `extraction_confidence`,
+  `cause_hint`, `label` or `classification_features`.
+
+A consumer that reads those claim fields should read the old payload (the
+default whenever the old event log has the session).
+
 ## `orunmila feedback` — per-session drop file
 
 The feedback file wraps the `orunmila json` payload (as `report`) and adds a
@@ -204,3 +227,23 @@ The event log has no `schema_version` and is not yet fully specified here.
   `claim` or `response`. `text` is then `''`, never the transcript's last
   message, which can be an earlier message of the turn (N10). An empty final
   message gives `text: ''` with no `claim_unconfirmed`.
+
+Only with `ORUNMILA_EXACT_CAPTURE=1` (off by default):
+
+- **`command_run.exit_code`** on a failed Claude Code command: the code its
+  failure text states, or `null` with `failed: true` when it states none.
+  Without the switch it is `1` whenever the code is unknown and the call failed.
+  `stdout_excerpt` and `output_path` then hold the failure text's output.
+- **`file_read.read_kind`** gains two values: `range` (the read returned less
+  than the whole file, its content was cut by a token cap, or, with no counts
+  in the result, it asked for a bounded range) and `listing` (a folder
+  listing such as `list_dir`, with `hash` and `bytes` null). `full` and
+  `pattern` are unchanged.
+- **`file_read.read_range`** (optional): `{ asked_offset, asked_limit,
+  start_line, lines, total_lines }`, each a whole number or `null`, plus
+  `truncated_by_token_cap: true` when the result says so. Absent when nothing
+  about the extent is known. `lines` and `total_lines` are the tool's own
+  counts, kept as given: Claude Code's Read counts the empty piece after a
+  file's last newline as a line in both, so a file ending in a newline shows one
+  more than its newline count (890 newlines: `total_lines` 891), and a whole
+  read still has `lines` equal to `total_lines`.

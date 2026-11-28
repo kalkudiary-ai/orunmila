@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 KALKU DIGITAL SOLUTIONS LIMITED
 'use strict';
 
 /**
@@ -34,6 +36,24 @@ it('seedDemoSession exercises every stain category through the real reconciler',
   assert.ok(total.silently_dropped >= 1, 'a silently dropped subtask');
   assert.ok(total.undisclosed_changes >= 1, 'an undisclosed change');
   assert.ok(total.untracked_writes >= 1, 'an untracked (sentinel) write');
+  rmrf(home);
+});
+
+it('DM1 (F36): the demo shows one of every claim outcome, partial and unverifiable too, each agent edit seen by both witnesses, dated after Orunmila existed', () => {
+  const home = tmpHome();
+  const { seedDemoSession } = require('../src/demo/seed');
+  const { listSessionReports } = require('../src/reconcile');
+  const sessionId = seedDemoSession();
+  const total = listSessionReports(sessionId).reduce((acc, r) => {
+    for (const [k, v] of Object.entries(r.summary)) acc[k] = (acc[k] || 0) + v;
+    return acc;
+  }, {});
+  for (const k of ['verified', 'partial', 'phantom', 'phantom_verification', 'unverifiable', 'silently_dropped', 'undisclosed_changes', 'untracked_writes']) assert.ok(total[k] >= 1, `${k}: ${JSON.stringify(total)}`);
+  const ev = fs.readFileSync(path.join(home, 'events.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
+  const hookWrites = ev.filter((e) => e.type === 'file_write' && e.source === 'hook').map((e) => e.path);
+  const diskWrites = new Set(ev.filter((e) => e.type === 'file_write' && e.source === 'fs-sentinel').map((e) => e.path));
+  assert.deepStrictEqual(hookWrites.filter((p) => !diskWrites.has(p)), [], 'every agent edit has its Sentinel row');
+  assert.ok(ev.every((e) => e.ts >= '2026-11-01'), 'no event dated before Orunmila existed');
   rmrf(home);
 });
 

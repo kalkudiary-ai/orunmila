@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 KALKU DIGITAL SOLUTIONS LIMITED
 'use strict';
 
 /**
@@ -111,8 +113,24 @@ function walk(value, kinds) {
   }
   if (Array.isArray(value)) return value.map((v) => walk(v, kinds));
   if (value && typeof value === 'object') {
+    // LD102 (slice K2): a key is redacted as a string is. A plain key keeps its
+    // name; a redacted one that would land on a name already taken is named
+    // [REDACTED#2], #3, ... so no value is overwritten. That name holds none of
+    // the key's text (LD103). The number carries on within the object, so many
+    // clashing keys cost one pass, not a recount from 2 for each.
+    const keys = Object.keys(value).map((k) => [k, redactString(k)]);
+    const taken = new Set(keys.filter(([k, r]) => r.text === k).map(([k]) => k));
     const out = {};
-    for (const [k, v] of Object.entries(value)) out[k] = walk(v, kinds);
+    let next = 2;
+    for (const [k, r] of keys) {
+      let name = r.text;
+      if (name !== k) {
+        for (const kd of r.kinds) kinds.add(kd);
+        while (taken.has(name)) name = `[REDACTED#${next++}]`;
+        taken.add(name);
+      }
+      out[name] = walk(value[k], kinds);
+    }
     return out;
   }
   return value;

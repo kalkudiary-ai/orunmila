@@ -2,7 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # ci/** (W1, W2, LD297): a test branch pushed so a branch's code runs on Linux and Windows before it reaches main.
+    branches: [main, 'ci/**']
   pull_request:
     branches: [main]
 
@@ -28,6 +29,66 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+
+  # W1 (LD297): the hooks as a user's machine runs them. The package is packed, installed globally into a prefix whose
+  # path holds a space, and every installed hook command is run exactly as written, through the platform's shell
+  # (cmd.exe on Windows) and, on Windows, through Git Bash too; the events are read back with `orunmila trail --json`.
+  # (npm test runs the cmd.exe and /bin/sh form on every OS through test/smoke-hooks.js.)
+  smoke:
+    name: smoke (hooks as installed / ${{ matrix.os }} / ${{ matrix.shell }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, shell: cmd }
+          - { os: windows-latest, shell: bash }
+          - { os: ubuntu-latest, shell: sh }
+          - { os: macos-latest, shell: sh }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: The hooks, run as written
+        run: node scripts/smoke-hooks.js ${{ matrix.shell == 'bash' && '--bash' || '' }}
+
+  # PM1, PM4 (LD335, LD337): every install route (npm i -g, npx, npm i -D, pnpm dlx, pnpm add -g, pnpm add -D) into a
+  # throwaway machine: every hook names the starter in Orunmila's home, runs, and still runs once the route's copy is
+  # removed. pnpm comes through corepack. (npm test runs the npm routes on every OS through test/install-routes.js.)
+  routes:
+    name: install routes (npm and pnpm / ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Every route, run and checked
+        run: node scripts/install-routes.js
+
+  # EU2 (LD371, LD379): an existing user's upgrade, from the published 0.2.4 (fetched from npm) to this build, in a
+  # throwaway machine: installed and used, upgraded, install run again (every hook moved onto the starter, none added),
+  # capture continuing, the old log kept and owner-only, status, and the kept JSON commands. (npm test runs the same
+  # script offline, from a local build, through test/upgrade-proof.js.)
+  upgrade:
+    name: upgrade (from the published 0.2.4 / ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: 0.2.4, then this build over it
+        run: node scripts/upgrade-proof.js --from orunmila@0.2.4
 
   # The coverage gate (c8 check-coverage in .c8rc.json) and the detection
   # accuracy gate are the two quality bars. They are deterministic on Linux;

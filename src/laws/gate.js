@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 KALKU DIGITAL SOLUTIONS LIMITED
 'use strict';
 
 /**
@@ -151,10 +153,11 @@ function liveGateCounts(sessionId, { claims = null } = {}) {
       continue;
     }
     records[name.slice(0, -5)] = s;
-    if (s.skipped_unconfirmed_claim || s.skipped_stale_claim) {
+    if (s.skipped_unconfirmed_claim || s.skipped_stale_claim || s.skipped_capture_writing) {
       counts.skipped++;
       if (s.skipped_unconfirmed_claim) counts.skipped_unconfirmed++;
-      else counts.skipped_repeat++;
+      else if (s.skipped_stale_claim) counts.skipped_repeat++;
+      else counts.skipped_writing = (counts.skipped_writing || 0) + 1; // T66: present only when a turn had one
     } else if (s.claim_fp) {
       counts.checked++;
       if (s.blocks > 0) counts.blocked++;
@@ -254,7 +257,7 @@ function renderFindings(findings, { blocking }) {
  * null when there is nothing to say — the overwhelmingly common case, and the
  * one that must cost nothing.
  */
-function decideForTurn({ sessionId, turnId, promptId, claimText, promptText, turnEvents, sentinelWrites = [], root }) {
+function decideForTurn({ sessionId, turnId, promptId, claimText, promptText, turnEvents, sentinelWrites = [], root, onCheck = () => {}, receipts = null, open = 0 }) {
   // With the switch on, the facts line comes first, ahead of any finding, and
   // stands alone on a turn with none. Everything after it is unchanged, and a
   // fault in the facts line drops the line, never a finding.
@@ -267,12 +270,28 @@ function decideForTurn({ sessionId, turnId, promptId, claimText, promptText, tur
   const withFacts = (text) => (facts ? `${facts}\n\n${text}` : text);
   const factsOnly = facts ? { hookSpecificOutput: { hookEventName: 'Stop', additionalContext: facts } } : null;
 
-  const { laws } = loadLaws({ root });
+  const { laws, errors: lawErrors = [] } = loadLaws({ root });
   const active = activeLaws(laws);
-  if (!active.length) return factsOnly;
+  if (!active.length) {
+    onCheck({ findings: [], lawErrors });
+    return factsOnly;
+  }
 
-  const res = evaluateTurn({ claimText, promptText, turnEvents, laws: active, strictProof: strictProofEnabled() });
-  if (!res.findings.length) return factsOnly;
+  // MR1 (LD319): the claims block's proved: lines, checked exactly, behind ORUNMILA_CLAIMS_BLOCK=1 (Leopard rule 2: the gate runs live)
+  const res = evaluateTurn({ claimText, promptText, turnEvents, laws: active, strictProof: strictProofEnabled(), receipts, claimsBlock: process.env.ORUNMILA_CLAIMS_BLOCK === '1' });
+  if (!res.findings.length) {
+    onCheck({ findings: [], lawErrors });
+    return factsOnly;
+  }
+
+  // T66 (test 66; NF8), with ORUNMILA_GATE_FROM_MARKS=1 only: a tool call of this turn started and has no outcome in
+  // the intake's log yet, so capture may still be writing the turn and a missing receipt may only be late. The gate
+  // never blocks such a turn: it records a skip, counted like any skip. A turn with nothing blocking is unchanged.
+  if (res.blocking.length && open > 0) {
+    writeState(sessionId, turnId, Object.assign({}, readState(sessionId, turnId), { skipped_capture_writing: true }));
+    onCheck({ skipped: `capture was still writing this turn: ${open} tool call(s) had started with no outcome in the log yet, so the gate does not block it (NF8)`, lawErrors });
+    return factsOnly;
+  }
 
   const state = readState(sessionId, turnId);
   const budget = blockBudget();
@@ -286,6 +305,7 @@ function decideForTurn({ sessionId, turnId, promptId, claimText, promptText, tur
       law_ids: (state.law_ids || []).concat(res.blocking.map((f) => f.law_id)),
     }));
     if (promptId) writeState(sessionId, promptId, { blocks: spent + 1 });
+    onCheck({ findings: res.findings, blocked: true, lawErrors });
     return {
       decision: 'block',
       reason: withFacts(renderFindings(res.blocking, { blocking: true })),
@@ -295,6 +315,7 @@ function decideForTurn({ sessionId, turnId, promptId, claimText, promptText, tur
   // Either nothing blocking, or the budget is spent. If it IS spent, say so out
   // loud in the advisory rather than letting a silenced law read as a pass.
   const exhausted = res.blocking.length > 0 && spent >= budget;
+  onCheck({ findings: res.findings, blocked: false, exhausted, lawErrors });
   let text = renderFindings(res.findings, { blocking: false });
   if (exhausted) {
     text =
@@ -310,9 +331,20 @@ function decideForTurn({ sessionId, turnId, promptId, claimText, promptText, tur
  * stdout, and always exits 0 — a non-zero exit from THIS script would itself
  * block the agent, which is the one thing it must never do by accident.
  */
-function runGate(payload, adapter, { root } = {}) {
+function runGate(payload, adapter, { root, onCheck } = {}) {
+  // B5 (LD146): the gate's own decision, for a law_gate mark, given only to a caller that asks.
+  const report = (c) => {
+    try {
+      if (onCheck) onCheck(c);
+    } catch {
+      /* the record of a check must never change the check */
+    }
+  };
   try {
-    if (String(process.env.ORUNMILA_LAWS || '').toLowerCase() === 'off') return null;
+    if (String(process.env.ORUNMILA_LAWS || '').toLowerCase() === 'off') {
+      report({ skipped: 'the law gate is switched off (ORUNMILA_LAWS=off)' });
+      return null;
+    }
 
     const sessionId = adapter.fields.sessionId(payload);
     const { stopKey, stopTurnId, promptId } = require('../capture/turnstate');
@@ -329,27 +361,56 @@ function runGate(payload, adapter, { root } = {}) {
     const turn = stopTurnId(sessionId, stopKey(claimText));
     if (claimText === null) {
       writeState(sessionId, turn, Object.assign({}, readState(sessionId, turn), { skipped_unconfirmed_claim: true }));
+      report({ skipped: 'could not confirm the current turn: the Stop payload carried no final message' });
       return null;
     }
-    if (!claimText.trim()) return null;
+    if (!claimText.trim()) {
+      report({ skipped: 'the final message is empty, so there was nothing to judge' });
+      return null;
+    }
 
     writeState(sessionId, turn, Object.assign({}, readState(sessionId, turn), { claim_fp: claimFingerprint(claimText) }));
 
-    const turnEvents = readTurn(sessionId, turn);
+    let turnEvents = readTurn(sessionId, turn);
     const promptEvent = turnEvents.find((e) => e.type === 'user_prompt');
+    let promptText = promptEvent ? String(promptEvent.text || '') : '';
+    let receipts = null;
+    let open = 0; // T66: the turn's tool calls with no outcome in the intake's log yet
+    // B9 (LD148), off by default: the turn's receipts and prompts from the
+    // intake's marks (open questions 2 and 3); no log for the session, or no
+    // turn in it the log shows is this Stop's and whole (B9b, LD163), judges
+    // from the event log as before.
+    if (process.env.ORUNMILA_GATE_FROM_MARKS === '1') {
+      const { readSessionMarks, confirmedTurn, openCalls } = require('../opon/gate/turn-marks');
+      const all = readSessionMarks(dataDir(), sessionId);
+      const t = all && confirmedTurn(all, String(claimText));
+      if (t && t.turn) {
+        open = openCalls(t.marks).length;
+        receipts = require('../opon/gate/receipts').buildReceiptsFromMarks(t.marks);
+        promptText = t.promptText;
+        // The lexical laws and strict proof read commands: the turn's, from its marks.
+        turnEvents = t.marks
+          .filter((m) => m.source === 'hook' && m.says === 'exited' && m.target && m.target.kind === 'command')
+          .map((m) => ({ type: 'command_run', command: String(m.target.text || ''), exit_code: Number.isInteger(m.detail && m.detail.exit_code) ? m.detail.exit_code : null, failed: (m.detail || {}).exit_status === 'fail', stdout_excerpt: String((m.detail || {}).output_excerpt || '') }));
+      }
+    }
 
     return decideForTurn({
       sessionId,
       turnId: turn,
       promptId: promptId(sessionId),
       claimText: String(claimText),
-      promptText: promptEvent ? String(promptEvent.text || '') : '',
+      promptText,
       turnEvents,
       sentinelWrites: factsLineEnabled() ? sentinelWritesSince(turnEvents) : [],
       root: root || process.cwd(),
+      onCheck: report,
+      receipts,
+      open,
     });
-  } catch {
+  } catch (e) {
     // A broken law engine may stop enforcing. It may never stop the agent.
+    report({ skipped: `the law gate failed: ${e && e.message}` });
     return null;
   }
 }

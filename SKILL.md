@@ -15,23 +15,26 @@ against that ground truth. It does NOT just log activity (plenty of tools do
 that well, e.g. Gryph). The distinguishing job is reconciliation: did the claim
 match reality, and is there a receipt for it at all.
 
-**It has two lenses, and they install separately. Work out which the user wants
+**It has three lenses, and they install separately. Work out which the user wants
 before installing anything.**
 
-| | The Stain Map | The Closeout Gate |
-|---|---|---|
-| what it does | records + reports | **refuses** |
-| when | after each turn | before a turn is allowed to end |
-| can it stop the agent? | never | yes - 2 of its 6 laws block |
-| agents | all supported agents | `claude-code` only |
-| install | `npx orunmila install` | `npx orunmila install --with-gate` |
+| | The Stain Map | The Closeout Gate | The Babaláwo |
+|---|---|---|---|
+| what it does | records + reports | **refuses** | judges the record |
+| when | after each turn | before a turn is allowed to end | at each session's closeout |
+| can it stop the agent? | never | yes - 2 of its 6 laws block | never |
+| agents | all supported agents | `claude-code` and `cursor` | `claude-code` (through the intake) |
+| install | `npx orunmila install` | `npx orunmila install --with-gate` | `npx orunmila install --intake`, then `npx orunmila install --with-judge` |
 
 If the user says *"show me what my agent did"*, *"audit"*, *"stain map"*,
 *"dye trace"* - they want **the Stain Map**.
 If the user says *"stop it lying"*, *"make it check its own work"*, *"don't let
 it tell me it's done when it isn't"* - they want **the Closeout Gate**, which
 needs the Stain Map underneath it.
-If unsure, install both with `--with-gate` and say what each one does.
+If they want a verdict on a whole session (Clean, Look at this or Violation, each
+finding naming what both witnesses recorded), that is **the Babaláwo**; it reads
+the intake's record (`npx orunmila install --intake`, then `orunmila intake start`).
+If unsure, install the first two with `--with-gate` and say what each one does.
 
 ## Outcome categories (the Stain Map)
 
@@ -60,11 +63,21 @@ observable from the outside.
    ```
    Add `--global` to install into `~/.claude/settings.json` instead, covering
    every project. Add `--agent <id>` for a non-Claude agent
-   (`npx orunmila agents` lists them).
+   (`npx orunmila agents` lists them); `--agent cursor --with-gate` gives Cursor
+   both lenses.
 3. **Tell the user to start a new session.** Hooks are read at session start, so
    an already-running session will not pick this up. This step is skipped
    constantly and it is the usual reason someone reports "it isn't working".
 4. Confirm what landed: `npx orunmila lenses`.
+
+Every route (npm, npx, pnpm) leaves the same thing behind: a copy of Orunmila in
+`~/.orunmila/runtime/`, and hooks that run it through one fixed starter,
+`~/.orunmila/bin/orunmila-start.js`, so clearing npx's or pnpm's cache does not
+break them. `orunmila update` moves that copy to npm's latest (it asks the
+registry, sending only the package's name; it switches only while no session is
+recorded). `orunmila install` also turns on a check once a day that does this by
+itself, unless the user has already chosen; `orunmila install --without-updates`
+turns it off. Say so when you install it: it is Orunmila's one internet call.
 
 ## Using the Stain Map
 
@@ -76,10 +89,20 @@ observable from the outside.
   npx orunmila trail
   ```
   Writes a self-contained `.html` file - the complete trail (the glove) plus
-  lineage plus the claim-vs-reality stains, in one page. Six tabs: Timeline,
-  Tree, Graph, 3D Graph, Dashboard, Report. The Report tab carries a
-  copy-paste prompt that sends the agent back to fix every flagged item.
-- `npx orunmila html` - the older mismatch-only report, if that is all they want.
+  lineage plus the claim-vs-reality stains, in one page that loads nothing from
+  the internet. Tabs: Timeline, Tree, Graph, 3D Map, Dashboard, Report, Glossary. The
+  Report tab carries a copy-paste prompt that sends the agent back to fix every
+  flagged item.
+- `npx orunmila report --verdicts --session <id>` - the session report from the
+  intake's record: its top line first (Clean session, N things to look at, N
+  violations, Incomplete record), then what changed on disk counted by what both
+  witnesses recorded, then each finding in one sentence. `--html <file>` writes
+  it as one offline page; `--json` gives it to the agent.
+- `npx orunmila trailer --session <id> --append <file>` - the session's verdict
+  as git trailers on a commit message. A convenience, not evidence:
+  `orunmila verify` over the session's logs proves the record.
+- `npx orunmila html` - the older mismatch-only report; `report --verdicts --html`
+  replaces it.
 - `npx orunmila json` / `npx orunmila trail --json` - machine-readable, for
   downstream tooling. `--facts-only` drops the inferred lineage layer.
 - `npx orunmila status` - which lenses are live, event counts, log size, and the
@@ -97,7 +120,8 @@ ORUNMILA_LAWS=off                         # disable the gate for one session
 ```
 
 **What a block means.** The gate runs on the Stop hook. If it blocks, the turn
-is not over: the agent must fix what was flagged and respond again. Two laws
+is not over: the agent must fix what was flagged and respond again. In Cursor the
+block arrives as an automatic follow-up message, marked as Orunmila's. Two laws
 block - `no-green-without-command` (a verification claim with no passing
 command) and
 `no-grep-as-basis` (a claim about a named file resting only on a pattern
@@ -116,12 +140,20 @@ unguarded pipe as a passing run. Use `set -o pipefail` when you pipe a test
 run. Do not end the command with `; echo $?`: the whole line then exits 0, and
 the gate counts that as a pass.
 
+**The claims block** (`ORUNMILA_CLAIMS_BLOCK=1`, off by default). The agent is
+asked, with each prompt, to end its turn with a fenced `orunmila-claims` block:
+`changed:` the files it changed, `proved:` each command that shows the work
+passes, `not done:` what it did not do. Each `proved:` command must have run in
+the turn and passed with its own exit status; each `changed:` file is checked in
+the record; `not done:` lines are shown in the session report. Prose claims are
+still read, so a block hides nothing.
+
 **What counts as proof.** By default, any command in the turn that did not fail
 backs a green claim, except an unguarded pipe. With `ORUNMILA_STRICT_PROOF=1`
 (off by default, not yet recommended) only a test-runner step whose recorded
 status is a pass counts, with nothing after it deciding the line's status and
-no pipe after it unless `set -o pipefail` came first. The README's "What counts
-as proof" has the runner list and the measured cost.
+no pipe after it unless `set -o pipefail` came first. The guide's "What counts
+as proof" (`docs/GUIDE.md`) has the runner list and the measured cost.
 
 **Blocks are budgeted.** Two per user message by default; the agent's answer
 after a block does not refill the budget. Once spent, findings degrade to advice
@@ -131,7 +163,8 @@ engine stops enforcing, it never stops the agent.
 
 ## Honest limits - say these if asked
 
-- The gate is **`claude-code` only**. Other agents get the Stain Map.
+- The gate runs for **`claude-code` and `cursor`**; in Cursor a block arrives as a
+  follow-up message and advice is not shown. Other agents get the Stain Map.
 - **`no-green-without-command` reads phrasing, not meaning.** It catches "Tests
   pass.", "All tests pass." and "It works.". It no longer blocks an honest
   negative such as "I tested none of it." or "Nothing was tested.", but a
@@ -149,14 +182,18 @@ engine stops enforcing, it never stops the agent.
 - Detection accuracy is **100% on a labelled set of 17 turns / 38 assertions**
   (`npm run accuracy`). Say "100% on our labelled set", never "100% accurate" -
   the set is small.
-- The Filesystem Sentinel's writes carry **no session id**, so on a machine with
-  two concurrent sessions over one tree each adopts the other's writes. Read a
-  touch list as "what changed on this machine while I worked", never as
-  authorship.
-- Deep verify (an optional LLM-judge pass for semantic claims) is **specified
-  and not built**.
+- The standalone Filesystem Sentinel (`watch`, `watch-fs`) writes carry **no
+  session id**, so on a machine with two concurrent sessions over one tree each
+  adopts the other's writes. Read its touch list as "what changed on this
+  machine while I worked", never as authorship. The intake's record names the
+  sessions that overlapped, credits a change only to the session that made it,
+  and no longer counts an idle second session (`ORUNMILA_PEER_BUSY=0` turns that
+  off).
+- **No AI model and no internet call does Orunmila's work.** An AI pass over
+  semantic claims is not part of the free version; only updates of Orunmila
+  itself may reach the internet.
 
-Full status for every known issue, open and closed: `review/ISSUES.md`.
+Status for each known issue, open and closed: `review/ISSUES.md` (as of 2026-10-28); findings since are in `CHANGELOG.md`.
 
 ## If something looks wrong
 

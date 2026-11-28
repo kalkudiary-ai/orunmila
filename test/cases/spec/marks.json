@@ -1,0 +1,3824 @@
+{
+  "good": {
+    "sentinel_modified": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "sentinel",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "file",
+        "path": "src/auth.ts"
+      },
+      "says": "modified",
+      "detail": {
+        "size": 4211,
+        "fingerprint_before": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "fingerprint": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "lines_added": 3,
+        "lines_removed": 1,
+        "diff_ref": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "sentinel_modified_before_unknown": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "sentinel",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "file",
+        "path": "src/auth.ts"
+      },
+      "says": "modified",
+      "detail": {
+        "size": 10,
+        "fingerprint_before": null,
+        "fingerprint": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "lines_added": null,
+        "lines_removed": null,
+        "no_diff": "binary"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_started": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "command",
+        "text": "npm test"
+      },
+      "says": "started",
+      "detail": {
+        "tool": "Bash"
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_exited_fail": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "command",
+        "text": "npm test"
+      },
+      "says": "exited",
+      "detail": {
+        "tool": "Bash",
+        "exit_status": "fail",
+        "output_excerpt": "FAIL  x",
+        "output_ref": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+        "redactions": [
+          "api_key"
+        ]
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_exited_known_code": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "command",
+        "text": "npm test"
+      },
+      "says": "exited",
+      "detail": {
+        "tool": "Bash",
+        "exit_status": "fail",
+        "exit_code": 3
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_created_file": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "file",
+        "path": "src/new.ts"
+      },
+      "says": "created",
+      "detail": {
+        "tool": "Write",
+        "exit_status": "pass",
+        "size": 12,
+        "fingerprint": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "lines_added": 1,
+        "lines_removed": 0,
+        "diff_ref": "sha256:8888888888888888888888888888888888888888888888888888888888888888"
+      },
+      "cause_hint": "toolu_02",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_read_range": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "file",
+        "path": "src/auth.ts"
+      },
+      "says": "read",
+      "detail": {
+        "tool": "Read",
+        "exit_status": "pass",
+        "read_kind": "range",
+        "size": 4211,
+        "fingerprint": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_read_secret_keyed": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "file",
+        "path": ".env"
+      },
+      "says": "read",
+      "detail": {
+        "tool": "Read",
+        "exit_status": "pass",
+        "read_kind": null,
+        "size": 80,
+        "fingerprint": "hmac-sha256:9999999999999999999999999999999999999999999999999999999999999999"
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_search": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "dir",
+        "path": "."
+      },
+      "says": "read",
+      "detail": {
+        "tool": "Grep",
+        "exit_status": "pass",
+        "read_kind": "pattern",
+        "pattern": "validateToken"
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_web_search": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "network",
+        "host": null,
+        "query": "json canonicalization"
+      },
+      "says": "contacted",
+      "detail": {
+        "tool": "WebSearch",
+        "exit_status": "pass"
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_fetch": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "network",
+        "host": "example.com",
+        "url": "https://example.com/"
+      },
+      "says": "contacted",
+      "detail": {
+        "tool": "WebFetch",
+        "exit_status": "pass"
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_called": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "tool",
+        "name": "mcp__x__y"
+      },
+      "says": "called",
+      "detail": {
+        "tool": "mcp__x__y",
+        "exit_status": "pass",
+        "tool_input": {
+          "q": 1
+        }
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_tool_failed": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "tool",
+        "name": "mcp__x__y"
+      },
+      "says": "ended",
+      "detail": {
+        "tool": "mcp__x__y",
+        "exit_status": "fail"
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_in_sub_agent": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": {
+        "id": "agent_1",
+        "type": "general-purpose"
+      },
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "command",
+        "text": "npm test"
+      },
+      "says": "started",
+      "detail": {
+        "tool": "Bash"
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_prompted": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "turn",
+        "id": "t3"
+      },
+      "says": "prompted",
+      "detail": {
+        "prompt": "go"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_turn_ended": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "turn",
+        "id": "t3"
+      },
+      "says": "ended",
+      "detail": {},
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "claim": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "agent_claim",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "claim"
+      },
+      "says": "claimed",
+      "detail": {
+        "text": "All tests pass."
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "law_gate_skipped": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "law_gate",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "turn",
+        "id": "t3"
+      },
+      "says": "checked",
+      "detail": {
+        "result": "skipped",
+        "reason": "could not confirm the current turn",
+        "findings": []
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "law_gate_blocked": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "law_gate",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "turn",
+        "id": "t3"
+      },
+      "says": "checked",
+      "detail": {
+        "result": "blocked",
+        "findings": [
+          {
+            "law": "no-green-without-command",
+            "severity": "block",
+            "quote": "All tests pass."
+          }
+        ]
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_exited": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "process"
+      },
+      "says": "exited",
+      "detail": {
+        "exit_status": "unknown"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "tick": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": null,
+      "says": "tick",
+      "detail": {
+        "stamped_by": "intake"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "sentinel_gap": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "sentinel",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "dir",
+        "path": "src"
+      },
+      "says": "gap",
+      "detail": {
+        "lost": "events under src: the watcher reported an overflow"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_tampered": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "process"
+      },
+      "says": "tampered",
+      "detail": {
+        "what": "foreign_sender",
+        "sender_pid": 4242,
+        "pinned_pid": 4100,
+        "received": "{\"session_id\":\"ses_test_0001\",\"source\":\"hook\",\"says\":\"started\"}"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "sentinel_renamed": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "sentinel",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "file",
+        "path": "src/auth.ts"
+      },
+      "says": "renamed",
+      "detail": {
+        "from": "src/auth.ts.tmp",
+        "size": 4211,
+        "fingerprint": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_prompted_from_tool": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "turn",
+        "id": "t3"
+      },
+      "says": "prompted",
+      "detail": {
+        "prompt": "<task-notification>done</task-notification>",
+        "from_human": false,
+        "channel": "http"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_write_outside": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "file",
+        "path": "/private/tmp/scratch/a.js",
+        "outside": true
+      },
+      "says": "created",
+      "detail": {
+        "tool": "Write",
+        "exit_status": "pass",
+        "channel": "command",
+        "size": 10,
+        "fingerprint": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+      },
+      "cause_hint": "toolu_1",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_restart_gap": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": null,
+      "says": "gap",
+      "detail": {
+        "lost": "every mark sent to intake while it was not running, from 2026-11-16T08:59:00.000Z to 2026-11-16T09:00:00.123Z",
+        "since": {
+          "mono_ns": "4940000000",
+          "observed_at": "2026-11-16T08:59:00.000Z"
+        },
+        "until": {
+          "mono_ns": "5000000000",
+          "observed_at": "2026-11-16T09:00:00.123Z"
+        },
+        "sessions": [
+          "ses_test_0001",
+          "ses_test_0002"
+        ]
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_session_ended": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "session",
+        "id": "ses_test_0001"
+      },
+      "says": "ended",
+      "detail": {
+        "reason": "prompt_input_exit"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_intake_stopped": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "process",
+        "name": "intake"
+      },
+      "says": "exited",
+      "detail": {
+        "exit_status": "pass",
+        "reason": "a stop signal"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_started_pinning": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "command",
+        "text": "npm test"
+      },
+      "says": "started",
+      "detail": {
+        "tool": "Bash",
+        "channel": "http",
+        "sender_pid": 4100
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "generated_ld83_1": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "command",
+        "text": "npm test"
+      },
+      "says": "gap",
+      "detail": {
+        "tool": "Bash",
+        "lost": "the generated fixture of LD83, moved off fingerprinted by LD171"
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_read_counted": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "file",
+        "path": "src/auth.ts"
+      },
+      "says": "read",
+      "detail": {
+        "tool": "Read",
+        "exit_status": "pass",
+        "read_kind": "full",
+        "size": 4211,
+        "fingerprint": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "read_range": {
+          "asked_offset": null,
+          "asked_limit": null,
+          "start_line": 1,
+          "lines": 40,
+          "total_lines": 40
+        }
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_read_range_cut": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "file",
+        "path": "src/auth.ts"
+      },
+      "says": "read",
+      "detail": {
+        "tool": "Read",
+        "exit_status": "pass",
+        "read_kind": "range",
+        "size": 4211,
+        "fingerprint": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "read_range": {
+          "asked_offset": 1,
+          "asked_limit": 3,
+          "start_line": 1,
+          "lines": 3,
+          "total_lines": 891,
+          "truncated_by_token_cap": true
+        }
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_read_listing": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "cursor",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "dir",
+        "path": "src"
+      },
+      "says": "read",
+      "detail": {
+        "tool": "list_dir",
+        "exit_status": "pass",
+        "read_kind": "listing"
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_fingerprinted": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "file",
+        "path": "src/auth.ts"
+      },
+      "says": "fingerprinted",
+      "detail": {
+        "exists": true,
+        "size": 4211,
+        "fingerprint": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_fingerprinted_absent": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "file",
+        "path": "src/auth.ts"
+      },
+      "says": "fingerprinted",
+      "detail": {
+        "exists": false
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_fingerprinted_unknown": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "file",
+        "path": "src/auth.ts"
+      },
+      "says": "fingerprinted",
+      "detail": {
+        "exists": true,
+        "size": 0,
+        "fingerprint": null
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_overlapped": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "process",
+        "name": "intake"
+      },
+      "says": "overlapped",
+      "detail": {
+        "session": "ses_test_0002",
+        "root": "/r/project",
+        "from": "4000000000",
+        "ended": false
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_overlapped_ended": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "process",
+        "name": "intake"
+      },
+      "says": "overlapped",
+      "detail": {
+        "session": "ses_test_0002",
+        "root": "/r/project",
+        "from": "4000000000",
+        "ended": true,
+        "to": "4900000000"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_overlapped_busy": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 8,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.223Z",
+      "mono_ns": "5100000000",
+      "target": {
+        "kind": "process",
+        "name": "intake"
+      },
+      "says": "overlapped",
+      "detail": {
+        "session": "ses_test_0002",
+        "root": "/r/project",
+        "from": "4000000000",
+        "ended": false,
+        "busy": true
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    "process_fingerprinted_rescan": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "file",
+        "path": "src/auth.ts"
+      },
+      "says": "fingerprinted",
+      "detail": {
+        "exists": true,
+        "size": 4211,
+        "fingerprint": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "rescan": true
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_fingerprinted_rescan_unknown": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "file",
+        "path": "src/auth.ts"
+      },
+      "says": "fingerprinted",
+      "detail": {
+        "exists": true,
+        "size": null,
+        "fingerprint": null,
+        "rescan": true,
+        "entry": "link"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_tampered_log": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 9,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-24T09:00:00.000Z",
+      "mono_ns": "6000000000",
+      "target": {
+        "kind": "file",
+        "path": "/home/u/.orunmila/sessions/ses_test_0001/raw.jsonl",
+        "outside": true
+      },
+      "says": "tampered",
+      "detail": {
+        "what": "log_location",
+        "change": "edited",
+        "removed": "{\"says\":\"read\"}",
+        "added": "{\"says\":\"exited\"}",
+        "fingerprint_before": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "fingerprint": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "restored": true
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_tampered_intake_stop": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 10,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-24T09:00:01.000Z",
+      "mono_ns": "6100000000",
+      "target": {
+        "kind": "process",
+        "name": "intake"
+      },
+      "says": "tampered",
+      "detail": {
+        "what": "intake_stop",
+        "signal": "SIGTERM"
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_exited_background": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "command",
+        "text": "npm run soak"
+      },
+      "says": "exited",
+      "detail": {
+        "tool": "Bash",
+        "exit_status": "unknown",
+        "output_excerpt": "",
+        "background": true
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_exited_test_counts": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "command",
+        "text": "npm test"
+      },
+      "says": "exited",
+      "detail": {
+        "tool": "Bash",
+        "exit_status": "pass",
+        "output_excerpt": "",
+        "test_counts": [
+          { "format": "node:test", "unit": "tests", "passed": 40, "failed": 0, "skipped": 2, "summaries": 1 },
+          { "format": "go", "unit": "packages", "passed": 3, "failed": 1, "skipped": 0, "summaries": 1 }
+        ]
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_exited_packages": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "command",
+        "text": "npm install esbuild"
+      },
+      "says": "exited",
+      "detail": {
+        "tool": "Bash",
+        "exit_status": "pass",
+        "output_excerpt": "",
+        "packages": {
+          "manager": "npm",
+          "lock": "package-lock.json",
+          "added": [
+            {
+              "name": "esbuild",
+              "version": "0.19.2",
+              "install_script": true
+            }
+          ],
+          "changed": [
+            {
+              "name": "a",
+              "from": "1.0.0",
+              "to": "1.0.1",
+              "install_script": false
+            }
+          ],
+          "removed": [
+            {
+              "name": "gone",
+              "version": "0.1.0"
+            }
+          ],
+          "not_read": [
+            "yarn.lock"
+          ],
+          "cut": 3
+        }
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_closeout_tripwire": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "process",
+        "name": "closeout"
+      },
+      "says": "exited",
+      "detail": {
+        "exit_status": "pass",
+        "outside_checked": 24,
+        "outside_changed": [
+          {
+            "path": "/home/u/.zshrc",
+            "fingerprint_before": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "fingerprint": "hmac-sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ]
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "process_closeout_completeness": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "process",
+      "agent": null,
+      "turn": null,
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "process",
+        "name": "closeout"
+      },
+      "says": "exited",
+      "detail": {
+        "exit_status": "pass",
+        "completeness": {
+          "transcript": "read",
+          "calls": 12,
+          "unmarked": [
+            {
+              "id": "toolu_9",
+              "tool": "mcp__db__query"
+            }
+          ],
+          "cut": 2
+        }
+      },
+      "cause_hint": null,
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "hook_exited_interrupted": {
+      "schema_version": 1,
+      "session_id": "ses_test_0001",
+      "seq": 7,
+      "source": "hook",
+      "agent": "claude-code",
+      "turn": "t3",
+      "sub_agent": null,
+      "observed_at": "2026-11-16T09:00:00.123Z",
+      "mono_ns": "5000000000",
+      "target": {
+        "kind": "command",
+        "text": "sleep 9"
+      },
+      "says": "exited",
+      "detail": {
+        "tool": "Bash",
+        "exit_status": "unknown",
+        "output_excerpt": "",
+        "interrupted": true
+      },
+      "cause_hint": "toolu_01",
+      "prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    }
+  },
+  "bad": [
+    {
+      "name": "schema version 2",
+      "from": "hook_started",
+      "set": {
+        "/schema_version": 2
+      },
+      "unset": [],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "seq 0 (marks start at 1; 0 is the header)",
+      "from": "hook_started",
+      "set": {
+        "/seq": 0
+      },
+      "unset": [],
+      "error": {
+        "path": "/seq",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "seq not an integer",
+      "from": "hook_started",
+      "set": {
+        "/seq": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/seq",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "unknown source",
+      "from": "hook_started",
+      "set": {
+        "/source": "cursor"
+      },
+      "unset": [],
+      "error": {
+        "path": "/source",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "verb not on the list",
+      "from": "hook_started",
+      "set": {
+        "/says": "edited"
+      },
+      "unset": [],
+      "error": {
+        "path": "/says",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "wall clock not ISO UTC",
+      "from": "hook_started",
+      "set": {
+        "/observed_at": "2026-11-16 09:00"
+      },
+      "unset": [],
+      "error": {
+        "path": "/observed_at",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "negative monotonic clock",
+      "from": "hook_started",
+      "set": {
+        "/mono_ns": "-1"
+      },
+      "unset": [],
+      "error": {
+        "path": "/mono_ns",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "no hash",
+      "from": "hook_started",
+      "set": {},
+      "unset": [
+        "/hash"
+      ],
+      "error": {
+        "path": "/hash",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "short hash",
+      "from": "hook_started",
+      "set": {
+        "/hash": "sha256:abc"
+      },
+      "unset": [],
+      "error": {
+        "path": "/hash",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "empty session id",
+      "from": "hook_started",
+      "set": {
+        "/session_id": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/session_id",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "Glove mark with no turn",
+      "from": "hook_started",
+      "set": {
+        "/turn": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/turn",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "Sentinel mark naming a turn",
+      "from": "sentinel_modified",
+      "set": {
+        "/turn": "t3"
+      },
+      "unset": [],
+      "error": {
+        "path": "/turn",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "law gate mark with no turn",
+      "from": "law_gate_skipped",
+      "set": {
+        "/turn": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/turn",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "sub-agent without its type",
+      "from": "hook_in_sub_agent",
+      "set": {},
+      "unset": [
+        "/sub_agent/type"
+      ],
+      "error": {
+        "path": "/sub_agent/type",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "Glove tool mark without its tool call id",
+      "from": "hook_started",
+      "set": {
+        "/cause_hint": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/cause_hint",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "Glove tool mark without the tool name",
+      "from": "hook_exited_fail",
+      "set": {},
+      "unset": [
+        "/detail/tool"
+      ],
+      "error": {
+        "path": "/detail/tool",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "command result without exit_status",
+      "from": "hook_exited_fail",
+      "set": {},
+      "unset": [
+        "/detail/exit_status"
+      ],
+      "error": {
+        "path": "/detail/exit_status",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "exited from a non-Glove source without exit_status",
+      "from": "process_exited",
+      "set": {},
+      "unset": [
+        "/detail/exit_status"
+      ],
+      "error": {
+        "path": "/detail/exit_status",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "exit_status not pass/fail/unknown",
+      "from": "hook_exited_fail",
+      "set": {
+        "/detail/exit_status": "ok"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/exit_status",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "Glove read outcome without exit_status",
+      "from": "hook_read_range",
+      "set": {},
+      "unset": [
+        "/detail/exit_status"
+      ],
+      "error": {
+        "path": "/detail/exit_status",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "exit_code on a mark that is not a command result",
+      "from": "hook_read_range",
+      "set": {
+        "/detail/exit_code": 0
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail",
+        "keyword": "not"
+      }
+    },
+    {
+      "name": "exit_code not an integer",
+      "from": "hook_exited_known_code",
+      "set": {
+        "/detail/exit_code": "fail"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/exit_code",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "output excerpt over 2,000 characters",
+      "from": "hook_exited_fail",
+      "set": {
+        "/detail/output_excerpt": {
+          "$repeat": "x",
+          "times": 2001
+        }
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/output_excerpt",
+        "keyword": "maxLength"
+      }
+    },
+    {
+      "name": "command result whose target is not a command",
+      "from": "hook_exited_fail",
+      "set": {
+        "/target": {
+          "kind": "file",
+          "path": "a"
+        }
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/kind",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "command target without its text",
+      "from": "hook_started",
+      "set": {},
+      "unset": [
+        "/target/text"
+      ],
+      "error": {
+        "path": "/target/text",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "a diff inside the raw log",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/diff": "+x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail",
+        "keyword": "not"
+      }
+    },
+    {
+      "name": "diff_ref and no_diff together",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/no_diff": "binary"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail",
+        "keyword": "not"
+      }
+    },
+    {
+      "name": "no_diff reason not on the list",
+      "from": "sentinel_modified_before_unknown",
+      "set": {
+        "/detail/no_diff": "empty"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/no_diff",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "created mark carrying fingerprint_before",
+      "from": "hook_created_file",
+      "set": {
+        "/detail/fingerprint_before": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail",
+        "keyword": "not"
+      }
+    },
+    {
+      "name": "line counts with the before-state unknown",
+      "from": "sentinel_modified_before_unknown",
+      "set": {
+        "/detail/lines_added": 3
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/lines_added",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "fingerprint not sha256 or hmac-sha256",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/fingerprint": "md5:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/fingerprint",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "negative size",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/size": -4
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/size",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "file change whose target is a command",
+      "from": "sentinel_modified",
+      "set": {
+        "/target": {
+          "kind": "command",
+          "text": "x"
+        }
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/kind",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "file target without a path",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/target/path"
+      ],
+      "error": {
+        "path": "/target/path",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "read without read_kind",
+      "from": "hook_read_range",
+      "set": {},
+      "unset": [
+        "/detail/read_kind"
+      ],
+      "error": {
+        "path": "/detail/read_kind",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "read_kind not on the list",
+      "from": "hook_read_range",
+      "set": {
+        "/detail/read_kind": "partial"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/read_kind",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "search without its pattern",
+      "from": "hook_search",
+      "set": {},
+      "unset": [
+        "/detail/pattern"
+      ],
+      "error": {
+        "path": "/detail/pattern",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "read whose target is a tool",
+      "from": "hook_read_range",
+      "set": {
+        "/target": {
+          "kind": "tool",
+          "name": "Read"
+        }
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/kind",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "network target without host",
+      "from": "hook_fetch",
+      "set": {},
+      "unset": [
+        "/target/host"
+      ],
+      "error": {
+        "path": "/target/host",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "contacted whose target is not network",
+      "from": "hook_fetch",
+      "set": {
+        "/target": {
+          "kind": "file",
+          "path": "a"
+        }
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/kind",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "called without tool_input",
+      "from": "hook_called",
+      "set": {},
+      "unset": [
+        "/detail/tool_input"
+      ],
+      "error": {
+        "path": "/detail/tool_input",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "tool target without a name",
+      "from": "hook_called",
+      "set": {},
+      "unset": [
+        "/target/name"
+      ],
+      "error": {
+        "path": "/target/name",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "target kind not on the list",
+      "from": "hook_called",
+      "set": {
+        "/target/kind": "url"
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/kind",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "prompt without its text",
+      "from": "hook_prompted",
+      "set": {},
+      "unset": [
+        "/detail/prompt"
+      ],
+      "error": {
+        "path": "/detail/prompt",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "turn target without an id",
+      "from": "hook_turn_ended",
+      "set": {},
+      "unset": [
+        "/target/id"
+      ],
+      "error": {
+        "path": "/target/id",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "claim without its text",
+      "from": "claim",
+      "set": {},
+      "unset": [
+        "/detail/text"
+      ],
+      "error": {
+        "path": "/detail/text",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "agent_claim saying something other than claimed",
+      "from": "claim",
+      "set": {
+        "/says": "modified"
+      },
+      "unset": [],
+      "error": {
+        "path": "/says",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "checked from a source other than the law gate",
+      "from": "law_gate_skipped",
+      "set": {
+        "/source": "hook",
+        "/cause_hint": "toolu_9",
+        "/detail/tool": "x",
+        "/detail/exit_status": "pass"
+      },
+      "unset": [],
+      "error": {
+        "path": "/source",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "law gate result not on the list",
+      "from": "law_gate_blocked",
+      "set": {
+        "/detail/result": "failed"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/result",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "law gate mark without a result",
+      "from": "law_gate_blocked",
+      "set": {},
+      "unset": [
+        "/detail/result"
+      ],
+      "error": {
+        "path": "/detail/result",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "law gate finding without its law",
+      "from": "law_gate_blocked",
+      "set": {},
+      "unset": [
+        "/detail/findings/0/law"
+      ],
+      "error": {
+        "path": "/detail/findings/0/law",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "law gate finding severity not block or warn",
+      "from": "law_gate_blocked",
+      "set": {
+        "/detail/findings/0/severity": "error"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/findings/0/severity",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "tick from a source other than process",
+      "from": "tick",
+      "set": {
+        "/source": "sentinel"
+      },
+      "unset": [],
+      "error": {
+        "path": "/source",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "null target on a mark that is not tick or gap",
+      "from": "sentinel_modified",
+      "set": {
+        "/target": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/target",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "gap without naming what was lost",
+      "from": "sentinel_gap",
+      "set": {},
+      "unset": [
+        "/detail/lost"
+      ],
+      "error": {
+        "path": "/detail/lost",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "redactions not a list of kinds",
+      "from": "hook_exited_fail",
+      "set": {
+        "/detail/redactions": "api_key"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/redactions",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "stamped_by not intake",
+      "from": "tick",
+      "set": {
+        "/detail/stamped_by": "sentinel"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/stamped_by",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "tampered from a source other than process",
+      "from": "process_tampered",
+      "set": {
+        "/source": "sentinel"
+      },
+      "unset": [],
+      "error": {
+        "path": "/source",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "tampered without saying what",
+      "from": "process_tampered",
+      "set": {},
+      "unset": [
+        "/detail/what"
+      ],
+      "error": {
+        "path": "/detail/what",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "tampered what not on the list",
+      "from": "process_tampered",
+      "set": {
+        "/detail/what": "vibes"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/what",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "channel not http or command",
+      "from": "hook_prompted_from_tool",
+      "set": {
+        "/detail/channel": "smoke"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/channel",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "from_human not a boolean",
+      "from": "hook_prompted_from_tool",
+      "set": {
+        "/detail/from_human": "no"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/from_human",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "renamed without its old path",
+      "from": "sentinel_renamed",
+      "set": {},
+      "unset": [
+        "/detail/from"
+      ],
+      "error": {
+        "path": "/detail/from",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "outside not a boolean",
+      "from": "hook_write_outside",
+      "set": {
+        "/target/outside": "yes"
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/outside",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "mono_ns as a JSON number (inexact past 2^53)",
+      "from": "sentinel_modified",
+      "set": {
+        "/mono_ns": 5000000000
+      },
+      "unset": [],
+      "error": {
+        "path": "/mono_ns",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a restart gap's since with no wall time",
+      "from": "process_restart_gap",
+      "set": {},
+      "unset": [
+        "/detail/since/observed_at"
+      ],
+      "error": {
+        "path": "/detail/since/observed_at",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "a restart gap's since mono_ns as a JSON number",
+      "from": "process_restart_gap",
+      "set": {
+        "/detail/since/mono_ns": 4940000000
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/since/mono_ns",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a restart gap's until with no mono_ns",
+      "from": "process_restart_gap",
+      "set": {},
+      "unset": [
+        "/detail/until/mono_ns"
+      ],
+      "error": {
+        "path": "/detail/until/mono_ns",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "a restart gap's sessions as one string",
+      "from": "process_restart_gap",
+      "set": {
+        "/detail/sessions": "ses_test_0001"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/sessions",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a restart gap's clock_reset false (absent unless the clock reset)",
+      "from": "process_restart_gap",
+      "set": {
+        "/detail/clock_reset": false
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/clock_reset",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "a foreign sender's pid as text",
+      "from": "process_tampered",
+      "set": {
+        "/detail/sender_pid": "4242"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/sender_pid",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a pinned pid that is not a whole number",
+      "from": "process_tampered",
+      "set": {
+        "/detail/pinned_pid": 4100.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/pinned_pid",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a foreign payload kept as an object, not text",
+      "from": "process_tampered",
+      "set": {
+        "/detail/received": {
+          "says": "started"
+        }
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/received",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a session end inside a turn",
+      "from": "hook_session_ended",
+      "set": {
+        "/turn": "t3"
+      },
+      "unset": [],
+      "error": {
+        "path": "/turn",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a session target with no id",
+      "from": "hook_session_ended",
+      "set": {},
+      "unset": [
+        "/target/id"
+      ],
+      "error": {
+        "path": "/target/id",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "a session end from the sentinel",
+      "from": "hook_session_ended",
+      "set": {
+        "/source": "sentinel"
+      },
+      "unset": [],
+      "error": {
+        "path": "/source",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "a session target with a verb other than ended",
+      "from": "hook_session_ended",
+      "set": {
+        "/says": "started"
+      },
+      "unset": [],
+      "error": {
+        "path": "/says",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "a pinning sender_pid that is not an integer",
+      "from": "hook_started_pinning",
+      "set": {
+        "/detail/sender_pid": "4100"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/sender_pid",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/schema_version missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/schema_version"
+      ],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/session_id missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/session_id"
+      ],
+      "error": {
+        "path": "/session_id",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/seq missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/seq"
+      ],
+      "error": {
+        "path": "/seq",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/source missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/source"
+      ],
+      "error": {
+        "path": "/source",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/agent missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/agent"
+      ],
+      "error": {
+        "path": "/agent",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/turn missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/turn"
+      ],
+      "error": {
+        "path": "/turn",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/sub_agent missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/sub_agent"
+      ],
+      "error": {
+        "path": "/sub_agent",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/observed_at missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/observed_at"
+      ],
+      "error": {
+        "path": "/observed_at",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/mono_ns missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/mono_ns"
+      ],
+      "error": {
+        "path": "/mono_ns",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/target missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/target"
+      ],
+      "error": {
+        "path": "/target",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/says missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/says"
+      ],
+      "error": {
+        "path": "/says",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/detail missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/detail"
+      ],
+      "error": {
+        "path": "/detail",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/cause_hint missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/cause_hint"
+      ],
+      "error": {
+        "path": "/cause_hint",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/prev_hash missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {},
+      "unset": [
+        "/prev_hash"
+      ],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/session_id of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/session_id": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/session_id",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/agent of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/agent": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/agent",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/agent empty (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/agent": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/agent",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/turn empty (generated, LD79)",
+      "from": "hook_started",
+      "set": {
+        "/turn": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/turn",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/sub_agent of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/sub_agent": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/sub_agent",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/sub_agent/id missing (generated, LD79)",
+      "from": "hook_in_sub_agent",
+      "set": {},
+      "unset": [
+        "/sub_agent/id"
+      ],
+      "error": {
+        "path": "/sub_agent/id",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/sub_agent/id of the wrong type (generated, LD79)",
+      "from": "hook_in_sub_agent",
+      "set": {
+        "/sub_agent/id": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/sub_agent/id",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/sub_agent/id empty (generated, LD79)",
+      "from": "hook_in_sub_agent",
+      "set": {
+        "/sub_agent/id": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/sub_agent/id",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/sub_agent/type of the wrong type (generated, LD79)",
+      "from": "hook_in_sub_agent",
+      "set": {
+        "/sub_agent/type": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/sub_agent/type",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/sub_agent/type empty (generated, LD79)",
+      "from": "hook_in_sub_agent",
+      "set": {
+        "/sub_agent/type": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/sub_agent/type",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/observed_at of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/observed_at": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/observed_at",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/cause_hint of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/cause_hint": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/cause_hint",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/cause_hint empty (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/cause_hint": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/cause_hint",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/prev_hash of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/prev_hash": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/fingerprint_before of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/fingerprint_before": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/fingerprint_before",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/lines_added below its minimum (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/lines_added": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/lines_added",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "/detail/since of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/since": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/since",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/since/mono_ns not matching its pattern (generated, LD79)",
+      "from": "process_restart_gap",
+      "set": {
+        "/detail/since/mono_ns": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/since/mono_ns",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/detail/since/observed_at of the wrong type (generated, LD79)",
+      "from": "process_restart_gap",
+      "set": {
+        "/detail/since/observed_at": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/since/observed_at",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/since/observed_at not matching its pattern (generated, LD79)",
+      "from": "process_restart_gap",
+      "set": {
+        "/detail/since/observed_at": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/since/observed_at",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "a session end with no target, so its null turn breaks the turn rule (generated, LD79)",
+      "from": "hook_session_ended",
+      "set": {},
+      "unset": [
+        "/target"
+      ],
+      "error": {
+        "path": "/turn",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/target of the wrong type (generated, LD79)",
+      "from": "tick",
+      "set": {
+        "/target": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/target",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/target/kind missing (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/target": {}
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/kind",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/target/path of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/target/path": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/path",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/target/path empty (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/target/path": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/path",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/target/text of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/target/text": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/text",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/target/id of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/target/id": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/id",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/target/id empty (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/target/id": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/id",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/target/name of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/target/name": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/name",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/target/name empty (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/target/name": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/name",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/target/host of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/target/host": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/host",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/target/url of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/target/url": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/url",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/target/query of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/target/query": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/query",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail of the wrong type (generated, LD79)",
+      "from": "hook_exited_fail",
+      "set": {
+        "/detail": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/tool of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/tool": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/tool",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/tool empty (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/tool": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/tool",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/detail/output_excerpt of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/output_excerpt": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/output_excerpt",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/output_ref of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/output_ref": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/output_ref",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/vcs of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/vcs": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/vcs",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/vcs/0 of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/vcs": [
+          "x"
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/vcs/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/read_kind of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/read_kind": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/read_kind",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/pattern of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/pattern": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/pattern",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/size of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/size": "4211"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/size",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/lines_removed of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/lines_removed": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/lines_removed",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/diff_ref of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/diff_ref": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/diff_ref",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/tool_result_excerpt of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/tool_result_excerpt": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/tool_result_excerpt",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/tool_result_size of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/tool_result_size": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/tool_result_size",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/tool_result_size below its minimum (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/tool_result_size": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/tool_result_size",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "/detail/text of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/text": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/text",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/prompt of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/prompt": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/prompt",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/findings of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/findings": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/findings",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/findings/0 of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/findings": [
+          "x"
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/findings/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/findings/0/severity missing (generated, LD79)",
+      "from": "law_gate_blocked",
+      "set": {},
+      "unset": [
+        "/detail/findings/0/severity"
+      ],
+      "error": {
+        "path": "/detail/findings/0/severity",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/detail/findings/0/quote missing (generated, LD79)",
+      "from": "law_gate_blocked",
+      "set": {},
+      "unset": [
+        "/detail/findings/0/quote"
+      ],
+      "error": {
+        "path": "/detail/findings/0/quote",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/detail/findings/0/law of the wrong type (generated, LD79)",
+      "from": "law_gate_blocked",
+      "set": {
+        "/detail/findings/0/law": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/findings/0/law",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/findings/0/law empty (generated, LD79)",
+      "from": "law_gate_blocked",
+      "set": {
+        "/detail/findings/0/law": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/findings/0/law",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/detail/findings/0/quote of the wrong type (generated, LD79)",
+      "from": "law_gate_blocked",
+      "set": {
+        "/detail/findings/0/quote": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/findings/0/quote",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/reason of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/reason": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/reason",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/lost of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/lost": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/lost",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/lost empty (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/lost": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/lost",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/detail/from of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/from": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/from",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/from empty (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/from": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/from",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/detail/redactions/0 of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/redactions": [
+          1
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/redactions/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/redactions/0 not matching its pattern (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/redactions": [
+          "X Y"
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/redactions/0",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/detail/sessions/0 of the wrong type (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/sessions": [
+          1
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/sessions/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/sessions/0 empty (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/sessions": [
+          ""
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/sessions/0",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/detail/sender_pid below its minimum (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/sender_pid": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/sender_pid",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "/detail/pinned_pid below its minimum (generated, LD79)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/pinned_pid": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/pinned_pid",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "a claim's claim_unconfirmed other than true (LD85)",
+      "from": "claim",
+      "set": {
+        "/detail/claim_unconfirmed": false
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/claim_unconfirmed",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "generated 2 (LD83)",
+      "from": "hook_started",
+      "set": {
+        "/says": "ended"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/exit_status",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "generated 3 (LD83)",
+      "from": "hook_session_ended",
+      "set": {
+        "/target": {}
+      },
+      "unset": [],
+      "error": {
+        "path": "/turn",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "generated 4 (LD83)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/fingerprint_before": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/lines_removed",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "generated 5 (LD83)",
+      "from": "sentinel_modified",
+      "set": {
+        "/says": "claimed"
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/kind",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "generated 6 (LD83)",
+      "from": "sentinel_modified",
+      "set": {
+        "/source": "law_gate"
+      },
+      "unset": [],
+      "error": {
+        "path": "/says",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "generated 7 (LD83)",
+      "from": "sentinel_modified",
+      "set": {
+        "/says": "checked"
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/kind",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "generated 8 (LD83)",
+      "from": "sentinel_modified",
+      "set": {
+        "/says": "prompted"
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/kind",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "generated 9 (LD83)",
+      "from": "sentinel_modified",
+      "set": {
+        "/says": "called"
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/kind",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "read_range not an object (LD121)",
+      "from": "hook_read_counted",
+      "set": {
+        "/detail/read_range": [
+          1
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/read_range",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "read_range without asked_offset (LD121)",
+      "from": "hook_read_counted",
+      "set": {},
+      "unset": [
+        "/detail/read_range/asked_offset"
+      ],
+      "error": {
+        "path": "/detail/read_range/asked_offset",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "read_range asked_offset not a whole number (LD121)",
+      "from": "hook_read_counted",
+      "set": {
+        "/detail/read_range/asked_offset": "3"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/read_range/asked_offset",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "read_range without asked_limit (LD121)",
+      "from": "hook_read_counted",
+      "set": {},
+      "unset": [
+        "/detail/read_range/asked_limit"
+      ],
+      "error": {
+        "path": "/detail/read_range/asked_limit",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "read_range asked_limit not a whole number (LD121)",
+      "from": "hook_read_counted",
+      "set": {
+        "/detail/read_range/asked_limit": "3"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/read_range/asked_limit",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "read_range without start_line (LD121)",
+      "from": "hook_read_counted",
+      "set": {},
+      "unset": [
+        "/detail/read_range/start_line"
+      ],
+      "error": {
+        "path": "/detail/read_range/start_line",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "read_range start_line not a whole number (LD121)",
+      "from": "hook_read_counted",
+      "set": {
+        "/detail/read_range/start_line": "3"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/read_range/start_line",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "read_range without lines (LD121)",
+      "from": "hook_read_counted",
+      "set": {},
+      "unset": [
+        "/detail/read_range/lines"
+      ],
+      "error": {
+        "path": "/detail/read_range/lines",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "read_range lines not a whole number (LD121)",
+      "from": "hook_read_counted",
+      "set": {
+        "/detail/read_range/lines": "3"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/read_range/lines",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "read_range without total_lines (LD121)",
+      "from": "hook_read_counted",
+      "set": {},
+      "unset": [
+        "/detail/read_range/total_lines"
+      ],
+      "error": {
+        "path": "/detail/read_range/total_lines",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "read_range total_lines not a whole number (LD121)",
+      "from": "hook_read_counted",
+      "set": {
+        "/detail/read_range/total_lines": "3"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/read_range/total_lines",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "read_range lines below zero (LD121)",
+      "from": "hook_read_counted",
+      "set": {
+        "/detail/read_range/lines": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/read_range/lines",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "read_range truncated_by_token_cap false: only written when true (LD121)",
+      "from": "hook_read_range_cut",
+      "set": {
+        "/detail/read_range/truncated_by_token_cap": false
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/read_range/truncated_by_token_cap",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "read_range on a mark that is not a read (LD121)",
+      "from": "hook_exited_fail",
+      "set": {
+        "/detail/read_range": {
+          "asked_offset": null,
+          "asked_limit": null,
+          "start_line": null,
+          "lines": null,
+          "total_lines": null
+        }
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail",
+        "keyword": "not"
+      }
+    },
+    {
+      "name": "a listing read targets a folder, not a file (LD121)",
+      "from": "hook_read_listing",
+      "set": {
+        "/target": {
+          "kind": "file",
+          "path": "src"
+        }
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/kind",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "/detail/root of the wrong type (B4, LD145)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/root": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/root",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/root empty (B4, LD145)",
+      "from": "sentinel_modified",
+      "set": {
+        "/detail/root": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/root",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/detail/law_errors of the wrong type (B5, LD146)",
+      "from": "law_gate_blocked",
+      "set": {
+        "/detail/law_errors": "not a list"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/law_errors",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/detail/law_errors with an empty item (B5, LD146)",
+      "from": "law_gate_blocked",
+      "set": {
+        "/detail/law_errors": [""]
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/law_errors/0",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/detail/law_errors with an item that is not text (B5, LD146)",
+      "from": "law_gate_blocked",
+      "set": {
+        "/detail/law_errors": [3]
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/law_errors/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "fingerprinted by a source that is not the Opon (N2, LD171)",
+      "from": "process_fingerprinted",
+      "set": {
+        "/source": "sentinel"
+      },
+      "unset": [],
+      "error": {
+        "path": "/source",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "fingerprinted a folder (N2)",
+      "from": "process_fingerprinted",
+      "set": {
+        "/target/kind": "dir"
+      },
+      "unset": [],
+      "error": {
+        "path": "/target/kind",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "fingerprinted with no exists (N2)",
+      "from": "process_fingerprinted",
+      "set": {},
+      "unset": [
+        "/detail/exists"
+      ],
+      "error": {
+        "path": "/detail/exists",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "fingerprinted an existing file with no fingerprint (N2)",
+      "from": "process_fingerprinted",
+      "set": {},
+      "unset": [
+        "/detail/fingerprint"
+      ],
+      "error": {
+        "path": "/detail/fingerprint",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "fingerprinted an existing file with no size (N2)",
+      "from": "process_fingerprinted",
+      "set": {},
+      "unset": [
+        "/detail/size"
+      ],
+      "error": {
+        "path": "/detail/size",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "a fingerprint for a file that is not there (N2)",
+      "from": "process_fingerprinted_absent",
+      "set": {
+        "/detail/fingerprint": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail",
+        "keyword": "not"
+      }
+    },
+    {
+      "name": "exists that is not a boolean (N2)",
+      "from": "process_fingerprinted",
+      "set": {
+        "/detail/exists": "yes"
+      },
+      "unset": [],
+      "error": {
+        "path": "/detail/exists",
+        "keyword": "type"
+      }
+    },
+    {"name":"overlapped from a source that is not the intake (L2, LD202)","from":"process_overlapped","set":{"/source":"sentinel"},"unset":[],"error":{"path":"/source","keyword":"const"}},
+    {"name":"overlapped on a target that is not the intake (L2)","from":"process_overlapped","set":{"/target/kind":"tool"},"unset":[],"error":{"path":"/target/kind","keyword":"const"}},
+    {"name":"overlapped naming no session (L2)","from":"process_overlapped","set":{},"unset":["/detail/session"],"error":{"path":"/detail/session","keyword":"required"}},
+    {"name":"overlapped with no root (L2)","from":"process_overlapped","set":{},"unset":["/detail/root"],"error":{"path":"/detail/root","keyword":"required"}},
+    {"name":"overlapped with no start (L2)","from":"process_overlapped","set":{},"unset":["/detail/from"],"error":{"path":"/detail/from","keyword":"required"}},
+    {"name":"overlapped with no ended (L2)","from":"process_overlapped","set":{},"unset":["/detail/ended"],"error":{"path":"/detail/ended","keyword":"required"}},
+    {"name":"overlapped naming an empty session (L2)","from":"process_overlapped","set":{"/detail/session":""},"unset":[],"error":{"path":"/detail/session","keyword":"minLength"}},
+    {"name":"overlapped naming a session that is not a string (L2)","from":"process_overlapped","set":{"/detail/session":7},"unset":[],"error":{"path":"/detail/session","keyword":"type"}},
+    {"name":"overlapped with an empty root (L2)","from":"process_overlapped","set":{"/detail/root":""},"unset":[],"error":{"path":"/detail/root","keyword":"minLength"}},
+    {"name":"overlapped with a root that is not a string (L2)","from":"process_overlapped","set":{"/detail/root":7},"unset":[],"error":{"path":"/detail/root","keyword":"type"}},
+    {"name":"overlapped with a start that is not a decimal (L2)","from":"process_overlapped","set":{"/detail/from":"soon"},"unset":[],"error":{"path":"/detail/from","keyword":"pattern"}},
+    {"name":"overlapped with a start that is a number (L2)","from":"process_overlapped","set":{"/detail/from":4000000000},"unset":[],"error":{"path":"/detail/from","keyword":"type"}},
+    {"name":"overlapped with ended not a boolean (L2)","from":"process_overlapped","set":{"/detail/ended":"yes"},"unset":[],"error":{"path":"/detail/ended","keyword":"type"}},
+    {"name":"overlapped with an end that is not a decimal (L2)","from":"process_overlapped_ended","set":{"/detail/to":"later"},"unset":[],"error":{"path":"/detail/to","keyword":"pattern"}},
+    {"name":"overlapped with an end that is a number (L2)","from":"process_overlapped_ended","set":{"/detail/to":4900000000},"unset":[],"error":{"path":"/detail/to","keyword":"type"}},
+    {"name":"overlapped ended with no end (L2)","from":"process_overlapped_ended","set":{},"unset":["/detail/to"],"error":{"path":"/detail/to","keyword":"required"}},
+    {"name":"overlapped not ended with an end (L2)","from":"process_overlapped","set":{"/detail/to":"4900000000"},"unset":[],"error":{"path":"/detail","keyword":"not"}},
+    {"name":"rescan that is not a boolean (K2, LD207)","from":"process_fingerprinted_rescan","set":{"/detail/rescan":"yes"},"unset":[],"error":{"path":"/detail/rescan","keyword":"type"}},
+    {"name":"rescan entry of no known kind (F9, LD234)","from":"process_fingerprinted_rescan_unknown","set":{"/detail/entry":"socket"},"unset":[],"error":{"path":"/detail/entry","keyword":"enum"}},
+    {"name": "a log change of no known kind (Q41, LD282)", "from": "process_tampered_log", "set": {"/detail/change": "rewritten"}, "unset": [], "error": {"path": "/detail/change", "keyword": "enum"}},
+    {"name": "removed text that is not text (Q41)", "from": "process_tampered_log", "set": {"/detail/removed": 3}, "unset": [], "error": {"path": "/detail/removed", "keyword": "type"}},
+    {"name": "removed text over 2,000 characters (Q41)", "from": "process_tampered_log", "set": {"/detail/removed": {"$repeat": "x", "times": 2001}}, "unset": [], "error": {"path": "/detail/removed", "keyword": "maxLength"}},
+    {"name": "added text that is not text (Q41)", "from": "process_tampered_log", "set": {"/detail/added": ["x"]}, "unset": [], "error": {"path": "/detail/added", "keyword": "type"}},
+    {"name": "added text over 2,000 characters (Q41)", "from": "process_tampered_log", "set": {"/detail/added": {"$repeat": "y", "times": 2001}}, "unset": [], "error": {"path": "/detail/added", "keyword": "maxLength"}},
+    {"name": "restored that is not a boolean (Q41)", "from": "process_tampered_log", "set": {"/detail/restored": "yes"}, "unset": [], "error": {"path": "/detail/restored", "keyword": "type"}},
+    {"name": "an overlapped busy note that is not a boolean (AT1, LD330)", "from": "process_overlapped", "set": {"/detail/busy": "yes"}, "unset": [], "error": {"path": "/detail/busy", "keyword": "type"}},
+    {"name": "an intake stop by a signal Orunmila does not catch (TE2, LD283)", "from": "process_tampered_intake_stop", "set": {"/detail/signal": "SIGKILL"}, "unset": [], "error": {"path": "/detail/signal", "keyword": "enum"}},
+    {"name": "a background note that is not true (F21, NF66)", "from": "hook_exited_background", "set": {"/detail/background": false}, "unset": [], "error": {"path": "/detail/background", "keyword": "const"}},
+    {"name": "an interrupted note that is not true (F21, NF66)", "from": "hook_exited_interrupted", "set": {"/detail/interrupted": false}, "unset": [], "error": {"path": "/detail/interrupted", "keyword": "const"}},
+    {"name": "hosts that are not a list (CF1, LD385)", "from": "hook_exited_background", "set": {"/detail/hosts": "a.example"}, "unset": [], "error": {"path": "/detail/hosts", "keyword": "type"}},
+    {"name": "an empty hosts list (CF1)", "from": "hook_exited_background", "set": {"/detail/hosts": []}, "unset": [], "error": {"path": "/detail/hosts", "keyword": "minItems"}},
+    {"name": "a host that is not text (CF1)", "from": "hook_exited_background", "set": {"/detail/hosts": [443]}, "unset": [], "error": {"path": "/detail/hosts/0", "keyword": "type"}},
+    {"name": "an empty host (CF1)", "from": "hook_exited_background", "set": {"/detail/hosts": [""]}, "unset": [], "error": {"path": "/detail/hosts/0", "keyword": "minLength"}},
+    {"name": "an elevated note that is not true (CF1)", "from": "hook_exited_background", "set": {"/detail/elevated": false}, "unset": [], "error": {"path": "/detail/elevated", "keyword": "const"}},
+    {"name": "test counts that are not a list (CF2, LD385)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": "x"}, "unset": [], "error": {"path": "/detail/test_counts", "keyword": "type"}},
+    {"name": "a test count entry that is not an object (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [1]}, "unset": [], "error": {"path": "/detail/test_counts/0", "keyword": "type"}},
+    {"name": "a test count entry with a field the spec does not name (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "passed": 40, "failed": 0, "skipped": 2, "summaries": 1, "total": 42}]}, "unset": [], "error": {"path": "/detail/test_counts/0/total", "keyword": "additionalProperties"}},
+    {"name": "a test count entry with no format (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"unit": "tests", "passed": 40, "failed": 0, "skipped": 2, "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/format", "keyword": "required"}},
+    {"name": "a test count entry with no unit (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "passed": 40, "failed": 0, "skipped": 2, "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/unit", "keyword": "required"}},
+    {"name": "a test count entry with no passed (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "failed": 0, "skipped": 2, "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/passed", "keyword": "required"}},
+    {"name": "a test count entry with no failed (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "passed": 40, "skipped": 2, "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/failed", "keyword": "required"}},
+    {"name": "a test count entry with no skipped (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "passed": 40, "failed": 0, "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/skipped", "keyword": "required"}},
+    {"name": "a test count entry with no summaries (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "passed": 40, "failed": 0, "skipped": 2}]}, "unset": [], "error": {"path": "/detail/test_counts/0/summaries", "keyword": "required"}},
+    {"name": "a test count from a runner the spec does not name (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "ava", "unit": "tests", "passed": 40, "failed": 0, "skipped": 2, "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/format", "keyword": "enum"}},
+    {"name": "a test count in a unit the spec does not name (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "files", "passed": 40, "failed": 0, "skipped": 2, "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/unit", "keyword": "enum"}},
+    {"name": "a passed count that is not a whole number (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "passed": "2", "failed": 0, "skipped": 2, "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/passed", "keyword": "type"}},
+    {"name": "a failed count that is not a whole number (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "passed": 40, "failed": "2", "skipped": 2, "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/failed", "keyword": "type"}},
+    {"name": "a skipped count that is not a whole number (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "passed": 40, "failed": 0, "skipped": "2", "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/skipped", "keyword": "type"}},
+    {"name": "a summaries count that is not a whole number (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "passed": 40, "failed": 0, "skipped": 2, "summaries": "2"}]}, "unset": [], "error": {"path": "/detail/test_counts/0/summaries", "keyword": "type"}},
+    {"name": "a passed count below its least (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "passed": -1, "failed": 0, "skipped": 2, "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/passed", "keyword": "minimum"}},
+    {"name": "a failed count below its least (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "passed": 40, "failed": -1, "skipped": 2, "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/failed", "keyword": "minimum"}},
+    {"name": "a skipped count below its least (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "passed": 40, "failed": 0, "skipped": -1, "summaries": 1}]}, "unset": [], "error": {"path": "/detail/test_counts/0/skipped", "keyword": "minimum"}},
+    {"name": "a summaries count below its least (CF2)", "from": "hook_exited_test_counts", "set": {"/detail/test_counts": [{"format": "node:test", "unit": "tests", "passed": 40, "failed": 0, "skipped": 2, "summaries": 0}]}, "unset": [], "error": {"path": "/detail/test_counts/0/summaries", "keyword": "minimum"}},
+    {"name": "packages that are not an object (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": "x"}, "unset": [], "error": {"path": "/detail/packages", "keyword": "type"}},
+    {"name": "packages with a field the spec does not name (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3, "total": 1}}, "unset": [], "error": {"path": "/detail/packages/total", "keyword": "additionalProperties"}},
+    {"name": "packages with no manager (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/manager", "keyword": "required"}},
+    {"name": "packages with no lock (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/lock", "keyword": "required"}},
+    {"name": "packages with no added (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/added", "keyword": "required"}},
+    {"name": "packages with no changed (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/changed", "keyword": "required"}},
+    {"name": "packages with no removed (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/removed", "keyword": "required"}},
+    {"name": "packages with no not_read (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/not_read", "keyword": "required"}},
+    {"name": "a manager the spec does not name (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "deno", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/manager", "keyword": "enum"}},
+    {"name": "a lock the spec does not read (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "yarn.lock", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/lock", "keyword": "enum"}},
+    {"name": "added that is not a list (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": "x", "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/added", "keyword": "type"}},
+    {"name": "an added entry that is not an object (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [1], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/added/0", "keyword": "type"}},
+    {"name": "an added entry with a field the spec does not name (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true, "extra": 1}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/added/0/extra", "keyword": "additionalProperties"}},
+    {"name": "an added entry with no name (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/added/0/name", "keyword": "required"}},
+    {"name": "an added entry with no version (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/added/0/version", "keyword": "required"}},
+    {"name": "an added entry with no install_script (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2"}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/added/0/install_script", "keyword": "required"}},
+    {"name": "an added entry whose name is not text (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": 1, "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/added/0/name", "keyword": "type"}},
+    {"name": "an added entry whose name is empty (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/added/0/name", "keyword": "minLength"}},
+    {"name": "an added entry whose version is not text (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": 1, "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/added/0/version", "keyword": "type"}},
+    {"name": "an added entry whose version is empty (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/added/0/version", "keyword": "minLength"}},
+    {"name": "an added entry whose install_script is not true, false or null (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": "yes"}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/added/0/install_script", "keyword": "enum"}},
+    {"name": "changed that is not a list (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": "x", "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/changed", "keyword": "type"}},
+    {"name": "an changed entry that is not an object (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [1], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/changed/0", "keyword": "type"}},
+    {"name": "an changed entry with a field the spec does not name (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false, "extra": 1}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/changed/0/extra", "keyword": "additionalProperties"}},
+    {"name": "an changed entry with no name (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/changed/0/name", "keyword": "required"}},
+    {"name": "an changed entry with no from (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/changed/0/from", "keyword": "required"}},
+    {"name": "an changed entry with no to (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/changed/0/to", "keyword": "required"}},
+    {"name": "an changed entry with no install_script (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1"}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/changed/0/install_script", "keyword": "required"}},
+    {"name": "an changed entry whose name is not text (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": 1, "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/changed/0/name", "keyword": "type"}},
+    {"name": "an changed entry whose name is empty (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/changed/0/name", "keyword": "minLength"}},
+    {"name": "an changed entry whose from is not text (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": 1, "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/changed/0/from", "keyword": "type"}},
+    {"name": "an changed entry whose from is empty (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/changed/0/from", "keyword": "minLength"}},
+    {"name": "an changed entry whose to is not text (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": 1, "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/changed/0/to", "keyword": "type"}},
+    {"name": "an changed entry whose to is empty (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/changed/0/to", "keyword": "minLength"}},
+    {"name": "an changed entry whose install_script is not true, false or null (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": "yes"}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/changed/0/install_script", "keyword": "enum"}},
+    {"name": "removed that is not a list (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": "x", "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/removed", "keyword": "type"}},
+    {"name": "an removed entry that is not an object (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [1], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/removed/0", "keyword": "type"}},
+    {"name": "an removed entry with a field the spec does not name (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0", "extra": 1}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/removed/0/extra", "keyword": "additionalProperties"}},
+    {"name": "an removed entry with no name (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/removed/0/name", "keyword": "required"}},
+    {"name": "an removed entry with no version (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/removed/0/version", "keyword": "required"}},
+    {"name": "an removed entry whose name is not text (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": 1, "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/removed/0/name", "keyword": "type"}},
+    {"name": "an removed entry whose name is empty (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/removed/0/name", "keyword": "minLength"}},
+    {"name": "an removed entry whose version is not text (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": 1}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/removed/0/version", "keyword": "type"}},
+    {"name": "an removed entry whose version is empty (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": ""}], "not_read": ["yarn.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/removed/0/version", "keyword": "minLength"}},
+    {"name": "not_read that is not a list (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": "yarn.lock", "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/not_read", "keyword": "type"}},
+    {"name": "a not_read lock the spec does not name (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["x.lock"], "cut": 3}}, "unset": [], "error": {"path": "/detail/packages/not_read/0", "keyword": "enum"}},
+    {"name": "a cut that is not a whole number (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": "3"}}, "unset": [], "error": {"path": "/detail/packages/cut", "keyword": "type"}},
+    {"name": "a cut below one (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 0}}, "unset": [], "error": {"path": "/detail/packages/cut", "keyword": "minimum"}},
+    {"name": "a before_unknown that is not true (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3, "before_unknown": false}}, "unset": [], "error": {"path": "/detail/packages/before_unknown", "keyword": "const"}},
+    {"name": "an unreadable that is not true (CF3)", "from": "hook_exited_packages", "set": {"/detail/packages": {"manager": "npm", "lock": "package-lock.json", "added": [{"name": "esbuild", "version": "0.19.2", "install_script": true}], "changed": [{"name": "a", "from": "1.0.0", "to": "1.0.1", "install_script": false}], "removed": [{"name": "gone", "version": "0.1.0"}], "not_read": ["yarn.lock"], "cut": 3, "unreadable": false}}, "unset": [], "error": {"path": "/detail/packages/unreadable", "keyword": "const"}},
+    {"name": "an outside count that is not a whole number (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_checked": "24"}, "unset": [], "error": {"path": "/detail/outside_checked", "keyword": "type"}},
+    {"name": "an outside count below zero (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_checked": -1}, "unset": [], "error": {"path": "/detail/outside_checked", "keyword": "minimum"}},
+    {"name": "outside changes that are not a list (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_changed": "x"}, "unset": [], "error": {"path": "/detail/outside_changed", "keyword": "type"}},
+    {"name": "an outside change that is not an object (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_changed": [1]}, "unset": [], "error": {"path": "/detail/outside_changed/0", "keyword": "type"}},
+    {"name": "an outside change with a field the spec does not name (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_changed": [{"path": "/home/u/.zshrc", "fingerprint_before": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "fingerprint": "hmac-sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "content": "x"}]}, "unset": [], "error": {"path": "/detail/outside_changed/0/content", "keyword": "additionalProperties"}},
+    {"name": "an outside change with no path (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_changed": [{"fingerprint_before": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "fingerprint": "hmac-sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}, "unset": [], "error": {"path": "/detail/outside_changed/0/path", "keyword": "required"}},
+    {"name": "an outside change with no fingerprint_before (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_changed": [{"path": "/home/u/.zshrc", "fingerprint": "hmac-sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}, "unset": [], "error": {"path": "/detail/outside_changed/0/fingerprint_before", "keyword": "required"}},
+    {"name": "an outside change with no fingerprint (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_changed": [{"path": "/home/u/.zshrc", "fingerprint_before": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}, "unset": [], "error": {"path": "/detail/outside_changed/0/fingerprint", "keyword": "required"}},
+    {"name": "an outside change whose path is not text (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_changed": [{"path": 1, "fingerprint_before": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "fingerprint": "hmac-sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}, "unset": [], "error": {"path": "/detail/outside_changed/0/path", "keyword": "type"}},
+    {"name": "an outside change with an empty path (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_changed": [{"path": "", "fingerprint_before": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "fingerprint": "hmac-sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}, "unset": [], "error": {"path": "/detail/outside_changed/0/path", "keyword": "minLength"}},
+    {"name": "an outside change whose fingerprint before is of the wrong shape (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_changed": [{"path": "/home/u/.zshrc", "fingerprint_before": "x", "fingerprint": "hmac-sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}, "unset": [], "error": {"path": "/detail/outside_changed/0/fingerprint_before", "keyword": "pattern"}},
+    {"name": "an outside change whose fingerprint is of the wrong shape (CF4)", "from": "process_closeout_tripwire", "set": {"/detail/outside_changed": [{"path": "/home/u/.zshrc", "fingerprint_before": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "fingerprint": "x"}]}, "unset": [], "error": {"path": "/detail/outside_changed/0/fingerprint", "keyword": "pattern"}},
+    {"name": "completeness that is not an object (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": "x"}, "unset": [], "error": {"path": "/detail/completeness", "keyword": "type"}},
+    {"name": "completeness with a field the spec does not name (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": 12, "unmarked": [{"id": "toolu_9", "tool": "mcp__db__query"}], "cut": 2, "extra": 1}}, "unset": [], "error": {"path": "/detail/completeness/extra", "keyword": "additionalProperties"}},
+    {"name": "completeness with no transcript (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"calls": 12, "unmarked": [{"id": "toolu_9", "tool": "mcp__db__query"}], "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/transcript", "keyword": "required"}},
+    {"name": "completeness with no calls (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "unmarked": [{"id": "toolu_9", "tool": "mcp__db__query"}], "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/calls", "keyword": "required"}},
+    {"name": "completeness with no unmarked (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": 12, "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/unmarked", "keyword": "required"}},
+    {"name": "a transcript state the spec does not name (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "partial", "calls": 12, "unmarked": [{"id": "toolu_9", "tool": "mcp__db__query"}], "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/transcript", "keyword": "enum"}},
+    {"name": "a call count that is not a whole number (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": "12", "unmarked": [{"id": "toolu_9", "tool": "mcp__db__query"}], "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/calls", "keyword": "type"}},
+    {"name": "a call count below zero (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": -1, "unmarked": [{"id": "toolu_9", "tool": "mcp__db__query"}], "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/calls", "keyword": "minimum"}},
+    {"name": "unmarked calls that are not a list (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": 12, "unmarked": "x", "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/unmarked", "keyword": "type"}},
+    {"name": "an unmarked call that is not an object (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": 12, "unmarked": [1], "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/unmarked/0", "keyword": "type"}},
+    {"name": "an unmarked call with a field the spec does not name (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": 12, "unmarked": [{"id": "toolu_9", "tool": "mcp__db__query", "input": {}}], "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/unmarked/0/input", "keyword": "additionalProperties"}},
+    {"name": "an unmarked call with no id (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": 12, "unmarked": [{"tool": "mcp__db__query"}], "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/unmarked/0/id", "keyword": "required"}},
+    {"name": "an unmarked call with no tool (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": 12, "unmarked": [{"id": "toolu_9"}], "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/unmarked/0/tool", "keyword": "required"}},
+    {"name": "an unmarked call whose id is not text (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": 12, "unmarked": [{"id": 9, "tool": "mcp__db__query"}], "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/unmarked/0/id", "keyword": "type"}},
+    {"name": "an unmarked call with an empty id (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": 12, "unmarked": [{"id": "", "tool": "mcp__db__query"}], "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/unmarked/0/id", "keyword": "minLength"}},
+    {"name": "an unmarked call whose tool is not text (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": 12, "unmarked": [{"id": "toolu_9", "tool": 9}], "cut": 2}}, "unset": [], "error": {"path": "/detail/completeness/unmarked/0/tool", "keyword": "type"}},
+    {"name": "a cut that is not a whole number (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": 12, "unmarked": [{"id": "toolu_9", "tool": "mcp__db__query"}], "cut": "2"}}, "unset": [], "error": {"path": "/detail/completeness/cut", "keyword": "type"}},
+    {"name": "a cut below one (CF5)", "from": "process_closeout_completeness", "set": {"/detail/completeness": {"transcript": "read", "calls": 12, "unmarked": [{"id": "toolu_9", "tool": "mcp__db__query"}], "cut": 0}}, "unset": [], "error": {"path": "/detail/completeness/cut", "keyword": "minimum"}}
+  ]
+}

@@ -1,0 +1,1845 @@
+{
+  "good": {
+    "header": {
+      "schema_version": 1,
+      "record": "session_header",
+      "session_id": "ses_test_0001",
+      "seq": 0,
+      "observed_at": "2026-11-16T08:59:59.000Z",
+      "mono_ns": "4900000000",
+      "orunmila": {
+        "version": "0.3.0",
+        "code_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "agent": {
+        "name": "claude-code",
+        "version": "2.1.0"
+      },
+      "os": {
+        "platform": "darwin",
+        "release": "25.2.0"
+      },
+      "accounts": {
+        "agent_user": "dev",
+        "orunmila_user": "dev"
+      },
+      "project_root": "/Users/dev/proj",
+      "config": {
+        "quiet_window_ms": 1500,
+        "ceiling_ms": 30000,
+        "lag_grace_ms": 3000,
+        "exclusions": [
+          "node_modules"
+        ],
+        "diff_size_limit_bytes": 10485760
+      },
+      "frozen": {
+        "rules": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "byproducts": null,
+        "ignore": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "law_packs": {
+          "canon": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        "hook_settings": {
+          ".claude/settings.local.json": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      },
+      "hooks_report": {
+        "before": [
+          "*"
+        ],
+        "after": [
+          "*"
+        ]
+      },
+      "test_command": {
+        "text": "node test/all.js",
+        "source": {
+          "path": "package.json",
+          "key": "scripts.test"
+        },
+        "scripts_fingerprint": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "prev_hash": null,
+      "hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    "header_hooks_partial": {
+      "schema_version": 1,
+      "record": "session_header",
+      "session_id": "ses_test_0001",
+      "seq": 0,
+      "observed_at": "2026-11-16T08:59:59.000Z",
+      "mono_ns": "4900000000",
+      "orunmila": {
+        "version": "0.3.0",
+        "code_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "agent": {
+        "name": "claude-code",
+        "version": "2.1.0"
+      },
+      "os": {
+        "platform": "darwin",
+        "release": "25.2.0"
+      },
+      "accounts": {
+        "agent_user": "dev",
+        "orunmila_user": "dev"
+      },
+      "project_root": "/Users/dev/proj",
+      "config": {
+        "quiet_window_ms": 1500,
+        "ceiling_ms": 30000,
+        "lag_grace_ms": 3000,
+        "exclusions": [
+          "node_modules"
+        ],
+        "diff_size_limit_bytes": 10485760
+      },
+      "frozen": {
+        "rules": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "byproducts": null,
+        "ignore": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "law_packs": {
+          "canon": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        "hook_settings": {
+          ".claude/settings.local.json": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      },
+      "hooks_report": {
+        "before": [
+          "Edit",
+          "Write"
+        ],
+        "after": [
+          "*"
+        ]
+      },
+      "test_command": {
+        "text": null,
+        "source": null,
+        "scripts_fingerprint": null
+      },
+      "prev_hash": null,
+      "hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    "header_baseline": {
+      "schema_version": 1,
+      "record": "session_header",
+      "session_id": "ses_test_0001",
+      "seq": 0,
+      "observed_at": "2026-11-16T08:59:59.000Z",
+      "mono_ns": "4900000000",
+      "orunmila": {
+        "version": "0.3.0",
+        "code_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "agent": {
+        "name": "claude-code",
+        "version": "2.1.0"
+      },
+      "os": {
+        "platform": "darwin",
+        "release": "25.2.0"
+      },
+      "accounts": {
+        "agent_user": "dev",
+        "orunmila_user": "dev"
+      },
+      "project_root": "/Users/dev/proj",
+      "config": {
+        "quiet_window_ms": 1500,
+        "ceiling_ms": 30000,
+        "lag_grace_ms": 3000,
+        "exclusions": [
+          "node_modules"
+        ],
+        "diff_size_limit_bytes": 10485760
+      },
+      "frozen": {
+        "rules": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "byproducts": null,
+        "ignore": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "law_packs": {
+          "canon": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        "hook_settings": {
+          ".claude/settings.local.json": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      },
+      "hooks_report": {
+        "before": [
+          "*"
+        ],
+        "after": [
+          "*"
+        ]
+      },
+      "test_command": {
+        "text": "node test/all.js",
+        "source": {
+          "path": "package.json",
+          "key": "scripts.test"
+        },
+        "scripts_fingerprint": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "prev_hash": null,
+      "hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "baseline": {
+        "fingerprint": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    "header_watch_extra": {
+      "schema_version": 1,
+      "record": "session_header",
+      "session_id": "ses_test_0001",
+      "seq": 0,
+      "observed_at": "2026-11-16T08:59:59.000Z",
+      "mono_ns": "4900000000",
+      "orunmila": {
+        "version": "0.3.0",
+        "code_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "agent": {
+        "name": "claude-code",
+        "version": "2.1.0"
+      },
+      "os": {
+        "platform": "darwin",
+        "release": "25.2.0"
+      },
+      "accounts": {
+        "agent_user": "dev",
+        "orunmila_user": "dev"
+      },
+      "project_root": "/Users/dev/proj",
+      "config": {
+        "quiet_window_ms": 1500,
+        "ceiling_ms": 30000,
+        "lag_grace_ms": 3000,
+        "exclusions": [
+          "node_modules"
+        ],
+        "diff_size_limit_bytes": 10485760,
+        "watch_extra": [
+          "/made/up/notes",
+          "C:/made/up/docs"
+        ]
+      },
+      "frozen": {
+        "rules": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "byproducts": null,
+        "ignore": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "law_packs": {
+          "canon": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        "hook_settings": {
+          ".claude/settings.local.json": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      },
+      "hooks_report": {
+        "before": [
+          "*"
+        ],
+        "after": [
+          "*"
+        ]
+      },
+      "test_command": {
+        "text": "node test/all.js",
+        "source": {
+          "path": "package.json",
+          "key": "scripts.test"
+        },
+        "scripts_fingerprint": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "prev_hash": null,
+      "hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    "header_tripwire": {
+      "schema_version": 1,
+      "record": "session_header",
+      "session_id": "ses_test_0001",
+      "seq": 0,
+      "observed_at": "2026-11-16T08:59:59.000Z",
+      "mono_ns": "4900000000",
+      "orunmila": {
+        "version": "0.3.0",
+        "code_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "agent": {
+        "name": "claude-code",
+        "version": "2.1.0"
+      },
+      "os": {
+        "platform": "darwin",
+        "release": "25.2.0"
+      },
+      "accounts": {
+        "agent_user": "dev",
+        "orunmila_user": "dev"
+      },
+      "project_root": "/Users/dev/proj",
+      "config": {
+        "quiet_window_ms": 1500,
+        "ceiling_ms": 30000,
+        "lag_grace_ms": 3000,
+        "exclusions": [
+          "node_modules"
+        ],
+        "diff_size_limit_bytes": 10485760
+      },
+      "frozen": {
+        "rules": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "byproducts": null,
+        "ignore": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "law_packs": {
+          "canon": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        "hook_settings": {
+          ".claude/settings.local.json": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      },
+      "hooks_report": {
+        "before": [
+          "*"
+        ],
+        "after": [
+          "*"
+        ]
+      },
+      "test_command": {
+        "text": "node test/all.js",
+        "source": {
+          "path": "package.json",
+          "key": "scripts.test"
+        },
+        "scripts_fingerprint": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "prev_hash": null,
+      "hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "tripwire": {
+        "/home/u/.zshrc": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "/home/u/.bashrc": null,
+        "/home/u/Library/LaunchAgents": "hmac-sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    }
+  },
+  "bad": [
+    {
+      "name": "header seq not 0",
+      "from": "header",
+      "set": {
+        "/seq": 1
+      },
+      "unset": [],
+      "error": {
+        "path": "/seq",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "header with a previous hash",
+      "from": "header",
+      "set": {
+        "/prev_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "unset": [],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "record name wrong",
+      "from": "header",
+      "set": {
+        "/record": "mark"
+      },
+      "unset": [],
+      "error": {
+        "path": "/record",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "no law pack fingerprints",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/frozen/law_packs"
+      ],
+      "error": {
+        "path": "/frozen/law_packs",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "hook settings fingerprint malformed",
+      "from": "header",
+      "set": {
+        "/frozen/hook_settings/.claude~1settings.local.json": "abc"
+      },
+      "unset": [],
+      "error": {
+        "path": "/frozen/hook_settings/.claude~1settings.local.json",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "negative quiet window",
+      "from": "header",
+      "set": {
+        "/config/quiet_window_ms": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/quiet_window_ms",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "no diff size limit",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/config/diff_size_limit_bytes"
+      ],
+      "error": {
+        "path": "/config/diff_size_limit_bytes",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "project root not absolute",
+      "from": "header",
+      "set": {
+        "/project_root": "proj"
+      },
+      "unset": [],
+      "error": {
+        "path": "/project_root",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "no record of which tool calls the hooks report",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/hooks_report"
+      ],
+      "error": {
+        "path": "/hooks_report",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no accounts",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/accounts"
+      ],
+      "error": {
+        "path": "/accounts",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no Orunmila version",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/orunmila/version"
+      ],
+      "error": {
+        "path": "/orunmila/version",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "mono_ns as a JSON number (inexact past 2^53)",
+      "from": "header",
+      "set": {
+        "/mono_ns": 5000000000
+      },
+      "unset": [],
+      "error": {
+        "path": "/mono_ns",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "no test command",
+      "from": "header",
+      "unset": [
+        "/test_command"
+      ],
+      "error": {
+        "path": "/test_command",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "test command fingerprint malformed",
+      "from": "header",
+      "set": {
+        "/test_command/scripts_fingerprint": "sha256:xyz"
+      },
+      "error": {
+        "path": "/test_command/scripts_fingerprint",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "test command source without its key",
+      "from": "header",
+      "unset": [
+        "/test_command/source/key"
+      ],
+      "error": {
+        "path": "/test_command/source/key",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "test command text a number",
+      "from": "header",
+      "set": {
+        "/test_command/text": 5
+      },
+      "error": {
+        "path": "/test_command/text",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/schema_version missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/schema_version"
+      ],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/record missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/record"
+      ],
+      "error": {
+        "path": "/record",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/session_id missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/session_id"
+      ],
+      "error": {
+        "path": "/session_id",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/seq missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/seq"
+      ],
+      "error": {
+        "path": "/seq",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/observed_at missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/observed_at"
+      ],
+      "error": {
+        "path": "/observed_at",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/mono_ns missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/mono_ns"
+      ],
+      "error": {
+        "path": "/mono_ns",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/orunmila missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/orunmila"
+      ],
+      "error": {
+        "path": "/orunmila",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/agent missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/agent"
+      ],
+      "error": {
+        "path": "/agent",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/os missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/os"
+      ],
+      "error": {
+        "path": "/os",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/project_root missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/project_root"
+      ],
+      "error": {
+        "path": "/project_root",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/config missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/config"
+      ],
+      "error": {
+        "path": "/config",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/frozen missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/frozen"
+      ],
+      "error": {
+        "path": "/frozen",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/prev_hash missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/prev_hash"
+      ],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/hash missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/hash"
+      ],
+      "error": {
+        "path": "/hash",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/schema_version not 1 (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/schema_version": 2
+      },
+      "unset": [],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "/session_id of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/session_id": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/session_id",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/session_id empty (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/session_id": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/session_id",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/observed_at of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/observed_at": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/observed_at",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/observed_at not matching its pattern (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/observed_at": "sha256:0123"
+      },
+      "unset": [],
+      "error": {
+        "path": "/observed_at",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/mono_ns not matching its pattern (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/mono_ns": "sha256:0123"
+      },
+      "unset": [],
+      "error": {
+        "path": "/mono_ns",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/orunmila of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/orunmila": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/orunmila",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/orunmila/version of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/orunmila/version": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/orunmila/version",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/orunmila/version empty (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/orunmila/version": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/orunmila/version",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/orunmila/code_fingerprint of the wrong type (its definition) (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/orunmila/code_fingerprint": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/orunmila/code_fingerprint",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/agent of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/agent": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/agent",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/agent/name missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/agent/name"
+      ],
+      "error": {
+        "path": "/agent/name",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/agent/name of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/agent/name": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/agent/name",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/agent/name empty (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/agent/name": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/agent/name",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/agent/version of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/agent/version": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/agent/version",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/os of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/os": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/os",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/os/platform missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/os/platform"
+      ],
+      "error": {
+        "path": "/os/platform",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/os/platform of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/os/platform": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/os/platform",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/os/platform empty (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/os/platform": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/os/platform",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/os/release of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/os/release": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/os/release",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/accounts of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/accounts": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/accounts",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/accounts/agent_user missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/accounts/agent_user"
+      ],
+      "error": {
+        "path": "/accounts/agent_user",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/accounts/orunmila_user missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/accounts/orunmila_user"
+      ],
+      "error": {
+        "path": "/accounts/orunmila_user",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/accounts/agent_user of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/accounts/agent_user": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/accounts/agent_user",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/accounts/agent_user empty (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/accounts/agent_user": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/accounts/agent_user",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/accounts/orunmila_user of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/accounts/orunmila_user": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/accounts/orunmila_user",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/accounts/orunmila_user empty (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/accounts/orunmila_user": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/accounts/orunmila_user",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/project_root of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/project_root": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/project_root",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/config of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/config": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/config",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/config/quiet_window_ms missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/config/quiet_window_ms"
+      ],
+      "error": {
+        "path": "/config/quiet_window_ms",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/config/ceiling_ms missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/config/ceiling_ms"
+      ],
+      "error": {
+        "path": "/config/ceiling_ms",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/config/lag_grace_ms missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/config/lag_grace_ms"
+      ],
+      "error": {
+        "path": "/config/lag_grace_ms",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/config/exclusions missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/config/exclusions"
+      ],
+      "error": {
+        "path": "/config/exclusions",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/config/quiet_window_ms of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/config/quiet_window_ms": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/quiet_window_ms",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/config/ceiling_ms of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/config/ceiling_ms": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/ceiling_ms",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/config/ceiling_ms below 0 (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/config/ceiling_ms": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/ceiling_ms",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "/config/lag_grace_ms of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/config/lag_grace_ms": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/lag_grace_ms",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/config/lag_grace_ms below 0 (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/config/lag_grace_ms": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/lag_grace_ms",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "/config/exclusions of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/config/exclusions": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/exclusions",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/config/exclusions holding an item of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/config/exclusions": [
+          7
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/exclusions/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/config/exclusions/0 of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/config/exclusions/0": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/exclusions/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/config/diff_size_limit_bytes of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/config/diff_size_limit_bytes": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/diff_size_limit_bytes",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/config/diff_size_limit_bytes below 0 (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/config/diff_size_limit_bytes": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/diff_size_limit_bytes",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "/frozen of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/frozen": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/frozen",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/frozen/rules missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/frozen/rules"
+      ],
+      "error": {
+        "path": "/frozen/rules",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/frozen/byproducts missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/frozen/byproducts"
+      ],
+      "error": {
+        "path": "/frozen/byproducts",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/frozen/ignore missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/frozen/ignore"
+      ],
+      "error": {
+        "path": "/frozen/ignore",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/frozen/hook_settings missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/frozen/hook_settings"
+      ],
+      "error": {
+        "path": "/frozen/hook_settings",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/frozen/rules of the wrong type (its definition) (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/frozen/rules": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/frozen/rules",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/frozen/byproducts of the wrong type (its definition) (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/frozen/byproducts": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/frozen/byproducts",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/frozen/ignore of the wrong type (its definition) (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/frozen/ignore": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/frozen/ignore",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/frozen/law_packs of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/frozen/law_packs": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/frozen/law_packs",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/frozen/law_packs/canon of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/frozen/law_packs/canon": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/frozen/law_packs/canon",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/frozen/law_packs/canon of the wrong type (its definition) (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/frozen/law_packs/canon": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/frozen/law_packs/canon",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/frozen/hook_settings of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/frozen/hook_settings": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/frozen/hook_settings",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/hooks_report of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/hooks_report": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/hooks_report",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/hooks_report/before missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/hooks_report/before"
+      ],
+      "error": {
+        "path": "/hooks_report/before",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/hooks_report/after missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/hooks_report/after"
+      ],
+      "error": {
+        "path": "/hooks_report/after",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/hooks_report/before of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/hooks_report/before": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/hooks_report/before",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/hooks_report/before holding an item of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/hooks_report/before": [
+          7
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/hooks_report/before/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/hooks_report/before/0 of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/hooks_report/before/0": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/hooks_report/before/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/hooks_report/before/0 empty (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/hooks_report/before/0": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/hooks_report/before/0",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/hooks_report/after of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/hooks_report/after": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/hooks_report/after",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/hooks_report/after holding an item of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/hooks_report/after": [
+          7
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/hooks_report/after/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/hooks_report/after/0 of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/hooks_report/after/0": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/hooks_report/after/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/hooks_report/after/0 empty (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/hooks_report/after/0": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/hooks_report/after/0",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/test_command of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/test_command": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/test_command",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/test_command/text missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/test_command/text"
+      ],
+      "error": {
+        "path": "/test_command/text",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/test_command/source missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/test_command/source"
+      ],
+      "error": {
+        "path": "/test_command/source",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/test_command/scripts_fingerprint missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/test_command/scripts_fingerprint"
+      ],
+      "error": {
+        "path": "/test_command/scripts_fingerprint",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/test_command/source of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/test_command/source": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/test_command/source",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/test_command/source/path missing (generated, LD79)",
+      "from": "header",
+      "set": {},
+      "unset": [
+        "/test_command/source/path"
+      ],
+      "error": {
+        "path": "/test_command/source/path",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/test_command/source/path of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/test_command/source/path": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/test_command/source/path",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/test_command/source/path empty (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/test_command/source/path": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/test_command/source/path",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/test_command/source/key of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/test_command/source/key": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/test_command/source/key",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/test_command/source/key empty (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/test_command/source/key": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/test_command/source/key",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "/test_command/scripts_fingerprint of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/test_command/scripts_fingerprint": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/test_command/scripts_fingerprint",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/hash of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/hash": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/hash",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/hash not matching its pattern (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/hash": "sha256:0123"
+      },
+      "unset": [],
+      "error": {
+        "path": "/hash",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/frozen/rules of the wrong type (generated, LD79)",
+      "from": "header",
+      "set": {
+        "/frozen/rules": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/frozen/rules",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "baseline with no fingerprint (N1b, LD170)",
+      "from": "header_baseline",
+      "set": {},
+      "unset": [
+        "/baseline/fingerprint"
+      ],
+      "error": {
+        "path": "/baseline/fingerprint",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "baseline fingerprint not a SHA-256 (N1b)",
+      "from": "header_baseline",
+      "set": {
+        "/baseline/fingerprint": "sha256:0123"
+      },
+      "unset": [],
+      "error": {
+        "path": "/baseline/fingerprint",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "baseline fingerprint keyed: the file's fingerprint is plain (N1b)",
+      "from": "header_baseline",
+      "set": {
+        "/baseline/fingerprint": "hmac-sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "unset": [],
+      "error": {
+        "path": "/baseline/fingerprint",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "baseline fingerprint of the wrong type (N1b)",
+      "from": "header_baseline",
+      "set": {
+        "/baseline/fingerprint": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/baseline/fingerprint",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "baseline not an object (N1b)",
+      "from": "header_baseline",
+      "set": {
+        "/baseline": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "unset": [],
+      "error": {
+        "path": "/baseline",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "byproducts not a list (A1a)",
+      "from": "header",
+      "set": {
+        "/config/byproducts": "dist/"
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/byproducts",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "rules not text (BB6, Q34)",
+      "from": "header",
+      "set": {
+        "/config/rules": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/rules",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "byproducts holding an entry that is not a string (A1a)",
+      "from": "header",
+      "set": {
+        "/config/byproducts": [
+          7
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/byproducts/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "case_insensitive that is not a boolean (Q25, LD233)",
+      "from": "header",
+      "set": {
+        "/config/case_insensitive": "yes"
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/case_insensitive",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "watch_extra not a list (Q42)",
+      "from": "header",
+      "set": {
+        "/config/watch_extra": "/made/up/notes"
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/watch_extra",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "watch_extra holding an entry that is not a string (Q42)",
+      "from": "header",
+      "set": {
+        "/config/watch_extra": [
+          7
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/watch_extra/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "watch_extra holding a relative folder (Q42)",
+      "from": "header",
+      "set": {
+        "/config/watch_extra": [
+          "notes"
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/config/watch_extra/0",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "a tripwire that is not an object (CF4)",
+      "from": "header_tripwire",
+      "set": {
+        "/tripwire": [
+          "x"
+        ]
+      },
+      "unset": [],
+      "error": {
+        "path": "/tripwire",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a tripwire fingerprint that is not text or null (CF4)",
+      "from": "header_tripwire",
+      "set": {
+        "/tripwire": {
+          "x": 7
+        }
+      },
+      "unset": [],
+      "error": {
+        "path": "/tripwire/x",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a tripwire fingerprint of the wrong shape (CF4)",
+      "from": "header_tripwire",
+      "set": {
+        "/tripwire": {
+          "x": "md5:00"
+        }
+      },
+      "unset": [],
+      "error": {
+        "path": "/tripwire/x",
+        "keyword": "pattern"
+      }
+    }
+  ]
+}

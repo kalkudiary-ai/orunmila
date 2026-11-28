@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:orunmila:spec:v1:updates-header",
+  "title": "Orunmila update log header, schema version 1",
+  "description": "The first line of the update log (`updates.jsonl` in Orunmila's home, beside the sessions), where its hash chain starts. Orunmila switches itself to a newer version only while no session is held, so no session's record sees its code change; each switch, and each update it refused, is a record in this hash-chained log, so an update can never look like code that was always there. Update records follow (update.schema.json).",
+  "$comment": "agent's proposal Q44 (a), approved by O 2026-11-25 (LD299): a log of its own beside the sessions, hash-chained, checked by `orunmila verify`; the brief names no update log, so every field name here is the agent's choice (LD329). Unknown fields are allowed, as in the other v1 drafts (LD17).",
+  "type": "object",
+  "required": ["schema_version", "record", "seq", "created_at", "prev_hash", "hash"],
+  "properties": {
+    "schema_version": { "description": "All carry a `schema_version`.", "$comment": "brief v4 line 209", "const": 1 },
+    "record": {
+      "description": "Marks this line as the update log's header, so a reader tells it from an update without guessing.",
+      "$comment": "agent's choice, LD329",
+      "const": "updates_header"
+    },
+    "seq": { "description": "The header is the log's first record; updates follow from seq 1.", "$comment": "agent's choice, LD329", "const": 0 },
+    "created_at": {
+      "description": "Wall-clock time of the first update, which created the log.",
+      "$comment": "agent's choice, LD329; the form of the session header's observed_at",
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$"
+    },
+    "prev_hash": { "description": "The hash chain starts from the header, so it has no previous hash.", "$comment": "brief v4 line 248; spec/hash-chain.md", "type": "null" },
+    "hash": {
+      "description": "The header's own hash; the first update's prev_hash.",
+      "$comment": "brief v4 line 248; spec/hash-chain.md",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

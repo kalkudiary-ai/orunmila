@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 KALKU DIGITAL SOLUTIONS LIMITED
 'use strict';
 
 /**
@@ -12,7 +14,7 @@
  * Run: node test/unit.js
  */
 
-const { assert, fs, path, tmpHome, tmpDir, rmrf, sleep, it, runAll } = require('./helpers');
+const { assert, fs, path, tmpHome, tmpDir, rmrf, sleep, awaitWatching, it, runAll } = require('./helpers');
 
 // Modules under test. eventlog reads ORUNMILA_HOME lazily (per call), so a
 // single require up here is fine as long as we set the env before each call.
@@ -316,9 +318,11 @@ it('html: renderSessionHtml (no trail) produces a self-contained document', () =
   assert.ok(html.includes('untracked write'), 'the untracked sneaky.js surfaces as a finding');
 });
 
-it('html: renderSessionHtml with no reports shows the empty-grid message', () => {
+// HTML1 (F17, LD303): with no reports the grid says it was not checked; "No file writes captured yet" was false
+// whenever the trail held writes, and the header beside it read "looks clean".
+it('html: renderSessionHtml with no reports says the files were not checked', () => {
   const html = renderSessionHtml('S', []);
-  assert.ok(html.includes('No file writes captured yet'));
+  assert.ok(html.includes('Not checked: no turn of this session has a report'));
 });
 
 it('html: renderSessionHtml with a trail model renders the tabbed visual + trail', () => {
@@ -606,6 +610,103 @@ it('hasher: looksBinary flags NUL bytes; snapshot drops content for binary', () 
 
 // --- fs-sentinel/walker: real fs.watch path ---------------------------------
 
+// Real fs.watch delivery can lag under full-suite load (NF5, P2-6): wait up to
+// a deadline rather than a fixed number of short sleeps. A real miss still fails.
+const WATCH_DEADLINE_MS = 5000;
+async function waitUntil(cond) {
+  const end = Date.now() + WATCH_DEADLINE_MS;
+  while (!cond() && Date.now() < end) await sleep(25);
+}
+
+// NF65, made deterministic: fs.watch returns at once but starts delivering only
+// after `armMs` (never, for Infinity), the blind window measured on macOS right
+// after a watcher starts. Test-only; fs.watch is restored whatever happens.
+async function withLateWatch(armMs, fn) {
+  const { EventEmitter } = require('events');
+  const realWatch = fs.watch;
+  fs.watch = function lateWatch(target, opts, cb) {
+    const fake = new EventEmitter();
+    let real = null;
+    let closed = false;
+    const timer =
+      armMs === Infinity
+        ? null
+        : setTimeout(() => {
+            if (closed) return;
+            real = realWatch.call(fs, target, opts, cb);
+            real.on('error', (e) => fake.emit('error', e));
+          }, armMs);
+    fake.close = () => {
+      closed = true;
+      if (timer) clearTimeout(timer);
+      if (real) real.close();
+    };
+    return fake;
+  };
+  try {
+    return await fn();
+  } finally {
+    fs.watch = realWatch;
+  }
+}
+
+function seenWalker(dir) {
+  const seen = new Set();
+  const walker = createWalker({
+    root: dir,
+    isIgnored: () => false,
+    onPath: (p) => seen.add(p),
+    onError: () => {},
+    onWatcherCount: () => {},
+  });
+  return { seen, walker };
+}
+
+it('walker readiness (NF65): a write made before the watcher listens is lost, and no deadline brings it back', async () => {
+  const dir = tmpDir();
+  await withLateWatch(300, async () => {
+    const { seen, walker } = seenWalker(dir);
+    walker.start();
+    const f = path.join(dir, 'early.js');
+    fs.writeFileSync(f, 'x');
+    await sleep(1000); // well past the moment the watcher starts listening
+    walker.close();
+    assert.ok(!seen.has(f), 'the simulated blind window must lose the write (else the readiness test proves nothing)');
+  });
+  rmrf(dir);
+});
+
+it('walker readiness (NF65): after awaitWatching(), a write is seen even when the watcher starts listening late', async () => {
+  const dir = tmpDir();
+  await withLateWatch(300, async () => {
+    const { seen, walker } = seenWalker(dir);
+    walker.start();
+    const ready = await awaitWatching(dir, (p) => seen.has(p));
+    const f = path.join(dir, 'after-ready.js');
+    fs.writeFileSync(f, 'x');
+    await waitUntil(() => seen.has(f));
+    walker.close();
+    assert.ok(ready, 'a probe was seen once the watcher listened');
+    assert.ok(seen.has(f), 'the write after readiness was seen');
+  });
+  rmrf(dir);
+});
+
+it('walker readiness (NF65): awaitWatching() gives up false at its deadline when the watcher never delivers', async () => {
+  const dir = tmpDir();
+  await withLateWatch(Infinity, async () => {
+    const { seen, walker } = seenWalker(dir);
+    walker.start();
+    const t0 = Date.now();
+    const ready = await awaitWatching(dir, (p) => seen.has(p), { deadlineMs: 600 });
+    const took = Date.now() - t0;
+    walker.close();
+    assert.strictEqual(ready, false, 'a dead watcher must not read as ready');
+    assert.ok(took >= 600 && took < 2000, `gave up at the deadline (took ${took} ms)`);
+  });
+  rmrf(dir);
+});
+
 it('walker: start() seeds existing files and reports new writes via onPath', (/* sync */) => {
   const dir = tmpDir();
   fs.mkdirSync(path.join(dir, 'sub'));
@@ -665,10 +766,12 @@ it('walker: a real write into a watched dir reaches onPath via the fs.watch call
     onWatcherCount: () => {},
   });
   walker.start();
+  const ready = await awaitWatching(dir, (p) => seen.includes(p));
   // Drive a real change and await real fs.watch delivery (handle() path).
   fs.writeFileSync(path.join(dir, 'new.js'), 'hello');
-  for (let i = 0; i < 20 && !seen.some((p) => p.endsWith('new.js')); i++) await sleep(40);
+  await waitUntil(() => seen.some((p) => p.endsWith('new.js')));
   walker.close();
+  assert.ok(ready, 'the watcher never delivered a probe');
   assert.ok(seen.some((p) => p.endsWith('new.js')), 'real write delivered to onPath');
   rmrf(dir);
 });
@@ -684,13 +787,16 @@ it('walker: a new subdirectory with a file inside gets a watcher and the file is
     onWatcherCount: () => {},
   });
   walker.start();
+  const ready = await awaitWatching(dir, (p) => seen.includes(p));
   // Create a brand-new subdir + file: handle() must stat the dir, attach, and
   // walk it so the inner file is reported even though it landed pre-watcher.
   const sub = path.join(dir, 'fresh');
   fs.mkdirSync(sub);
   fs.writeFileSync(path.join(sub, 'inner.js'), 'x');
-  for (let i = 0; i < 25 && !seen.some((p) => p.endsWith('inner.js')); i++) await sleep(40);
+  await waitUntil(() => seen.some((p) => p.endsWith('inner.js')));
   walker.close();
+  assert.ok(ready, 'the watcher never delivered a probe');
+  assert.ok(seen.some((p) => p.endsWith('inner.js')), 'the file inside the new subdirectory was reported');
   assert.ok(walker.watcherCount() === 0, 'closed cleanly');
   rmrf(dir);
 });

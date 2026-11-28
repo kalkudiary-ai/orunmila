@@ -10,19 +10,23 @@ Most verification tooling tells you afterwards. The Closeout Gate runs on the
 Stop hook, **before a turn is allowed to end**, and can refuse it — the agent
 must fix what was flagged and respond again.
 
-This is the second of orunmila's two lenses. The first, the Stain Map, records
-and reports and never refuses (that's the free `orunmila` skill). The gate needs
-the Stain Map underneath it, because it judges the events the Stain Map records.
+This is one of orunmila's three lenses. The Stain Map records and reports and
+never refuses (that's the free `orunmila` skill); the Babaláwo judges a whole
+session's record at its end and never refuses either. The gate needs the Stain
+Map underneath it, because it judges the events the Stain Map records.
 
-**Claude Code only.** No other agent currently exposes a hook that can refuse a
-turn. Say this up front — do not install and let them discover it.
+**Claude Code and Cursor.** Claude Code's Stop hook can refuse a turn; Cursor's
+stop hook can only send a follow-up message, so in Cursor a block arrives as an
+automatic message, marked as Orunmila's, that the agent then answers, and advice
+is not shown. No other agent exposes a hook that can answer a turn's end. Say
+this up front — do not install and let them discover it.
 
 ## Steps
 
-1. Check Node >= 18 and that they are on Claude Code.
+1. Check Node >= 18 and that they are on Claude Code or Cursor.
 2. Install both lenses:
    ```bash
-   npx orunmila install --agent claude-code --with-gate
+   npx orunmila install --agent claude-code --with-gate   # or: --agent cursor --with-gate
    ```
    If the Stain Map is already installed, add the gate alone — this leaves the
    existing capture hooks untouched:
@@ -67,12 +71,18 @@ even one that tested nothing. Setting expectations wrongly here is
 worse than the limits themselves: someone who believes a turn the gate let
 through was tested will stop checking for it.
 
+**The claims block makes the check exact** (`ORUNMILA_CLAIMS_BLOCK=1`, off by
+default). The agent is asked to end each turn with a fenced `orunmila-claims`
+block; each `proved: <command>` line must name a command that ran in the turn
+and passed with its own exit status (`npm test; echo done` does not prove `npm
+test`). A miss is `no-green-without-command`'s finding. Prose is still read.
+
 ## Tuning block vs advise
 
 The defaults are set on measurement, not taste, and it is worth explaining why
 before changing them. On real sessions only `no-green-without-command` proved
 precise enough to be worth stopping a turn over. The current figures are in the
-README, under "Why only two block".
+guide (`docs/GUIDE.md`), under "Why only two block".
 
 The asymmetry drives everything: a false advisory costs the agent a sentence of
 attention, a false block costs the whole session — and an agent that learns the

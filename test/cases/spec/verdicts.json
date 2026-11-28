@@ -1,0 +1,660 @@
+{
+  "good": {
+    "verdict": {
+      "schema_version": 1,
+      "record": "verdict",
+      "seq": 1,
+      "session_id": "ses_test_0001",
+      "verdict_id": "v_0001",
+      "odu_id": "odu_0001",
+      "odu_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "verdict": "look_at_this",
+      "rule": "R2",
+      "also": ["R6"],
+      "mark_seqs": [3],
+      "witness_status": {
+        "glove": {
+          "status": "saw",
+          "mark_seqs": [3],
+          "says": ["modified"],
+          "slots": [
+            {
+              "seq": 3
+            }
+          ]
+        },
+        "sentinel": {
+          "status": "saw_nothing",
+          "mark_seqs": []
+        }
+      },
+      "hidden": false,
+      "opened": ["odu_0002"],
+      "supersedes": "v_0000",
+      "rules": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "prev_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    "verdict_first": {
+      "schema_version": 1,
+      "record": "verdict",
+      "seq": 1,
+      "session_id": "ses_test_0001",
+      "verdict_id": "v_0001",
+      "odu_id": "odu_0001",
+      "odu_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "verdict": "look_at_this",
+      "rule": "R2",
+      "also": ["R6"],
+      "mark_seqs": [3],
+      "witness_status": {
+        "glove": {
+          "status": "saw",
+          "mark_seqs": [3],
+          "says": ["modified"],
+          "slots": [
+            {
+              "seq": 3
+            }
+          ]
+        },
+        "sentinel": {
+          "status": "saw_nothing",
+          "mark_seqs": []
+        }
+      },
+      "hidden": false,
+      "opened": ["odu_0002"],
+      "supersedes": null,
+      "rules": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "prev_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  },
+  "bad": [
+    {
+      "name": "no schema_version",
+      "from": "verdict",
+      "set": {},
+      "unset": ["/schema_version"],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no record",
+      "from": "verdict",
+      "set": {},
+      "unset": ["/record"],
+      "error": {
+        "path": "/record",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no seq",
+      "from": "verdict",
+      "set": {},
+      "unset": ["/seq"],
+      "error": {
+        "path": "/seq",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no session_id",
+      "from": "verdict",
+      "set": {},
+      "unset": ["/session_id"],
+      "error": {
+        "path": "/session_id",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no verdict_id",
+      "from": "verdict",
+      "set": {},
+      "unset": ["/verdict_id"],
+      "error": {
+        "path": "/verdict_id",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no odu_id",
+      "from": "verdict",
+      "set": {},
+      "unset": ["/odu_id"],
+      "error": {
+        "path": "/odu_id",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no odu_hash",
+      "from": "verdict",
+      "set": {},
+      "unset": ["/odu_hash"],
+      "error": {
+        "path": "/odu_hash",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no verdict",
+      "from": "verdict",
+      "set": {},
+      "unset": ["/verdict"],
+      "error": {
+        "path": "/verdict",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no rule",
+      "from": "verdict",
+      "set": {},
+      "unset": ["/rule"],
+      "error": {
+        "path": "/rule",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no also",
+      "from": "verdict",
+      "set": {},
+      "unset": ["/also"],
+      "error": {
+        "path": "/also",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no mark_seqs",
+      "from": "verdict",
+      "set": {},
+      "unset": ["/mark_seqs"],
+      "error": {
+        "path": "/mark_seqs",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no witness_status",
+      "from": "verdict",
+      "set": {},
+      "unset": ["/witness_status"],
+      "error": {
+        "path": "/witness_status",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no hidden",
+      "from": "verdict",
+      "set": {},
+      "unset": ["/hidden"],
+      "error": {
+        "path": "/hidden",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no opened",
+      "from": "verdict",
+      "set": {},
+      "unset": ["/opened"],
+      "error": {
+        "path": "/opened",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no supersedes",
+      "from": "verdict",
+      "set": {},
+      "unset": ["/supersedes"],
+      "error": {
+        "path": "/supersedes",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no rules",
+      "from": "verdict",
+      "set": {},
+      "unset": ["/rules"],
+      "error": {
+        "path": "/rules",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no prev_hash",
+      "from": "verdict",
+      "set": {},
+      "unset": ["/prev_hash"],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "no hash",
+      "from": "verdict",
+      "set": {},
+      "unset": ["/hash"],
+      "error": {
+        "path": "/hash",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "schema_version 2",
+      "from": "verdict",
+      "set": {
+        "/schema_version": 2
+      },
+      "unset": [],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "another record",
+      "from": "verdict",
+      "set": {
+        "/record": "odu"
+      },
+      "unset": [],
+      "error": {
+        "path": "/record",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "seq 0",
+      "from": "verdict",
+      "set": {
+        "/seq": 0
+      },
+      "unset": [],
+      "error": {
+        "path": "/seq",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "seq not an integer",
+      "from": "verdict",
+      "set": {
+        "/seq": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/seq",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "empty session",
+      "from": "verdict",
+      "set": {
+        "/session_id": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/session_id",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "session a number",
+      "from": "verdict",
+      "set": {
+        "/session_id": 5
+      },
+      "unset": [],
+      "error": {
+        "path": "/session_id",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "verdict_id malformed",
+      "from": "verdict",
+      "set": {
+        "/verdict_id": "v_1"
+      },
+      "unset": [],
+      "error": {
+        "path": "/verdict_id",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "verdict_id a number",
+      "from": "verdict",
+      "set": {
+        "/verdict_id": 1
+      },
+      "unset": [],
+      "error": {
+        "path": "/verdict_id",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "odu_id malformed",
+      "from": "verdict",
+      "set": {
+        "/odu_id": "g_0001"
+      },
+      "unset": [],
+      "error": {
+        "path": "/odu_id",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "odu_id a number",
+      "from": "verdict",
+      "set": {
+        "/odu_id": 1
+      },
+      "unset": [],
+      "error": {
+        "path": "/odu_id",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/odu_hash not a fingerprint",
+      "from": "verdict",
+      "set": {
+        "/odu_hash": "sha256:xyz"
+      },
+      "unset": [],
+      "error": {
+        "path": "/odu_hash",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/odu_hash not a string",
+      "from": "verdict",
+      "set": {
+        "/odu_hash": 5
+      },
+      "unset": [],
+      "error": {
+        "path": "/odu_hash",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/rules not a fingerprint",
+      "from": "verdict",
+      "set": {
+        "/rules": "sha256:xyz"
+      },
+      "unset": [],
+      "error": {
+        "path": "/rules",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/rules not a string",
+      "from": "verdict",
+      "set": {
+        "/rules": 5
+      },
+      "unset": [],
+      "error": {
+        "path": "/rules",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/prev_hash not a fingerprint",
+      "from": "verdict",
+      "set": {
+        "/prev_hash": "sha256:xyz"
+      },
+      "unset": [],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/prev_hash not a string",
+      "from": "verdict",
+      "set": {
+        "/prev_hash": 5
+      },
+      "unset": [],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/hash not a fingerprint",
+      "from": "verdict",
+      "set": {
+        "/hash": "sha256:xyz"
+      },
+      "unset": [],
+      "error": {
+        "path": "/hash",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/hash not a string",
+      "from": "verdict",
+      "set": {
+        "/hash": 5
+      },
+      "unset": [],
+      "error": {
+        "path": "/hash",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a fourth verdict",
+      "from": "verdict",
+      "set": {
+        "/verdict": "incomplete"
+      },
+      "unset": [],
+      "error": {
+        "path": "/verdict",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "rule malformed",
+      "from": "verdict",
+      "set": {
+        "/rule": "phantom"
+      },
+      "unset": [],
+      "error": {
+        "path": "/rule",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "rule a number",
+      "from": "verdict",
+      "set": {
+        "/rule": 1
+      },
+      "unset": [],
+      "error": {
+        "path": "/rule",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "also not a list",
+      "from": "verdict",
+      "set": {
+        "/also": "R6"
+      },
+      "unset": [],
+      "error": {
+        "path": "/also",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "also holds a malformed rule",
+      "from": "verdict",
+      "set": {
+        "/also/0": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/also/0",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "mark_seqs not a list",
+      "from": "verdict",
+      "set": {
+        "/mark_seqs": 3
+      },
+      "unset": [],
+      "error": {
+        "path": "/mark_seqs",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "mark_seqs holds 0",
+      "from": "verdict",
+      "set": {
+        "/mark_seqs/0": 0
+      },
+      "unset": [],
+      "error": {
+        "path": "/mark_seqs/0",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "mark_seqs holds a string",
+      "from": "verdict",
+      "set": {
+        "/mark_seqs/0": "3"
+      },
+      "unset": [],
+      "error": {
+        "path": "/mark_seqs/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "witness_status not an object",
+      "from": "verdict",
+      "set": {
+        "/witness_status": []
+      },
+      "unset": [],
+      "error": {
+        "path": "/witness_status",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "witness_status with no glove",
+      "from": "verdict",
+      "set": {},
+      "unset": ["/witness_status/glove"],
+      "error": {
+        "path": "/witness_status/glove",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "witness_status with no sentinel",
+      "from": "verdict",
+      "set": {},
+      "unset": ["/witness_status/sentinel"],
+      "error": {
+        "path": "/witness_status/sentinel",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "hidden not a boolean",
+      "from": "verdict",
+      "set": {
+        "/hidden": 0
+      },
+      "unset": [],
+      "error": {
+        "path": "/hidden",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "opened not a list",
+      "from": "verdict",
+      "set": {
+        "/opened": "odu_0002"
+      },
+      "unset": [],
+      "error": {
+        "path": "/opened",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "opened holds a malformed id",
+      "from": "verdict",
+      "set": {
+        "/opened/0": "odu_2"
+      },
+      "unset": [],
+      "error": {
+        "path": "/opened/0",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "opened holds a number",
+      "from": "verdict",
+      "set": {
+        "/opened/0": 2
+      },
+      "unset": [],
+      "error": {
+        "path": "/opened/0",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "supersedes malformed",
+      "from": "verdict",
+      "set": {
+        "/supersedes": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/supersedes",
+        "keyword": "anyOf"
+      }
+    }
+  ]
+}

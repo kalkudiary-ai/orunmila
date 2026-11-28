@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 KALKU DIGITAL SOLUTIONS LIMITED
 'use strict';
 
 /**
@@ -16,21 +18,20 @@
  * open it in a browser.
  */
 
-const { buildVizData, renderTrailVisual } = require('./trail-visual');
+const { buildVizData, renderTrailVisual, STAIN_COLORS, CHANNEL_COLORS: TV_CHANNEL_COLORS, CHANNEL_GLYPH: TV_CHANNEL_GLYPH } = require('./trail-visual');
 
-const COLORS = {
-  untracked_write: '#d50000',
-  verified: '#2e7d32',
-  partial: '#f9a825',
-  phantom: '#c62828',
-  phantom_verification: '#b71c1c',
-  unverifiable: '#757575',
-  undisclosed: '#8e24aa',
-  silently_dropped: '#6a1b9a',
-  addressed: '#2e7d32',
-  acknowledged_incomplete: '#0277bd',
-  unverifiable_ask: '#757575',
-};
+// HTML1 (LD305): one palette for the page. The outcomes the tabs also show take the tabs' colours; the ask outcomes
+// only this file shows add theirs. Before, the header and the tabs gave one outcome two colours.
+const COLORS = Object.assign(
+  {
+    addressed: STAIN_COLORS.verified,
+    acknowledged_incomplete: '#7fb3d5',
+    unverifiable_ask: STAIN_COLORS.unverifiable,
+  },
+  STAIN_COLORS
+);
+// Shown when nothing was checked, or nothing could be: neither good nor bad.
+const NEUTRAL = '#8b96a3';
 
 // untracked_write outranks everything: a change the agent's tool stream never
 // disclosed at all is the strongest stain the tool can find (PRD 6.4).
@@ -50,19 +51,10 @@ const SEVERITY_RANK = {
 
 // The glove's own visual axis: not "is this a mismatch" (that's COLORS above)
 // but "what KIND of contact was this". A separate vocabulary on purpose so the
-// trail can be read even on files orunmila found nothing wrong with.
-const CHANNEL_COLORS = {
-  read: '#4fc3f7',     // light blue — observed, no change
-  write: '#66bb6a',    // green — agent-announced change
-  disk: '#26a69a',     // teal — independently observed on disk (sentinel)
-  command: '#ffb74d',  // amber — a command ran
-  network: '#ba68c8',  // purple — external contact
-  tool: '#90a4ae',     // grey — other tool call
-};
-
-const CHANNEL_GLYPH = {
-  read: '👁', write: '✎', disk: '💾', command: '$', network: '🌐', tool: '⚙',
-};
+// trail can be read even on files orunmila found nothing wrong with. The same
+// colours and plain symbols as the tabs (HTML1: emoji drew differently by OS).
+const CHANNEL_COLORS = TV_CHANNEL_COLORS;
+const CHANNEL_GLYPH = TV_CHANNEL_GLYPH;
 
 function esc(s) {
   return String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -140,8 +132,10 @@ function renderFindingRow(p, info, g, maxTouches) {
 // Replaces the old equal-weight tile wall: only files that earned a stain are
 // surfaced, ranked worst-first; everything verified/clean collapses away so the
 // signal is not buried under 50 identical-looking green-and-purple boxes.
-function renderFindings(files, trailByPath) {
-  if (!files.size) return '<p class="dim">No file writes captured yet.</p>';
+function renderFindings(files, trailByPath, checked) {
+  // F17: with no checked turn there is nothing to rank; that is "not checked", never "nothing captured".
+  if (!checked) return '<p class="dim">Not checked: no turn of this session has a report, so no file was compared with a claim.</p>';
+  if (!files.size) return '<p class="dim">No file in the checked turns was tied to a claim or a change.</p>';
   const all = Array.from(files.entries()).map(([p, info]) => ({ p, info, g: trailByPath && trailByPath.get(p) }));
   const ranked = all
     .filter((x) => !CLEAN_OUTCOMES.has(x.info.worstOutcome))
@@ -294,6 +288,30 @@ function stainByKeyFrom(files) {
   return m;
 }
 
+/**
+ * The header's phrase for checked turns, from their summed summaries. PG1 (F33): the dashboard's card uses this same
+ * rule, so one session never reads "Trustworthy" there and "Untracked writes: investigate" here. Severity drives the
+ * phrase: untracked writes (disk changed, never disclosed) outrank everything; then claim problems; undisclosed changes
+ * are worth a look too (they once read "looks clean").
+ */
+function headerVerdict(totals) {
+  const verified = totals.verified || 0;
+  const caution = (totals.partial || 0) + (totals.unverifiable || 0);
+  const problems = (totals.phantom || 0) + (totals.phantom_verification || 0) + (totals.silently_dropped || 0);
+  const totalClaims = verified + caution + problems;
+  const undisclosed = totals.undisclosed_changes || 0;
+  const untracked = totals.untracked_writes || 0;
+  return untracked > 0
+    ? { txt: 'Untracked writes: investigate', c: COLORS.untracked_write }
+    : problems > 0
+    ? { txt: 'Review recommended', c: COLORS.phantom }
+    : caution > 0 || undisclosed > 0
+    ? { txt: 'Worth a look', c: COLORS.partial }
+    : totalClaims === 0
+    ? { txt: 'Nothing to check', c: NEUTRAL }
+    : { txt: 'Clean', c: COLORS.verified };
+}
+
 // The headline. Instead of eight equal-weight pills (where "phantom 140" reads
 // the same as "verified 61"), lead with ONE number and a single proportion bar,
 // so the first glance answers "do I need to look?" before any detail.
@@ -305,22 +323,28 @@ function renderVerdict(totals, turnCount, trail) {
   const undisclosed = totals.undisclosed_changes || 0;
   const untracked = totals.untracked_writes || 0;
 
-  // Severity drives the accent colour and the verdict phrase. Untracked writes
-  // (disk changed, never disclosed) outrank everything; then claim problems.
-  const sev = untracked > 0
-    ? { txt: 'untracked writes &mdash; investigate', c: COLORS.untracked_write }
-    : problems > 0
-    ? { txt: 'review recommended', c: COLORS.phantom }
-    : caution > 0
-    ? { txt: 'minor gaps', c: COLORS.partial }
-    : { txt: 'looks clean', c: COLORS.verified };
+  const touches = trail && trail.totals ? trail.totals.touches || 0 : 0;
 
-  const headNum = untracked > 0 ? untracked : problems;
+  // F17 (LD303): nothing checked is said plainly, never shown as clean.
+  if (!turnCount) {
+    return `<div class="verdict">
+    <div>
+      <div class="dim" style="font-size:0.8rem;margin-bottom:6px;">0 turns checked${touches ? ` &middot; ${touches} touches recorded` : ''}</div>
+      <div style="display:flex;align-items:baseline;gap:10px;"><span class="big" style="color:${NEUTRAL}">&mdash;</span><span class="lede">Not checked</span></div>
+      <div class="sub">No turn of this session has a report, so no claim was compared with the record. The trail below is what was recorded.</div>
+    </div>
+    <span class="pill" style="background:${NEUTRAL}">Not checked</span>
+  </div>`;
+  }
+
+  const sev = headerVerdict(totals);
+
+  const headNum = untracked > 0 ? untracked : problems > 0 ? problems : totalClaims === 0 ? '&mdash;' : verified;
   const headLabel = untracked > 0
     ? `untracked write${untracked === 1 ? '' : 's'}`
-    : problems > 0 ? 'claims need review' : 'claims, all clean';
-
-  const touches = trail && trail.totals ? trail.totals.touches || 0 : 0;
+    : problems > 0 ? `claim${problems === 1 ? '' : 's'} need review`
+    : totalClaims === 0 ? 'No checkable claims'
+    : `claim${verified === 1 ? '' : 's'} checked, none wrong`;
   const pct = (n) => (totalClaims ? (n / totalClaims) * 100 : 0);
 
   const bar = totalClaims
@@ -350,7 +374,29 @@ function renderVerdict(totals, turnCount, trail) {
   ${bar}`;
 }
 
-function renderSessionHtml(sessionId, reports, trail) {
+/**
+ * MR3 (LD316): the witness gap under the header, from the session's odù log (src/babalawo/report witnessGap): what
+ * changed on disk, each change counted by what both witnesses recorded. `witnesses` undefined: the caller has no session
+ * folder to read (`orunmila html`), and nothing is shown; null: there is no odù log, and the page says so.
+ */
+function renderGap(witnesses) {
+  if (witnesses === undefined) return '';
+  if (witnesses === null) return '<p class="gap gap-none">What changed on disk is not shown: this session has no odù log to read both witnesses from (the intake writes one with ORUNMILA_OPON_LIVE=1).</p>';
+  return `<p class="gap">${esc(witnesses.sentence)}</p>`;
+}
+
+/**
+ * PG1 (F33): the Babaláwo's verdict under the witness gap, from the session's verdict log (src/render/session-facts.js),
+ * with why it can differ from the header and where its findings are. `judge` undefined: the caller read no session folder
+ * (`orunmila html`), and nothing is shown; null: no verdict log that verifies, and the page says so.
+ */
+function renderJudge(judge, sessionId) {
+  if (judge === undefined) return '';
+  if (judge === null) return '<p class="gap gap-none">Not judged: this session has no verdict log. The Babaláwo writes one at the closeout of each session the intake records, when it is on (orunmila install --with-judge).</p>';
+  return `<p class="gap judge">${esc(judge.sentence)} The header above checks each turn's claims; the Babaláwo judges the whole record with its own rules, so the two can differ. Its findings: <code>orunmila report --verdicts --session ${esc(sessionId)}</code>.</p>`;
+}
+
+function renderSessionHtml(sessionId, reports, trail, { witnesses, judge } = {}) {
   const files = buildFileStains(reports);
   const trailByPath = indexTrailByPath(trail);
   // The rich, tabbed, stain-first visual (Graph/Tree/Timeline/Dashboard). Only
@@ -370,7 +416,7 @@ function renderSessionHtml(sessionId, reports, trail) {
 <title>orunmila - session ${esc(sessionId)}</title>
 <style>
   :root { color-scheme: dark; }
-  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background:#111; color:#eee; margin:0; padding:24px; }
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background:#0b0d11; color:#e6ebf0; margin:0; padding:24px 32px; max-width:1500px; }
   h1 { font-size: 1.4rem; }
   h4 { margin: 18px 0 6px; color:#bbb; font-size:0.85rem; text-transform:uppercase; letter-spacing:0.04em; }
   .dim { color:#888; }
@@ -379,6 +425,8 @@ function renderSessionHtml(sessionId, reports, trail) {
   .verdict .big { font-size:2.5rem; font-weight:700; line-height:1; }
   .verdict .lede { font-size:0.95rem; color:#bbb; }
   .verdict .sub { color:#888; font-size:0.82rem; margin-top:6px; }
+  .gap { font-size:0.85rem; color:#c8d0d8; margin:-6px 0 18px; max-width:1100px; }
+  .gap-none { color:#888; }
   .verdict .pill { font-size:0.8rem; font-weight:600; padding:7px 14px; border-radius:8px; white-space:nowrap; color:#fff; }
   .prop { display:flex; height:12px; border-radius:6px; overflow:hidden; gap:2px; margin:4px 0 8px; background:#1c1c1c; }
   .prop span { display:block; }
@@ -391,7 +439,8 @@ function renderSessionHtml(sessionId, reports, trail) {
   .rank-name { font-family:ui-monospace,Menlo,monospace; font-size:0.8rem; width:180px; flex-shrink:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .rank-tag { font-size:0.64rem; font-weight:600; padding:2px 8px; border-radius:8px; flex-shrink:0; text-transform:uppercase; letter-spacing:0.03em; color:#fff; }
   .rank-bar { flex:1; min-width:60px; height:8px; background:#1c1c1c; border-radius:4px; overflow:hidden; }
-  .rank-bar span { height:100%; }
+  /* display:block, or the span is inline and its width does nothing: the bars never drew (found by HTML1) */
+  .rank-bar span { display:block; height:100%; }
   .rank-count { font-size:0.75rem; color:#999; width:62px; text-align:right; flex-shrink:0; }
   .rank-quiet { font-family:ui-monospace,Menlo,monospace; font-size:0.74rem; color:#777; line-height:1.9; margin-top:6px; }
   details.quiet { margin-top:12px; }
@@ -420,20 +469,22 @@ function renderSessionHtml(sessionId, reports, trail) {
 <body>
   <h1>orunmila &mdash; session ${esc(sessionId)}</h1>
   ${renderVerdict(totals, reports.length, trail)}
+  ${renderGap(witnesses)}
+  ${renderJudge(judge, sessionId)}
 
   <h4>Files worth a look (ranked by severity)</h4>
-  ${renderFindings(files, trailByPath)}
+  ${renderFindings(files, trailByPath, reports.length > 0)}
 
   ${visualBlock}
 
   ${renderTrailSection(trail)}
 
-  <h2 class="trail-h">orunmila &mdash; claim vs. reality</h2>
-  <p class="dim">The skeptical lens: only mismatches between what was claimed and what the evidence shows.</p>
+  <h2 class="trail-h">Claim vs. record</h2>
+  <p class="dim">Each turn's claims set beside what the record shows. A finding means &ldquo;recheck this&rdquo;, not &ldquo;the agent lied&rdquo;: the evidence may sit outside what Orunmila sees.</p>
   <h4>Turn by turn</h4>
-  ${reports.map(renderTurn).join('\n')}
+  ${reports.length ? reports.map(renderTurn).join('\n') : '<p class="dim">Not checked: no turn of this session has a report.</p>'}
 </body>
 </html>`;
 }
 
-module.exports = { renderSessionHtml };
+module.exports = { renderSessionHtml, COLORS, headerVerdict };

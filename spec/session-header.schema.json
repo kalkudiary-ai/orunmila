@@ -1,0 +1,218 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:orunmila:spec:v1:session-header",
+  "title": "Orunmila session header, schema version 1",
+  "description": "Every session's raw log begins with a header record, and the hash chain starts from it. It records everything needed to reproduce the session's results. Replay reads these values from the header, never from current settings.",
+  "$comment": "brief v3 line 282 lists what the header holds but names no fields: every field name here is the agent's choice (LD16). Draft from Phase 1 slice A1; built in slice A10. Unknown fields are allowed (line 209).",
+  "type": "object",
+  "required": ["schema_version", "record", "session_id", "seq", "observed_at", "mono_ns", "orunmila", "agent", "os", "accounts", "project_root", "config", "frozen", "hooks_report", "test_command", "prev_hash", "hash"],
+  "properties": {
+    "schema_version": { "description": "All carry a `schema_version`.", "$comment": "brief v3 line 209", "const": 1 },
+    "record": {
+      "description": "Marks this line as the header, so a reader tells it from a mark without guessing.",
+      "$comment": "agent's choice, LD16",
+      "const": "session_header"
+    },
+    "session_id": { "description": "The session this log records.", "$comment": "brief v3 line 282", "type": "string", "minLength": 1 },
+    "seq": {
+      "description": "The header is the first record of the raw log; marks follow from seq 1.",
+      "$comment": "brief v3 lines 237, 282; 0 for the header is the agent's choice, LD10",
+      "const": 0
+    },
+    "observed_at": {
+      "description": "Wall-clock time the session started, for humans only.",
+      "$comment": "brief v3 line 238",
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$"
+    },
+    "mono_ns": {
+      "description": "The monotonic clock at session start, as a decimal string of the integer.",
+      "$comment": "brief v3 line 238; brief v4 line 238 (open point P1, decided 2026-11-16)",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "orunmila": {
+      "description": "Orunmila's version.",
+      "$comment": "brief v3 line 282",
+      "type": "object",
+      "required": ["version"],
+      "properties": {
+        "version": { "description": "Orunmila's version.", "$comment": "brief v3 line 282", "type": "string", "minLength": 1 },
+        "code_fingerprint": {
+          "description": "A fingerprint of Orunmila's own code at session start; a change mid-session is a tampering mark.",
+          "$comment": "agent: ledger A3 and NF41, phase1-plan A10; not in brief line 282",
+          "$ref": "#/definitions/fingerprint"
+        }
+      }
+    },
+    "agent": {
+      "description": "The agent.",
+      "$comment": "brief v3 line 282",
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "description": "The agent, for example `claude-code`.", "$comment": "brief v3 line 282", "type": "string", "minLength": 1 },
+        "version": { "description": "The agent's version, null when unknown. Orunmila's intake writes null: Claude Code's hook payloads name no version.", "$comment": "brief v3 line 282", "type": ["string", "null"] }
+      }
+    },
+    "os": {
+      "description": "The operating system.",
+      "$comment": "brief v3 line 282",
+      "type": "object",
+      "required": ["platform"],
+      "properties": {
+        "platform": { "description": "For example `darwin`, `linux`, `win32`.", "$comment": "brief v3 line 282", "type": "string", "minLength": 1 },
+        "release": { "description": "The operating system release.", "$comment": "brief v3 line 282", "type": "string" }
+      }
+    },
+    "accounts": {
+      "description": "User accounts: the agent's, and the one Orunmila's files belong to (in the free version, the same account).",
+      "$comment": "brief v3 lines 282, 587",
+      "type": "object",
+      "required": ["agent_user", "orunmila_user"],
+      "properties": {
+        "agent_user": { "description": "The account the agent runs as.", "$comment": "brief v3 line 282", "type": "string", "minLength": 1 },
+        "orunmila_user": { "description": "The account that owns Orunmila's logs.", "$comment": "brief v3 lines 282, 342", "type": "string", "minLength": 1 }
+      }
+    },
+    "project_root": {
+      "description": "The session header records the project root, so a Glove mark and a sentinel mark for one file always join.",
+      "$comment": "brief v3 line 339. An absolute path (POSIX, or a Windows drive).",
+      "type": "string",
+      "pattern": "^(/|[A-Za-z]:[\\\\/])"
+    },
+    "config": {
+      "description": "Every configured value (quiet window, ceiling, lag grace, exclusions).",
+      "$comment": "brief v3 line 282; other configured values are allowed beside these",
+      "type": "object",
+      "required": ["quiet_window_ms", "ceiling_ms", "lag_grace_ms", "exclusions", "diff_size_limit_bytes"],
+      "properties": {
+        "quiet_window_ms": { "description": "The quiet window: how long, in milliseconds, a group of marks for one target waits with no new mark before it settles.", "$comment": "brief v3 line 282", "type": "integer", "minimum": 0 },
+        "ceiling_ms": { "description": "The ceiling: the longest, in milliseconds from its first mark, a group stays open before it is settled however busy it is.", "$comment": "brief v3 line 282", "type": "integer", "minimum": 0 },
+        "lag_grace_ms": { "description": "The lag grace: how long, in milliseconds, a settled group waits for a slower source's late marks before it is sealed.", "$comment": "brief v3 line 282", "type": "integer", "minimum": 0 },
+        "exclusions": { "description": "What the Sentinel and the baseline skip under the project: the Sentinel's ignore list (its defaults, then the lines of `.orunmila/ignore`), less `.orunmila/`, which is watched; each entry as written there, a folder's ending in `/`, matched as the ignore list's entries are; empty when the intake runs no Sentinel.", "$comment": "brief v3 line 282", "type": "array", "items": { "type": "string" } },
+        "diff_size_limit_bytes": {
+          "description": "The size limit over which a diff is not kept (`no_diff: too_large`), a configured value recorded in the session header.",
+          "$comment": "brief v3 line 266",
+          "type": "integer",
+          "minimum": 0
+        },
+        "case_insensitive": {
+          "description": "Whether the project root's file system ignores case, as the intake probed it at session start. Intake lower-cases every mark's path and the baseline's on such a root (line 345), so replay folds a claim's path the same way before matching it; absent in headers written before the field existed, where replay cannot tell and matches as it did then.",
+          "$comment": "agent's proposal (LD227), approved by O as Q25 (2026-11-23, \"ok, go\"), LD233; brief v4 lines 283, 345, 859 rule 4",
+          "type": "boolean"
+        },
+        "byproducts": {
+          "description": "The byproducts list (`.orunmila/byproducts`) as it was at session start: one entry per line, trimmed, blank lines and `#` comments left out, matched as the ignore list's entries are. Its fingerprint is `frozen.byproducts`, of the same bytes. Absent when the header does not carry the list (the live path off, slice A1a); station 5 then has no list to match.",
+          "$comment": "brief v4 lines 283, 349, 399; the list in the header is the agent's proposal (LD175, Q9), so replay reads it from the header and never from current settings",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "rules": {
+          "description": "The rules file (`.orunmila/rules`) as it was at session start, its text whole, so the judge and any re-judgement read the session's rules from the header and never from current settings. Its fingerprint is `frozen.rules`, of the same bytes. Absent when the file did not exist (the default rules judge the session) or the judge was off.",
+          "$comment": "brief v4 lines 283, 664, 684; agent's proposal, Q34 (approved by O 2026-11-24, LD262): copied by the intake, parsed only by the judge",
+          "type": "string"
+        },
+        "watch_extra": {
+          "description": "The folders outside the project that this session's Sentinel also watched (ORUNMILA_WATCH_EXTRA), each its real absolute path with `/` separators, as an outside mark's path is written, sorted. A file there with no Sentinel mark is `saw_nothing`, not `out_of_scope`. Absent when the Sentinel watched no extra folder (the default).",
+          "$comment": "brief v4 lines 283, 347; agent's proposal, Q42 (approved by O 2026-11-25, LD299; LD289, LD328)",
+          "type": "array",
+          "items": { "type": "string", "pattern": "^(/|[A-Za-z]:/)" }
+        }
+      }
+    },
+    "frozen": {
+      "description": "The fingerprints of every frozen configuration file (rules, byproducts, ignore list, law packs, agent hook settings) as they were at session start. null when the file does not exist.",
+      "$comment": "brief v3 lines 282, 343",
+      "type": "object",
+      "required": ["rules", "byproducts", "ignore", "law_packs", "hook_settings"],
+      "properties": {
+        "rules": { "description": "`.orunmila/rules`.", "$comment": "brief v3 line 342", "$ref": "#/definitions/fingerprint" },
+        "byproducts": { "description": "`.orunmila/byproducts`.", "$comment": "brief v3 line 342", "$ref": "#/definitions/fingerprint" },
+        "ignore": { "description": "`.orunmila/ignore`.", "$comment": "brief v3 line 342", "$ref": "#/definitions/fingerprint" },
+        "law_packs": {
+          "description": "Every law pack in use (Orunmila's canon and any project law pack), by name. Orunmila names them `canon` (its own pack) and `project` (`.orunmila/laws.json`), each null when its file is not there.",
+          "$comment": "brief v3 line 343",
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/fingerprint" }
+        },
+        "hook_settings": {
+          "description": "The agent's own hook configuration files, by path. A change mid-session is recorded as a tampering mark; it cannot be held back (NF42, approved by O 2026-11-15). Orunmila keys each by its absolute path as the operating system writes it (backslashes on Windows): the project's `.claude/settings.json` and `.claude/settings.local.json`, and the user's `~/.claude/settings.json`, each null when absent.",
+          "$comment": "brief v3 line 343, as amended for hook settings by O's NF42 decision",
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/fingerprint" }
+        }
+      }
+    },
+    "hooks_report": {
+      "description": "Which tool calls the agent's hooks can report before and after they run. Where an agent cannot report before a tool runs, the session header says so.",
+      "$comment": "brief v3 lines 282, 337. Each list holds tool names, or \"*\" for every tool (agent's choice, LD16); an empty list means none.",
+      "type": "object",
+      "required": ["before", "after"],
+      "properties": {
+        "before": { "description": "Tools reported before they run. Orunmila lists each matcher of its own pre-tool-use hooks, split at `|`, each once; `*` means every tool.", "$comment": "brief v3 line 337", "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "after": { "description": "Tools reported after they run. Orunmila lists each matcher of its own post-tool-use hooks, split at `|`, each once; `*` means every tool.", "$comment": "brief v3 line 337", "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "test_command": {
+      "description": "The project's own test command as it was at session start, and a fingerprint of the scripts block that decides what it runs. Configuration is frozen at session start: a change to the block mid-session is a tampering mark (`frozen_config`) and does not take effect until the next session. Every value is null when none was found.",
+      "$comment": "agent: slice B8, proposed in writing to O (brief v4 line 859, rule 4) and approved 2026-11-18 (\"If you're sure b8 is the best choice, lets go\"), narrowed by LD70 from the whole file to its scripts block; grounded in brief v4 lines 283 and 349",
+      "type": "object",
+      "required": ["text", "source", "scripts_fingerprint"],
+      "properties": {
+        "text": { "description": "The test command, redacted like every other text the log holds; null when none was found.", "$comment": "agent: LD70; redaction as brief v4 line 249", "type": ["string", "null"] },
+        "source": {
+          "description": "Where the command was read from; null with no command.",
+          "$comment": "agent: LD70",
+          "type": ["object", "null"],
+          "required": ["path", "key"],
+          "properties": {
+            "path": { "description": "The file, relative to the project root (today always `package.json`).", "$comment": "agent: LD70", "type": "string", "minLength": 1 },
+            "key": { "description": "The entry in that file (today always `scripts.test`).", "$comment": "agent: LD70", "type": "string", "minLength": 1 }
+          }
+        },
+        "scripts_fingerprint": {
+          "description": "Plain SHA-256 of the RFC 8785 form of package.json's whole scripts block, its string values redacted first; null when the block is unknown.",
+          "$comment": "agent: LD70; a test script can run other scripts, so the whole block is frozen",
+          "type": ["string", "null"],
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "tripwire": {
+      "description": "The outside tripwire's start: each file or folder outside the watched folders that runs code as the user (shell start-up files, git and ssh config, ssh's authorized_keys, ~/.npmrc, the agents' own user hook settings, the operating system's start-up folders), by its absolute path with `/` separators, and its keyed HMAC-SHA-256 fingerprint (a folder's covers every entry under it), null when nothing is there. The closeout fingerprints the same paths again and names each one that changed. Paths and fingerprints only, never content. Absent when command facts are off.",
+      "$comment": "agent's proposal CF4 (LD385; O, 2026-11-28); written unless ORUNMILA_COMMAND_FACTS=0 (on by default since 1.0.0, DF1, LD395)",
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/fingerprint" }
+    },
+    "baseline": {
+      "description": "The baseline snapshot taken at session start: a fingerprint of every file in the workspace, kept beside the log as `baseline.jsonl` (one canonical JSON line per entry, sorted by path). The walk skips what `config.exclusions` names, so the exclusion itself is in this header. Its fingerprint is here, so the hash chain covers it too. Absent when no snapshot was taken.",
+      "$comment": "brief v4 lines 385, 387; the field's name and shape are the agent's (LD170). Counts of entries and bytes are left out: the brief does not name them and the file gives them",
+      "type": "object",
+      "required": ["fingerprint"],
+      "properties": {
+        "fingerprint": {
+          "description": "Plain SHA-256 of `baseline.jsonl`'s bytes.",
+          "$comment": "brief v4 line 387",
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "prev_hash": { "description": "The hash chain starts from the header, so it has no previous hash.", "$comment": "brief v3 line 282", "type": "null" },
+    "hash": {
+      "description": "The header's own hash; the first mark's prev_hash.",
+      "$comment": "brief v3 lines 247, 282",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "definitions": {
+    "fingerprint": {
+      "description": "Plain SHA-256, or keyed HMAC-SHA-256 for files on the redaction list; null when the file does not exist.",
+      "$comment": "brief v3 lines 249, 343",
+      "type": ["string", "null"],
+      "pattern": "^(sha256|hmac-sha256):[0-9a-f]{64}$"
+    }
+  }
+}

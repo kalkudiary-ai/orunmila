@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:orunmila:spec:v1:retention-removal",
+  "title": "Orunmila retention removal record, schema version 1",
+  "description": "One line of the retention log after its header: one session removed whole (its raw and quarantine logs, every part, and the files kept beside them). It is written before the session's folder is touched, and it holds what is needed to show which session went and that it was intact: the hash of its header line and the last seq and hash of each of its logs.",
+  "$comment": "brief v4 line 348 asks for the log and names no fields: every field name here is the agent's choice (LD66; as schemas, LD77). Written by src/opon/ledger/retention.js, not wired. Unknown fields are allowed, as in the other v1 drafts (LD17).",
+  "type": "object",
+  "required": ["schema_version", "record", "seq", "session_id", "removed_at", "reason", "header", "raw", "quarantine", "counts", "prev_hash", "hash"],
+  "properties": {
+    "schema_version": { "description": "All carry a `schema_version`.", "$comment": "brief v4 line 209", "const": 1 },
+    "record": { "description": "Always `removed`.", "$comment": "agent's choice, LD66", "const": "removed" },
+    "seq": { "description": "One more than the line before it; the header is seq 0.", "$comment": "agent's choice, LD66; spec/hash-chain.md", "type": "integer", "minimum": 1 },
+    "session_id": { "description": "The session removed.", "$comment": "agent's choice, LD66", "type": "string", "minLength": 1 },
+    "removed_at": {
+      "description": "Wall-clock time of the removal, by the caller's clock.",
+      "$comment": "agent's choice, LD66; the form of the session header's observed_at",
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$"
+    },
+    "reason": { "description": "Why the session was removed, in the caller's words (for example the retention setting it was older than).", "$comment": "agent's choice, LD66; any text, as retention.js writes it (LD77)", "type": "string" },
+    "header": {
+      "description": "The hash of the session's header line, the first line of its raw log. A folder later found under the same id is compared with it, so a new session there is not taken for this one.",
+      "$comment": "agent's choice, LD66; never null in a written record (LD77)",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "raw": { "description": "Where the session's raw log ended when it was removed.", "$comment": "agent's choice, LD66", "$ref": "#/definitions/log_end" },
+    "quarantine": { "description": "Where the session's quarantine log ended when it was removed.", "$comment": "agent's choice, LD66", "$ref": "#/definitions/log_end" },
+    "counts": {
+      "description": "What the session held, as its check counted it.",
+      "$comment": "agent's choice, LD66; the counts of src/verify/session.js",
+      "type": "object",
+      "required": ["marks", "quarantined", "kept_files"],
+      "properties": {
+        "marks": { "description": "Marks in the raw log, the header and continuation records not counted.", "$comment": "agent's choice, LD66", "type": "integer", "minimum": 0 },
+        "quarantined": { "description": "Inputs in the quarantine log.", "$comment": "agent's choice, LD66", "type": "integer", "minimum": 0 },
+        "kept_files": { "description": "References in its marks to files kept beside the log, each checked (a file two marks name counts twice).", "$comment": "agent's choice, LD66", "type": "integer", "minimum": 0 }
+      }
+    },
+    "prev_hash": {
+      "description": "The `hash` of the line before, exactly as written there.",
+      "$comment": "brief v4 line 248; spec/hash-chain.md",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "hash": {
+      "description": "This record's hash, by the same rule as every line (spec/hash-chain.md).",
+      "$comment": "brief v4 line 248",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "definitions": {
+    "log_end": {
+      "description": "The last record of one of the session's logs, across its parts.",
+      "$comment": "agent's choice, LD66",
+      "type": "object",
+      "required": ["seq", "hash"],
+      "properties": {
+        "seq": { "description": "That record's seq.", "$comment": "agent's choice, LD66", "type": "integer", "minimum": 0 },
+        "hash": { "description": "That record's hash, exactly as written there.", "$comment": "agent's choice, LD66", "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+      }
+    }
+  }
+}

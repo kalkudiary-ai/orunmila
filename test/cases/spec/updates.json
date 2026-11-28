@@ -1,0 +1,393 @@
+{
+  "good": {
+    "switched": {
+      "schema_version": 1,
+      "record": "update",
+      "seq": 1,
+      "at": "2026-11-26T09:00:00.000Z",
+      "from": "0.2.4",
+      "to": "0.2.5",
+      "integrity": "sha512-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+      "self_check": "pass",
+      "switched": true,
+      "prev_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "first_install": {
+      "schema_version": 1,
+      "record": "update",
+      "seq": 1,
+      "at": "2026-11-26T09:00:00.000Z",
+      "from": null,
+      "to": "0.2.5",
+      "integrity": "sha512-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+      "self_check": "pass",
+      "switched": true,
+      "prev_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "refused": {
+      "schema_version": 1,
+      "record": "update",
+      "seq": 2,
+      "at": "2026-11-26T09:00:00.000Z",
+      "from": "0.2.4",
+      "to": "0.2.5",
+      "integrity": "sha512-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+      "self_check": "fail",
+      "switched": false,
+      "prev_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  },
+  "bad": [
+    {
+      "name": "a later schema version",
+      "from": "switched",
+      "set": {
+        "/schema_version": 2
+      },
+      "unset": [],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "a header in an update's place",
+      "from": "switched",
+      "set": {
+        "/record": "updates_header"
+      },
+      "unset": [],
+      "error": {
+        "path": "/record",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "a seq that is not a whole number",
+      "from": "switched",
+      "set": {
+        "/seq": "1"
+      },
+      "unset": [],
+      "error": {
+        "path": "/seq",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a seq of 0, which is the header's",
+      "from": "switched",
+      "set": {
+        "/seq": 0
+      },
+      "unset": [],
+      "error": {
+        "path": "/seq",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "a time of the wrong type",
+      "from": "switched",
+      "set": {
+        "/at": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/at",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a time not in UTC ISO form",
+      "from": "switched",
+      "set": {
+        "/at": "yesterday"
+      },
+      "unset": [],
+      "error": {
+        "path": "/at",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "a from version of the wrong type",
+      "from": "switched",
+      "set": {
+        "/from": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/from",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a from version that is not a version",
+      "from": "switched",
+      "set": {
+        "/from": "latest"
+      },
+      "unset": [],
+      "error": {
+        "path": "/from",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "no to version",
+      "from": "switched",
+      "set": {
+        "/to": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/to",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a to version that is not a version",
+      "from": "switched",
+      "set": {
+        "/to": "v0.2.5"
+      },
+      "unset": [],
+      "error": {
+        "path": "/to",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "an integrity hash of the wrong type",
+      "from": "switched",
+      "set": {
+        "/integrity": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/integrity",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "an integrity hash not in the registry's form",
+      "from": "switched",
+      "set": {
+        "/integrity": "md5-abc"
+      },
+      "unset": [],
+      "error": {
+        "path": "/integrity",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "a self-check that is neither pass nor fail",
+      "from": "switched",
+      "set": {
+        "/self_check": "maybe"
+      },
+      "unset": [],
+      "error": {
+        "path": "/self_check",
+        "keyword": "enum"
+      }
+    },
+    {
+      "name": "switched that is not true or false",
+      "from": "switched",
+      "set": {
+        "/switched": "yes"
+      },
+      "unset": [],
+      "error": {
+        "path": "/switched",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a prev_hash of the wrong type",
+      "from": "switched",
+      "set": {
+        "/prev_hash": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a prev_hash not a whole sha256 hash",
+      "from": "switched",
+      "set": {
+        "/prev_hash": "sha256:0123"
+      },
+      "unset": [],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "a hash of the wrong type",
+      "from": "switched",
+      "set": {
+        "/hash": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/hash",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a hash not a whole sha256 hash",
+      "from": "switched",
+      "set": {
+        "/hash": "sha256:0123"
+      },
+      "unset": [],
+      "error": {
+        "path": "/hash",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/schema_version missing",
+      "from": "switched",
+      "set": {},
+      "unset": [
+        "/schema_version"
+      ],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/record missing",
+      "from": "switched",
+      "set": {},
+      "unset": [
+        "/record"
+      ],
+      "error": {
+        "path": "/record",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/seq missing",
+      "from": "switched",
+      "set": {},
+      "unset": [
+        "/seq"
+      ],
+      "error": {
+        "path": "/seq",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/at missing",
+      "from": "switched",
+      "set": {},
+      "unset": [
+        "/at"
+      ],
+      "error": {
+        "path": "/at",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/from missing",
+      "from": "switched",
+      "set": {},
+      "unset": [
+        "/from"
+      ],
+      "error": {
+        "path": "/from",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/to missing",
+      "from": "switched",
+      "set": {},
+      "unset": [
+        "/to"
+      ],
+      "error": {
+        "path": "/to",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/integrity missing",
+      "from": "switched",
+      "set": {},
+      "unset": [
+        "/integrity"
+      ],
+      "error": {
+        "path": "/integrity",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/self_check missing",
+      "from": "switched",
+      "set": {},
+      "unset": [
+        "/self_check"
+      ],
+      "error": {
+        "path": "/self_check",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/switched missing",
+      "from": "switched",
+      "set": {},
+      "unset": [
+        "/switched"
+      ],
+      "error": {
+        "path": "/switched",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/prev_hash missing",
+      "from": "switched",
+      "set": {},
+      "unset": [
+        "/prev_hash"
+      ],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/hash missing",
+      "from": "switched",
+      "set": {},
+      "unset": [
+        "/hash"
+      ],
+      "error": {
+        "path": "/hash",
+        "keyword": "required"
+      }
+    }
+  ]
+}

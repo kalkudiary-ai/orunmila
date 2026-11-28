@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:orunmila:spec:v1:baseline-entry",
+  "title": "Orunmila baseline snapshot entry, schema version 1",
+  "description": "One line of `baseline.jsonl`, the baseline snapshot taken at session start: one entry seen under the project root. The file is one canonical JSON line (RFC 8785) per entry, sorted by path, and its plain SHA-256 is the session header's `baseline.fingerprint`.",
+  "$comment": "brief v4 lines 385, 387, 390, 250 name the snapshot and its fingerprint but no fields: every field name here is the agent's choice (LD169, LD170). Written by src/opon/net/baseline.js.",
+  "type": "object",
+  "required": ["path"],
+  "properties": {
+    "path": {
+      "description": "The entry's path relative to the project root, with `/`, lower-cased on a case-insensitive file system and redacted, as a mark's `target.path` is, so the two name one file the same way.",
+      "$comment": "brief v4 lines 248, 345; agent's choice, LD169, LD170",
+      "type": "string",
+      "minLength": 1
+    },
+    "size": {
+      "description": "A regular file's size in bytes.",
+      "$comment": "agent's choice, LD169",
+      "type": "integer",
+      "minimum": 0
+    },
+    "fingerprint": {
+      "description": "A regular file's fingerprint, hashed by streaming: plain SHA-256, or keyed HMAC-SHA-256 for a file on the redaction list.",
+      "$comment": "brief v4 lines 250, 390",
+      "type": "string",
+      "pattern": "^(sha256|hmac-sha256):[0-9a-f]{64}$"
+    },
+    "kind": {
+      "description": "Present for an entry that is not a regular file read whole: `link` for a symbolic link (never followed), `other` for anything else that is not a folder, `unreadable` for a file or folder the walk could not read (its `error` says why). Nothing seen is left out.",
+      "$comment": "agent's choice, LD169; `unreadable` LD172",
+      "enum": ["link", "other", "unreadable"]
+    },
+    "error": {
+      "description": "On an `unreadable` entry: the operating system's error code (for example `EACCES`, or `ENOENT` for a file gone mid-walk).",
+      "$comment": "agent's choice, LD172",
+      "type": "string",
+      "minLength": 1
+    },
+    "redactions": {
+      "description": "The kinds of secret redacted from `path`, when any was. Sorted in UTF-16 code-unit order, each kind once.",
+      "$comment": "brief v4 line 248; agent's choice, LD170",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    }
+  }
+}

@@ -33,6 +33,14 @@ Requires a captured session — the `orunmila` skill (free) sets that up.
    gets the top 5 actually checked, which is the point.
 4. Hand them the HTML report alongside it. Its Report tab already carries a
    copy-paste prompt that sends the agent back to fix every flagged item.
+5. If the session ran through the intake (`orunmila install --intake`), add its
+   session report: the verdict on the whole session, what changed on disk
+   counted by what both witnesses recorded, and each finding in one sentence:
+   ```bash
+   npx orunmila report --verdicts --session <id> --html report.html
+   npx orunmila trailer --session <id>     # the verdict as git trailers for the commit
+   ```
+   A trailer is a convenience, not evidence; `orunmila verify` proves the record.
 
 ## Triage order
 
@@ -80,10 +88,11 @@ The report stamps those edges `inferred`. Treat them as a lead, not a fact.
   hook. The report deliberately never asserts which, because intent is not
   observable from the outside.
 - **Check the touch list's scope before trusting attribution.** If two agent
-  sessions were running over the same tree, the disk observer's writes carry no
-  session id and each session adopts the other's. Read it as "what changed on
-  this machine during this window", not as authorship. (P0-2 in
-  `review/ISSUES.md`.)
+  sessions were running over the same tree, the standalone disk observer's
+  writes carry no session id and each session adopts the other's. Read it as
+  "what changed on this machine during this window", not as authorship. (P0-2
+  in `review/ISSUES.md`.) The intake's session report names the sessions that
+  overlapped and credits a change only to the one that made it.
 - **The summary line is the fastest read.** `1 verified, 1 phantom,
   1 phantom-verification, 0 silently dropped, 0 undisclosed` tells a reviewer in
   one glance whether this session needs an hour or five minutes.

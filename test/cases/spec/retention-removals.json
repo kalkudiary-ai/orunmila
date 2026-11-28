@@ -1,0 +1,594 @@
+{
+  "good": {
+    "first_removal": {
+      "schema_version": 1,
+      "record": "removed",
+      "seq": 1,
+      "session_id": "ses_test_0001",
+      "removed_at": "2026-11-18T12:00:00.000Z",
+      "reason": "older than 30 days",
+      "header": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "raw": {
+        "seq": 4,
+        "hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      },
+      "quarantine": {
+        "seq": 0,
+        "hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "counts": {
+        "marks": 4,
+        "quarantined": 0,
+        "kept_files": 1
+      },
+      "prev_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "header_only_session_empty_reason": {
+      "schema_version": 1,
+      "record": "removed",
+      "seq": 7,
+      "session_id": "ses_test_0002",
+      "removed_at": "2026-11-18T12:00:00Z",
+      "reason": "",
+      "header": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "raw": {
+        "seq": 0,
+        "hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "quarantine": {
+        "seq": 0,
+        "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "counts": {
+        "marks": 0,
+        "quarantined": 0,
+        "kept_files": 0
+      },
+      "prev_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "hash": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+    }
+  },
+  "bad": [
+    {
+      "name": "a removal at seq 0, the header's",
+      "from": "first_removal",
+      "set": {
+        "/seq": 0
+      },
+      "unset": [],
+      "error": {
+        "path": "/seq",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "a removal that starts a chain",
+      "from": "first_removal",
+      "set": {
+        "/prev_hash": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a removal that names no session",
+      "from": "first_removal",
+      "set": {
+        "/session_id": ""
+      },
+      "unset": [],
+      "error": {
+        "path": "/session_id",
+        "keyword": "minLength"
+      }
+    },
+    {
+      "name": "a removal time not in UTC ISO form",
+      "from": "first_removal",
+      "set": {
+        "/removed_at": "2026-11-18T12:00:00+03:00"
+      },
+      "unset": [],
+      "error": {
+        "path": "/removed_at",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "a reason that is not text",
+      "from": "first_removal",
+      "set": {
+        "/reason": 30
+      },
+      "unset": [],
+      "error": {
+        "path": "/reason",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "a removal with no header hash, so a reused id could not be told apart",
+      "from": "first_removal",
+      "set": {
+        "/header": null
+      },
+      "unset": [],
+      "error": {
+        "path": "/header",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "the raw log's end with no hash",
+      "from": "first_removal",
+      "set": {},
+      "unset": [
+        "/raw/hash"
+      ],
+      "error": {
+        "path": "/raw/hash",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "the raw log's end at a negative seq",
+      "from": "first_removal",
+      "set": {
+        "/raw/seq": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/raw/seq",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "the raw log's end hash keyed",
+      "from": "first_removal",
+      "set": {
+        "/raw/hash": "hmac-sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      },
+      "unset": [],
+      "error": {
+        "path": "/raw/hash",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "a removal with no quarantine log end",
+      "from": "first_removal",
+      "set": {},
+      "unset": [
+        "/quarantine"
+      ],
+      "error": {
+        "path": "/quarantine",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "a count that is not a whole number",
+      "from": "first_removal",
+      "set": {
+        "/counts/marks": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/counts/marks",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "counts with no kept files",
+      "from": "first_removal",
+      "set": {},
+      "unset": [
+        "/counts/kept_files"
+      ],
+      "error": {
+        "path": "/counts/kept_files",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "a header line in a removal's place",
+      "from": "first_removal",
+      "set": {
+        "/record": "retention_header"
+      },
+      "unset": [],
+      "error": {
+        "path": "/record",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "a removal's own hash keyed",
+      "from": "first_removal",
+      "set": {
+        "/hash": "hmac-sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "unset": [],
+      "error": {
+        "path": "/hash",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/schema_version missing (generated, LD78)",
+      "from": "first_removal",
+      "set": {},
+      "unset": [
+        "/schema_version"
+      ],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/record missing (generated, LD78)",
+      "from": "first_removal",
+      "set": {},
+      "unset": [
+        "/record"
+      ],
+      "error": {
+        "path": "/record",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/seq missing (generated, LD78)",
+      "from": "first_removal",
+      "set": {},
+      "unset": [
+        "/seq"
+      ],
+      "error": {
+        "path": "/seq",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/session_id missing (generated, LD78)",
+      "from": "first_removal",
+      "set": {},
+      "unset": [
+        "/session_id"
+      ],
+      "error": {
+        "path": "/session_id",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/removed_at missing (generated, LD78)",
+      "from": "first_removal",
+      "set": {},
+      "unset": [
+        "/removed_at"
+      ],
+      "error": {
+        "path": "/removed_at",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/reason missing (generated, LD78)",
+      "from": "first_removal",
+      "set": {},
+      "unset": [
+        "/reason"
+      ],
+      "error": {
+        "path": "/reason",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/header missing (generated, LD78)",
+      "from": "first_removal",
+      "set": {},
+      "unset": [
+        "/header"
+      ],
+      "error": {
+        "path": "/header",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/raw missing (generated, LD78)",
+      "from": "first_removal",
+      "set": {},
+      "unset": [
+        "/raw"
+      ],
+      "error": {
+        "path": "/raw",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/counts missing (generated, LD78)",
+      "from": "first_removal",
+      "set": {},
+      "unset": [
+        "/counts"
+      ],
+      "error": {
+        "path": "/counts",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/prev_hash missing (generated, LD78)",
+      "from": "first_removal",
+      "set": {},
+      "unset": [
+        "/prev_hash"
+      ],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/hash missing (generated, LD78)",
+      "from": "first_removal",
+      "set": {},
+      "unset": [
+        "/hash"
+      ],
+      "error": {
+        "path": "/hash",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/schema_version not 1 (generated, LD78)",
+      "from": "first_removal",
+      "set": {
+        "/schema_version": 2
+      },
+      "unset": [],
+      "error": {
+        "path": "/schema_version",
+        "keyword": "const"
+      }
+    },
+    {
+      "name": "/seq of the wrong type (generated, LD78)",
+      "from": "first_removal",
+      "set": {
+        "/seq": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/seq",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/session_id of the wrong type (generated, LD78)",
+      "from": "first_removal",
+      "set": {
+        "/session_id": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/session_id",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/removed_at of the wrong type (generated, LD78)",
+      "from": "first_removal",
+      "set": {
+        "/removed_at": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/removed_at",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/header not a whole sha256 hash (generated, LD78)",
+      "from": "first_removal",
+      "set": {
+        "/header": "sha256:0123"
+      },
+      "unset": [],
+      "error": {
+        "path": "/header",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/counts of the wrong type (generated, LD78)",
+      "from": "first_removal",
+      "set": {
+        "/counts": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/counts",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/counts/marks missing (generated, LD78)",
+      "from": "first_removal",
+      "set": {},
+      "unset": [
+        "/counts/marks"
+      ],
+      "error": {
+        "path": "/counts/marks",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/counts/quarantined missing (generated, LD78)",
+      "from": "first_removal",
+      "set": {},
+      "unset": [
+        "/counts/quarantined"
+      ],
+      "error": {
+        "path": "/counts/quarantined",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/counts/marks below 0 (generated, LD78)",
+      "from": "first_removal",
+      "set": {
+        "/counts/marks": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/counts/marks",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "/counts/quarantined of the wrong type (generated, LD78)",
+      "from": "first_removal",
+      "set": {
+        "/counts/quarantined": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/counts/quarantined",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/counts/quarantined below 0 (generated, LD78)",
+      "from": "first_removal",
+      "set": {
+        "/counts/quarantined": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/counts/quarantined",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "/counts/kept_files of the wrong type (generated, LD78)",
+      "from": "first_removal",
+      "set": {
+        "/counts/kept_files": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/counts/kept_files",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/counts/kept_files below 0 (generated, LD78)",
+      "from": "first_removal",
+      "set": {
+        "/counts/kept_files": -1
+      },
+      "unset": [],
+      "error": {
+        "path": "/counts/kept_files",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "name": "/prev_hash not a whole sha256 hash (generated, LD78)",
+      "from": "first_removal",
+      "set": {
+        "/prev_hash": "sha256:0123"
+      },
+      "unset": [],
+      "error": {
+        "path": "/prev_hash",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "name": "/hash of the wrong type (generated, LD78)",
+      "from": "first_removal",
+      "set": {
+        "/hash": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/hash",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/raw of the wrong type (generated, LD78)",
+      "from": "first_removal",
+      "set": {
+        "/raw": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/raw",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/raw/seq missing (generated, LD78)",
+      "from": "first_removal",
+      "set": {},
+      "unset": [
+        "/raw/seq"
+      ],
+      "error": {
+        "path": "/raw/seq",
+        "keyword": "required"
+      }
+    },
+    {
+      "name": "/raw/seq of the wrong type (generated, LD78)",
+      "from": "first_removal",
+      "set": {
+        "/raw/seq": 1.5
+      },
+      "unset": [],
+      "error": {
+        "path": "/raw/seq",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/raw/hash of the wrong type (generated, LD78)",
+      "from": "first_removal",
+      "set": {
+        "/raw/hash": 7
+      },
+      "unset": [],
+      "error": {
+        "path": "/raw/hash",
+        "keyword": "type"
+      }
+    },
+    {
+      "name": "/quarantine of the wrong type (cold verify of S3, LD78)",
+      "from": "first_removal",
+      "set": {
+        "/quarantine": "x"
+      },
+      "unset": [],
+      "error": {
+        "path": "/quarantine",
+        "keyword": "type"
+      }
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+# W3a: every text file is checked out with LF on every OS, as it is stored. Without this, git on Windows (CI's
+# core.autocrlf) writes CRLF, so LICENSE no longer hashes to the Apache text, a mutant's snippet no longer occurs
+# once, and a file read on Windows differs from the same file read anywhere else.
+* text=auto eol=lf
+*.png binary

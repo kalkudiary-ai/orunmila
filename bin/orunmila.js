@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 KALKU DIGITAL SOLUTIONS LIMITED
 'use strict';
 
 const fs = require('fs');
@@ -54,6 +56,60 @@ function mergeClaudeHook(settings, eventName, matcher, command) {
   settings.hooks[eventName].push({ matcher, hooks: [{ type: 'command', command }] });
 }
 
+/**
+ * PM3 (LD291): the script a hook command runs, when it is one of Orunmila's (by its basename), read from the command's
+ * words with their quotes taken off; and every command hook in a settings object whose script is not there (a package
+ * runner's cache cleared, a copy moved), as [{ event, script }]. Such a hook runs nothing, so it records nothing.
+ */
+const ORUNMILA_SCRIPTS = ['orunmila-start.js', 'user-prompt-submit.js', 'pre-tool-use.js', 'post-tool-use.js', 'stop.js', 'law-gate.js', 'intake-send.js', 'connector.js'];
+/** The command's words, quotes taken off, and the index of the first that names one of Orunmila's scripts (or -1). */
+function scriptOf(command) {
+  const words = [];
+  const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  let m;
+  while ((m = re.exec(String(command)))) words.push(m[1] !== undefined ? m[1] : m[2] !== undefined ? m[2] : m[3]);
+  return { words, at: words.findIndex((w) => ORUNMILA_SCRIPTS.includes(path.basename(w))) };
+}
+/**
+ * F28 (Phase 7, EU2): the script a hook runs, as a `/`-separated path inside this copy (`root`), when the hook names
+ * one of this copy's own files directly, as an earlier version's install wrote it (`node "<package>/src/...js"`);
+ * otherwise null. Paths are compared after resolving links, so a global folder reached through a link still matches.
+ */
+function ownScript(command, root) {
+  const { words, at } = scriptOf(command);
+  if (at < 0 || !path.isAbsolute(words[at])) return null;
+  let rel;
+  try {
+    rel = path.relative(fs.realpathSync(root), fs.realpathSync(words[at]));
+  } catch {
+    return null;
+  }
+  return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? { rel: rel.split(path.sep).join('/'), rest: words.slice(at + 1) } : null;
+}
+function missingHookScripts(settings) {
+  const { starterTarget, STARTER } = require('../src/runtime/install');
+  const out = [];
+  for (const [event, entries] of Object.entries((settings && settings.hooks) || {})) {
+    for (const entry of Array.isArray(entries) ? entries : []) {
+      // F24: Claude Code nests { type: 'command', command } under each entry's hooks; Cursor lists { command } itself.
+      const list = entry && Array.isArray(entry.hooks) ? entry.hooks : entry && typeof entry.command === 'string' ? [{ type: 'command', command: entry.command }] : [];
+      for (const h of list) {
+        if (!h || h.type !== 'command') continue;
+        const { words, at } = scriptOf(h.command);
+        const s = at >= 0 ? words[at] : null;
+        if (!s || !path.isAbsolute(s)) continue;
+        if (!fs.existsSync(s)) out.push({ event, script: s });
+        else if (path.basename(s) === STARTER) {
+          // PM2b (LD331): the starter is there; the script it runs is the current version's.
+          const t = starterTarget(s, words[at + 1]);
+          if (!t.ok) out.push({ event, script: t.file });
+        }
+      }
+    }
+  }
+  return out;
+}
+
 // The four purpose-named Claude-Code capture scripts. We detect an existing
 // install by SCRIPT BASENAME (not full command string) so that a second install
 // pointing at a DIFFERENT copy of orunmila (e.g. ~/.claude/orunmila/... vs
@@ -91,6 +147,12 @@ function findExistingClaudeHooks(settings) {
 // without the other, and "is the gate on?" must be answerable without guessing.
 const GATE_HOOK_BASENAME = 'law-gate.js';
 
+// The events the intake's router reads (slice B1d), each sent by intake-send.js (LD133).
+const INTAKE_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'Stop', 'SessionEnd'];
+// H2 (LD140): which of them go over Claude Code's HTTP hooks, and which keep the command sender.
+const INTAKE_HTTP_EVENTS = ['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop'];
+const INTAKE_COMMAND_EVENTS = ['SessionStart', 'PostToolUseFailure', 'SessionEnd'];
+
 // Find the registered Closeout Gate hook, if any. Same basename strategy as
 // findExistingClaudeHooks: a gate pointing at a different copy of orunmila is
 // still a gate.
@@ -127,8 +189,17 @@ const LENSES = {
     verb: 'refuses',
     one_line: "Stops a turn ending on a claim the turn's own evidence does not support.",
     refuses: true,
-    agents: 'claude-code only',
+    agents: 'claude-code and cursor',
     install: 'orunmila install --with-gate',
+  },
+  // BJ1 (LD326): the judge, an install option, off by default (O: "not everyone will appreciate the feature").
+  babalawo: {
+    name: 'The Babaláwo',
+    verb: 'judges',
+    one_line: "Judges each session's sealed record at its closeout: Clean, Look at this or Violation, with the reason.",
+    refuses: false,
+    agents: 'claude-code (through the intake)',
+    install: 'orunmila install --with-judge',
   },
 };
 
@@ -155,7 +226,7 @@ function lensState({ agentId = 'claude-code', global = false } = {}) {
     configPath: p,
     exists: true,
     stainMap: captureHooks,
-    gate: adapter.id === 'claude-code' ? findExistingGateHooks(settings) : [],
+    gate: adapter.id === 'claude-code' ? findExistingGateHooks(settings) : adapter.id === 'cursor' ? findCursorGateHooks(settings) : [],
     adapter,
   };
 }
@@ -167,6 +238,13 @@ function lensState({ agentId = 'claude-code', global = false } = {}) {
 // Returns { installed: boolean }. Refuses (installed:false) rather than adding a
 // second registration when an orunmila hook already exists in this settings file
 // — silently skipping would hide the dual-install; we print where it was found.
+/**
+ * PM2b (LD331): Orunmila's home, and the hook command for one of its scripts: through the starter in the home, which
+ * runs the version `install` copied there (src/runtime/install.js), never a path inside the copy that ran `install`.
+ */
+const orunmilaHome = () => process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
+const hookFor = (rel) => require('../src/runtime/install').hookCommand(orunmilaHome(), rel);
+
 function installClaudeCode(root, p, { tolerateExisting = false } = {}) {
   const settings = readJson(p, {});
   const existing = findExistingClaudeHooks(settings);
@@ -187,10 +265,10 @@ function installClaudeCode(root, p, { tolerateExisting = false } = {}) {
     }
     return { installed: false, existing };
   }
-  // Quote the script path: it can contain spaces (e.g. C:\Users\Jane Doe\...)
-  // and, on Windows, backslash separators. Both are safe inside double quotes
-  // for the shell that runs the hook command on every platform.
-  const s = (name) => `node "${path.join(root, 'src/capture/claude-code', name)}"`;
+  // The starter's path is quoted (hookCommand): it can contain spaces (e.g.
+  // C:\Users\Jane Doe\...) and, on Windows, backslash separators. Both are safe
+  // inside double quotes for the shell that runs the hook command on every platform.
+  const s = (name) => hookFor(`src/capture/claude-code/${name}`);
   mergeClaudeHook(settings, 'UserPromptSubmit', '*', s('user-prompt-submit.js'));
   mergeClaudeHook(settings, 'PreToolUse', 'Write|Edit|MultiEdit', s('pre-tool-use.js'));
   mergeClaudeHook(settings, 'PostToolUse', '*', s('post-tool-use.js'));
@@ -204,13 +282,60 @@ function installClaudeCode(root, p, { tolerateExisting = false } = {}) {
 function installAntigravity(adapter, root, p) {
   const settings = readJson(p, {});
   settings.orunmila = settings.orunmila || {};
-  const connector = path.join(root, 'src/capture/connector.js');
   for (const [phase, eventName] of Object.entries(adapter.events)) {
     const matcher = phase === 'preTool' ? (adapter.preToolMatcher || '*') : '*';
     settings.orunmila[eventName] = [
-      { matcher, hooks: [{ type: 'command', command: `node "${connector}" ${adapter.id} ${phase}` }] },
+      { matcher, hooks: [{ type: 'command', command: `${hookFor('src/capture/connector.js')} ${adapter.id} ${phase}` }] },
     ];
   }
+  fs.writeFileSync(p, JSON.stringify(settings, null, 2));
+}
+
+// CU1: Cursor reads { version: 1, hooks: { <event>: [{ command }] } } (its docs, and measured on its command-line
+// agent 2026.11.22). Each of Orunmila's entries, in either the list form or the one string an earlier install wrote, is
+// taken out of every event, the user's own entries kept, and one entry per measured event added.
+function installCursor(adapter, root, p) {
+  const settings = readJson(p, {});
+  const hooks = settings.hooks && typeof settings.hooks === 'object' ? settings.hooks : {};
+  const ours = (c) => scriptOf(c).words.some((w) => path.basename(w) === 'connector.js');
+  for (const ev of Object.keys(hooks)) {
+    const v = hooks[ev];
+    const kept = typeof v === 'string' ? (ours(v) ? [] : [{ command: v }]) : (Array.isArray(v) ? v.filter((h) => !(h && ours(h.command))) : v);
+    if (Array.isArray(kept) && !kept.length) delete hooks[ev];
+    else hooks[ev] = kept;
+  }
+  for (const [phase, eventNames] of Object.entries(adapter.events)) {
+    for (const ev of [].concat(eventNames)) {
+      hooks[ev] = (Array.isArray(hooks[ev]) ? hooks[ev] : []).concat([{ command: `${hookFor('src/capture/connector.js')} ${adapter.id} ${phase}` }]);
+    }
+  }
+  settings.version = settings.version || 1;
+  settings.hooks = hooks;
+  fs.writeFileSync(p, JSON.stringify(settings, null, 2));
+}
+
+// CG1 (LD394): the Closeout Gate's two Cursor hooks, by the script they run (src/capture/cursor/law-gate.js).
+const isCursorGate = (c) => {
+  const { words, at } = scriptOf(c);
+  return at >= 0 && path.basename(words[at]) === 'orunmila-start.js' ? /(^|\/)cursor\/law-gate\.js$/.test(String(words[at + 1] || '')) : words.some((w) => /[\\/]cursor[\\/]law-gate\.js$/.test(w));
+};
+function findCursorGateHooks(settings) {
+  const out = [];
+  for (const [event, list] of Object.entries((settings && settings.hooks) || {})) {
+    for (const h of Array.isArray(list) ? list : []) if (h && typeof h.command === 'string' && isCursorGate(h.command)) out.push({ event, command: h.command });
+  }
+  return out;
+}
+/** The gate on afterAgentResponse (its text) and stop (its check, loop_limit 2: the block budget), any earlier ones replaced. */
+function installCursorGate(p) {
+  const settings = readJson(p, {});
+  const hooks = settings.hooks && typeof settings.hooks === 'object' ? settings.hooks : {};
+  for (const ev of Object.keys(hooks)) if (Array.isArray(hooks[ev])) hooks[ev] = hooks[ev].filter((h) => !(h && typeof h.command === 'string' && isCursorGate(h.command)));
+  const gate = hookFor('src/capture/cursor/law-gate.js');
+  hooks.afterAgentResponse = (hooks.afterAgentResponse || []).concat([{ command: `${gate} text` }]);
+  hooks.stop = (hooks.stop || []).concat([{ command: `${gate} stop`, loop_limit: 2 }]);
+  settings.version = settings.version || 1;
+  settings.hooks = hooks;
   fs.writeFileSync(p, JSON.stringify(settings, null, 2));
 }
 
@@ -220,16 +345,54 @@ function installAntigravity(adapter, root, p) {
 function installGeneric(adapter, root, p) {
   const settings = readJson(p, {});
   settings.hooks = settings.hooks || {};
-  const connector = path.join(root, 'src/capture/connector.js');
   for (const [phase, eventNames] of Object.entries(adapter.events)) {
     for (const eventName of [].concat(eventNames)) {
-      settings.hooks[eventName] = `node "${connector}" ${adapter.id} ${phase}`;
+      settings.hooks[eventName] = `${hookFor('src/capture/connector.js')} ${adapter.id} ${phase}`;
     }
   }
   fs.writeFileSync(p, JSON.stringify(settings, null, 2));
 }
 
+/**
+ * BJ1 (LD326; LD300 (4)): `install --with-judge | --without-judge` sets the Babaláwo's switch in Orunmila's home and
+ * touches no hook. The intake reads it at its next start; the judge only reads sealed records and never stops the agent.
+ */
+function installJudge(on) {
+  const { setJudge } = require('../src/opon/intake/switches');
+  const home = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
+  const file = setJudge(home, on);
+  if (on) {
+    console.log(`${LENSES.babalawo.name} is on (${file}).`);
+    console.log('At each session\'s closeout the intake judges the sealed record: every event Clean, Look at this or Violation,');
+    console.log('and the session as a whole, into verdict.jsonl beside the other two logs. It only reads the record; it never stops the agent.');
+    console.log('The record it reads comes on with it: a baseline at each session\'s start and the session\'s odù log (ORUNMILA_OPON_LIVE=0 turns that off, and the judge then has nothing to judge).');
+    console.log('It judges sessions the intake records: orunmila install --intake, then orunmila intake start.');
+    console.log('Read a session\'s verdicts with: orunmila report --verdicts --session ID');
+  } else {
+    console.log(`${LENSES.babalawo.name} is off (${file}). No verdict log is written; the record is kept as before.`);
+    console.log('Any session can still be judged by hand: orunmila judge --session ID');
+  }
+  console.log('It takes effect at the intake\'s next start (orunmila intake stop, then orunmila intake start; a launch agent starts it again by itself).');
+  if (process.env.ORUNMILA_JUDGE_LIVE === '1' || process.env.ORUNMILA_JUDGE_LIVE === '0') {
+    console.log(`Note: ORUNMILA_JUDGE_LIVE=${process.env.ORUNMILA_JUDGE_LIVE} is set in this shell, and an intake started from it follows that instead.`);
+  }
+}
+
+/** PM2c2 (LD333): `install --with-updates | --without-updates`, the daily update check's switch in Orunmila's home. */
+function installUpdates(on) {
+  const { setUpdates } = require('../src/opon/intake/switches');
+  const file = setUpdates(orunmilaHome(), on);
+  if (on) {
+    console.log(`Daily updates are on (${file}).`);
+    console.log("Once a day the intake, or a hook where no intake runs, asks the npm registry for the latest orunmila, sending only the package's name,");
+    console.log('and switches to it once it is checked and no session is being recorded. Each switch is in ~/.orunmila/updates.jsonl.');
+  } else console.log(`Daily updates are off (${file}). Update by hand with: orunmila update`);
+  if (process.env.ORUNMILA_UPDATES === '1' || process.env.ORUNMILA_UPDATES === '0') console.log(`Note: ORUNMILA_UPDATES=${process.env.ORUNMILA_UPDATES} is set in this shell, and wins over the switch where it is set.`);
+}
+
 function cmdInstall() {
+  if (args.includes('--with-judge') || args.includes('--without-judge')) return installJudge(args.includes('--with-judge'));
+  if (args.includes('--with-updates') || args.includes('--without-updates')) return installUpdates(args.includes('--with-updates'));
   const root = path.resolve(__dirname, '..');
   const agentId = flag('agent', 'claude-code');
   const adapter = getAdapter(agentId);
@@ -243,6 +406,57 @@ function cmdInstall() {
   const p = configPath(adapter, { global, home: os.homedir(), cwd: process.cwd() });
   fs.mkdirSync(path.dirname(p), { recursive: true });
 
+  // F19 (LD336): Orunmila's capture hooks already here. Each runs this home's starter: installing again is an upgrade
+  // (the copy and `current` below, no hook added). Any names another copy: a plain install refuses, before it touches
+  // Orunmila's home, so a refusal changes nothing.
+  const capturing = !args.includes('--intake') && !args.includes('--gate-only') && !args.includes('--with-gate') && !args.includes('--with-laws');
+  const thisStarter = path.join(orunmilaHome(), 'bin', require('../src/runtime/install').STARTER);
+  const existing = adapter.id === 'claude-code' ? findExistingClaudeHooks(readJson(p, {})) : [];
+  const upgrade = existing.length > 0 && existing.every((e) => {
+    const { words, at } = scriptOf(e.command);
+    return (at >= 0 && words[at] === thisStarter) || ownScript(e.command, root) !== null; // F28: or this copy's own file
+  });
+  if (capturing && existing.length && !upgrade) {
+    installClaudeCode(root, p); // prints the refusal and where the other hooks are; writes nothing
+    process.exitCode = 1;
+    return;
+  }
+
+  // PM2b (LD331): this copy kept in Orunmila's home, so every hook below runs it through the starter, whatever
+  // happens to the copy that ran `install` (npx's or pnpm's cache cleared, a global folder moved).
+  const rt = require('../src/runtime/install').installRuntime({ home: orunmilaHome(), from: root });
+  console.log(`Orunmila ${rt.version} is kept in ${rt.dir}${rt.fresh ? '' : ' (already there)'}; every hook runs it through ${rt.starter},`);
+  console.log('so the hooks keep working if the copy that ran this install is removed.\n');
+  // UD1 (O's word, 2026-11-27; Q33's plan): a user's install turns the daily update check on, unless it is set already.
+  if (require('../src/opon/intake/switches').setUpdatesDefault(orunmilaHome()).written) {
+    console.log("Daily updates are on: once a day Orunmila asks the npm registry for its latest version, sending only the package's name,");
+    console.log('and switches to it once it is checked and no session is being recorded. Turn them off with: orunmila install --without-updates\n');
+  }
+  // F28: every hook that names this copy's own files, as an earlier version's install wrote it, is rewritten in place to
+  // run the starter, keeping its event, matcher and arguments, so it keeps working when this copy goes.
+  if (adapter.id === 'claude-code' && fs.existsSync(p)) {
+    const settings = readJson(p, {});
+    let moved = 0;
+    for (const entries of Object.values((settings && settings.hooks) || {})) {
+      for (const entry of Array.isArray(entries) ? entries : []) {
+        for (const h of (entry && entry.hooks) || []) {
+          const own = h && h.type === 'command' ? ownScript(h.command, root) : null;
+          if (!own) continue;
+          h.command = [hookFor(own.rel), ...own.rest].join(' ');
+          moved++;
+        }
+      }
+    }
+    if (moved) {
+      fs.writeFileSync(p, JSON.stringify(settings, null, 2));
+      console.log(`${moved} hooks named this copy's own files, as an earlier version's install wrote them; each now runs the starter.`);
+    }
+  }
+  if (capturing && upgrade) {
+    console.log(`Orunmila is already installed in ${p}: its hooks run that starter, which now runs ${rt.version}. No hook was added.`);
+    return;
+  }
+
   // The Closeout Gate is a SEPARATE registration from the Stain Map, so it must
   // be installable on its own. Someone who set capture up months ago and now
   // wants the gate would otherwise be turned away by the duplicate-install
@@ -251,6 +465,53 @@ function cmdInstall() {
   //
   // --with-laws is the original spelling of --with-gate. It keeps working
   // forever: it is in install instructions people have already followed.
+  // --intake (slice B2, LD133): the sender to the intake, for every event the
+  // intake's router reads and every tool, beside today's capture hooks, never in
+  // their place. Installing it is the switch (LD122); it does not start the intake.
+  if (args.includes('--intake')) {
+    if (adapter.id !== 'claude-code') {
+      console.error(`--intake is claude-code only for now; ${adapter.label} keeps its current capture.`);
+      process.exitCode = 1;
+      return;
+    }
+    const settings = readJson(p, {});
+    const sender = hookFor('src/capture/claude-code/intake-send.js');
+    const url = `http://127.0.0.1:${require('../src/opon/intake/server').intakePort()}/hook`;
+    // One channel per event (H2, LD140): Claude Code's own HTTP hooks where they are
+    // known to fire, so each session is pinned to the claude process; the command
+    // sender for SessionStart (command-only) and the two not yet measured over HTTP.
+    // Any earlier intake hook, sender or HTTP, is replaced, never doubled.
+    const ours = (h) => h && ((h.type === 'command' && String(h.command || '').includes('intake-send.js')) || (h.type === 'http' && /^http:\/\/127\.0\.0\.1:[0-9]+\/hook$/.test(String(h.url || ''))));
+    settings.hooks = settings.hooks || {};
+    for (const ev of INTAKE_EVENTS) {
+      const kept = (settings.hooks[ev] || []).map((e) => ({ ...e, hooks: (e.hooks || []).filter((h) => !ours(h)) })).filter((e) => e.hooks.length);
+      if (kept.length) settings.hooks[ev] = kept;
+      else delete settings.hooks[ev];
+    }
+    for (const ev of INTAKE_COMMAND_EVENTS) mergeClaudeHook(settings, ev, '*', sender);
+    for (const ev of INTAKE_HTTP_EVENTS) (settings.hooks[ev] = settings.hooks[ev] || []).push({ matcher: '*', hooks: [{ type: 'http', url, timeout: 2 }] });
+    // BB5b (LD276; brief v4 line 678): an installed Closeout Gate sends its checks to the intake too, by an argument,
+    // never an environment prefix (not every shell a hook runs in reads one). The gate is never installed from here.
+    let gates = 0;
+    for (const e of settings.hooks.Stop || []) {
+      for (const h of e.hooks || []) {
+        if (h.type !== 'command' || !String(h.command || '').includes(GATE_HOOK_BASENAME)) continue;
+        gates++;
+        if (!/\s--marks$/.test(h.command)) h.command = `${h.command} --marks`;
+      }
+    }
+    fs.writeFileSync(p, JSON.stringify(settings, null, 2));
+    console.log(`The intake is registered in ${p}, beside any hooks already there:`);
+    console.log(`  HTTP hooks to ${url} for ${INTAKE_HTTP_EVENTS.join(', ')} (every tool; each session pinned to the claude process)`);
+    console.log(`  the command sender for ${INTAKE_COMMAND_EVENTS.join(', ')}`);
+    if (gates) console.log("  the Closeout Gate's checks go to the intake too (--marks), so each session's record shows the law gate");
+    else console.log('The Closeout Gate is not installed here: with no law-gate checks, every session\'s record will be Incomplete (law gate silent). Add it with: orunmila install --gate-only');
+    console.log("Nothing is recorded while no intake runs: start it with");
+    console.log('  orunmila intake start');
+    console.log(`\nRestart ${adapter.label} (or start a new session) for this to take effect.`);
+    return;
+  }
+
   const wantsGate = args.includes('--with-gate') || args.includes('--with-laws');
   const gateOnly = args.includes('--gate-only');
   let captureInstalled = true;
@@ -261,8 +522,8 @@ function cmdInstall() {
   // nothing to judge and it will pass every turn in silence. Say so out loud
   // rather than installing something inert.
   if (gateOnly) {
-    if (adapter.id !== 'claude-code') {
-      console.error(`--gate-only is claude-code only; ${adapter.label} can run the Stain Map but not the Closeout Gate.`);
+    if (adapter.id !== 'claude-code' && adapter.id !== 'cursor') {
+      console.error(`--gate-only is for claude-code and cursor; ${adapter.label} can run the Stain Map but not the Closeout Gate.`);
       process.exitCode = 1;
       return;
     }
@@ -273,11 +534,16 @@ function cmdInstall() {
       console.log('nothing to read and will pass every turn silently. Install both with:');
       console.log('  orunmila install --with-gate\n');
     }
-    const settings = readJson(p, {});
-    const gate = `node "${path.join(root, 'src/capture/claude-code', 'law-gate.js')}"`;
-    mergeClaudeHook(settings, 'Stop', '*', gate);
-    fs.writeFileSync(p, JSON.stringify(settings, null, 2));
-    console.log(`${LENSES['closeout-gate'].name} installed on the Stop hook in ${p}.\n`);
+    if (adapter.id === 'cursor') {
+      installCursorGate(p);
+      console.log(`${LENSES['closeout-gate'].name} installed for Cursor in ${p}: on afterAgentResponse and stop; a block reaches the agent as an automatic follow-up message.\n`);
+    } else {
+      const settings = readJson(p, {});
+      const gate = hookFor('src/capture/claude-code/law-gate.js');
+      mergeClaudeHook(settings, 'Stop', '*', gate);
+      fs.writeFileSync(p, JSON.stringify(settings, null, 2));
+      console.log(`${LENSES['closeout-gate'].name} installed on the Stop hook in ${p}.\n`);
+    }
     printLawsForReview({ root: process.cwd() });
     console.log(`\nRestart ${adapter.label} (or start a new session) for this to take effect.`);
     return;
@@ -296,6 +562,8 @@ function cmdInstall() {
     }
   } else if (adapter.id === 'antigravity') {
     installAntigravity(adapter, root, p);
+  } else if (adapter.id === 'cursor') {
+    installCursor(adapter, root, p);
   } else {
     installGeneric(adapter, root, p);
   }
@@ -307,11 +575,16 @@ function cmdInstall() {
   // interrupted — so installing it prints every law in force, its severity, and
   // the file to edit to change it.
   if (wantsGate) {
-    if (adapter.id !== 'claude-code') {
-      console.log(`\nThe ${LENSES['closeout-gate'].name} is claude-code only; the Stain Map is installed, the gate is not.`);
+    if (adapter.id === 'cursor') {
+      installCursorGate(p);
+      console.log(`${LENSES['closeout-gate'].name} installed for Cursor: on afterAgentResponse and stop. A block reaches the agent as an automatic`);
+      console.log("follow-up message (Cursor's stop hook takes nothing else); advice is kept in the gate's record, not shown.\n");
+      printLawsForReview({ root: process.cwd() });
+    } else if (adapter.id !== 'claude-code') {
+      console.log(`\nThe ${LENSES['closeout-gate'].name} is for claude-code and cursor; the Stain Map is installed, the gate is not.`);
     } else {
       const settings = readJson(p, {});
-      const gate = `node "${path.join(root, 'src/capture/claude-code', 'law-gate.js')}"`;
+      const gate = hookFor('src/capture/claude-code/law-gate.js');
       mergeClaudeHook(settings, 'Stop', '*', gate);
       fs.writeFileSync(p, JSON.stringify(settings, null, 2));
       console.log(`${LENSES['closeout-gate'].name} installed on the Stop hook.\n`);
@@ -322,7 +595,7 @@ function cmdInstall() {
     console.log('The Stain Map you just installed only ever reports. The gate can REFUSE a turn whose');
     console.log('claims its own evidence does not support. See exactly what it would enforce first:');
     console.log('  orunmila laws');
-    console.log('Then add it with:  orunmila install --agent claude-code --with-gate');
+    console.log(`Then add it with:  orunmila install --agent ${adapter.id === 'cursor' ? 'cursor' : 'claude-code'} --with-gate`);
     console.log('Compare the two lenses any time with:  orunmila lenses');
   }
 
@@ -376,6 +649,22 @@ function printLawsForReview({ root }) {
 }
 
 /**
+ * F24: the lens states `status` and `lenses` show. With --agent, that agent's alone, as before. Without it, every agent
+ * whose config in this folder (or, with --global, the home folder) holds one of Orunmila's hooks, so a Cursor project
+ * reads Cursor's hooks file; when none does, Claude Code's, as before.
+ */
+function lensStatesShown() {
+  const global = args.includes('--global');
+  const asked = flag('agent', null);
+  if (asked) {
+    const one = lensState({ agentId: asked, global });
+    return one ? [one] : [];
+  }
+  const found = listAgents().map((a) => lensState({ agentId: a.id, global })).filter((s) => s && s.exists && (s.stainMap.length || s.gate.length));
+  return found.length ? found : [lensState({ agentId: 'claude-code', global })];
+}
+
+/**
  * `orunmila lenses` — which lens is which, what each one can do, and which of
  * them you actually have installed right now.
  *
@@ -386,17 +675,16 @@ function printLawsForReview({ root }) {
 function cmdLenses() {
   const dim = (t) => `\x1b[2m${t}\x1b[0m`;
   const bold = (t) => `\x1b[1m${t}\x1b[0m`;
-  const agentId = flag('agent', 'claude-code');
-  const global = args.includes('--global');
-  const state = lensState({ agentId, global });
+  const states = lensStatesShown();
+  const state = states[0];
 
   if (!state) {
-    console.error(`Unknown agent "${agentId}". Try: orunmila agents`);
+    console.error(`Unknown agent "${flag('agent', '')}". Try: orunmila agents`);
     process.exitCode = 1;
     return;
   }
 
-  console.log(bold('orunmila has two lenses. They are installed separately and used for different jobs.\n'));
+  console.log(bold('orunmila has three lenses. They are installed separately and used for different jobs.\n'));
 
   // Pad on VISIBLE width: the header cells carry ANSI bold codes, and padEnd
   // counts those bytes, which knocks the header out of line with the rows.
@@ -406,42 +694,61 @@ function cmdLenses() {
   const pad = (t, n) => String(t) + ' '.repeat(Math.max(0, n - vis(t)));
 
   const rows = [
-    ['', bold('The Stain Map'), bold('The Closeout Gate')],
-    ['what it does', 'records + reports', 'refuses'],
-    ['when', 'after each turn', "before a turn is allowed to end"],
-    ['can it stop the agent?', 'never', 'yes — 2 of its laws block'],
-    ['agents', 'all supported agents', 'claude-code only'],
-    ['install', 'orunmila install', 'orunmila install --with-gate'],
-    ['add to an existing install', '—', 'orunmila install --gate-only'],
-    ['turn off for one session', '—', 'ORUNMILA_LAWS=off'],
-    ['read it', 'orunmila trail', 'orunmila laws'],
+    ['', bold('The Stain Map'), bold('The Closeout Gate'), bold('The Babaláwo')],
+    ['what it does', 'records + reports', 'refuses', 'judges the record'],
+    ['when', 'after each turn', 'before a turn is allowed to end', "at each session's closeout"],
+    ['can it stop the agent?', 'never', 'yes — 2 of its laws block', 'never'],
+    ['agents', 'all supported agents', 'claude-code and cursor', 'claude-code (through the intake)'],
+    ['install', 'orunmila install', 'orunmila install --with-gate', 'orunmila install --with-judge'],
+    ['add to an existing install', '—', 'orunmila install --gate-only', 'orunmila install --with-judge'],
+    ['turn off', '—', 'ORUNMILA_LAWS=off (one session)', 'orunmila install --without-judge'],
+    ['read it', 'orunmila trail', 'orunmila laws', 'orunmila report --verdicts --session ID'],
   ];
   const w0 = Math.max(...rows.map((r) => vis(r[0])));
-  for (const [a, b, c] of rows) {
-    console.log(`  ${pad(a, w0)}   ${pad(b, 29)} ${c}`);
+  for (const [a, b, c, d] of rows) {
+    console.log(`  ${pad(a, w0)}   ${pad(b, 22)} ${pad(c, 33)} ${d}`);
   }
 
   console.log(dim('\n  The gate judges the events the Stain Map records, so the gate needs the Stain'));
-  console.log(dim('  Map underneath it. The Stain Map is useful entirely on its own.'));
+  console.log(dim('  Map underneath it. The Stain Map is useful entirely on its own. The Babaláwo'));
+  console.log(dim("  judges the intake's record (install --intake), and is off until you turn it on."));
 
-  console.log(`\n${bold('Installed right now')} ${dim(`(${state.configPath})`)}`);
-  if (!state.exists) {
-    console.log('  neither — no config file at that path yet.');
-  } else {
+  for (const st of states) {
+    const who = st.adapter.id === 'claude-code' ? '' : ` for ${st.adapter.label}`;
+    console.log(`\n${bold(`Installed right now${who}`)} ${dim(`(${st.configPath})`)}`);
+    if (!st.exists) {
+      console.log('  neither — no config file at that path yet.');
+      continue;
+    }
     const mark = (on) => (on ? '\x1b[32m✓ installed\x1b[0m' : '\x1b[2m· not installed\x1b[0m');
-    console.log(`  ${pad('The Stain Map', 20)} ${mark(state.stainMap.length)}`);
-    for (const h of state.stainMap) console.log(dim(`      [${h.event}] ${h.command}`));
-    if (state.adapter.id === 'claude-code') {
-      console.log(`  ${pad('The Closeout Gate', 20)} ${mark(state.gate.length)}`);
-      for (const h of state.gate) console.log(dim(`      [${h.event}] ${h.command}`));
+    console.log(`  ${pad('The Stain Map', 20)} ${mark(st.stainMap.length)}`);
+    for (const h of st.stainMap) console.log(dim(`      [${h.event}] ${h.command}`));
+    if (st.adapter.id === 'claude-code' || st.adapter.id === 'cursor') {
+      console.log(`  ${pad('The Closeout Gate', 20)} ${mark(st.gate.length)}`);
+      for (const h of st.gate) console.log(dim(`      [${h.event}] ${h.command}`));
     } else {
-      console.log(`  ${pad('The Closeout Gate', 20)} ${dim('· unavailable for this agent (claude-code only)')}`);
+      console.log(`  ${pad('The Closeout Gate', 20)} ${dim('· unavailable for this agent (claude-code and cursor only)')}`);
     }
   }
+
+  const j = judgeState();
+  const judgeMark = j.on ? '\x1b[32m✓ installed\x1b[0m' : '\x1b[2m· not installed\x1b[0m';
+  console.log(`  ${pad('The Babaláwo', 20)} ${judgeMark} ${dim(`(${j.why})`)}`);
+  if (j.problem) console.log(`      \x1b[33m${j.problem}: read as off\x1b[0m`);
 
   if (state.exists && state.stainMap.length && !state.gate.length && state.adapter.id === 'claude-code') {
     console.log(dim('\n  To add the gate without touching capture:  orunmila install --gate-only'));
   }
+}
+
+/** BJ1 (LD326): the judge's switch as `lenses` and `status` show it, from Orunmila's home; the environment noted. */
+function judgeState() {
+  const { readSwitches, switchesFile } = require('../src/opon/intake/switches');
+  const home = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
+  const s = readSwitches(home);
+  const env = process.env.ORUNMILA_JUDGE_LIVE;
+  const shell = env === '1' || env === '0' ? `; ORUNMILA_JUDGE_LIVE=${env} in this shell wins for an intake started from it` : '';
+  return { on: s.judge, problem: s.problem, why: `switch: ${switchesFile(home)}${shell}` };
 }
 
 function logSizeKB() {
@@ -454,24 +761,34 @@ function logSizeKB() {
 
 function cmdStatus() {
   const all = eventlog.readAll();
-  const sessions = new Set(all.map((e) => e.session_id));
+  // F42: only a real id names a session; the Sentinel's rows name none (as F20 found in watch).
+  const sessions = new Set(all.map((e) => e.session_id).filter((s) => typeof s === 'string' && s));
   if (legacy.isLegacy(eventlog.dataDir())) console.log(`\x1b[33m${legacy.WARNING}\x1b[0m\n`);
 
   // Which lenses are live, first — before any counts. A log with events in it
   // says capture ran at some point; it does not say the gate is on, and those
   // are the two separate things a person checking status actually wants.
-  const ls = lensState({ agentId: flag('agent', 'claude-code'), global: args.includes('--global') });
-  if (ls) {
+  const shown = lensStatesShown(); // F24: every agent with Orunmila's hooks in this folder, or the one --agent names
+  for (const ls of shown) {
     const mk = (on) => (on ? '\x1b[32mon\x1b[0m' : '\x1b[2moff\x1b[0m');
-    const gateCell = ls.adapter.id === 'claude-code'
+    const gateCell = ls.adapter.id === 'claude-code' || ls.adapter.id === 'cursor'
       ? mk(ls.gate.length)
-      : '\x1b[2mn/a (claude-code only)\x1b[0m';
-    console.log(`Lenses: Stain Map ${mk(ls.stainMap.length)}  |  Closeout Gate ${gateCell}`);
+      : '\x1b[2mn/a (claude-code and cursor only)\x1b[0m';
+    const who = ls.adapter.id === 'claude-code' ? '' : ` (${ls.adapter.label})`;
+    console.log(`Lenses${who}: Stain Map ${mk(ls.stainMap.length)}  |  Closeout Gate ${gateCell}  |  Babaláwo ${mk(judgeState().on)}`);
     if (String(process.env.ORUNMILA_LAWS || '').toLowerCase() === 'off') {
       console.log('  \x1b[33mORUNMILA_LAWS=off is set in this shell — the gate is disabled regardless of install.\x1b[0m');
     }
     console.log(`  config: ${ls.configPath}`);
-    console.log('  detail: orunmila lenses\n');
+    // PM3 (LD291): a hook whose script is gone runs nothing; name each one, and exit 1 so a self-check can rely on it.
+    const missing = ls.exists ? missingHookScripts(readJson(ls.configPath, {})) : [];
+    if (missing.length) {
+      console.log(`  \x1b[31m${missing.length} ${missing.length === 1 ? 'hook names a script that is' : 'hooks name a script that is'} not there\x1b[0m, so ${missing.length === 1 ? 'it records' : 'they record'} nothing:`);
+      for (const m of missing) console.log(`    [${m.event}] ${m.script}`);
+      console.log('  Install again from a copy that stays (npm i -g orunmila, then orunmila install): a package runner\'s cache can be cleared.');
+      process.exitCode = 1;
+    }
+    if (ls === shown[shown.length - 1]) console.log('  detail: orunmila lenses\n');
   }
 
   console.log(`Event log: ${eventlog.logPath()}`);
@@ -479,6 +796,9 @@ function cmdStatus() {
   console.log(`Log size: ${logSizeKB()} KB`);
   console.log(`Sessions seen: ${sessions.size}`);
   if (sessions.size) console.log(`Most recent session: ${eventlog.latestSessionId()}`);
+  // F32: the intake's session logs, counted beside the old log, so a home that has only them never reads as empty.
+  const logged = loggedSessions();
+  console.log(`Session logs (the intake's): ${logged.length} in ${path.join(orunmilaHome(), 'sessions')}${logged.length ? `, latest ${latestLoggedSession()}` : ''}`);
   if (sessions.size > 50) {
     console.log(`\nThe log holds ${sessions.size} sessions. To cap it: orunmila prune [--keep N] (default 20).`);
   }
@@ -492,6 +812,43 @@ function cmdStatus() {
   console.log('Override in .orunmila/ignore (one path per line; "!entry" un-ignores a default).');
 }
 
+/**
+ * F32 (brief v4 line 747): the kept commands on a home whose session is only in the intake's session log. Before, they
+ * read the old event log alone and showed an empty session with exit 0. sessionLogDir(id): the session's folder in
+ * <home>/sessions/ when its raw log is there, else null. latestLoggedSession(): the session whose raw log was written
+ * last. keptSessionId(): --session, else the old log's latest, else the latest session log.
+ */
+function sessionLogDir(id) {
+  if (!id) return null;
+  try {
+    const dir = path.join(orunmilaHome(), 'sessions', require('../src/opon/intake/paths').sessionFolderName(id));
+    return fs.existsSync(path.join(dir, 'raw.jsonl')) ? dir : null;
+  } catch {
+    return null; // an id unsafe as a folder name has no session log
+  }
+}
+function loggedSessions() {
+  const sessions = path.join(orunmilaHome(), 'sessions');
+  const out = [];
+  for (const name of fs.existsSync(sessions) ? fs.readdirSync(sessions) : []) {
+    try {
+      out.push({ name, m: fs.statSync(path.join(sessions, name, 'raw.jsonl')).mtimeMs });
+    } catch {
+      /* not a session folder */
+    }
+  }
+  return out;
+}
+function latestLoggedSession() {
+  const best = loggedSessions().sort((a, b) => b.m - a.m)[0];
+  return best ? best.name : null;
+}
+function keptSessionId() {
+  return flag('session', null) || eventlog.latestSessionId() || latestLoggedSession();
+}
+/** F32: the one sentence a kept command prints when it read the session log, the old log having nothing for the session. */
+const fromLogNote = (dir) => `Read from the session log in ${dir}: the old event log has no events for this session.`;
+
 // All inspection commands honor --archive <stamp>: when set, they read from the
 // snapshot under <dataDir>/archive/<stamp>/ instead of the live reports. The
 // archive holds the original pre-rescore scores; live always shows current.
@@ -504,9 +861,77 @@ function loadReportsForRead(sessionId) {
   return { reports: listSessionReports(sessionId), fromArchive: null };
 }
 
+/**
+ * `orunmila report --verdicts [--session ID] [--html FILE] [--json]` (Phase 6 slice BB8, LD272; brief v4 lines 688-693):
+ * the session report from the session's logs in <home>/sessions/<id>/: top line first, each finding one sentence naming
+ * both witnesses, the law gate's counts. With no verdict log (the judge was off at its closeout) the odù log is judged
+ * for this report only, and the report says so. Exit 0 reported, 1 no session or its logs do not verify, 2 usage.
+ */
+function cmdReportVerdicts() {
+  const { checkLog } = require('../src/verify/session');
+  const { sessionFolderName } = require('../src/opon/intake/paths');
+  const { verifyText } = require('../src/verify/chain');
+  const babalawo = require('../src/babalawo');
+  const { buildReport, renderText, renderHtml, renderJson } = require('../src/babalawo/report');
+  const home = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
+  const id = flag('session', null);
+  let dir;
+  try {
+    dir = id ? path.join(home, 'sessions', sessionFolderName(id)) : null;
+  } catch {
+    dir = null; // an id unsafe as a folder name has no session log
+  }
+  if (!dir) {
+    console.error('Usage: orunmila report --verdicts --session ID [--html FILE] [--json]');
+    process.exitCode = 2;
+    return;
+  }
+  const refuse = (words) => {
+    console.log(`orunmila report: ${words}`);
+    process.exitCode = 1;
+  };
+  const raw = checkLog(dir, 'raw');
+  if (!raw.ok) return refuse(`session ${id} has no raw log here, or it does not verify (orunmila verify ${dir})`);
+  const recs = raw.records.filter((r) => !(r.part > 1 && r.line === 1)).map((r) => r.rec);
+  const oduFile = path.join(dir, 'odu.jsonl');
+  if (!fs.existsSync(oduFile)) return refuse(`session ${id} has no odù log (the intake writes one only with ORUNMILA_OPON_LIVE=1)`);
+  const oduText = fs.readFileSync(oduFile, 'utf8');
+  if (!verifyText(oduText).ok) return refuse(`the odù log of ${id} does not verify (orunmila verify ${dir})`);
+  const { testDiffsFromMarks, oduRecords } = require('../src/opon/ledger/beside');
+  const diffs = testDiffsFromMarks({ odus: oduRecords(oduText), marks: recs.slice(1), dir }); // MR2 (LD317): R27, the judge and the report
+  const vFile = path.join(dir, 'verdict.jsonl');
+  let vText;
+  const judgedNow = !fs.existsSync(vFile);
+  if (judgedNow) {
+    const j = babalawo.judge({ header: recs[0], oduText, diffs });
+    if (!j.ok) return refuse(j.words);
+    vText = j.text;
+  } else {
+    vText = fs.readFileSync(vFile, 'utf8');
+    if (!verifyText(vText).ok) return refuse(`the verdict log of ${id} does not verify (orunmila verify ${dir})`);
+  }
+  const parse = (t) => t.split('\n').slice(0, -1).map((l) => JSON.parse(l));
+  const q = checkLog(dir, 'quarantine');
+  const quarantined = q.records.filter((r) => !(r.part === 1 && r.line === 1) && !(r.part > 1 && r.line === 1)).length;
+  const rep = buildReport({ header: recs[0], marks: recs.slice(1), odus: parse(oduText), verdicts: parse(vText), quarantined, judgedNow, diffs });
+  const html = flag('html', null);
+  if (html) {
+    fs.writeFileSync(html, renderHtml(rep));
+    console.log(`Wrote ${html}: ${rep.top_line}`);
+  } else if (args.includes('--json')) process.stdout.write(renderJson(rep) + '\n');
+  else process.stdout.write(renderText(rep));
+}
+
 function cmdReport() {
-  const sessionId = flag('session', eventlog.latestSessionId());
+  if (args.includes('--verdicts')) return cmdReportVerdicts();
+  const sessionId = keptSessionId();
   if (!sessionId) return console.log('No sessions captured yet.');
+  // DOC6 (brief line 733): an experimental adapter's session says so first, in its own report.
+  const { experimentalNote } = require('../src/capture/support');
+  for (const id of [...new Set(eventlog.readSession(sessionId).map((e) => e.agent))].filter((a) => a && a !== 'fs-sentinel').sort()) {
+    const note = experimentalNote(id, (getAdapter(id) || { label: id }).label);
+    if (note) console.log(note + '\n');
+  }
   const turn = flag('turn', null);
   const stamp = flag('archive', null);
   if (turn) {
@@ -517,7 +942,12 @@ function cmdReport() {
     return;
   }
   const { reports, fromArchive } = loadReportsForRead(sessionId);
-  if (!reports.length) return console.log(`No turns reconciled yet for session ${sessionId}${fromArchive ? ` in archive ${fromArchive}` : ''}.`);
+  if (!reports.length) {
+    console.log(`No turns reconciled yet for session ${sessionId}${fromArchive ? ` in archive ${fromArchive}` : ''}.`);
+    // F32: this command reads the old log's turn reports; the session log's report is another command.
+    if (!fromArchive && sessionLogDir(sessionId)) console.log(`This session has a session log; its report: orunmila report --verdicts --session ${sessionId}`);
+    return;
+  }
   if (fromArchive) console.log(`(archived snapshot: ${fromArchive})\n`);
   for (const r of reports) console.log(renderTurn(r));
 }
@@ -537,9 +967,12 @@ function applyRedaction(reports, trail) {
 }
 
 function cmdHtml() {
-  const sessionId = flag('session', eventlog.latestSessionId());
+  // Ship item 5 (LD292): kept for this release; the session report from the verdict log replaces it.
+  // EU3 (LD378): and when: removing a command is a breaking change, so no sooner than the next major version.
+  console.log('Note: orunmila html is replaced by orunmila report --verdicts --session ID --html FILE (one file, nothing loaded from the network); this command keeps working in 1.x and is removed no sooner than 2.0.0.');
+  const sessionId = keptSessionId();
   if (!sessionId) return console.log('No sessions captured yet.');
-  const rawTrail = trailForSession(sessionId);
+  const rawTrail = keptTrail(sessionId, (s) => console.log(s));
   const { reports: rawReports, fromArchive } = loadReportsForRead(sessionId);
   const { reports, trail } = applyRedaction(rawReports, rawTrail);
   const html = renderSessionHtml(sessionId, reports, trail);
@@ -550,12 +983,38 @@ function cmdHtml() {
   console.log(`Wrote ${outPath}`);
 }
 
+/**
+ * MR3 (LD316), PG1 (F33): what the page reads from the session's logs in <home>/sessions/<id>/: the witness gap from its
+ * odù log and the Babaláwo's verdict from its verdict log, each null when its log is missing or does not verify, so
+ * the page says it is not shown rather than show nothing as clean (src/render/session-facts.js, shared with the dashboard).
+ */
+function sessionFactsOf(sessionId) {
+  return require('../src/render/session-facts').sessionFacts(orunmilaHome(), sessionId);
+}
+
+/**
+ * F32 (brief v4 line 747): the trail a kept command shows: the old event log's, or, when that has no touch for the
+ * session and the session log is there, the session log's (src/trail/from-marks.js, the same model, both witnesses on
+ * every row), with a notice through `say` (stderr for JSON, so stdout stays JSON).
+ */
+function keptTrail(sessionId, say) {
+  const old = trailForSession(sessionId);
+  if (old.totals.touches > 0 || flag('archive', null)) return old;
+  const dir = sessionLogDir(sessionId);
+  if (!dir) return old;
+  say(fromLogNote(dir));
+  return require('../src/trail/from-marks').trailFromSessionFolder(dir);
+}
+
 function cmdTrail() {
+  // --marks (slice B7, LD149): the trail from the intake's session log in
+  // <home>/sessions/<id>/, both witnesses on every row. --json only.
+  if (args.includes('--marks')) return cmdTrailMarks();
   // The unified report: orunmila's skeptical stain PLUS the glove's complete
   // trail + lineage, both built from the one events.jsonl — one global truth.
-  const sessionId = flag('session', eventlog.latestSessionId());
+  const sessionId = keptSessionId();
   if (!sessionId) return console.log('No sessions captured yet.');
-  const rawTrail = trailForSession(sessionId);
+  const rawTrail = keptTrail(sessionId, args.includes('--json') ? (s) => process.stderr.write(s + '\n') : (s) => console.log(s));
   const { reports: rawReports, fromArchive } = loadReportsForRead(sessionId);
 
   // --json: emit the trail model (the glove) as machine-readable JSON instead of
@@ -583,7 +1042,7 @@ function cmdTrail() {
   }
 
   const { reports, trail } = applyRedaction(rawReports, rawTrail);
-  const html = renderSessionHtml(sessionId, reports, trail);
+  const html = renderSessionHtml(sessionId, reports, trail, sessionFactsOf(sessionId));
   const suffix = fromArchive ? `-archive-${fromArchive}` : '';
   const outPath = flag('out', path.join(process.cwd(), `orunmila-trail-${sessionId}${suffix}.html`));
   fs.writeFileSync(outPath, html);
@@ -591,6 +1050,51 @@ function cmdTrail() {
   if (fromArchive) console.log(`(archived snapshot: ${fromArchive})`);
   console.log(`Wrote ${outPath}`);
   console.log(`Trail (the glove): ${t.touches} touches across ${t.artifacts} artifacts in ${t.turns} turns.`);
+}
+
+function cmdTrailMarks() {
+  const { trailFromSessionFolder } = require('../src/trail/from-marks');
+  const { sessionFolderName } = require('../src/opon/intake/paths');
+  const home = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
+  const sessions = path.join(home, 'sessions');
+  let id = flag('session', null);
+  if (!id) {
+    // The session whose raw log was written last.
+    let best = null;
+    for (const name of fs.existsSync(sessions) ? fs.readdirSync(sessions) : []) {
+      try {
+        const m = fs.statSync(path.join(sessions, name, 'raw.jsonl')).mtimeMs;
+        if (!best || m > best.m) best = { name, m };
+      } catch {
+        /* not a session folder */
+      }
+    }
+    id = best && best.name;
+  }
+  let dir;
+  try {
+    dir = id && path.join(sessions, sessionFolderName(id));
+  } catch {
+    dir = null; // an id unsafe as a folder name has no session log
+  }
+  if (!dir || !fs.existsSync(path.join(dir, 'raw.jsonl'))) {
+    console.log(`orunmila trail --marks: no session log for ${id ? JSON.stringify(id) : 'any session'} in ${sessions}`);
+    process.exitCode = 1;
+    return;
+  }
+  if (!args.includes('--json')) {
+    console.log('orunmila trail --marks: only --json is built for the session logs so far');
+    process.exitCode = 2;
+    return;
+  }
+  const home2 = !args.includes('--no-redact-home');
+  const { trail } = redactForRender([], trailFromSessionFolder(dir), { home: home2, root: process.cwd() });
+  const json = renderTrailJson(trail, { factsOnly: args.includes('--facts-only') });
+  const out = flag('out', null);
+  if (out) {
+    fs.writeFileSync(out, json);
+    console.log(`Wrote ${out}`);
+  } else process.stdout.write(json + '\n');
 }
 
 function cmdDemo() {
@@ -645,13 +1149,24 @@ function cmdWatch() {
     process.exit(0);
   });
 
-  console.log('Watching for new turn reports + filesystem - leave this running, work normally in Claude Code...\n');
+  // F41: the agent named is the one whose hooks this folder holds (F24's reading), never Claude Code by default.
+  const agents = lensStatesShown().filter((s) => s.exists && (s.stainMap.length || s.gate.length)).map((s) => s.adapter.label);
+  console.log(`Watching for new turn reports + filesystem - leave this running, work normally in ${agents.length ? agents.join(' or ') : 'your coding agent'}...\n`);
   const seen = new Set();
+  const told = new Set(); // reports already named as unreadable, so each is named once
   setInterval(() => {
     const all = eventlog.readAll();
-    const sessions = new Set(all.map((e) => e.session_id));
+    // F20: the disk watcher's rows have session_id null (it knows no session); only a real id names a session.
+    const sessions = new Set();
+    for (const e of all) if (typeof e.session_id === 'string' && e.session_id) sessions.add(e.session_id);
     for (const sessionId of sessions) {
-      for (const report of listSessionReports(sessionId)) {
+      const onUnreadable = (file, err) => {
+        const key = `${sessionId}/${file}`;
+        if (told.has(key)) return;
+        told.add(key);
+        console.error(`orunmila watch: the report ${key} could not be read yet (${err.message}); it is tried again on each tick.`);
+      };
+      for (const report of listSessionReports(sessionId, { onUnreadable })) {
         const key = `${sessionId}/${report.turn_id}`;
         if (!seen.has(key)) {
           seen.add(key);
@@ -679,6 +1194,8 @@ function cmdPrune() {
   // Explicit, opt-in log rotation. The flat JSONL log is the forensic trail, so
   // we NEVER trim it automatically — only when the user runs this, and only by
   // whole sessions (keeping a partial session would corrupt its turn lineage).
+  // Ship item 5 (B6w, LD165): the per-session logs are removed whole by retention instead.
+  console.log('prune trims the old event log (~/.orunmila/events.jsonl). The per-session logs the intake writes are removed whole, and recorded, by `orunmila retention`, which replaces prune for them.');
   const keep = Math.max(1, parseInt(flag('keep', '20'), 10) || 20);
   const before = logSizeKB();
   const res = eventlog.pruneToRecentSessions(keep);
@@ -690,6 +1207,68 @@ function cmdPrune() {
   console.log(`Events: ${res.before} -> ${res.after}.  Log: ${before} KB -> ${logSizeKB()} KB.`);
   console.log('Per-session reports/cache/output sidecars for removed sessions can be deleted from');
   console.log(`  ${eventlog.dataDir()}  (reports/, cache/, output/) if you no longer need them.`);
+}
+
+/**
+ * `orunmila retention --keep-days N [--yes]` — retention replaces `prune` for the
+ * per-session logs (slice B6w, LD165; brief v4 line 348; test 45; N4). It lists
+ * the session folders in <home>/sessions/ whose last record is older than N
+ * days, and with --yes removes each whole, the removal written first to
+ * <home>/retention.jsonl (src/opon/ledger/retention.js). A session the running
+ * intake holds is never removed. N comes from --keep-days, else
+ * ORUNMILA_RETENTION_DAYS; with neither nothing is removed. Exit 0 done or
+ * nothing due, 1 something due without --yes or a removal refused, 2 no period.
+ */
+function cmdRetention() {
+  const { plan, retire, readRetentionLog } = require('../src/opon/ledger/retention');
+  const home = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
+  const sessionsDir = path.join(home, 'sessions');
+  const logFile = path.join(home, 'retention.jsonl');
+  const given = flag('keep-days', process.env.ORUNMILA_RETENTION_DAYS || null);
+  if (given === null || !/^[1-9][0-9]*$/.test(String(given))) {
+    console.error('Usage: orunmila retention --keep-days N [--yes]   (or ORUNMILA_RETENTION_DAYS=N), N whole days, at least 1.');
+    console.error('Nothing is removed until you choose a period.');
+    process.exitCode = 2;
+    return;
+  }
+  const keepDays = Number(given);
+  const log = readRetentionLog(logFile);
+  if (!log.ok) {
+    console.log(`Nothing removed: ${log.words}. Retention stops until the log is looked at.`);
+    process.exitCode = 1;
+    return;
+  }
+  let held = [];
+  try {
+    held = JSON.parse(fs.readFileSync(path.join(home, 'intake', 'held.json'), 'utf8'));
+  } catch {
+    /* no held list: the intake holds nothing */
+  }
+  const holding = new Set(Array.isArray(held) ? held : []);
+  const old = fs.existsSync(sessionsDir) ? plan({ sessionsDir, keepDays, now: new Date().toISOString() }) : [];
+  for (const id of old.filter((x) => holding.has(x))) console.log(`Kept ${id}: the running intake holds it.`);
+  const due = old.filter((x) => !holding.has(x));
+  if (!due.length) {
+    console.log(`No session log is older than ${keepDays} day(s) in ${sessionsDir}.`);
+    return;
+  }
+  if (!args.includes('--yes')) {
+    console.log(`These session logs are older than ${keepDays} day(s); --yes removes each one whole, recorded first in ${logFile}:`);
+    for (const id of due) console.log(`  ${id}`);
+    process.exitCode = 1;
+    return;
+  }
+  let refused = 0;
+  for (const id of due) {
+    const r = retire({ sessionsDir, id, logFile, reason: `older than ${keepDays} day(s)` });
+    if (r.ok) console.log(`Removed ${id} (retention record ${r.seq}${r.finished ? ', a removal cut short, finished' : ''}).`);
+    else {
+      refused++;
+      console.log(`Kept ${id}: ${r.reason}`);
+    }
+  }
+  console.log(`Retention log: ${readRetentionLog(logFile).words}.`);
+  if (refused) process.exitCode = 1;
 }
 
 function cmdLog() {
@@ -723,6 +1302,16 @@ function cmdLog() {
 function cmdStats() {
   const stats = computeStats();
   console.log(formatStats(stats));
+  // F32: stats counts the old path's turn reports; the session logs with none are named, never left out silently.
+  let reported = [];
+  try {
+    reported = fs.readdirSync(path.join(eventlog.dataDir(), 'reports'));
+  } catch {
+    /* no reports folder: no session has a turn report */
+  }
+  const known = new Set(reported);
+  const only = loggedSessions().filter((s) => !known.has(s.name)).length;
+  if (only) console.log(`\n${only} session ${only === 1 ? 'log is' : 'logs are'} in ${path.join(orunmilaHome(), 'sessions')} with no turn report: not counted here. Each one's report: orunmila report --verdicts --session ID`);
 }
 
 function cmdRescore() {
@@ -868,9 +1457,15 @@ function cmdLaws() {
   const { evaluateTurn } = require('../src/laws/evaluate');
   // The same switch the live gate reads, so a replay judges as the gate did.
   const strictProof = require('../src/laws/gate').strictProofEnabled();
-  const sessionId = flag('session', eventlog.latestSessionId());
+  const sessionId = keptSessionId();
   if (!sessionId) return console.log('No sessions captured yet.');
   const events = eventlog.readSession(sessionId);
+  // F32: this replays the old event log; a session only in its session log has its law gate's results in the report.
+  if (!events.length && sessionLogDir(sessionId)) {
+    const note = `This session is only in its session log, and this replays the old event log. Its law gate's results: orunmila report --verdicts --session ${sessionId}`;
+    if (args.includes('--json')) process.stderr.write(note + '\n');
+    else console.log(note + '\n');
+  }
   const byTurn = eventlog.groupByTurn(events.filter((e) => e.turn_id));
   const active = activeLaws(laws);
 
@@ -970,7 +1565,7 @@ function detectAgent() {
 }
 
 function cmdJson() {
-  const sessionId = flag('session', eventlog.latestSessionId());
+  const sessionId = keptSessionId();
   if (!sessionId) {
     console.error('No sessions captured yet.');
     process.exit(1);
@@ -978,17 +1573,73 @@ function cmdJson() {
   const turn = flag('turn', null);
   const include = parseIncludes();
   const home = !args.includes('--no-redact-home');
-  const { reports } = loadReportsForRead(sessionId);
-  const events = eventlog.readSession(sessionId);
-  const json = renderJson({
-    sessionId,
-    agent: detectAgent(),
-    reports,
-    events,
-    turn,
-    include,
-    redactOpts: { home, root: process.cwd() },
-  });
+  // K6 (LD218): the odù log's feedback with ORUNMILA_FEEDBACK_FROM_ODU=1, or both with --side-by-side; else the old path, unchanged.
+  const fromOdu = process.env.ORUNMILA_FEEDBACK_FROM_ODU === '1';
+  const both = args.includes('--side-by-side');
+  // F32 (brief v4 line 747): a session the old log has no event or report for, with a session log and an odù log,
+  // gets the verdicts' feedback, the same 1.0 shape (BB9), with a notice on stderr so stdout stays JSON.
+  let fallback = false;
+  if (!both && !fromOdu && process.env.ORUNMILA_FEEDBACK_FROM_VERDICTS !== '1' && !flag('archive', null)) {
+    const dir = sessionLogDir(sessionId);
+    if (dir && fs.existsSync(path.join(dir, 'odu.jsonl')) && !listSessionReports(sessionId).length && !eventlog.readSession(sessionId).length) {
+      fallback = true;
+      process.stderr.write(`${fromLogNote(dir)} This is the verdicts' feedback (ORUNMILA_FEEDBACK_FROM_VERDICTS=1).\n`);
+    }
+  }
+  const oldJson = () => {
+    const { reports } = loadReportsForRead(sessionId);
+    const events = eventlog.readSession(sessionId);
+    return renderJson({ sessionId, agent: detectAgent(), reports, events, turn, include, redactOpts: { home, root: process.cwd() } });
+  };
+  const oduJson = () => {
+    const { feedbackFromOdu } = require('../src/opon/feedback/from-odu');
+    const { sessionFolderName } = require('../src/opon/intake/paths');
+    const file = path.join(eventlog.dataDir(), 'sessions', sessionFolderName(sessionId), 'odu.jsonl');
+    if (!fs.existsSync(file)) {
+      console.error(`No odù log for session ${sessionId} (${file}): the intake writes one only with ORUNMILA_OPON_LIVE=1.`);
+      process.exit(1);
+    }
+    // F7 (LD248): the old path's generated_at is its latest event's time; here, the latest observed_at of the raw log beside
+    // the odù log. F15 (LD287): read a line at a time, never as one string (a raw log can pass V8's longest, about 512 MB).
+    const generatedAt = fs.existsSync(path.join(path.dirname(file), 'raw.jsonl')) ? require('../src/verify/session').latestObservedAt(path.dirname(file)) : null;
+    return feedbackFromOdu({ sessionId, agent: detectAgent(), oduText: fs.readFileSync(file, 'utf8'), turn, include, generatedAt, redactOpts: { home, root: process.cwd() } });
+  };
+  // BB9 (LD273): the verdicts' feedback with ORUNMILA_FEEDBACK_FROM_VERDICTS=1, in the same 1.0 shape; with --side-by-side, beside the old path's.
+  const fromVerdicts = process.env.ORUNMILA_FEEDBACK_FROM_VERDICTS === '1' || fallback;
+  const verdictJson = () => {
+    const { checkLog } = require('../src/verify/session');
+    const { sessionFolderName } = require('../src/opon/intake/paths');
+    const { feedbackFromVerdicts } = require('../src/babalawo/report/feedback');
+    const dir = path.join(eventlog.dataDir(), 'sessions', sessionFolderName(sessionId));
+    const raw = checkLog(dir, 'raw');
+    const oduFile = path.join(dir, 'odu.jsonl');
+    if (!raw.ok || !fs.existsSync(oduFile)) {
+      console.error(`No verified raw log and odù log for session ${sessionId} in ${dir}: the verdicts' feedback needs both (ORUNMILA_OPON_LIVE=1).`);
+      process.exit(1);
+    }
+    const recs = raw.records.filter((r) => !(r.part > 1 && r.line === 1)).map((r) => r.rec);
+    const oduText = fs.readFileSync(oduFile, 'utf8');
+    const vFile = path.join(dir, 'verdict.jsonl');
+    const judgedNow = !fs.existsSync(vFile);
+    let verdictText;
+    if (judgedNow) {
+      const j = require('../src/babalawo').judge({ header: recs[0], oduText });
+      if (!j.ok) {
+        console.error(j.words);
+        process.exit(1);
+      }
+      verdictText = j.text;
+    } else verdictText = fs.readFileSync(vFile, 'utf8');
+    const generatedAt = recs.reduce((a, r) => (typeof r.observed_at === 'string' && (a === null || r.observed_at > a) ? r.observed_at : a), null);
+    return feedbackFromVerdicts({ sessionId, agent: detectAgent(), header: recs[0], marks: recs.slice(1), oduText, verdictText, judgedNow, generatedAt, turn, include, redactOpts: { home, root: process.cwd() } });
+  };
+  let json;
+  if (both) {
+    const { sideBySide } = require('../src/opon/feedback/from-odu');
+    const old = JSON.parse(oldJson());
+    const odu = fromVerdicts ? verdictJson() : oduJson();
+    json = JSON.stringify({ old, [fromVerdicts ? 'verdicts' : 'odu']: odu, compare: sideBySide(old, odu) }, null, 2);
+  } else json = fromVerdicts ? JSON.stringify(verdictJson(), null, 2) : fromOdu ? JSON.stringify(oduJson(), null, 2) : oldJson();
   const out = flag('out', null);
   if (out) {
     fs.writeFileSync(out, json);
@@ -999,7 +1650,7 @@ function cmdJson() {
 }
 
 function cmdFeedback() {
-  const sessionId = flag('session', eventlog.latestSessionId());
+  const sessionId = keptSessionId();
   if (!sessionId) {
     console.error('No sessions captured yet.');
     process.exit(1);
@@ -1009,6 +1660,8 @@ function cmdFeedback() {
   const dir = flag('dir', path.join(process.cwd(), '.orunmila-feedback'));
   const { reports } = loadReportsForRead(sessionId);
   const events = eventlog.readSession(sessionId);
+  // F32: the drop file comes from the old log; the same cases from a session only in its session log are another command.
+  if (!events.length && sessionLogDir(sessionId)) process.stderr.write(`This session is only in its session log, and feedback reads the old event log, so it has no cases here. The same cases from its verdicts: ORUNMILA_FEEDBACK_FROM_VERDICTS=1 orunmila json --session ${sessionId}\n`);
   const { file, payload } = feedback.writeFeedback({
     sessionId,
     agent: detectAgent(),
@@ -1041,13 +1694,647 @@ function cmdFeedbackImport() {
   }
 }
 
+/**
+ * `orunmila verify <session-folder> [--json]` — check a session log folder end
+ * to end (src/verify/session.js) and answer in plain words. Exit 0 intact,
+ * 1 broken, 2 usage. The folder format is Phase 1's; the intake writes it
+ * (`orunmila intake`, `install --intake`).
+ */
+function cmdVerify() {
+  if (args.includes('--updates')) {
+    // PM2a (Q44 (a), LD329): the update log in Orunmila's home, hash-chained, each record against its schema.
+    const { readUpdatesLog, updatesFile } = require('../src/opon/ledger/updates');
+    const home = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
+    const r = readUpdatesLog(home);
+    console.log(`${updatesFile(home)}: ${r.words}`);
+    process.exitCode = r.ok ? 0 : 1;
+    return;
+  }
+  const dir = args[1] && !args[1].startsWith('--') ? args[1] : null;
+  if (!dir) {
+    console.error('Usage: orunmila verify <session-folder> [--json]');
+    process.exit(2);
+  }
+  const { verifySession } = require('../src/verify/session');
+  const r = verifySession(path.resolve(dir));
+  if (args.includes('--json')) process.stdout.write(JSON.stringify(r, null, 2) + '\n');
+  else console.log(r.words);
+  process.exitCode = r.ok ? 0 : 1;
+}
+
+/**
+ * `orunmila leak-check [--root dir] [--path p]...` — search everything Orunmila
+ * stored, and the report files it wrote, for the exact values of the project's
+ * `.env` files (LD93, LD95). Run by hand: nothing runs it automatically.
+ * Prints names, never values. Exit 0 none found, 1 found, 2 nothing checked, a
+ * path not read, or a failure.
+ */
+function cmdLeakCheck() {
+  try {
+    leakCheck();
+  } catch (err) {
+    // The code only: an error's message is never printed, so it cannot carry a value.
+    console.log(`leak-check failed (${(err && (err.code || err.name)) || 'error'}): nothing reliable was checked.`);
+    process.exitCode = 2;
+  }
+}
+
+function leakCheck() {
+  const lc = require('../src/opon/intake/leak-check');
+  // Every argument is --root <dir> or --path <file-or-folder>; anything else
+  // (--path=x, a typo) is refused, so a path is never dropped in silence.
+  const paths = [];
+  let root = process.cwd();
+  for (let i = 1; i < args.length; i++) {
+    const value = args[i + 1];
+    if ((args[i] !== '--path' && args[i] !== '--root') || !value || value.startsWith('--')) {
+      console.log(`Usage: orunmila leak-check [--root dir] [--path file-or-folder]...  (not understood: ${args[i]})`);
+      process.exitCode = 2;
+      return;
+    }
+    if (args[i] === '--path') paths.push(path.resolve(value));
+    else root = value;
+    i++;
+  }
+  root = path.resolve(root);
+  const { entries, files: envFiles, unreadable: envUnread, sources } = lc.readEnvEntries(root);
+  for (const u of envUnread) console.log(`NOT READ  ${u}`);
+  if (!entries.length) {
+    console.log(envFiles.length
+      ? `No value in ${envFiles.join(', ')} can be checked (it needs 8+ characters, or 4+ under a secret name; true, false, null, undefined and the like are not looked for).`
+      : `No readable .env file in ${root}: there is nothing to check against.`);
+    console.log('Nothing was checked.');
+    process.exitCode = 2;
+    return;
+  }
+  // The data dir by the same rule as eventlog.dataDir(), which would create it.
+  const data = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
+  const targets = lc.defaultTargets({ dataDir: data, root });
+  for (const p of paths) targets.push({ path: p, required: true });
+  const r = lc.scan(targets, entries, { skip: sources });
+  const unread = [...envUnread, ...r.unreadable];
+  console.log(`Checked ${entries.length} value(s) from ${envFiles.join(', ')} in ${root}`);
+  console.log(`against ${r.files} file(s): the data dir ${data}, report files in the root, and each --path.`);
+  for (const h of r.hits) {
+    console.log(`\x1b[31mLEAK\x1b[0m  ${h.file} line ${h.line}, byte ${h.byte}  ${h.names.join(', ')} (${h.length} characters), ${h.count} time(s) in this file`);
+  }
+  for (const u of r.unreadable) console.log(`NOT READ  ${u}`);
+  console.log('Not checked: anything printed to the terminal or piped (trail --json, json without --out). Pass a saved copy with --path.');
+  if (r.hits.length) {
+    const files = new Set(r.hits.map((h) => h.file)).size;
+    console.log(`\n${r.hits.length} value(s) found in ${files} file(s). Values are never printed.`);
+    console.log('Rotate each secret named above. `orunmila log redact` removes known formats only, not these values.');
+    process.exitCode = 1;
+    return;
+  }
+  if (!r.files) {
+    console.log('\nNo file was checked: there is no data dir, report file or --path to read.');
+    process.exitCode = 2;
+    return;
+  }
+  if (unread.length) {
+    console.log(`\nNo value found, but ${unread.length} path(s) were not read, so this is not a clean result.`);
+    process.exitCode = 2;
+    return;
+  }
+  console.log('\nNo value found.');
+}
+
+/**
+ * `orunmila intake run|start|status|stop` — the intake server (slice B1e,
+ * LD132): one per machine, on a Unix socket in Orunmila's home. `run` serves in
+ * the foreground (what a launch agent runs); `start` runs it detached and waits
+ * up to 5 s for it to answer; `status` exits 0 when one answers, 1 when none
+ * does; `stop` asks it to stop over its socket (TE2, LD283; SIGTERM after 2 s for an intake from before TE2) and
+ * waits for it to go. A signal no one asked for is recorded as tampering and exits 1, so the launch agent restarts it.
+ * Nothing sends to it yet: the hooks' sender is slice B2.
+ */
+/**
+ * PM2c3 (LD334): what node runs for `intake run`: the starter and the current version's CLI, when `install` made them
+ * (so a restart runs the version an update switched to), else this copy.
+ */
+function intakeArgv(home, sub = 'run') {
+  const starter = path.join(home, 'bin', 'orunmila-start.js');
+  const { starterTarget } = require('../src/runtime/install');
+  return fs.existsSync(starter) && starterTarget(starter, 'bin/orunmila.js').ok ? [starter, 'bin/orunmila.js', 'intake', sub] : [__filename, 'intake', sub];
+}
+
+async function cmdIntake() {
+  const { createServer, intakePaths, readInstallKey, statusOf, intakePort } = require('../src/opon/intake/server');
+  const home = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
+  const p = intakePaths(home);
+  const sub = args[1];
+  const waitFor = async (cond, ms = 5000) => {
+    for (let end = Date.now() + ms; Date.now() < end; ) {
+      if (await cond()) return true;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    return cond();
+  };
+  if (sub === 'run') {
+    const { createRouter } = require('../src/opon/intake/router');
+    const { nowMono } = require('../src/opon/intake/mono');
+    const { judgeOn, livePathOn, switchesFile, logGuardOn, peerBusyOn, vcsMarksOn, commandFactsOn } = require('../src/opon/intake/switches');
+    const judge = judgeOn(process.env, home); // BJ1 (LD326): the install's switch, the environment winning where set
+    const livePath = livePathOn(process.env, home); // F38 (LD382): ORUNMILA_OPON_LIVE where set, else the judge's switch
+    const logGuard = logGuardOn(process.env); // MR7: on unless ORUNMILA_LOG_GUARD=0
+    const peerBusy = peerBusyOn(process.env); // PB1: on unless ORUNMILA_PEER_BUSY=0
+    const vcsMarks = vcsMarksOn(process.env); // DF1 (LD395): on unless ORUNMILA_VCS_MARKS=0
+    const commandFacts = commandFactsOn(process.env); // DF1 (LD395): on unless ORUNMILA_COMMAND_FACTS=0
+    const router = createRouter({
+      home,
+      clock: () => ({ mono: nowMono(), wall: new Date().toISOString() }),
+      checkSender: require('../src/opon/intake/peer').isAgentProgram, // the pid runs claude (LD139)
+      codeRoot: path.join(__dirname, '..', 'src'),
+      orunmilaVersion: require('../package.json').version,
+      installKey: readInstallKey(home),
+      sentinel: true, // the Sentinel runs inside the intake (B4, LD145)
+      baseline: livePath.on, // the Ọpọ́n's live path: the baseline at session start (N1b, LD170), stations 2-6 and odu.jsonl (L1c, LD200); ORUNMILA_OPON_LIVE where set, else on with the judge (F38)
+      guard: logGuard.on, // TE1 (LD279): every session's logs watched for a change Orunmila did not make, and put back; on by default since MR7
+      judge: judge.on, // the judge at each closeout (BB6), only when switched on (BJ1: install --with-judge, or ORUNMILA_JUDGE_LIVE=1; Q38)
+      // Q12 (a) (LD289): extra folders the Sentinel watches, absolute paths joined by the path delimiter (none by default)
+      watchExtra: (process.env.ORUNMILA_WATCH_EXTRA || '').split(path.delimiter).filter((x) => x && path.isAbsolute(x)),
+      asyncStart: process.env.ORUNMILA_ASYNC_START === '1', // SN1 (LD294): a session's start off the intake's thread (F16)
+      peerBusy: peerBusy.on, // AT1b (LD330): a peer's working time noted in each session's log; on by default since PB1
+      vcsMarks: vcsMarks.on, // VC1 (LD372, test 60): git, PR and CI state on a command's mark; on by default since DF1 (LD395)
+      commandFacts: commandFacts.on, // CF1-CF5 (LD385): a command's own facts, the tripwire and the transcript check; on by default since DF1 (LD395)
+      // T32 (LD374, test 32): past this many paths waiting at once, the Sentinel drops the flood and writes a gap; no limit unless set
+      sentinelMaxPending: Number.isInteger(Number(process.env.ORUNMILA_SENTINEL_MAX_PENDING)) && Number(process.env.ORUNMILA_SENTINEL_MAX_PENDING) > 0 ? Number(process.env.ORUNMILA_SENTINEL_MAX_PENDING) : undefined,
+    });
+    // TE2 (LD283): a stop asked for comes over the socket (`orunmila intake stop`) and exits 0; a signal with no ask is
+    // a tampered mark in every held session, kept in last-stop.json for the next start's gap, and exits 1, so the
+    // launch agent (KeepAlive SuccessfulExit false) starts the intake again.
+    // W4a (LD343): a kill no handler sees, a crash and a reboot are told apart at this start, from the notes the last run
+    // left (src/opon/intake/prior-end.js): run.json while it ran, last-stop.json for a handled signal or a crash.
+    const ends = require('../src/opon/intake/prior-end');
+    const lastStop = ends.lastStopFile(p.dir);
+    const runFile = ends.runNote(p.dir);
+    const readNote = (f) => {
+      try {
+        return JSON.parse(fs.readFileSync(f, 'utf8'));
+      } catch {
+        return null; // none kept
+      }
+    };
+    const resumeAlso = ends.priorEnd({ lastStop: readNote(lastStop), run: readNote(runFile), bootNow: ends.bootTime() });
+    let stopping = false;
+    let server = null;
+    const ranOut = () => fs.rmSync(runFile, { force: true }); // a stop this intake makes itself: nothing to tell at the next start
+    const onStop = async (reason) => {
+      if (stopping) return;
+      stopping = true;
+      await server.stop(`stopped as asked: ${reason}`);
+      ranOut();
+      process.exit(0);
+    };
+    server = createServer({ home, router, httpPort: intakePort(), onStop, resumeAlso, version: require('../package.json').version });
+    const r = await server.start();
+    if (!r.ok) {
+      console.error(`orunmila intake: ${r.reason}`);
+      process.exit(r.code === 'running' ? 3 : 1);
+    }
+    fs.rmSync(lastStop, { force: true }); // named once, in this start's gaps
+    fs.writeFileSync(runFile, JSON.stringify({ pid: process.pid, boot: ends.bootTime(), started_at: new Date().toISOString() }) + '\n', { mode: 0o600 }); // W4a
+    process.on('uncaughtException', (e) => {
+      // W4a: a crash leaves its own note, so the next start says it crashed, never that it was killed.
+      try {
+        fs.writeFileSync(lastStop, JSON.stringify({ crash: String((e && e.message) || e).slice(0, 300), at: new Date().toISOString() }) + '\n', { mode: 0o600 });
+        ranOut();
+      } finally {
+        console.error(e);
+        process.exit(1);
+      }
+    });
+    console.log(`orunmila intake: listening on ${r.sock} (pid ${process.pid})` + (r.squat ? `; another process held the socket: recorded in ${p.errors}` : ''));
+    console.log(r.http.listening ? `orunmila intake: HTTP on 127.0.0.1:${r.http.port}` : `orunmila intake: HTTP port 127.0.0.1:${r.http.port} is held by another process (recorded in ${p.errors}); tried again every second`);
+    const why = judge.from === 'environment' ? `ORUNMILA_JUDGE_LIVE=${judge.on ? 1 : 0}` : judge.from === 'switch' ? `the switch in ${switchesFile(home)}` : 'turn it on with: orunmila install --with-judge';
+    console.log(`orunmila intake: the judge is ${judge.on ? 'on' : 'off'} (${why})`);
+    // F38: the record the judge reads, and why it is on or off; a judge with none says it has nothing to judge.
+    if (judge.on && !livePath.on) console.log('orunmila intake: the judge has no record to judge (ORUNMILA_OPON_LIVE=0): no odù log is written, so no session is judged');
+    else if (livePath.on) console.log(`orunmila intake: the record the judge reads is on (${livePath.from === 'environment' ? 'ORUNMILA_OPON_LIVE=1' : 'the judge is on'}): a baseline at each session's start, and its odù log`);
+    const dflt = (name, sw) => (sw.from === 'environment' ? `${name}=${sw.on ? 1 : 0}` : `on by default; ${name}=0 turns it off`);
+    console.log(logGuard.on ? `orunmila intake: every session's logs are guarded: a change Orunmila did not make is recorded and put back (${dflt('ORUNMILA_LOG_GUARD', logGuard)})` : 'orunmila intake: the logs are not guarded (ORUNMILA_LOG_GUARD=0)');
+    console.log(peerBusy.on ? `orunmila intake: each session's log notes when a peer sharing its folder is working (${dflt('ORUNMILA_PEER_BUSY', peerBusy)})` : "orunmila intake: a peer's busy time is not noted (ORUNMILA_PEER_BUSY=0)");
+    // DF1 (LD395): the two switches on by default for 1.0.0, each with where its state came from.
+    console.log(vcsMarks.on ? `orunmila intake: a git or gh command's mark carries the git, pull-request and CI state its output shows (${dflt('ORUNMILA_VCS_MARKS', vcsMarks)})` : "orunmila intake: git, pull-request and CI state is not put on a command's mark (ORUNMILA_VCS_MARKS=0)");
+    console.log(commandFacts.on ? `orunmila intake: command facts are on: each command's hosts and a sudo, a test run's counts, an install's packages, the outside tripwire and the transcript check (${dflt('ORUNMILA_COMMAND_FACTS', commandFacts)})` : 'orunmila intake: command facts are off (ORUNMILA_COMMAND_FACTS=0)');
+    // PM2c2 (LD333): the daily update check, read at each tick so the switch takes effect without a restart; the update
+    // runs as its own process (src/runtime/daily.js), never in the intake's. ORUNMILA_UPDATE_POLL_MS is for tests.
+    const { updatesOn } = require('../src/opon/intake/switches');
+    const daily = require('../src/runtime/daily');
+    const upd = updatesOn(process.env, home);
+    console.log(`orunmila intake: the daily update check is ${upd.on ? 'on' : 'off'} (${upd.from === 'environment' ? `ORUNMILA_UPDATES=${upd.on ? 1 : 0}` : upd.from === 'switch' ? `the switch in ${switchesFile(home)}` : 'turn it on with: orunmila install --with-updates'})`);
+    setInterval(() => {
+      try {
+        if (updatesOn(process.env, home).on && daily.due(home)) daily.startUpdate(home);
+      } catch (e) {
+        console.error(`orunmila intake: the daily update check could not start (${e.code || e.message})`);
+      }
+    }, Number(process.env.ORUNMILA_UPDATE_POLL_MS) > 0 ? Number(process.env.ORUNMILA_UPDATE_POLL_MS) : 60 * 60 * 1000).unref();
+    // W4a: SIGBREAK (Ctrl+Break) is the one more signal Windows lets a console process handle.
+    for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP', ...(process.platform === 'win32' ? ['SIGBREAK'] : [])]) {
+      process.on(sig, async () => {
+        if (stopping) return;
+        stopping = true;
+        await server.stop(`stopped by ${sig}, which no one asked for through orunmila intake stop`, { signal: sig });
+        fs.writeFileSync(lastStop, JSON.stringify({ signal: sig, at: new Date().toISOString() }) + '\n', { mode: 0o600 });
+        ranOut();
+        process.exit(1);
+      });
+    }
+    // PM2c3 (LD334): an intake run from the copy in Orunmila's home moves onto the version an update switched to, once
+    // it holds no session (so no session's record sees its code change): a stop as asked, then a start through the
+    // starter; under the launch agent, exit 75 and launchd starts it again (KeepAlive after a failed exit).
+    const runtimeDir = path.join(home, 'runtime');
+    let ownFolder = null;
+    try {
+      if (path.dirname(fs.realpathSync(path.join(__dirname, '..'))) === fs.realpathSync(runtimeDir)) ownFolder = path.basename(fs.realpathSync(path.join(__dirname, '..')));
+    } catch {
+      ownFolder = null; // no runtime in the home: this intake runs from another copy, and stays on it
+    }
+    if (ownFolder) {
+      const pollMs = Number(process.env.ORUNMILA_UPDATE_POLL_MS) > 0 ? Number(process.env.ORUNMILA_UPDATE_POLL_MS) : 60 * 1000;
+      setInterval(async () => {
+        if (stopping) return;
+        let cur;
+        try {
+          cur = fs.readFileSync(path.join(runtimeDir, 'current'), 'utf8').trim();
+        } catch {
+          return;
+        }
+        if (cur === ownFolder || !/^[0-9A-Za-z][0-9A-Za-z._+-]*$/.test(cur) || router.held().length) return;
+        stopping = true;
+        const to = cur.split('_')[0];
+        console.log(`orunmila intake: moving onto ${to} (an update switched to it, and no session is held)`);
+        await server.stop(`moving onto Orunmila ${to}: an update switched to it while no session was held`);
+        ranOut(); // W4a: a planned move, not a kill
+        if (process.env.XPC_SERVICE_NAME === require('../src/opon/intake/launch-agent').LABEL || process.env.ORUNMILA_KEPT === '1') process.exit(75); // launchd, or W2b's keeper, starts it again
+        const out = fs.openSync(p.out, 'a', 0o600);
+        require('child_process').spawn(process.execPath, [path.join(home, 'bin', 'orunmila-start.js'), 'bin/orunmila.js', 'intake', 'run'], { detached: true, stdio: ['ignore', out, out], env: process.env, windowsHide: true }).unref();
+        process.exit(0);
+      }, pollMs).unref();
+    }
+    return;
+  }
+  if (sub === 'keep') {
+    // W2b (LD338): the intake kept running, as launchd's KeepAlive keeps the launch agent's: started (through the
+    // starter when installed, so each start runs the current version), and started again after a failed exit (a crash,
+    // a stop no one asked for, a move onto an update); a stop asked for (exit 0) ends it. Another intake already
+    // running (exit 3): tried again every 10 s, as the launch agent's ThrottleInterval.
+    for (;;) {
+      const r = require('child_process').spawnSync(process.execPath, intakeArgv(home, 'run'), { stdio: 'inherit', env: { ...process.env, ORUNMILA_KEPT: '1' }, windowsHide: true });
+      if (r.status === 0) {
+        console.log('orunmila intake keep: the intake stopped as asked; keeping it ends');
+        return;
+      }
+      const wait = r.status === 3 ? 10000 : 1000;
+      console.log(`orunmila intake keep: the intake exited ${r.status === null ? `on ${r.signal}` : r.status}; starting it again in ${wait / 1000} s`);
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    }
+  }
+  if (sub === 'start') {
+    const st = await statusOf(p.sock);
+    if (st) {
+      console.log(`orunmila intake: already running (pid ${st.pid}) on ${p.sock}`);
+      return;
+    }
+    fs.mkdirSync(p.dir, { recursive: true, mode: 0o700 });
+    const out = fs.openSync(p.out, 'a', 0o600);
+    // PM2c3 (LD334): through the starter when `install` made one, so the intake is the starter's child and has a pid of
+    // its own; none answered before this start, so the one that answers now is this one.
+    const child = require('child_process').spawn(process.execPath, intakeArgv(home), { detached: true, stdio: ['ignore', out, out], env: process.env, windowsHide: true });
+    child.unref();
+    fs.closeSync(out);
+    let seen = null;
+    await waitFor(async () => (seen = await statusOf(p.sock, 300)) !== null);
+    if (seen) {
+      console.log(`orunmila intake: started (pid ${seen.pid}${seen.version ? `, Orunmila ${seen.version}` : ''}) on ${p.sock}`);
+      return;
+    }
+    console.log(`orunmila intake: did not start within 5 s; its output is in ${p.out}`);
+    process.exitCode = 1;
+    return;
+  }
+  if (sub === 'status') {
+    const st = await statusOf(p.sock);
+    if (!st) {
+      console.log(`orunmila intake: not running (nothing answers on ${p.sock})`);
+      process.exitCode = 1;
+      return;
+    }
+    const h = st.http;
+    const web = h ? `; http 127.0.0.1:${h.port}${h.listening ? '' : ' (not listening: another process holds it)'}` : '; no HTTP';
+    console.log(`orunmila intake: running (pid ${st.pid}) since ${st.started_at} on ${st.socket}${web}; ${st.held.length} session(s) held`);
+    return;
+  }
+  if (sub === 'stop') {
+    const st = await statusOf(p.sock);
+    if (!st) {
+      console.log(`orunmila intake: not running (nothing answers on ${p.sock})`);
+      process.exitCode = 1;
+      return;
+    }
+    // TE2 (LD283): ask over the socket, so the intake knows the stop was asked for. An intake from before TE2 does not
+    // know the op; for it, after 2 s, the old way: SIGTERM.
+    await new Promise((resolve) => {
+      const c = require('net').createConnection(p.sock);
+      c.on('error', resolve);
+      c.on('close', resolve);
+      c.on('connect', () => c.end(JSON.stringify({ op: 'stop', reason: 'orunmila intake stop' }) + '\n'));
+    });
+    let gone = await waitFor(async () => !fs.existsSync(p.lock) && (await statusOf(p.sock, 300)) === null, 2000);
+    if (!gone) {
+      process.kill(st.pid, 'SIGTERM');
+      gone = await waitFor(async () => !fs.existsSync(p.lock) && (await statusOf(p.sock, 300)) === null);
+    }
+    console.log(gone ? `orunmila intake: stopped (pid ${st.pid})` : `orunmila intake: pid ${st.pid} did not stop within 7 s`);
+    if (!gone) process.exitCode = 1;
+    return;
+  }
+  if (sub === 'agent' && (process.env.ORUNMILA_AGENT_PLATFORM || process.platform) === 'win32') {
+    // W2b (LD338): on Windows, a script in the user's Startup folder that runs `intake keep` hidden at each login.
+    // ORUNMILA_AGENT_PLATFORM and ORUNMILA_STARTUP_DIR exist for tests: they never touch a real Startup folder.
+    const { createStartup } = require('../src/opon/intake/startup-win');
+    const dir = process.env.ORUNMILA_STARTUP_DIR || path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
+    const s = createStartup({ platform: 'win32', dir });
+    const act = args[2];
+    if (act === 'install') {
+      const r = s.install({ node: process.execPath, args: intakeArgv(home, 'keep'), env: process.env });
+      console.log(`orunmila intake agent: installed ${r.file}; at each login it starts the intake, hidden, and keeps it running (remove with: orunmila intake agent uninstall)`);
+    } else if (act === 'uninstall') {
+      const r = s.uninstall();
+      console.log(r.removed ? `orunmila intake agent: removed ${r.removed}` : `orunmila intake agent: none installed (${s.file} is absent)`);
+    } else if (act === 'status') {
+      const r = s.status();
+      console.log(r.installed ? `orunmila intake agent: installed (${r.file}): the intake starts at each login` : `orunmila intake agent: not installed (${r.file} is absent)`);
+      if (!r.installed) process.exitCode = 1;
+    } else {
+      console.log('Usage: orunmila intake agent install|uninstall|status');
+      process.exitCode = 2;
+    }
+    return;
+  }
+  if (sub === 'agent') {
+    // The per-user launch agent (slice LA, LD143). ORUNMILA_LAUNCH_AGENTS_DIR and
+    // ORUNMILA_LAUNCHCTL exist for tests: they never touch the real launchd.
+    const { createLaunchAgent } = require('../src/opon/intake/launch-agent');
+    const launchctl = process.env.ORUNMILA_LAUNCHCTL || '/bin/launchctl';
+    const agent = createLaunchAgent({
+      uid: process.getuid ? process.getuid() : null,
+      dir: process.env.ORUNMILA_LAUNCH_AGENTS_DIR || path.join(os.homedir(), 'Library', 'LaunchAgents'),
+      run: (a) => require('child_process').spawnSync(launchctl, a, { encoding: 'utf8' }),
+    });
+    const act = args[2];
+    let r;
+    if (act === 'install') r = agent.install({ node: process.execPath, script: __filename, home, env: process.env, args: intakeArgv(home) }); // PM2c3 (LD334)
+    else if (act === 'uninstall') r = agent.uninstall();
+    else if (act === 'status') r = agent.status();
+    else {
+      console.log('Usage: orunmila intake agent install|uninstall|status');
+      process.exitCode = 2;
+      return;
+    }
+    if (!r.ok) {
+      console.error(`orunmila intake agent: ${r.reason}`);
+      process.exitCode = 1;
+      return;
+    }
+    if (act === 'install') console.log(`orunmila intake agent: installed ${r.plist} and loaded it (${agent.service}); remove with: orunmila intake agent uninstall (launchctl bootout ${agent.service})`);
+    else if (act === 'uninstall') console.log(r.removed ? `orunmila intake agent: booted out ${agent.service} and removed ${r.removed}` : `orunmila intake agent: none installed (${agent.plist} is absent); booted out ${agent.service} if it was loaded`);
+    else {
+      console.log(r.loaded ? `orunmila intake agent: loaded (${agent.service}), state ${r.state || 'unknown'}${r.pid ? `, pid ${r.pid}` : ''}` : `orunmila intake agent: not loaded (${agent.service})`);
+      if (!r.loaded) process.exitCode = 1;
+    }
+    return;
+  }
+  console.log('Usage: orunmila intake run|start|status|stop|keep|agent');
+  process.exitCode = 2;
+}
+
+/**
+ * `orunmila replay <session-folder> [--out file] [--expect file]` (Phase 2
+ * slice R1, LD152): the Ọpọ́n's output for a recorded raw log. With --expect,
+ * compares it with an earlier output and names the first line that differs
+ * (exit 1); exit 0 when they are the same. A log that does not verify is
+ * refused (exit 1).
+ */
+function cmdReplay() {
+  const { replayFolder } = require('../src/opon/replay');
+  const dir = args[1] && !args[1].startsWith('--') ? args[1] : null;
+  if (!dir) {
+    console.error('Usage: orunmila replay <session-folder> [--out file] [--expect file]');
+    process.exitCode = 2;
+    return;
+  }
+  const r = replayFolder(dir);
+  if (!r.ok) {
+    console.log(r.words);
+    process.exitCode = 1;
+    return;
+  }
+  const expect = flag('expect', null);
+  if (expect) {
+    const want = fs.readFileSync(expect, 'utf8').split('\n');
+    const got = r.text.split('\n');
+    for (let i = 0; i < Math.max(want.length, got.length); i++) {
+      if (want[i] !== got[i]) {
+        console.log(`replay differs from ${expect} at line ${i + 1}:\n  expected: ${want[i] === undefined ? '(no line)' : want[i]}\n  replayed: ${got[i] === undefined ? '(no line)' : got[i]}`);
+        process.exitCode = 1;
+        return;
+      }
+    }
+    console.log(`replay matches ${expect} (${r.lines.length} lines)`);
+    return;
+  }
+  const out = flag('out', null);
+  if (out) {
+    fs.writeFileSync(out, r.text);
+    console.log(`Wrote ${out} (${r.words})`);
+  } else process.stdout.write(r.text);
+}
+
+/**
+ * `orunmila judge --session <id> [--rules <file>]` (Phase 6 slice BB6; brief v4 line 684): judge a session's sealed odù
+ * log again and append to its verdict log (verdict.jsonl beside the other two): each verdict that changed supersedes
+ * the old one, which is never edited. The rules are the header's (the rules file as it was at session start), or the
+ * file named. Nothing else in the folder is written. Exit 0 judged, 1 refused (a session the intake still holds, TE1's
+ * rest; a log that does not verify, a rules file that cannot be read), 2 usage.
+ */
+async function cmdJudge() {
+  const { checkLog } = require('../src/verify/session');
+  const { statusOf, intakePaths } = require('../src/opon/intake/server');
+  const { sessionFolderName } = require('../src/opon/intake/paths');
+  const { verifyText } = require('../src/verify/chain');
+  const { canonicalize } = require('../src/verify/canonical');
+  const babalawo = require('../src/babalawo');
+  const home = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
+  const id = flag('session', null);
+  let dir;
+  try {
+    dir = id && path.join(home, 'sessions', sessionFolderName(id));
+  } catch {
+    dir = null; // an id unsafe as a folder name has no session log
+  }
+  if (!dir) {
+    console.error('Usage: orunmila judge --session <id> [--rules <file>]');
+    process.exitCode = 2;
+    return;
+  }
+  const refuse = (words) => {
+    console.log(`orunmila judge: ${words}`);
+    process.exitCode = 1;
+  };
+  // TE1's rest (LD285): one writer per verdict log. While the intake holds the session it may write the verdict log at
+  // a closeout, and with ORUNMILA_LOG_GUARD=1 it takes any other write for tampering and puts the log back.
+  const st = await statusOf(intakePaths(home).sock, 1000);
+  if (st && Array.isArray(st.held) && st.held.includes(id)) {
+    return refuse(`not judged: the intake still holds session ${id} (it releases a session 30 minutes after its last payload), and only one process writes a session's verdict log; judge it after that`);
+  }
+  const raw = checkLog(dir, 'raw');
+  if (!raw.ok) return refuse(`not judged: the raw log of ${id} is missing or does not verify (orunmila verify ${dir})`);
+  const oduFile = path.join(dir, 'odu.jsonl');
+  if (!fs.existsSync(oduFile)) return refuse(`not judged: session ${id} has no odù log (the intake writes one only with ORUNMILA_OPON_LIVE=1)`);
+  const file = path.join(dir, 'verdict.jsonl');
+  let prior = [];
+  if (fs.existsSync(file)) {
+    const text = fs.readFileSync(file, 'utf8');
+    if (!verifyText(text).ok) return refuse(`not judged: the verdict log ${file} does not verify, and it is never edited`);
+    prior = text.split('\n').slice(0, -1).map((l) => JSON.parse(l));
+  }
+  const rulesPath = flag('rules', null);
+  let rulesText;
+  if (rulesPath) {
+    try {
+      rulesText = fs.readFileSync(rulesPath, 'utf8');
+    } catch (e) {
+      return refuse(`not judged: the rules file ${rulesPath} could not be read (${e.code || e.message})`);
+    }
+  }
+  const oduText = fs.readFileSync(oduFile, 'utf8');
+  const { testDiffsFromMarks, oduRecords } = require('../src/opon/ledger/beside');
+  const diffs = testDiffsFromMarks({ odus: oduRecords(oduText), marks: raw.records.map((x) => x.rec), dir }); // MR2 (LD317): R27
+  const r = babalawo.judge({ header: raw.records[0].rec, oduText, rulesText, prior, diffs });
+  if (!r.ok) return refuse(r.words);
+  if (r.added.length) fs.appendFileSync(file, r.added.map((x) => canonicalize(x) + '\n').join(''), { mode: 0o600 });
+  const s = r.records.filter((x) => x.record === 'session_verdict').pop();
+  console.log(`orunmila judge: judged ${id}: ${r.added.length} record(s) added to ${file}; the session's verdict: ${s.verdict} (${s.rules_source} rules, ${babalawo.name} ${babalawo.version})`);
+}
+
+/**
+ * `orunmila trailer --session ID [--append FILE]` (MR4, LD318): the session's verdict as git trailers (src/render/trailer.js),
+ * printed, or appended to a commit message file (a `commit-msg` hook passes it as $1). A convenience outside the evidence
+ * path: it reads the session folder and writes only the file named. Exit 0 done, 1 no session here or its verdict log
+ * does not verify, 2 usage.
+ */
+function cmdTrailer() {
+  const { sessionFolderName } = require('../src/opon/intake/paths');
+  const { verifyText } = require('../src/verify/chain');
+  const { trailerLines, appendTrailers } = require('../src/render/trailer');
+  const home = process.env.ORUNMILA_HOME || path.join(os.homedir(), '.orunmila');
+  const id = flag('session', null);
+  let dir;
+  try {
+    dir = id ? path.join(home, 'sessions', sessionFolderName(id)) : null;
+  } catch {
+    dir = null; // an id unsafe as a folder name has no session log
+  }
+  if (!dir) {
+    console.error('Usage: orunmila trailer --session ID [--append FILE]');
+    process.exitCode = 2;
+    return;
+  }
+  const refuse = (words) => {
+    console.log(`orunmila trailer: ${words}`);
+    process.exitCode = 1;
+  };
+  if (!fs.existsSync(path.join(dir, 'raw.jsonl'))) return refuse(`session ${id} has no session log here (${dir})`);
+  let footer;
+  try {
+    footer = JSON.parse(fs.readFileSync(path.join(dir, 'footer.json'), 'utf8'));
+  } catch {
+    footer = null; // not closed out yet
+  }
+  let sessionVerdict = null;
+  const vFile = path.join(dir, 'verdict.jsonl');
+  if (fs.existsSync(vFile)) {
+    const text = fs.readFileSync(vFile, 'utf8');
+    if (!verifyText(text).ok) return refuse(`the verdict log of ${id} does not verify (orunmila verify ${dir}), so no verdict is given`);
+    sessionVerdict = text.split('\n').slice(0, -1).map((l) => JSON.parse(l)).filter((r) => r.record === 'session_verdict').pop() || null;
+  }
+  const lines = trailerLines({ sessionId: id, footer, sessionVerdict });
+  const file = flag('append', null);
+  if (!file) return void process.stdout.write(lines.join('\n') + '\n');
+  fs.writeFileSync(file, appendTrailers(fs.readFileSync(file, 'utf8'), lines));
+  console.log(`orunmila trailer: ${lines.length} trailers in ${file}`);
+}
+
+/**
+ * `orunmila update` (PM2c1, LD332; LD268): the copy in Orunmila's home brought up to the registry's latest version
+ * (src/runtime/update.js), switched to only while no session is held: none held by the running intake, or, with no
+ * intake running, none it will resume (its held.json). The registry is ORUNMILA_REGISTRY, else npm's own setting, else
+ * npm's public registry; it is sent the package's name and nothing else. Exit 0 up to date, switched or waiting; 1
+ * refused or failed (the update log has each failed self-check).
+ */
+async function cmdUpdate() {
+  const { statusOf, intakePaths } = require('../src/opon/intake/server');
+  const home = orunmilaHome();
+  // PM2c2 (LD333): `--auto`, started by the daily check: only with the switch on, one at a time (runtime/update.lock,
+  // taken over after 30 minutes), its answer in runtime/last-update; it prints nothing (no one reads a detached run).
+  let lock = null;
+  if (args.includes('--auto')) {
+    if (!require('../src/opon/intake/switches').updatesOn(process.env, home).on) return;
+    lock = path.join(home, 'runtime', 'update.lock');
+    try {
+      fs.writeFileSync(lock, String(process.pid), { flag: 'wx', mode: 0o600 });
+    } catch {
+      try {
+        if (Date.now() - fs.statSync(lock).mtimeMs < 30 * 60 * 1000) return; // another update runs
+        fs.writeFileSync(lock, String(process.pid), { mode: 0o600 });
+      } catch {
+        return;
+      }
+    }
+  }
+  const registry = process.env.ORUNMILA_REGISTRY || process.env.npm_config_registry || 'https://registry.npmjs.org';
+  const held = async () => {
+    const st = await statusOf(intakePaths(home).sock, 1000);
+    if (st) return Array.isArray(st.held) && st.held.length > 0;
+    try {
+      const h = JSON.parse(fs.readFileSync(path.join(home, 'intake', 'held.json'), 'utf8'));
+      return Array.isArray(h) && h.length > 0;
+    } catch {
+      return false; // no held list: nothing to resume
+    }
+  };
+  if (lock) {
+    try {
+      const r = await require('../src/runtime/update').updateNow({ home, registry, held });
+      const file = path.join(home, 'runtime', 'last-update');
+      fs.writeFileSync(`${file}.${process.pid}.tmp`, `${new Date().toISOString()} ${r.status}: ${r.words}\n`, { mode: 0o600 });
+      fs.renameSync(`${file}.${process.pid}.tmp`, file);
+    } finally {
+      fs.rmSync(lock, { force: true });
+    }
+    return;
+  }
+  console.log(`orunmila update: asking ${registry} for the latest orunmila (only the package's name is sent)`);
+  const r = await require('../src/runtime/update').updateNow({ home, registry, held });
+  console.log(`orunmila update: ${r.words}`);
+  process.exitCode = r.status === 'refused' || r.status === 'failed' ? 1 : 0;
+}
+
 const COMMANDS = {
   install: cmdInstall,
+  update: cmdUpdate,
+  replay: cmdReplay,
+  judge: cmdJudge,
+  intake: cmdIntake,
   agents: cmdAgents,
   laws: cmdLaws,
   stats: cmdStats,
   status: cmdStatus,
   prune: cmdPrune,
+  retention: cmdRetention,
   log: cmdLog,
   lenses: cmdLenses,
   report: cmdReport,
@@ -1063,9 +2350,13 @@ const COMMANDS = {
   watch: cmdWatch,
   'watch-fs': cmdWatchFs,
   'debug-transcript': cmdDebugTranscript,
+  verify: cmdVerify,
+  'leak-check': cmdLeakCheck,
+  trailer: cmdTrailer,
 };
 
-// Issue 2 (0.2.4): the version, one line, exit 0 (it printed the usage text and exited 1).
+// The installed version, one line, exit 0 (SECURITY.md asks a reporter to give it; OW2, LD151). `-v` and `version`
+// too, as 0.2.4 on `main` reads them (issue 2).
 if (cmd === '--version' || cmd === '-v' || cmd === 'version') {
   console.log(require('../package.json').version);
   process.exit(0);
@@ -1076,27 +2367,35 @@ if (!cmd || !COMMANDS[cmd]) {
 
 Usage: orunmila <command> [options]
 
-TWO LENSES, installed separately (orunmila lenses — which do I have?):
+THREE LENSES, installed separately (orunmila lenses — which do I have?):
 
   The Stain Map      records + reports. Never refuses. All supported agents.
   The Closeout Gate  refuses a turn whose claims its evidence doesn't support.
-                     claude-code only. 2 of its 6 laws block; the rest advise.
+                     claude-code and cursor. 2 of its 6 laws block; the rest advise.
+  The Babaláwo       judges each session's record at its closeout. Never refuses. Off until you turn it on.
 
 Install
   orunmila install [--agent ID] [--global]        the Stain Map alone (default agent: claude-code)
-  orunmila install --with-gate [--agent ID]       both lenses (--with-laws is the original spelling, still works)
+  orunmila install --with-gate [--agent ID]       both lenses, for claude-code or cursor (--with-laws is the original spelling)
   orunmila install --gate-only                    add the Closeout Gate to an existing Stain Map install
-  orunmila lenses [--agent ID] [--global]         the two lenses side by side + which are installed right now
+  orunmila install --intake                       send every hook payload to the intake too (claude-code; start it first)
+  orunmila install --with-judge | --without-judge  the Babaláwo on or off (from the intake's next start)
+  orunmila install --with-updates | --without-updates  the daily update check on or off (a plain install turns it on; orunmila update by hand, always)
+  orunmila lenses [--agent ID] [--global]         the three lenses side by side + which are installed right now
   orunmila agents                                 list supported agents and their config locations
+  orunmila --version                              the installed version
 
 The Stain Map — read what happened
   orunmila trail [--session ID] [--out path] [--archive STAMP] [--no-redact-home]
                                                   THE REPORT: complete trail (the glove) + lineage + stains
   orunmila trail --json [--facts-only] [--session ID] [--out path]
                                                   machine-readable trail; --facts-only drops the inferred lineage layer
+  orunmila trail --json --marks [--facts-only] [--session ID]
+                                                  the same, from the intake's session log: both witnesses on every row
   orunmila report [--session ID] [--turn ID] [--archive STAMP]   terminal stain report (live, or a pinned snapshot)
-  orunmila html [--session ID] [--out path] [--archive STAMP]    mismatch-only HTML report
+  orunmila html [--session ID] [--out path] [--archive STAMP]    the old mismatch-only page (report --verdicts --html replaces it; removed no sooner than 2.0.0)
   orunmila json [--session ID] [--turn ID] [--include claim_text]   per-turn stain output (schema_version 1.0)
+  orunmila json --session ID --side-by-side       the same beside the odù log's (ORUNMILA_FEEDBACK_FROM_ODU=1: the odù log's alone)
   orunmila demo [--out path]                      sample report from a scripted session — no setup, for a first look
   orunmila watch [--root dir]                     live-tail new turn reports + run the filesystem sentinel
   orunmila watch-fs [--root dir]                  run ONLY the filesystem sentinel (independent disk observer)
@@ -1111,15 +2410,33 @@ Both lenses
   orunmila status [--agent ID]                    which lenses are live, event log location, size, counts
   orunmila stats                                  cross-agent reliability scores, phantom rates, comparisons
   orunmila prune [--keep N]                       cap the log to the N most-recent sessions (explicit, never automatic)
+  orunmila retention --keep-days N [--yes]        remove session logs older than N days, each whole and recorded first
   orunmila log redact                             scrub known secret formats from everything already stored
   orunmila log delete [--yes]                     delete stored session data (lists it first; --yes to delete)
+  orunmila leak-check [--root dir] [--path p]     search stored data and report files for this project's .env
+                                                  values (names printed, never values; exit 1 if any found)
   orunmila rescore [--dry-run]                    re-reconcile every persisted report (originals archived, never deleted)
   orunmila archives                               list archived rescore snapshots, readable with --archive <stamp>
   orunmila feedback [--session ID] [--include claim_text]   write sanitized accuracy cases to a local drop folder
   orunmila feedback-import [--dir path] [--force]  copy those cases into test/cases/precision/
   orunmila debug-transcript <path>                inspect why transcript parsing isn't matching your install
+  orunmila verify <session-folder> [--json]       check a session log folder's hash chains, records and kept files
+                                                  (the per-session logs the intake writes, in ~/.orunmila/sessions/)
+  orunmila verify --updates                       check the update log (~/.orunmila/updates.jsonl): each update, chained
+  orunmila update                                 bring the copy in ~/.orunmila up to npm's latest; switched only while
+                                                  no session is held (the one network call: the package's name is sent)
+  orunmila intake run|start|status|stop|keep      the intake server, one per machine (install --intake sends to it);
+                                                  keep runs it and starts it again after a crash
+  orunmila intake agent install|uninstall|status  keep the intake running at login: a launch agent on macOS, a script
+                                                  in the Startup folder on Windows (it runs orunmila intake keep)
+  orunmila replay <session-folder> [--expect file]  the Opon's settled groups for a session log, replayed (Phase 2)
+  orunmila judge --session ID [--rules file]      judge a session's odù log again; new verdicts supersede, old ones stay
+  orunmila report --verdicts --session ID [--html FILE] [--json]
+                                                  the session report: top line, each finding naming both witnesses
+  orunmila trailer --session ID [--append FILE]   the session's verdict as git trailers for a commit message
+                                                  (a convenience, not evidence: orunmila verify proves the record)
 
-Docs: README.md · known issues with status: review/ISSUES.md
+Docs: docs/START.md (new to Orunmila) · README.md (the way in) · docs/GUIDE.md (every command, law, switch and limit) · known issues with status: review/ISSUES.md
 `);
   process.exit(cmd ? 1 : 0);
 }

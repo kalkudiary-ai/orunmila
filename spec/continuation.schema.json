@@ -1,0 +1,82 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:orunmila:spec:v1:continuation",
+  "title": "Orunmila log continuation record, schema version 1",
+  "description": "The first line of a log's second (or later) part. A crash can cut a log's last line short; that log is never edited. The restart starts a new part beside it, and this record, the new part's first line, says where the previous part was cut. One hash chain runs through all the parts (spec/hash-chain.md, \"A log in parts\").",
+  "$comment": "agent's choice, LD57 (format change approved by O 2026-11-17: \"the restart would start a second part of the log beside it, recording where the first part broke\"). Unknown fields are allowed, as in the other v1 drafts (LD17).",
+  "type": "object",
+  "required": ["schema_version", "record", "session_id", "log", "part", "seq", "cut", "prev_hash", "hash"],
+  "properties": {
+    "schema_version": {
+      "description": "All carry a `schema_version`.",
+      "$comment": "brief v3 line 209",
+      "const": 1
+    },
+    "record": {
+      "description": "Always `continuation`.",
+      "$comment": "agent's choice, LD57",
+      "const": "continuation"
+    },
+    "session_id": {
+      "description": "The session whose log this part continues.",
+      "$comment": "agent's choice, LD57",
+      "type": "string",
+      "minLength": 1
+    },
+    "log": {
+      "description": "Which of the session's logs this part continues: `raw` (the marks) or `quarantine` (inputs that were not valid marks).",
+      "$comment": "agent's choice, LD57",
+      "enum": ["raw", "quarantine"]
+    },
+    "part": {
+      "description": "This part's number: 2 for the file `raw.2.jsonl` or `quarantine.2.jsonl`, and so on. Part 1 is the log's own file.",
+      "$comment": "agent's choice, LD57",
+      "type": "integer",
+      "minimum": 2
+    },
+    "seq": {
+      "description": "One more than the `seq` of the last whole line before the cut. The lines after it count on from here.",
+      "$comment": "agent's choice, LD57",
+      "type": "integer",
+      "minimum": 1
+    },
+    "cut": {
+      "description": "Where the previous part was cut, and what was left there.",
+      "$comment": "agent's choice, LD57",
+      "type": "object",
+      "required": ["line", "bytes", "fingerprint"],
+      "properties": {
+        "line": {
+          "description": "The cut line's number in the previous part, counting from 1.",
+          "$comment": "agent's choice, LD57",
+          "type": "integer",
+          "minimum": 1
+        },
+        "bytes": {
+          "description": "How many bytes of the cut line were written before the crash.",
+          "$comment": "agent's choice, LD57",
+          "type": "integer",
+          "minimum": 1
+        },
+        "fingerprint": {
+          "description": "The plain SHA-256 of those bytes, so the cut line left in the previous part can be checked and never changed.",
+          "$comment": "agent's choice, LD57",
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "prev_hash": {
+      "description": "The `hash` of the last whole line before the cut, exactly as written there.",
+      "$comment": "agent's choice, LD57; the chain rule is brief v3 line 247",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "hash": {
+      "description": "This record's hash, by the same rule as every line (spec/hash-chain.md).",
+      "$comment": "brief v3 line 247",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

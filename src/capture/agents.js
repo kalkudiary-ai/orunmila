@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 KALKU DIGITAL SOLUTIONS LIMITED
 'use strict';
 
 /**
@@ -110,7 +112,47 @@ const defaultFields = {
   },
   stdout: (response) => String(response.stdout || response.output || response.stdoutText || ''),
   stderr: (response) => (response.stderr ? String(response.stderr) : ''),
+  // Read only with ORUNMILA_EXACT_CAPTURE=1 (core.js). What a failure payload
+  // itself says about a failed command, for a host whose failure hook carries
+  // no tool_response: { code, output }, code null when not stated (NF22).
+  // null here means the host's shape is not known, so capture keeps its old rule.
+  failureExit: () => null,
+  // How much of a file a read returned, from the tool's own result (LD94):
+  // { start_line, lines, total_lines } (each null when not given). null when the
+  // host's result shape is not known.
+  readExtent: () => null,
 };
+
+// The folder-listing tools among READ_TOOLS: a listing names entries, it shows
+// no file's content (LD94). Used only with ORUNMILA_EXACT_CAPTURE=1.
+const LISTING_TOOLS = /^(list_dir)$/i;
+
+function wholeNumber(v) {
+  return Number.isInteger(v) && v >= 0 ? v : null;
+}
+
+// LD94: the range a read asked for and the range its result says it returned.
+// A read is 'range' when it returned fewer lines than the file holds or its
+// content was cut by a token cap; with no counts in the result, when it asked
+// for a bounded range. null when nothing about the extent is known. Shared by
+// capture (core.js, with ORUNMILA_EXACT_CAPTURE=1) and the mark adapters (LD121).
+function readRange(input, extent) {
+  const e = extent || {};
+  const range = {
+    asked_offset: wholeNumber(input && input.offset),
+    asked_limit: wholeNumber(input && input.limit),
+    start_line: e.start_line === undefined ? null : e.start_line,
+    lines: e.lines === undefined ? null : e.lines,
+    total_lines: e.total_lines === undefined ? null : e.total_lines,
+  };
+  const cut = e.truncated_by_token_cap === true;
+  if (cut) range.truncated_by_token_cap = true;
+  const counted = range.lines !== null && range.total_lines !== null;
+  const asked = range.asked_offset !== null || range.asked_limit !== null;
+  if (!counted && !asked && !cut && range.start_line === null) return null;
+  const partial = counted ? (range.lines < range.total_lines || cut) : (asked || cut);
+  return { range, kind: partial ? 'range' : 'full' };
+}
 
 function withDefaults(adapter) {
   return Object.assign({}, adapter, {
@@ -146,22 +188,86 @@ const REGISTRY = {
       // no origin field (2.1.314); in one session the opening tag matched the
       // transcript's origin.kind on 7 prompts of 7 (NF54).
       promptFromHuman: (p) => !/^\s*<(?:task-notification|agent-message)[\s>]/.test(String(p.prompt || '')),
+      // PostToolUseFailure has no tool_response: a Bash failure's code is the
+      // first line of `error` ("Exit code N"; transcripts show "Error: Exit code
+      // N"), its output the rest. Any other first line states no code (a
+      // timeout, a refusal): the whole text is the output, the code null.
+      failureExit: (p) => {
+        if (typeof p.error !== 'string') return { code: null, output: '' };
+        const nl = p.error.indexOf('\n');
+        const first = nl === -1 ? p.error : p.error.slice(0, nl);
+        const m = /^(?:Error: )?Exit code (\d{1,9})\s*$/.exec(first);
+        if (!m) return { code: null, output: p.error };
+        return { code: Number(m[1]), output: nl === -1 ? '' : p.error.slice(nl + 1) };
+      },
+      // Read's result: { type: 'text', file: { filePath, content, numLines,
+      // startLine, totalLines, truncatedByTokenCap? } } in transcripts (1,254
+      // of 1,254 in this worktree's); a flat object is read the same way.
+      readExtent: (response) => {
+        const r = response && typeof response === 'object' ? response : {};
+        const f = r.file && typeof r.file === 'object' ? r.file : r;
+        const ext = { start_line: wholeNumber(f.startLine), lines: wholeNumber(f.numLines), total_lines: wholeNumber(f.totalLines) };
+        if (f.truncatedByTokenCap === true) ext.truncated_by_token_cap = true;
+        return ext;
+      },
     },
   }),
 
-  // Cursor — hooks land in .cursor; tool names differ (edit_file, read_file,
-  // run_terminal_cmd). Field defaults already cover its camelCase shapes.
+  // Cursor — hooks in .cursor/hooks.json as { version: 1, hooks: { <event>: [{ command }] } } (bin/orunmila.js
+  // installCursor). CU1, measured 2026-11-28 on Cursor's command-line agent 2026.11.22-e9042b2, every hook's stdin
+  // kept (test/cursor.js holds the shapes): preToolUse/postToolUse name the tool (Read, Write, Grep, Shell) with
+  // `tool_input` an object and `tool_output` JSON text (Shell's: { output, exitCode }); afterFileEdit and
+  // afterShellExecution repeat those calls with less (no tool name; no exit code), so they are not used. The final
+  // text comes only in afterAgentResponse (`text`), so that closes the turn; `stop`, at the same moment, has none.
+  // Print mode (`-p`) fires no prompt, stop or response hook: sessionEnd closes a turn nothing closed, from the
+  // transcript. The "before" hooks print nothing: measured, an empty answer blocked nothing.
   cursor: withDefaults({
     id: 'cursor',
     label: 'Cursor',
     config: { dir: '.cursor', file: 'hooks.json' },
     events: {
       prompt: 'beforeSubmitPrompt',
-      preTool: 'beforeShellExecution',
-      postTool: ['afterFileEdit', 'afterShellExecution'],
-      stop: 'stop',
+      preTool: 'preToolUse',
+      postTool: ['postToolUse', 'postToolUseFailure'],
+      stop: 'afterAgentResponse',
+      sessionEnd: 'sessionEnd',
     },
-    preToolMatcher: 'edit_file|create_file|apply_patch',
+    stopCarriesFinalText: true,
+    transcript: {
+      lastAssistantText: (p) => require('./transcript').lastAssistantText(p),
+      // Cursor wraps the ask: "<timestamp>...</timestamp>\n<user_query>\n...\n</user_query>".
+      lastUserText: (p) => {
+        const t = require('./transcript').lastUserText(p);
+        const m = /<user_query>\n?([\s\S]*?)\n?<\/user_query>/.exec(t);
+        return m ? m[1] : t;
+      },
+    },
+    fields: {
+      toolResponse: (p) => {
+        const r = p.tool_output !== undefined ? p.tool_output : (p.tool_response || p.result || {});
+        if (typeof r !== 'string') return r || {};
+        try {
+          const v = JSON.parse(r);
+          return v && typeof v === 'object' ? v : { output: r };
+        } catch {
+          return { output: r };
+        }
+      },
+      // afterAgentResponse's `text` is every text block of the turn joined with no space ("...the tests.Updated ..."),
+      // which the claim reader cannot split. Measured: the transcript's last assistant message is that text's tail, so
+      // the claim is that message, as Claude Code's is; when the transcript's last message is not exactly the tail (not
+      // caught up, N10), the hook's own text stands.
+      finalText: (p) => {
+        if (typeof p.text !== 'string') return null;
+        let last;
+        try {
+          last = require('./transcript').lastAssistantText(p.transcript_path || null);
+        } catch {
+          last = '';
+        }
+        return last && last !== p.text && p.text.endsWith(last) ? last : p.text;
+      },
+    },
   }),
 
   // Aider — drives edits via git commits + a chat history file. It has no native
@@ -301,4 +407,7 @@ module.exports = {
   defaultFields,
   defaultClassifyTool,
   withDefaults,
+  LISTING_TOOLS,
+  wholeNumber,
+  readRange,
 };

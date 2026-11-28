@@ -4,9 +4,451 @@ All notable changes to orunmila are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-While orunmila is pre-1.0, breaking changes may land in any `0.x` release.
+From 1.0.0, a command, flag or output field is removed or changed in meaning only in a
+new major version, and named in this file first.
 
 ## [Unreleased]
+
+## [1.0.0] — 2026-11-28
+
+### Upgrading from 0.2.x
+
+**What changes**
+
+- **The hooks run through one starter.** `orunmila install` keeps a copy of the
+  package in Orunmila's home and every hook it writes runs that copy through
+  `~/.orunmila/bin/orunmila-start.js`, so clearing a package cache no longer
+  switches capture off. Hooks an earlier version wrote are moved onto the
+  starter when you run `orunmila install` again (below).
+- **A second, optional record: the intake.** Each session can get its own
+  hash-chained log in `~/.orunmila/sessions/<id>/`, outside the project, which
+  `orunmila verify` checks with no network and no setup. Its formats are the
+  open specification in `spec/` (v1, Apache 2.0). Nothing changes until you
+  install it.
+- **`orunmila install` turns on the daily update check** unless you have chosen
+  already (`--without-updates`, or `ORUNMILA_UPDATES=0`, turns it off). It sends
+  only the package's name.
+- **`orunmila html` is replaced** by `orunmila report --verdicts --session ID
+  --html FILE`. It keeps working in 1.x and is removed no sooner than 2.0.0; it
+  says so when it runs.
+- **`orunmila prune` stays for the old event log**; the intake's per-session logs
+  are removed whole, and recorded, by `orunmila retention`.
+- **Cursor is supported for the Stain Map, and the Closeout Gate with
+  `--with-gate`** (test 49, on Cursor's command-line agent). Before, `install --agent cursor` wrote a hooks file Cursor does not read,
+  so nothing was recorded; it now writes Cursor's own format and reads the hooks
+  Cursor sends (tool calls with their exit codes, the final message, and a print
+  mode session's end). Run `orunmila install --agent cursor` again in each Cursor
+  project: it replaces the old entries and keeps your own hooks.
+
+**What to do**
+
+1. Upgrade the package the way you installed it (`npm install -g orunmila`, or
+   as a dev dependency).
+2. Run `orunmila install` again in each project whose sessions you record. It
+   moves your existing hooks onto the starter in place and adds none; hooks that
+   name a different copy of Orunmila are refused, named and left as they are.
+3. Run `orunmila status`: it names any hook whose script is missing, and exits 1
+   if one is.
+4. If your event log was written before 0.2.2, `orunmila log redact` removes the
+   secrets the old capture kept, or `orunmila log delete --yes` deletes the log.
+5. Optional: `orunmila install --intake`, then `orunmila intake start`, for the
+   per-session record and `orunmila verify`.
+
+**What still works**
+
+Every command of 0.2.x keeps its name, its flags and its output's shape:
+`install`, `agents`, `lenses`, `status`, `trail` (and its alias `glove`),
+`report`, `html`, `json`, `feedback`, `feedback-import`, `laws`, `stats`,
+`prune`, `rescore`, `archives`, `demo`, `watch`, `watch-fs` and
+`debug-transcript`. A test holds the JSON shapes of `trail --json`,
+`trail --json --facts-only`, `json` and `laws --check --json` against the
+published 0.2.4 on a real session. The event log `~/.orunmila/events.jsonl`, the
+hook scripts by their paths in the package (`src/capture/claude-code/`),
+`.orunmila/ignore`, `.orunmila/redact` and `ORUNMILA_LAWS=off` work as before.
+
+### Added
+
+- **A page for new users, and the support table stated plainly.**
+  `docs/START.md` (in the package) is for someone who has never heard of
+  Orunmila: what it is, a first session in ten minutes, how to read a real
+  session report, its words, what it defends against and cannot see, what it
+  stores, where and for how long, and which agents are supported. Claude Code
+  is fully supported; Cursor is supported, tested on real sessions of its
+  command-line agent (test 49); Gemini CLI, Codex, Continue, Antigravity and Generic are experimental
+  (sample data only); Aider is experimental and sentinel only; no Windsurf
+  adapter exists. An experimental adapter's session says so on the first line
+  of `orunmila report`.
+- **A short README, a guide, and a map of the system for contributors.** The
+  README is now the way in: what Orunmila is, a "Start here" table, a
+  four-command quickstart, the three lenses, what it catches and cannot see,
+  and what's new. Everything else moved, word for word, to `docs/GUIDE.md`,
+  which the package now carries. `CONTRIBUTING.md` gains a first hour and a
+  map of the system, every folder in `src/` named. The README now names three
+  lenses, as the help does (it said two), and `CONTRIBUTING.md` no longer says
+  the tool makes no network call (the update check is its one).
+- **The trail page's Graph tab is a flowchart on a canvas.** Each thing is a
+  box and each link an arrow pointing the way it went, read, ran or used,
+  changed, left to right. The canvas moves both ways: scroll (Shift and scroll
+  to go sideways), drag the background, or use the arrow keys; Ctrl or ⌘ and
+  scroll, a pinch, or + and − zoom about the pointer; 0 or the Fit button fits
+  the width again, and a button opens it full screen. Nothing is held back:
+  the Graph showed at most 60 things a level, and now shows every one. At the
+  picture's edge the scroll goes back to the page.
+- **The licence and trademark files a release carries.** `TRADEMARKS.md` says
+  how the Orunmila name may be used (the Apache License grants no rights to
+  it, and a changed version needs a new name). `THIRD_PARTY_LICENSES` says the
+  package has no runtime dependency to credit. NOTICE points to the trademark
+  policy, and every JavaScript file opens with its SPDX licence identifier and
+  copyright line. `test/license-files.js` keeps each of these true, and also
+  fails if LICENSE stops matching the Apache 2.0 text or a locked package is
+  not permissively licensed.
+- **The trail page's 3D Map.** The same map in 3D, drawn by Orunmila's own
+  WebGL2 code in the package, with nothing loaded from the network: glowing
+  spheres, links with sparkles, a replay that starts from a blank canvas and
+  builds the map in the order the agent worked (each thing appears when first
+  touched, each link grows once both its ends are there), following the agent
+  from file to file, and a Calm (the default) or Vivid look. Without WebGL2 it says so and
+  points to the Graph tab.
+- **The witness gap.** `orunmila report --verdicts` gives, second after its
+  top line, every file change in the session counted by what both witnesses
+  recorded of it; the trail page shows it under its header, and says when a
+  session has no odù log to read it from.
+- **Rule R27, tests weakened** (the judge 1.2.0). A **Look at this** when the
+  agent deletes a test file, adds skip or only markers to one, or removes more
+  assertion lines than it adds, read from the diffs kept beside the log; the
+  report says when that turn's claim says the tests pass.
+- **`orunmila trailer`.** A session's verdict as git trailers on a commit
+  message (`--append` for a `commit-msg` hook). A convenience, not evidence.
+- **The claims block** (`ORUNMILA_CLAIMS_BLOCK=1`, off by default). Claude Code's
+  agent is asked, with each prompt, to end its turn with an `orunmila-claims`
+  block: each `proved:` command must have run in the turn and passed; each
+  `changed:` file is checked in the session's record; `not done:` lines are
+  shown in the session report. Format: `spec/claims-block.md`.
+- **The judge as an install option, like the Closeout Gate.** `orunmila install
+  --with-judge` and `--without-judge` set its switch in Orunmila's home, read at
+  the intake's next start; `orunmila lenses` and `status` show it beside the
+  other two lenses (`ORUNMILA_JUDGE_LIVE` still wins where set).
+- **`orunmila verify --updates`** checks the update log's hash chain and each
+  record against its schema.
+- **`orunmila update`.** Brings the copy in Orunmila's home up to the npm
+  registry's latest `orunmila`: the download is checked against the registry's
+  integrity hash, the new version must pass its own self-check, and Orunmila
+  switches to it only while no session is being recorded (it waits, checked,
+  until then), keeping the version it ran as `runtime/previous`. Each switch and
+  each failed self-check goes into `~/.orunmila/updates.jsonl`. This is the
+  package's one network call; it sends only the package's name. `orunmila
+  install` turns it on to run by itself, unless you have already chosen: at
+  most once a day, started by the intake or, where none runs, by a hook, in the
+  background, so nothing waits for it. `orunmila install --without-updates`
+  (or `ORUNMILA_UPDATES=0`) turns it off, `--with-updates` on again.
+  The intake runs the copy in Orunmila's home too (`orunmila intake start` and
+  the launch agent start it through the starter), moves onto a new version once
+  it holds no session, and names the version it runs in `orunmila intake status`.
+- **The intake starts at login on Windows.** `orunmila intake agent install`
+  writes `orunmila-intake.vbs` into your Startup folder (no administrator
+  rights), which starts the intake hidden through `orunmila intake keep`; the
+  keeper starts it again after a crash or a stop no one asked for, as the
+  launch agent does on macOS. Not yet run on a real Windows login.
+- **The intake on Windows.** It listens on a named pipe, under a fresh name at
+  each start (the home's name plus 32 random hex), published in
+  `~/.orunmila/intake/address`, which both hook senders and the CLI read; so no
+  program can take the name before the intake starts. A program listening on
+  the old, fixed name is recorded as a squat. The full test suite, the hooks
+  run through cmd.exe and Git Bash, and every install route pass on Windows in
+  CI (Node 18, 20 and 22); a few checks need POSIX file modes or a stop signal
+  Windows does not deliver, and are skipped there by name, never passed.
+- **A stop no handler sees is named at the next start.** A kill (`kill -9`, or
+  Task Manager and `taskkill /F` on Windows) runs no handler, so the intake
+  could only show the downtime. Each run now leaves a note while it runs, and
+  the next start says in the gap it writes whether the intake was killed,
+  crashed (with the error) or the machine rebooted while it ran. On Windows a
+  console Ctrl+Break is now handled like the other stop signals.
+- **A second session that sits idle no longer blocks credit**
+  (on by default; `ORUNMILA_PEER_BUSY=0` turns it off). The intake notes in each session's
+  record when another session in the same folder is working (the `overlapped`
+  mark's new `busy` field). A change made during this session's command while
+  every other session is idle is credited to that command at medium
+  confidence, where before it was unexplained. Records without the note read
+  as before.
+- **The Graph tab reads left to right.** Three levels (what the agent read, ran
+  and changed), each in its folders, flagged things first; links curve between
+  the columns instead of through one centre point. A folder or file written
+  two ways (`src/x.js` and `~/proj/src/x.js`) is one.
+- **The intake, a preview, off until you install it.** `orunmila intake
+  run|start|status|stop` runs one intake per machine on a Unix socket in
+  Orunmila's data dir; it writes each session to its own hash-chained log in
+  `sessions/<id>/`, outside the project (`orunmila verify` checks one).
+  `orunmila install --intake` adds Claude Code HTTP hooks posting to
+  `127.0.0.1` (port 47390, or `ORUNMILA_INTAKE_PORT`) for prompts, tool calls
+  and stops, and a small sender, `intake-send.js`, for session start, failed
+  tool calls and session end, for every tool, beside the capture hooks you
+  already have, which keep working as before. Neither ever blocks your agent:
+  **when no intake is running, nothing is sent and that session has no intake
+  record at all**, so start the intake first; `orunmila intake agent install`
+  keeps it running at login (a per-user launch agent, macOS;
+  `orunmila intake agent uninstall` removes it). A sender that cannot hand its
+  payload over within one second gives up, and that payload is lost. If
+  another process holds the intake's socket when it starts, the intake records
+  that and takes the socket back (on Windows a pipe cannot be taken back, so
+  each start listens on a fresh name, above); a port held by another process is recorded
+  and tried again every second until the intake has it. The intake runs the Filesystem Sentinel
+  itself for each session's folder, `.orunmila/` included, and records a change
+  during the session to the project's `.orunmila/` files, the law packs, the
+  agent's hook settings or Orunmila's own code as tampering. These logs are
+  read by `orunmila verify`, `report --verdicts`, `judge`, `trailer`,
+  `trail --json --marks` (both witnesses on every row), `json` with
+  `--side-by-side` or its two switches, and the trail page and dashboard (the
+  witness line and the judge's verdict); the other reports come from the event
+  log, and read the session log when the event log has nothing for the session
+  (below).
+- **Exact capture, off by default (`ORUNMILA_EXACT_CAPTURE=1`).** Claude Code
+  sends a failed tool call with no `tool_response`; the exit code is the first
+  line of its `error` text (`Exit code N`, or `Error: Exit code N`) and the
+  command's output the rest. Capture read neither, so every failed command
+  was recorded as `exit_code: 1` with empty output (NF22). With the switch on,
+  the stated code is recorded, or `null` (still `failed: true`) when the text
+  states none, and the output is kept like any command's, redacted whole
+  before the excerpt is cut. A read records how much of the file it returned,
+  from the tool's own result, in `read_range`, and `read_kind` is `range` when
+  that was less than the whole file (LD94); a folder listing (`list_dir`) is
+  `read_kind: "listing"`, not a file read. The gate grades a `range` read of
+  a file it hashed as before, a full receipt; a `range` read with no hash, and
+  a listing, are now weak receipts, and a failed `range` read is none (each was
+  full while every read said `full`). With the switch off, capture writes
+  exactly what it wrote before; docs/SCHEMA.md lists the fields.
+- **Two previews for the Closeout Gate, off by default.** With
+  `ORUNMILA_GATE_MARKS=1` each check the gate makes (passed, warned, blocked or
+  skipped, with the laws and the quoted sentence) is also written to the
+  intake's session log. With `ORUNMILA_GATE_FROM_MARKS=1` the gate judges a
+  turn from that log: a read or edit that failed is no receipt, and a folder
+  listing is a weak one; and a turn with a tool call started whose outcome is
+  not in that log yet is never blocked, since capture may still be writing it:
+  the gate records a skip. With both off the gate behaves exactly as before.
+- **`orunmila leak-check`: find your `.env` values in what Orunmila stored.**
+  Capture redacts known secret formats, not your `.env` values, so a value in
+  a format it does not know is stored as written, by both witnesses;
+  SECURITY.md now says so. The command reads the project's top-level `.env`
+  files once, when you run it, and searches the data dir, the report files in
+  the project folder and any `--path` for each value (as written, and as JSON,
+  HTML and the report pages escape it). It prints names, files and lines, never
+  values, and exits 1 if any value is found, 2 if nothing was checked or a path
+  was not read. Nothing runs it automatically. A value that is only `true`,
+  `false`, `null`, `undefined` or a word like them is not looked for
+  (SECURITY.md lists them).
+- **`orunmila retention --keep-days N [--yes]`** removes the intake's session logs
+  older than N days, each folder whole and only if it verifies, the removal
+  written first to a hash-chained `retention.jsonl`. Without `--yes` it only
+  lists them; with no period it removes nothing; a session the running intake
+  holds is kept. `prune` still trims the old event log and now says so.
+- **SECURITY.md says how fast a report is answered:** an acknowledgement within
+  7 days, whether the issue is confirmed within 30, and a released fix, or a
+  published advisory with a workaround, within 90.
+- **Session verdicts, off by default (`orunmila install --with-judge`, or
+  `ORUNMILA_JUDGE_LIVE=1` where the intake starts; `--without-judge` turns it
+  off).** The switch also turns on the record the judge reads, a baseline at each
+  session's start and the session's odù log (`ORUNMILA_OPON_LIVE`, on with the
+  judge unless set to `0`). At each
+  session's closeout the intake judges every event of its record with fixed
+  rules, no model: **Clean**, **Look at this** or **Violation**, each citing its
+  rule and the marks behind it, and the session as a whole, **Incomplete**
+  whenever evidence was lost. They go to a third hash-chained log,
+  `verdict.jsonl`, which `orunmila verify` checks. The rules are
+  `.orunmila/rules`, copied into the session's header at its start; the rules
+  that guard the record cannot be switched off. `orunmila report --verdicts
+  --session ID [--html FILE] [--json]` gives the session report (one offline
+  page with `--html`); `orunmila judge --session ID [--rules FILE]` judges again,
+  the new verdicts superseding the old, none edited. The law gate's results are
+  part of the record: each turn it blocked is a finding, and the session's skip
+  rate over 2% another. A session that goes quiet for 30 minutes without ending
+  is closed out before the intake lets it go. `ORUNMILA_FEEDBACK_FROM_VERDICTS=1`
+  gives the agent the same findings through `orunmila json`.
+- **A tamper-evident log, on by default (`ORUNMILA_LOG_GUARD=0` turns it off).** Every log of
+  a session (raw, quarantine, odù, verdict) is watched against Orunmila's own
+  copy: a change it did not make (an append, a cut, an edit, a delete or move) is
+  recorded with the text removed and added, the log is put back, and `verify`
+  names each one.
+- **A stop no one asked for is recorded.** `orunmila intake stop` now asks over
+  the intake's own socket; a stop signal without that ask is recorded in every
+  open session (judged Look at this: a logout sends the same signal) and the
+  intake exits so its launch agent starts it again, naming the stop in its gap.
+- **Large projects, off by default (`ORUNMILA_ASYNC_START=1`).** A new session's
+  baseline and the closeout's rescan run off the intake's thread; on a project of
+  100,000 files each took about 4 s on it, longer than the agent's hooks wait.
+- **Extra folders for the Sentinel, off by default (`ORUNMILA_WATCH_EXTRA`).**
+- **`orunmila status` names any hook whose script is missing** (a package
+  cache that was cleared) and exits 1.
+- **Edit verbs for the claim reader, off by default (`ORUNMILA_EDIT_VERBS=1`):**
+  "I edited X", "modified", "rewrote" and "patched" are read as claims of
+  changed work.
+- **Git, pull-request and CI state in the intake's record, on by default
+  (`ORUNMILA_VCS_MARKS=0` turns it off).** A `git` or `gh` command's output (its branch and
+  commit, each pull request and its state, each set of checks) goes on that
+  command's mark in the session's log, as the event log has always kept it.
+- **What a command's own text says, on by default (`ORUNMILA_COMMAND_FACTS=0` turns it off).**
+  Each command's mark in the intake's record names the hosts its command line
+  names (`detail.hosts`) and whether a step of it asked for administrator rights
+  (`detail.elevated`: `sudo`, `doas`, `su`, `pkexec`, `runas`, `gsudo`); the
+  session report names those commands and hosts as plain lines, never a verdict.
+  The agent's testimony: a host named is not a host reached. A test run's mark also
+  carries its runner's own pass, fail and skip counts (`detail.test_counts`: node:test,
+  jest, vitest, mocha, pytest, go, cargo), and the report names them, so "all tests
+  pass" beside a skipped test shows. An install command's mark names what npm's
+  lock file gained, changed and lost across it (`detail.packages`), each package
+  with its version and whether it runs an install script; another manager's lock
+  file is named as not read. Where the closeout runs, a tripwire fingerprints the
+  files outside the watched folders that run code as you (shell start-up files,
+  git and ssh config, `authorized_keys`, `~/.npmrc`, the agents' user hook
+  settings, the start-up folders of each OS) at session start (the header's
+  `tripwire`) and at the closeout, which names each that changed by path only.
+  The closeout also checks the record against the agent's own transcript and
+  names each tool call with no mark (`detail.completeness`).
+- **A claim that quotes its run's count, off by default (`ORUNMILA_RUNNER_CLAIMS=1`).**
+  "`npm test` passed (`1 test passed`)" and "Ran `npm test`: **1 test passed**" are read
+  as test claims, for the gate and the judge, for every agent (F40). With
+  `ORUNMILA_EDIT_VERBS=1`, "wired" is a work verb too.
+- **The Closeout Gate in Cursor (`orunmila install --agent cursor --with-gate`).**
+  Two hooks: `afterAgentResponse` keeps the turn's text, and `stop` waits for that
+  same response's text (Cursor fires both at once), judges the turn with the same
+  laws as Claude Code's gate, and answers a block as a follow-up message, which
+  Cursor submits as the next user message (`loop_limit` 2, the gate's block
+  budget). Advice is not shown in Cursor, whose stop hook takes nothing else; it
+  stays in the gate's record. Run in a real session of Cursor's command-line agent:
+  "All tests pass." with no run behind it was blocked, and the agent then ran the
+  tests and answered with their output.
+- **`status`, `lenses` and `watch` read the folder's own agent (F24, F41).** In a
+  Cursor project they read `.cursor/hooks.json`: `status` no longer says the
+  Stain Map is off there, names a Cursor hook whose script is gone, and `watch`
+  no longer tells a Cursor user to work in Claude Code.
+- **A limit on a flooded Sentinel, off by default
+  (`ORUNMILA_SENTINEL_MAX_PENDING=N`).** Past N changed paths waiting at once
+  under one folder, the rest of the flood is dropped and one gap in each
+  session's record says so; the closeout's rescan finds what changed.
+
+### Changed
+
+- **The hooks no longer name the copy that ran `install`.** `orunmila install`
+  keeps a copy of the package in Orunmila's home
+  (`~/.orunmila/runtime/<version>_<fingerprint>/`, the current one named in
+  `~/.orunmila/runtime/current`), and every hook it writes runs that copy
+  through one fixed starter, `~/.orunmila/bin/orunmila-start.js`. A hook
+  installed through `npx` or `pnpm dlx` used to name a file in that tool's
+  cache, and recorded nothing once the cache was cleared. `orunmila status`
+  follows the starter to the script it runs and names one that is missing.
+  Each hook takes about 20 ms longer (one more Node start). Installing again
+  over hooks that already run the starter is an upgrade: the new copy becomes
+  current and no hook is added. Hooks an earlier version wrote, which name the
+  installed package's own files, are an upgrade too: after `npm install -g
+  orunmila`, `orunmila install` moves each of them onto the starter in place
+  (its event, matcher and arguments kept) and adds none. Hooks that name a
+  different copy of Orunmila are still refused, named, and left untouched.
+- **The trail page says what it checked.** With no checked turn, the header,
+  the file list, the Report tab, the Dashboard and the claim-vs-record section
+  say "Not checked"; before, the page read "looks clean". Turns checked with no
+  checkable claim say so. Undisclosed changes make the header "Worth a look".
+- **Calmer, one palette, no emoji.** One set of outcome colours across the
+  page (the header and the tabs used two), no glow on every dot, and plain
+  symbols in place of emoji, which drew differently by operating system.
+- **Neutral words.** The Glossary and the copy-paste prompt ask for evidence or
+  a fix instead of calling a claim a fabrication; the dropped-ask finding is
+  marked as often wrong; the Glossary no longer describes scores the page
+  does not show.
+- **"Flagged" stays flagged.** It adds linked things only while they stay few;
+  on a dense session it showed nearly everything.
+- **The judge's report groups repeated findings** with their count (the JSON
+  for the agent keeps every one).
+- **Nothing Orunmila ships calls an AI service, and its one internet call is
+  `orunmila update`'s** (above). The trail
+  page's 3D graph, which loaded a library from a CDN, is gone (its 2D graph and
+  the other tabs need no network); the model benchmark runner left the package
+  (it stays in the repository as `scripts/bench.js`), and the dashboard's
+  benchmark section with it. A test reads every shipped file and fails on an
+  outgoing network call, a CDN or an AI service.
+- **`orunmila html` says that `orunmila report --verdicts --html` replaces it.**
+  It still works for this release.
+- **The spec says what Orunmila writes wherever a writer had to choose.** Every
+  field of `spec/` whose content or order its schema leaves open was listed by a
+  script from the schemas and checked against the text; 47 descriptions and
+  three lines of `spec/README.md` now say what Orunmila writes there (the
+  turn's `t1`, `t2` ids, which marks carry `cause_hint` and `agent`, how an
+  excerpt is cut, what a quarantined input's `received` holds, what the quiet
+  window, ceiling and lag grace are, each sorted list's order). No format
+  changed.
+- **The launch agent keeps every intake switch** that was set when it was
+  installed (the judge's, the guard's, the extra folders, the off-thread start),
+  not only the live flag.
+
+### Fixed
+
+- **`orunmila install --with-judge` alone judged nothing.** The judge reads a
+  session's odù log, which the intake wrote only with `ORUNMILA_OPON_LIVE=1`,
+  and no page said so: a session judged with the switch on had no verdict and
+  `report --verdicts` refused it. The odù log now comes on with the judge
+  (`ORUNMILA_OPON_LIVE=1` or `0` still decides where set, and with `0` the
+  intake says at its start that the judge has nothing to judge).
+- **One session, one set of words on the pages.** The dashboard called a
+  session "70% Trustworthy" in green while the trail page said "Untracked
+  writes: investigate" and the judge "Violation". The dashboard's card now uses
+  the trail page's header words and colours, both pages give the judge's
+  verdict from the verdict log with why it can differ from the header (or say
+  "Not judged"), and the score's tooltip says what it scores (dropped parts of
+  the request are not scored; it said they score 0). The dashboard no longer
+  says Orunmila "checks every claim", and marks the dropped-part check as often
+  wrong. The Dashboard tab calls an unflagged thing "nothing flagged", not
+  "clean", and the Glossary defines the Glove, the Sentinel, both witnesses, an
+  odù and the judge's verdicts.
+- **A session only in the intake's record no longer reads as empty.** With the
+  old event log holding nothing for a session, `trail`, `trail --json`, `html`
+  and `json` exited 0 with no turn and no touch. They now read the session log
+  (`json` gives the verdicts' feedback: schema 1.0, fewer fields on each claim,
+  `docs/SCHEMA.md`) and say so; `status` counts the session logs; `report`,
+  `stats`, `feedback` and `laws --check` name the command that reads them.
+  A session the old log has is answered exactly as before.
+- **The docs said things the tool no longer does.** Every document in the
+  repository was read against the tool: the measurement write-up said "MIT
+  licensed", that the CLI makes no outbound request and that the 3D tab loads a
+  library from a CDN, and quoted a retired precision figure as current; the
+  benchmark and corpus pages ran `bin/bench.js` (it is `scripts/bench.js`, and
+  Cursor and Antigravity cannot be driven by it); SECURITY.md said "pre-1.0";
+  the skills page priced three free skills; the guide said `install` refuses an
+  earlier version's hooks (it moves them onto the starter) and left out
+  `ORUNMILA_OPON_LIVE`; the spec still named a "separate-user setup in Phase 5",
+  which output 1 does not have. Each now says what the tool does.
+- **A session report no longer quotes a whole command.** A finding about the
+  agent reading Orunmila's record quoted each command whole, so one heredoc
+  could fill the report with tens of lines. It now quotes the first line, at
+  most 120 characters, and marks the cut; the record keeps every command whole.
+- **`orunmila watch` no longer stops about 1.5 seconds after it starts.** On
+  its first check for new reports it took the disk watcher's records, which
+  belong to no session, for a session, and crashed. Any record of a change
+  on disk was enough, and `watch` starts that watcher itself. A report it
+  finds half-written, as the Stop hook is still writing it, is named once and
+  read again on the next check, instead of ending the command.
+- **Five faults Windows showed, fixed.** A claim naming a file with a drive
+  letter (`C:/proj/src/a.ts`) lost the drive, so a backed claim read as a
+  phantom; a path written with `\` is still read as its file name. On Windows
+  every hook payload sent over HTTP was recorded as tampering, since the
+  sender was found with tools Windows does not have (`netstat` and `tasklist`
+  now). Replay could credit a change on Windows to a session it had lost. After
+  a restart, a change to Orunmila's own code outside the project was recorded
+  twice. A program squatting on the intake's pipe was written as "taken back"
+  before the start failed.
+- **The session report's law-gate line on a record an older intake wrote.** It
+  said "0 turns checked" when the record holds the gate's checks but not yet
+  their results in each event; it now counts them from the record.
+- **SECURITY.md no longer describes network use the package does not have.**
+  It said the report's 3D Graph tab loaded a script from a CDN and named a
+  `bin/bench.js`; neither exists. It now says the pages Orunmila renders load
+  nothing from the network, and that the benchmark runner `scripts/bench.js`,
+  which can call AI models, is not in the npm package.
+- **The file bars in "Files worth a look" draw.** Their fill was an inline
+  element, so its width did nothing and no bar ever showed.
+- **A secret used as an object key no longer reaches the event log.** Capture
+  redacted every string value in an event but copied object keys as written,
+  so a tool input such as `{"<token>": "v"}` stored the token. A key is now
+  redacted as a string is and the kind it held is listed in `redactions`. A
+  redacted key whose name is already taken is named `[REDACTED#2]`, `#3` and
+  so on, so no value is overwritten. A log written before this fix can still
+  hold such a key: `orunmila log redact` removes it.
 
 ## [0.2.4] — 2026-11-23
 
@@ -495,10 +937,8 @@ renders the result as a colored map of the codebase.
 - Zero runtime dependencies; no network calls by the tool itself; no account
   or API key. Everything stays local in `~/.orunmila/`.
 
-[Unreleased]: https://github.com/kalkudiary-ai/orunmila/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/kalkudiary-ai/orunmila/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/kalkudiary-ai/orunmila/compare/v0.2.4...v1.0.0
 [0.2.4]: https://github.com/kalkudiary-ai/orunmila/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/kalkudiary-ai/orunmila/compare/v0.2.2...v0.2.3
-[0.2.2]: https://github.com/kalkudiary-ai/orunmila/compare/v0.2.1...v0.2.2
-[0.2.1]: https://github.com/kalkudiary-ai/orunmila/compare/v0.2.0...v0.2.1
-[0.2.0]: https://github.com/kalkudiary-ai/orunmila/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/kalkudiary-ai/orunmila/releases/tag/v0.1.0
+[0.2.2]: https://github.com/kalkudiary-ai/orunmila/releases/tag/v0.2.2

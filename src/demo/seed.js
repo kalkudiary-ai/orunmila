@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 KALKU DIGITAL SOLUTIONS LIMITED
 'use strict';
 
 /**
@@ -14,14 +16,17 @@
  * The scripted session deliberately exercises one of each interesting outcome so
  * the screenshot/demo shows the full surface:
  *   - verified        (claimed an edit, the diff has real logic)
- *   - partial         (claimed an implementation, the diff is a trivial stub)
+ *   - partial         (claimed an implementation, the diff is a trivial stub: src/retry.js)
  *   - phantom         (claimed a file change with zero matching tool call)
  *   - phantom_verification (claimed "tested and passing" with no passing command)
+ *   - unverifiable    (a work claim naming nothing to check: "I fixed it.")
  *   - silently_dropped (the prompt asked for something never mentioned again)
  *   - undisclosed     (edited a file no claim/ask covers — scope creep)
  *   - untracked_write (the sentinel saw a disk write the hooks never announced)
  * plus every trail channel: read (with hash), write, command, network, disk, and
- * a sub-agent (Task) touch.
+ * a sub-agent (Task) touch; and each agent edit seen by both witnesses, as a real
+ * session records it (DM1, F36). Not shown: the judge's verdicts, which need the
+ * intake's record (the trail page then says "Not judged").
  *
  * It writes into whatever ORUNMILA_HOME points at, so the caller isolates it in a
  * temp dir and never pollutes the user's real ~/.orunmila log.
@@ -36,7 +41,7 @@ const SESSION = 'demo-session';
 
 // Monotonic clock so events sort in scripted order and each turn gets a clean,
 // non-overlapping time window (the sentinel/turn correlation is time-based).
-let clock = Date.parse('2025-01-15T10:00:00.000Z');
+let clock = Date.parse('2026-11-20T10:00:00.000Z'); // DM1: a date after Orunmila existed
 function ts() {
   clock += 1000; // one second between events — readable, deterministic
   return new Date(clock).toISOString();
@@ -50,6 +55,12 @@ function hashOf(text) {
 // fresh monotonic ts so ordering and per-turn windows are deterministic.
 function emit(turnId, event) {
   return eventlog.append(Object.assign({ session_id: SESSION, turn_id: turnId, ts: ts() }, event));
+}
+
+// DM1: the Sentinel's own row for an edit the agent made, as a real session records it, so the page shows a change
+// both witnesses saw beside the one only the Sentinel saw.
+function sentinelSaw(path, diff) {
+  return eventlog.append({ session_id: SESSION, turn_id: null, ts: ts(), type: TYPES.FILE_WRITE, agent: 'fs-sentinel', source: 'fs-sentinel', path, rel_path: path, diff });
 }
 
 // ---- the scripted turns ----------------------------------------------------
@@ -69,6 +80,7 @@ function turn1() {
     path: 'src/math.js', call_id: 'c2',
     diff: '--- a/src/math.js\n+++ b/src/math.js\n@@\n+export function add(a, b) {\n+  const sum = a + b;\n+  return sum;\n+}\n',
   });
+  sentinelSaw('src/math.js', '--- a/src/math.js\n+++ b/src/math.js\n@@\n+export function add(a, b) {\n+  const sum = a + b;\n+  return sum;\n+}\n');
   emit(t, {
     type: TYPES.COMMAND_RUN, agent: 'claude-code', source: 'hook', tool_name: 'Bash',
     command: 'node --test test/math.test.js', exit_code: 0, call_id: 'c3',
@@ -96,7 +108,7 @@ function turn2() {
   emit(t, {
     type: TYPES.TURN_CLAIM,
     text:
-      'I added input validation to src/handler.js. The tests now pass and the feature is verified working.',
+      'I added input validation to src/handler.js. The tests now pass and the feature is verified working. I fixed it.',
   });
   emit(t, { type: TYPES.TURN_END });
 }
@@ -123,6 +135,14 @@ function turn3() {
     diff:
       '--- a/src/server.js\n+++ b/src/server.js\n@@\n+const { TIMEOUT } = require("./config");\n+server.setTimeout(TIMEOUT);\n',
   });
+  sentinelSaw('src/server.js', '--- a/src/server.js\n+++ b/src/server.js\n@@\n+const { TIMEOUT } = require("./config");\n+server.setTimeout(TIMEOUT);\n');
+  // DM1: a claimed implementation whose change is a stub (-> partial).
+  emit(t, {
+    type: TYPES.FILE_WRITE, agent: 'claude-code', source: 'hook', tool_name: 'Write',
+    path: 'src/retry.js', call_id: 'd6',
+    diff: '--- a/src/retry.js\n+++ b/src/retry.js\n@@\n+// TODO: retry with backoff\n+export function retry() {}\n',
+  });
+  sentinelSaw('src/retry.js', '--- a/src/retry.js\n+++ b/src/retry.js\n@@\n+// TODO: retry with backoff\n+export function retry() {}\n');
   // A sub-agent (Task / Explore) touch — attributed to the sub-agent in the trail.
   emit(t, {
     type: TYPES.FILE_READ, agent: 'claude-code', source: 'hook', tool_name: 'Read',
@@ -135,6 +155,7 @@ function turn3() {
     path: 'src/telemetry.js', call_id: 'd5',
     diff: '--- a/src/telemetry.js\n+++ b/src/telemetry.js\n@@\n+track("server_start");\n',
   });
+  sentinelSaw('src/telemetry.js', '--- a/src/telemetry.js\n+++ b/src/telemetry.js\n@@\n+track("server_start");\n');
   // The Filesystem Sentinel, a SEPARATE observer, sees a write to a file the
   // hook stream never mentioned this turn. turn_id:null (the sentinel can't see
   // turn ids); reconcile folds it in by timestamp, so this MUST land inside the
@@ -149,7 +170,7 @@ function turn3() {
 
   emit(t, {
     type: TYPES.TURN_CLAIM,
-    text: 'I wired src/server.js to use the config timeout (referenced the Node http docs).',
+    text: 'I wired src/server.js to use the config timeout (referenced the Node http docs). I implemented retry with backoff in src/retry.js.',
   });
   emit(t, { type: TYPES.TURN_END });
 }

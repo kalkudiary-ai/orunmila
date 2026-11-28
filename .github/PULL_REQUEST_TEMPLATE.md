@@ -25,6 +25,7 @@
 ## Checklist
 
 - [ ] New behaviour has a test (and a labelled fixture if it changes a verdict).
-- [ ] No new runtime dependency; no network call by the tool itself.
+- [ ] No new runtime dependency; no new network call (the update check is the only one).
 - [ ] Any new heuristic is labelled as one where the user can see it.
+- [ ] What differs on Windows, Linux and macOS is said.
 - [ ] `CHANGELOG.md` has an `Unreleased` entry describing the change.

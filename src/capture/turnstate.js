@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 KALKU DIGITAL SOLUTIONS LIMITED
 'use strict';
 
 /**
@@ -177,4 +179,9 @@ function bumpTurn(sessionId, { countPrompt = true } = {}) {
   return writeState(sessionId, { turn, closed: false, prompt: state.prompt + (countPrompt ? 1 : 0) }).turn;
 }
 
-module.exports = { currentTurn, bumpTurn, turnId, promptId, writeTurnId, closeTurn, advanceIfClosed, stopKey, stopTurnId };
+/** CU1: whether the session's turn is not closed by a stop (true too before any turn record: tools alone write none). */
+function isTurnOpen(sessionId) {
+  return !readState(sessionId).closed;
+}
+
+module.exports = { currentTurn, bumpTurn, turnId, promptId, writeTurnId, closeTurn, advanceIfClosed, stopKey, stopTurnId, isTurnOpen };

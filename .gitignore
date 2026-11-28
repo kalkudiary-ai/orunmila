@@ -17,3 +17,6 @@ report.html
 
 # Local Claude Code editor state (machine-specific)
 .claude/settings.local.json
+
+# TURBO run state: the plan, the queue for O, O's inbox, run logs (LD108)
+.turbo/

@@ -1,0 +1,296 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 KALKU DIGITAL SOLUTIONS LIMITED
+'use strict';
+
+/**
+ * src/opon/intake/engine.js — the intake's core (brief v4 lines 343, 360;
+ * design D-I 4.3; Phase 1 slice B1). Built unwired before the 0.2.3 cut: no
+ * socket, timer or file of its own. The caller gives it a clock and a session
+ * log per session (src/opon/ledger/session-log.js), sends it marks that an
+ * adapter has already translated, and calls poll() on a timer.
+ *
+ *   createIntake({ openLog, clock, checkSender, tickMs = 500, resumes = false })
+ *     resumes             LD286: a Glove prompt after the session's end resumes it (LD249): it ticks again
+ *     checkSender(pid, mark)  required: whether a session's first HTTP sender
+ *                         runs the agent's own program (LD58; the wiring reads it)
+ *     openLog(sessionId)  the session's log ({ append }), opened on its first mark
+ *     clock()             { mono: '<decimal ns>', wall: '<ISO time>' }, the intake's
+ *                         own time of arrival
+ *   intake.receive(mark, { channel, pid }, files = [])
+ *                         `files` are the files kept with the mark (an
+ *                         adapter's keep list, [{ slot, text }]), passed to the
+ *                         log's append with it (LD59, LD124).
+ *                         Routes the mark to its session's log, by its
+ *                         session_id; a mark with no mono_ns is stamped with the
+ *                         arrival time and says so (detail.stamped_by, line 238).
+ *                         Glove marks (source hook or agent_claim) carry
+ *                         detail.channel, `http` or `command` (decision I-3). The
+ *                         first HTTP Glove payload with a pid pins the session to
+ *                         that process (NF49); a later one from another pid is
+ *                         written as a `tampered` mark (what: foreign_sender, both
+ *                         pids, the payload as text) and never as the session's
+ *                         own mark (decision I-2, test 82). The pinning mark
+ *                         carries detail.sender_pid, which only intake writes,
+ *                         so a restart re-pins from the record; a first sender
+ *                         checkSender refuses pins nothing and is tampered
+ *                         (LD58). Command-hook payloads
+ *                         never pin and are never refused by a pin: the agent can
+ *                         send them itself (NF48), which their label says.
+ *                         Returns the log's answer, or { ok: false, reason } when
+ *                         the mark names no session (nothing is written) or came
+ *                         from the wrong process.
+ *   intake.poll()         writes a `tick` (source process) to every session with
+ *                         no mark written for tickMs (line 360: the heartbeat
+ *                         ticks only while idle); returns how many it wrote
+ *   intake.resume([{ id, log }], { also }?)
+ *                         after a restart, before anything else: one gap per
+ *                         reopened session for the downtime (test 84; below),
+ *                         `also` added to its lost text (a squat, LD132);
+ *                         returns { gaps: [{ id, seq }], failed: [{ id, reason }],
+ *                         skipped: [{ id, reason }] } (sessions that ended)
+ *   intake.stop(reason, { first }?)
+ *                         a planned stop: a closing note in each session not
+ *                         yet ended (after first(id, now)'s mark, TE2), then nothing more (LD56); returns
+ *                         { notes: [{ id, seq }], failed: [{ id, reason }] }
+ *   intake.release(id, reason)
+ *                         stops holding one session (LD123): the same closing
+ *                         note in it, then no tick; the next mark for it opens
+ *                         its log again through openLog. Returns the log's
+ *                         answer, or { ok: false, reason } when it is not held
+ *   intake.held()         the ids of the sessions held, sorted
+ *
+ * Silence is measured on the intake's clock from the last mark written to the
+ * session (a tick included), not from a source's own mono_ns. The caller's mark
+ * is never changed.
+ */
+
+const TICK_MS = 500;
+const NS_PER_MS = 1000000n;
+const GLOVE_SOURCES = ['hook', 'agent_claim']; // the Glove's marks: the agent's own hooks and its claim
+const CHANNELS = ['http', 'command']; // detail.channel (decision I-3)
+const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+
+function createIntake({ openLog, clock, checkSender, tickMs = TICK_MS, resumes = false }) {
+  if (typeof checkSender !== 'function') throw new Error("createIntake needs checkSender(pid, mark): whether a session's first HTTP sender runs the agent's own program (LD58)");
+  const sessions = new Map(); // session id -> { log, last: bigint mono of the last mark written }
+  const quiet = BigInt(tickMs) * NS_PER_MS;
+  let stopped = false;
+
+  function write(s, m, now, files = []) {
+    const r = s.log.append(m, files);
+    if (r.ok) s.last = BigInt(now.mono);
+    return r;
+  }
+
+  /**
+   * A payload from the wrong process, recorded as tampered and never as the
+   * session's mark (I-2): another process than the pinned one, or, at first
+   * contact, one the sender check refused (LD58: no pinned_pid then).
+   */
+  function foreign(s, id, m, pid, now) {
+    const detail = { what: 'foreign_sender', received: JSON.stringify(m) };
+    if (pid !== null) detail.sender_pid = pid; // an HTTP sender not named by the lookup has none (LD139)
+    if (s.pin !== null) detail.pinned_pid = s.pin;
+    const t = {
+      schema_version: 1,
+      session_id: id,
+      source: 'process',
+      agent: null,
+      turn: null,
+      sub_agent: null,
+      observed_at: now.wall,
+      mono_ns: now.mono,
+      target: { kind: 'process' },
+      says: 'tampered',
+      detail,
+      cause_hint: null,
+    };
+    const r = write(s, t, now);
+    return {
+      ok: false,
+      reason:
+        s.pin !== null
+          ? `a payload for session ${id} came from another process (pid ${pid}; the session is pinned to pid ${s.pin}): recorded as tampered, not as the session's mark`
+          : `a payload for session ${id} came from pid ${pid}, which the sender check says is not running the agent's own program: recorded as tampered, and nothing is pinned`,
+      tampered: r.ok ? r.seq : null,
+      ...(r.ok ? {} : { refused: (r.reasons || [r.reason]).join('; ') }),
+    };
+  }
+
+  function receive(input, from = {}, files = []) {
+    if (stopped) return { ok: false, reason: 'intake has stopped: nothing more is written until it restarts, and the restart gap covers this mark' };
+    const m = JSON.parse(JSON.stringify(input));
+    const id = m && m.session_id;
+    if (typeof id !== 'string' || !id) return { ok: false, reason: 'the mark names no session, so it cannot be routed to a log' };
+    const now = clock();
+    let s = sessions.get(id);
+    if (!s) {
+      const log = openLog(id);
+      // A log held again after a release keeps its pin, from the record (LD58, LD123).
+      s = { log, last: BigInt(now.mono), pin: typeof log.pin === 'function' ? log.pin() : null, ended: typeof log.ended === 'function' && log.ended() };
+      sessions.set(id, s);
+    }
+    const glove = GLOVE_SOURCES.includes(m.source);
+    const pid = Number.isInteger(from.pid) ? from.pid : null;
+    let pins = false;
+    if (glove && from.channel === 'http' && pid !== null) {
+      // Pinned at first contact (NF49): only HTTP payloads carry a sender the agent cannot choose,
+      // and only a sender running the agent's own program may pin (LD58).
+      if (s.pin === null) {
+        if (!checkSender(pid, m)) return foreign(s, id, m, pid, now);
+        s.pin = pid;
+        pins = true;
+      } else if (s.pin !== pid) return foreign(s, id, m, pid, now);
+    } else if (glove && from.channel === 'http' && pid === null && s.pin !== null) {
+      // An HTTP sender that could not be named is not the pinned process as far as the record can show (LD139).
+      return foreign(s, id, m, null, now);
+    }
+    if (glove && isObject(m.detail) && 'sender_pid' in m.detail) {
+      // Only intake writes sender_pid on a Glove mark (LD58).
+      m.detail = { ...m.detail };
+      delete m.detail.sender_pid;
+    }
+    if (glove && CHANNELS.includes(from.channel) && isObject(m.detail)) m.detail = { ...m.detail, channel: from.channel };
+    if (pins && isObject(m.detail)) m.detail = { ...m.detail, sender_pid: pid }; // the pin, kept in the record (LD58)
+    if (m.mono_ns === undefined) {
+      m.mono_ns = now.mono;
+      if (isObject(m.detail)) m.detail = { ...m.detail, stamped_by: 'intake' };
+    }
+    const r = write(s, m, now, files);
+    if (r.ok && m.says === 'ended' && isObject(m.target) && m.target.kind === 'session') s.ended = true;
+    // LD286, with `resumes` (the judge's flag): a new prompt from the Glove after the session's end resumes it (LD249), so
+    // it ticks again and gets its release note, like any held session.
+    if (r.ok && resumes && s.ended && glove && m.says === 'prompted') s.ended = false;
+    return r;
+  }
+
+  /** The intake's closing note in one session (LD56, LD123): an exited mark on the intake process. */
+  function note(id, reason, now) {
+    return {
+      schema_version: 1,
+      session_id: id,
+      source: 'process',
+      agent: null,
+      turn: null,
+      sub_agent: null,
+      observed_at: now.wall,
+      mono_ns: now.mono,
+      target: { kind: 'process', name: 'intake' },
+      says: 'exited',
+      detail: { exit_status: 'pass', reason: String(reason) },
+      cause_hint: null,
+    };
+  }
+
+  function release(id, reason) {
+    const s = sessions.get(id);
+    if (!s) return { ok: false, reason: `session ${id} is not held` };
+    const now = clock();
+    const r = s.ended ? { ok: true, seq: null } : write(s, note(id, reason, now), now);
+    sessions.delete(id);
+    return r;
+  }
+
+  const held = () => [...sessions.keys()].sort();
+
+  function poll() {
+    if (stopped) return 0;
+    const now = clock();
+    let written = 0;
+    for (const [id, s] of sessions) {
+      if (s.ended) continue; // an ended session never ticks (LD55)
+      if (BigInt(now.mono) - s.last < quiet) continue;
+      const tick = {
+        schema_version: 1,
+        session_id: id,
+        source: 'process',
+        agent: null,
+        turn: null,
+        sub_agent: null,
+        observed_at: now.wall,
+        mono_ns: now.mono,
+        target: null,
+        says: 'tick',
+        detail: {},
+        cause_hint: null,
+      };
+      if (write(s, tick, now).ok) written++;
+    }
+    return written;
+  }
+
+  /**
+   * After a restart (test 84; design D-I 4.7). `entries` are the reopened logs
+   * (session-log.js openSessionLog) of the sessions the intake was serving.
+   * A session whose log holds its end mark is held but skipped: no gap, no
+   * tick, named in no gap (LD55). One gap goes into each of the others, from
+   * the latest record among all of them (the intake's last write: a tick when
+   * idle) to now, naming them all. It is
+   * written on every restart, however short: hooks never wait for intake, so
+   * anything sent meanwhile is lost. A reboot resets the monotonic clock, so a
+   * now below `since` is written too, flagged clock_reset. A gap a log refuses
+   * is reported in `failed`, never dropped.
+   */
+  function resume(entries, { also } = {}) {
+    if (sessions.size) throw new Error('resume comes first: this intake already holds sessions');
+    const ids = entries.map((e) => e.id);
+    if (new Set(ids).size !== ids.length) throw new Error('a session is resumed twice');
+    const out = { gaps: [], failed: [], skipped: [] };
+    if (!entries.length) return out;
+    const now = clock();
+    const since = entries.map((e) => e.log.last()).reduce((a, b) => (BigInt(b.mono_ns) > BigInt(a.mono_ns) ? b : a));
+    const live = entries.filter((e) => !e.log.ended());
+    const named = live.map((e) => e.id).sort();
+    for (const { id, log } of entries) {
+      const s = { log, last: BigInt(now.mono), pin: log.pin() }; // re-pinned from the record (LD58)
+      sessions.set(id, s);
+      if (log.ended()) {
+        // Held, so a late mark still lands in its log, but no gap and no tick (LD55).
+        s.ended = true;
+        out.skipped.push({ id, reason: 'the session ended' });
+        continue;
+      }
+      const detail = {
+        lost: `every mark sent to intake while it was not running, from ${since.observed_at} to ${now.wall}` + (also ? `; ${also}` : ''),
+        since: { mono_ns: since.mono_ns, observed_at: since.observed_at },
+        until: { mono_ns: now.mono, observed_at: now.wall },
+        sessions: named,
+      };
+      if (BigInt(now.mono) < BigInt(since.mono_ns)) detail.clock_reset = true;
+      const gap = { schema_version: 1, session_id: id, source: 'process', agent: null, turn: null, sub_agent: null, target: null, observed_at: now.wall, mono_ns: now.mono, says: 'gap', detail, cause_hint: null };
+      const r = write(s, gap, now);
+      if (r.ok) out.gaps.push({ id, seq: r.seq });
+      else out.failed.push({ id, reason: (r.reasons || [r.reason]).join('; ') });
+    }
+    return out;
+  }
+
+  /**
+   * A planned stop (LD56): one closing note in each session not yet ended,
+   * then nothing more is accepted or ticked. The next restart's gap starts
+   * at the note, the intake's last write. A second stop writes nothing.
+   * `first(id, now)` (TE2, LD283): a mark written before each note, the
+   * tampered mark of a stop no one asked for.
+   */
+  function stop(reason, { first } = {}) {
+    const out = { notes: [], failed: [] };
+    if (stopped) return out;
+    stopped = true;
+    const now = clock();
+    for (const [id, s] of sessions) {
+      if (s.ended) continue;
+      if (first) {
+        const t = write(s, first(id, now), now);
+        if (!t.ok) out.failed.push({ id, reason: (t.reasons || [t.reason]).join('; ') });
+      }
+      const r = write(s, note(id, reason, now), now);
+      if (r.ok) out.notes.push({ id, seq: r.seq });
+      else out.failed.push({ id, reason: (r.reasons || [r.reason]).join('; ') });
+    }
+    return out;
+  }
+
+  return { receive, poll, resume, stop, release, held };
+}
+
+module.exports = { createIntake, TICK_MS };

@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 KALKU DIGITAL SOLUTIONS LIMITED
 'use strict';
 
 /**
@@ -17,6 +19,13 @@
  *     Every failure path is silent.
  *
  * Kill switch: ORUNMILA_LAWS=off
+ *
+ * ORUNMILA_GATE_MARKS=1 (off by default; slice B5, LD146): the gate's decision
+ * is also sent to the intake as one payload, for a `law_gate` mark (test 61).
+ * The sender is loaded only then, so the flag off loads what it always did.
+ * `--marks` on the hook's command line does the same (BB5b, LD276): `install
+ * --intake` writes it, since an environment prefix on a hook command does not
+ * work in every shell a hook runs in (cmd.exe on Windows).
  */
 
 const { runGate } = require('../../laws/gate');
@@ -30,8 +39,15 @@ process.stdin.on('data', (c) => {
 process.stdin.on('end', () => {
   try {
     const payload = JSON.parse(raw || '{}');
-    const out = runGate(payload, getAdapter('claude-code'), { root: process.cwd() });
+    let check = null;
+    const marks = process.env.ORUNMILA_GATE_MARKS === '1' || process.argv.includes('--marks');
+    const out = runGate(payload, getAdapter('claude-code'), { root: process.cwd(), onCheck: marks ? (c) => (check = c) : undefined });
     if (out) process.stdout.write(JSON.stringify(out));
+    if (check) {
+      const p = { hook_event_name: 'OrunmilaLawCheck', session_id: payload.session_id, cwd: process.cwd(), check };
+      require('./gate-send').send(p, () => process.exit(0));
+      return;
+    }
   } catch {
     /* silent by contract — see the header */
   }

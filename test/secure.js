@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 KALKU DIGITAL SOLUTIONS LIMITED
 'use strict';
 
 /**
@@ -246,6 +248,12 @@ it('the limits table in SECURITY.md states the PEM bounds the code uses', () => 
   assert.ok(counts && counts.includes(`count word: ${COUNT_WORDS.join(', ')} |`), String(counts));
 });
 
+it('SECURITY.md says how fast a report is answered: 7, 30 and 90 days (brief line 742, LD164)', () => {
+  const doc = fs.readFileSync(path.join(__dirname, '..', 'SECURITY.md'), 'utf8');
+  const section = doc.slice(doc.indexOf('## Reporting a vulnerability'));
+  for (const promise of ['acknowledgement within 7 days', 'within 30 days', 'within 90 days']) assert.ok(section.includes(promise), `the reporting section does not promise "${promise}"`);
+});
+
 // Regression guard, not a test of this fix: it passes on every version so far.
 it('a complete JSON-escaped key (a service-account file) is removed whole and the JSON after it is kept', () => {
   const whole = redactString('"-----BEGIN PRIVATE KEY-----\\nMIIEvQ' + 'j'.repeat(58) + '\\n-----END PRIVATE KEY-----\\n", "x": 1');
@@ -325,6 +333,36 @@ it('redactEvent walks nested objects and records kinds, never values', () => {
 it('an event with nothing to redact gains no redactions field', () => {
   const ev = redactEvent({ type: 'command_run', command: 'npm test', exit_code: null });
   assert.strictEqual(ev.redactions, undefined);
+});
+
+// LD102 and LD103 in live capture (slice K2): a key is redacted as a string is,
+// and a clash is named [REDACTED#n], so no value is overwritten.
+it('K2: an object key is redacted, and a clash keeps every value', () => {
+  const a = SECRETS.github_token;
+  const b = 'ghp_' + 'z'.repeat(36);
+  const ev = redactEvent({ type: 'tool_call', input: { [a]: 'one', [b]: 'two', '[REDACTED:github_token]': 'plain', note: SECRETS.npm_token } });
+  const json = JSON.stringify(ev);
+  assert.ok(!json.includes(a) && !json.includes(b), json);
+  assert.deepStrictEqual(ev.input, { '[REDACTED#2]': 'one', '[REDACTED#3]': 'two', '[REDACTED:github_token]': 'plain', note: '[REDACTED:npm_token]' });
+  assert.deepStrictEqual(ev.redactions, ['github_token', 'npm_token']);
+  assert.deepStrictEqual(redactEvent({ type: 'tool_call', input: { [a]: 1 } }).redactions, ['github_token'], "a key's kind alone is noted");
+});
+
+it('K2: plain keys keep their names', () => {
+  const ev = { type: 'tool_call', input: { file_path: '/x/a.js', nested: { old_string: 'a', new_string: 'b' } } };
+  assert.deepStrictEqual(redactEvent(ev), ev);
+});
+
+it('K2: a secret held in a tool input key never reaches the log', () => {
+  const home = tmpHome();
+  const key = SECRETS.anthropic_key;
+  const payload = JSON.stringify({ session_id: 's-key', hook_event_name: 'PostToolUse', tool_name: 'mcp__kv__set', tool_use_id: 'toolu_key_1', tool_input: { [key]: 'v' }, tool_response: 'ok' });
+  const r = run(POST, { input: payload, env: { ORUNMILA_HOME: home } });
+  assert.strictEqual(r.status, 0, r.stderr);
+  const raw = fs.readFileSync(path.join(home, 'events.jsonl'), 'utf8');
+  assert.ok(raw.length > 0, 'nothing was recorded');
+  assert.ok(!raw.includes(key), 'a key holding a secret reached events.jsonl');
+  rmrf(home);
 });
 
 // --- redaction: end to end through a real hook ----------------------------------

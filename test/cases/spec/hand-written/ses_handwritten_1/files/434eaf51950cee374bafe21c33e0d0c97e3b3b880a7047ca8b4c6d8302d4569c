@@ -1,0 +1,6 @@
+--- a/src/app.py
++++ b/src/app.py
+@@ -1,2 +1,2 @@
+ def greet(name):
+-    return "Helo, " + name
++    return "Hello, " + name

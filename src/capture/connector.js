@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 KALKU DIGITAL SOLUTIONS LIMITED
 'use strict';
 
 /**
@@ -25,7 +27,7 @@
 const { runHook } = require('./core');
 const { getAdapter } = require('./agents');
 
-const VALID_PHASES = new Set(['prompt', 'preTool', 'postTool', 'stop']);
+const VALID_PHASES = new Set(['prompt', 'preTool', 'postTool', 'stop', 'sessionEnd']);
 
 function main() {
   const agentId = process.argv[2];

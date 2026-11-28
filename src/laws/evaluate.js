@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 KALKU DIGITAL SOLUTIONS LIMITED
 'use strict';
 
 /**
@@ -276,11 +278,17 @@ function covers(receiptText, target) {
   return hay.includes(needle);
 }
 
-/** 'full' | 'weak' | 'none' — the best receipt the turn holds for one target. */
+/**
+ * 'full' | 'weak' | 'none' — the best receipt the turn holds for one target.
+ * Receipts built from marks (src/opon/gate/receipts.js, B9) also grade a path
+ * by the folders listed or searched (`pathGrade`); the better of the two wins.
+ */
 function receiptStrength(target, receipts) {
   if (receipts.full.some((r) => covers(r.text, target))) return 'full';
+  const byPath = typeof receipts.pathGrade === 'function' && target.kind === 'path' ? receipts.pathGrade(target) : 'none';
+  if (byPath === 'full') return 'full';
   if (receipts.weak.some((r) => covers(r.text, target))) return 'weak';
-  return 'none';
+  return byPath;
 }
 
 function finding(law, assertion, detail) {
@@ -453,8 +461,8 @@ function lexicalHits(law, { claimText, promptText, turnEvents }) {
  *                                     a green claim; the caller reads the switch
  * @returns {{ findings: object[], blocking: object[], assertions: object[] }}
  */
-function evaluateTurn({ claimText = '', promptText = '', turnEvents = [], laws = [], strictProof = false } = {}) {
-  const receipts = buildReceipts(turnEvents);
+function evaluateTurn({ claimText = '', promptText = '', turnEvents = [], laws = [], strictProof = false, receipts: given = null, claimsBlock = false } = {}) {
+  const receipts = given || buildReceipts(turnEvents); // from marks with ORUNMILA_GATE_FROM_MARKS=1 (B9)
   const assertions = extractAssertions(claimText);
   const proof = strictProof ? proofOfPass(turnEvents) : null;
   const findings = [];
@@ -477,6 +485,28 @@ function evaluateTurn({ claimText = '', promptText = '', turnEvents = [], laws =
     }
   }
 
+  // MR1 (LD319; brief line 443; spec/claims-block.md): with ORUNMILA_CLAIMS_BLOCK=1 the caller passes claimsBlock, and
+  // each `proved:` line of the agent's claims block is checked exactly: the declared command must be one step of a run
+  // in the turn that passed with an exit status that means what it says. A miss is the green law's own finding, at its
+  // severity. Prose claims were read above as before: the block adds, it replaces nothing.
+  // Loaded only with the switch on, so with it off the hooks load no new code (Leopard rule 2; hook-reach unchanged).
+  const { parseClaimsBlock, provedBy, mentions } = claimsBlock ? require('../reconcile/claims-block') : {};
+  const block = claimsBlock ? parseClaimsBlock(claimText) : null;
+  const green = block && laws.find((l) => l.enabled && l.rule === 'verification_without_command');
+  for (const cmd of green ? block.proved : []) {
+    if (provedBy(cmd, receipts.passingCommands)) continue;
+    const named = (c) => mentions(cmd, c);
+    findings.push(
+      finding(green, { text: `proved: ${cmd}`, targets: [] }, {
+        declared_command: cmd,
+        passing_commands: receipts.passingCommands.length,
+        failed_commands: receipts.failedCommands.filter(named).map((c) => `exit ${c.exit_code}: ${c.command}`),
+        exit_code_laundered_by_pipe: receipts.unreliableCommands.filter(named).map((c) => c.command),
+        exit_code_laundered_by_or: receipts.passingCommands.filter((c) => named(c) && String(c.command).includes('||')).map((c) => c.command),
+      }),
+    );
+  }
+
   return {
     findings,
     blocking: findings.filter((f) => f.severity === 'block'),
@@ -491,4 +521,4 @@ function evaluateTurn({ claimText = '', promptText = '', turnEvents = [], laws =
   };
 }
 
-module.exports = { evaluateTurn, buildReceipts, receiptStrength, readStrength, covers, hasUnguardedPipe, RULES, SHELL_PATTERN_RE };
+module.exports = { evaluateTurn, buildReceipts, receiptStrength, readStrength, covers, hasUnguardedPipe, classifyShellLine, RULES, SHELL_PATTERN_RE };

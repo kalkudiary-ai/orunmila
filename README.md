@@ -1,6 +1,6 @@
 # orunmila — *The Diviner*
 
-> Did your AI coding agent actually do what it said? Orunmila — named after the Yoruba *orisha* of wisdom and divination — reads the session and tells you the truth.
+> Did your AI coding agent actually do what it said? Orunmila — named after the Yoruba *orisha* of wisdom and divination — checks what the agent said against what two witnesses recorded.
 
 [![CI](https://github.com/kalkudiary-ai/orunmila/actions/workflows/ci.yml/badge.svg)](https://github.com/kalkudiary-ai/orunmila/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/orunmila.svg)](https://www.npmjs.com/package/orunmila)
@@ -9,14 +9,20 @@
 
 Agents narrate confidently regardless of what happened underneath. *"I added
 validation and tested it"* might mean exactly that, or a stub with a comment and
-no test ever run. Tool-call logs tell you a file changed; they don't check
-whether the agent's own account of the change was true.
+no test ever run.
 
-**Orunmila reconciles the agent's story against the evidence.**
-[**See a live report →**](https://kalkudiary-ai.github.io/orunmila/) — a real
-rendered session, no install required.
+**Orunmila checks the agent's account against two witnesses, side by side.**
+The **Glove** is the agent's own hooks: every file it read or changed, every
+command it ran with its exit code, every tool and web call. The **Sentinel**
+watches your project folder on disk, whoever changes it, so a change the agent
+never reported still shows. No AI model judges anything: every verdict is fixed
+code over the recorded facts, and it all runs on your machine.
 
-Here is that session at the terminal — one ordinary ask, one honest write, one
+[**See a live report →**](https://kalkudiary-ai.github.io/orunmila/) — a scripted
+session showing one of every claim outcome, rendered by the real renderer
+(`npx orunmila demo` makes the same page), no install required.
+
+And an ordinary session at the terminal — one ask, one honest write, one
 invented file, one unbacked "tests pass":
 
 ```
@@ -42,155 +48,121 @@ Summary: 1 verified, 0 partial, 1 phantom, 1 phantom-verification,
          0 unverifiable, 0 silently dropped, 0 undisclosed, 0 untracked writes
 ```
 
-100% free, Apache 2.0 licensed, runs entirely on your machine. No telemetry, no
-account, no API key required for the default mode.
-
-**One exception, stated up front because it is a privacy claim.** The `orunmila`
-CLI itself makes no outbound requests. The HTML report it generates has one tab
-— **3D Graph** — that fetches a `3d-force-graph` bundle from unpkg (falling back
-to jsdelivr) when a viewer opens it. Opening that tab therefore reveals the
-viewer's IP, and the fact that they opened a report, to a CDN. Every other tab
-is fully self-contained and works offline. Tracked as
-[P2-8](review/ISSUES.md).
+Free, Apache 2.0 licensed, no account, no API key, no telemetry. **No internet
+call does Orunmila's work.** The one call it makes asks the npm registry for a
+newer Orunmila, at most once a day after `orunmila install`, sending only the package's
+name (`orunmila install --without-updates` turns it off). Reports load nothing
+from the network, so opening or sharing one reveals nothing to a third party.
 
 ![Orunmila's report: what the agent claimed, against what it actually did](docs/images/stain-map.png)
 
 *One ordinary session. The agent wrote the validation, invented a test file, and said the tests passed. Ranked by severity, worst first.*
 
-![The fix-it prompt: findings turned into a message that sends the agent back](docs/images/fix-it-prompt.png)
+## Start here
 
-*Every finding becomes a prompt you paste straight back into the agent. It is not a diagnosis you then have to act on — it is the message that makes the agent act.*
-
-![Findings: phantom, phantom test, dropped, undisclosed, untracked write](docs/images/findings.png)
-
-## The two lenses
-
-Orunmila does two different jobs. They install separately, because which one you
-want is genuinely not predictable — some teams want the record, some want the
-refusal, and the ones who want both want to switch them on independently.
-
-|  | **The Stain Map** | **The Closeout Gate** |
-|---|---|---|
-| what it does | records + reports | **refuses** |
-| when | after each turn | before a turn is allowed to end |
-| can it stop the agent? | never | yes — 2 of its 6 laws block |
-| agents | all supported agents | `claude-code` only |
-| install | `orunmila install` | `orunmila install --with-gate` |
-| add to an existing install | — | `orunmila install --gate-only` |
-| turn off for one session | — | `ORUNMILA_LAWS=off` |
-| read it | `orunmila trail` | `orunmila laws` |
-
-```bash
-orunmila lenses        # the two side by side, and which you have installed right now
-```
-
-**The Stain Map** is the retrospective lens: it stains everything the agent
-touched, reconciles each claim against the evidence, and hands you a colour-coded
-map of where to look. It never refuses anything. Use it when you want to know
-what your agents are actually doing.
-
-**The Closeout Gate** is the preventive lens: it runs on the Stop hook and can
-refuse to let a turn end on a claim the turn's own evidence doesn't support. Use
-it when you want the agent to fix its own story before it hands work back.
-
-One dependency between them, stated plainly: the gate judges the events the
-Stain Map records, so the gate needs the Stain Map underneath it. The Stain Map
-is useful entirely on its own. `--gate-only` will tell you if you've installed a
-gate with nothing to judge rather than looking successful and sitting silent.
+| You want to | Go to |
+|---|---|
+| Start from nothing: what it is, ten minutes to a first report, what it stores, what it cannot see | [docs/START.md](docs/START.md) |
+| See a report before installing anything | [the live report](https://kalkudiary-ai.github.io/orunmila/), or `npx orunmila demo` |
+| Use it on your own agent | [Quickstart](#quickstart), below |
+| Know what it can and cannot tell you | [What it catches](#what-it-catches) and [What it cannot see](#what-it-cannot-see) |
+| Look up a command, a law, a switch or a number | [The guide](docs/GUIDE.md) |
+| Change the code | [CONTRIBUTING.md](CONTRIBUTING.md): a map of the system and your first hour |
 
 ## Quickstart
 
-Two install routes. **Both carry both lenses** — the route only changes how you
-get the code, never what you get.
-
-### From npm
+In the project you want to watch:
 
 ```bash
-npm install -g orunmila                  # or use npx and skip the global install
-orunmila install --with-gate             # both lenses
-orunmila trail                           # the report, after you've worked a session
+npm install -g orunmila          # or run each command below as: npx orunmila …
+orunmila install --with-gate     # record each session, and check claims before a turn ends
 ```
 
-With `npx` and nothing installed globally:
+Then **start a new session** of your agent there (hooks are read when a session
+starts) and work as usual. After each turn you get a short report. For the
+second witness, run the Sentinel in another terminal while you work:
 
 ```bash
-npx orunmila install --with-gate
-npx orunmila trail
+orunmila watch                   # each turn's report as it lands, and the Sentinel watching the folder
 ```
 
-### From a git clone
-
-Use this if you want to read the source, change the laws, or contribute. It is
-the same tool; the commands just run through `node bin/orunmila.js` instead of
-the `orunmila` binary.
+For the whole picture of a session:
 
 ```bash
-git clone https://github.com/kalkudiary-ai/orunmila.git
-cd orunmila
-node bin/orunmila.js install --with-gate   # run from the project you want to watch
-node bin/orunmila.js trail
+orunmila trail                   # one offline page: timeline, files, flowchart, 3D map, findings, and a prompt to paste back
 ```
 
-`npm test`, `npm run lint` and `npm run accuracy` all work from a clone with zero
-dependencies installed — the runtime has none, and the dev tooling is only
-`eslint`, `prettier` and `c8`.
+Claude Code is the default agent. `orunmila install --agent cursor --with-gate`
+gives Cursor the Stain Map and the Closeout Gate; `--agent` with the others
+`orunmila agents` lists gives them the Stain Map. How far each is supported:
 
-### Either route: picking your lenses
+| Agent | Support |
+|---|---|
+| Claude Code | Fully supported, tested on real sessions. |
+| Cursor | Supported, tested on real sessions in Cursor's command-line agent (test 49): the Stain Map, and the Closeout Gate, whose block arrives as an automatic follow-up message (advice is not shown). The editor's agent reads the same hooks file; not yet run there. |
+| Gemini CLI, Codex, Continue, Antigravity, Generic | Experimental: built, tested only with sample data; results may be wrong. |
+| Aider | Experimental, sentinel only (Aider has no hooks). |
+| Windsurf | No adapter exists. |
 
-```bash
-orunmila install                         # The Stain Map alone
-orunmila install --with-gate             # both lenses
-orunmila install --gate-only             # add the Closeout Gate to an existing install
-orunmila lenses                          # which do I have right now?
-```
+Other routes (pnpm, a project-only install, a git clone) and what an install
+leaves in `~/.orunmila/`: [Quickstart: every route](docs/GUIDE.md#quickstart-every-route).
 
-Hooks are read at session start, so **start a new session** in your project after
-installing. Work normally. You'll get a terminal stain report after each turn; if
-your setup doesn't surface hook stdout, run `orunmila watch` in a second
-terminal.
+## The three lenses
 
-Pick a different agent with `--agent`:
+|  | **The Stain Map** | **The Closeout Gate** | **The Babaláwo** |
+|---|---|---|---|
+| what it does | records + reports | **refuses** | judges each session's record |
+| when | after each turn | before a turn is allowed to end | at each session's closeout |
+| can it stop the agent? | never | yes — 2 of its 6 laws block | never |
+| agents | all supported agents | `claude-code` and `cursor` | `claude-code`, through the intake (a preview) |
+| install | `orunmila install` | `orunmila install --with-gate` | `orunmila install --intake`, then `orunmila install --with-judge` |
+| read it | `orunmila trail` | `orunmila laws` | `orunmila report --verdicts` |
 
-```bash
-orunmila install --agent cursor
-orunmila install --agent antigravity
-orunmila agents                          # everything supported, and where each config lives
-```
+The Closeout Gate judges what the Stain Map records, so it needs the Stain Map
+underneath it. `orunmila lenses` shows which you have.
+[The three lenses](docs/GUIDE.md#the-three-lenses) in the guide has the rest.
 
-Add the independent disk observer (the Filesystem Sentinel) — it catches writes
-that never went through a tool call, and is worth **+5.3 points** of measured
-detection accuracy:
+## What it catches
 
-```bash
-orunmila watch                           # report tailing + the sentinel
-orunmila watch-fs                        # the sentinel alone
-```
+| Outcome | Meaning |
+|---|---|
+| `verified` | claimed, and the diff/command backs it up |
+| `partial` | touched, but the diff is scaffolding only (comment/stub, no real logic) |
+| `phantom` | claimed, zero matching tool call anywhere in the turn - **never sent** |
+| `phantom_verification` | claimed "tested/works/verified" with no passing command behind it |
+| `unverifiable` | too hedged to check at all ("added some basic validation") |
+| `undisclosed` | a file changed that no claim and no part of the original ask covers |
+| `silently_dropped` | part of the original ask has no evidence **and** was never mentioned again. Often wrong: measured on one user's sessions it fired on about 1 turn in 3, mostly on pasted text, quotes or command output taken for a request. Treat it as a prompt to look |
+| `untracked_write` | the Sentinel saw a change land on disk that no tool call in the turn reported |
 
-## See it first (zero setup)
+Every finding is evidence, never a verdict on intent: a red stain means the
+receipt is missing, not that the agent lied. The Report tab of `orunmila trail`
+turns the findings into a message you paste back to the agent, asking for the
+evidence or a fix on each.
 
-Want to see what the report looks like before wiring it into your agent? One
-command renders a sample unified report from a scripted session — no install, no
-agent, nothing touched in your real log:
+## What it cannot see
 
-```bash
-node bin/orunmila.js demo        # writes orunmila-demo.html, open it in a browser
-```
+**Orunmila reports evidence, never intent.** A green stain means the receipt
+checks out, not that the code is correct. It narrows where you need to look; it
+does not replace the look. The edges to know first:
 
-The demo session is built to show one of *everything*: a verified edit, a
-phantom claim, a phantom "tested and passing", a silently-dropped ask, an
-undisclosed file, an untracked disk write the sentinel caught — plus the full
-trail (read→write lineage, a network fetch, a sub-agent touch). It's the **real
-renderer** fed scripted events, so the page is exactly what you'll get live.
+- The Closeout Gate runs for Claude Code and Cursor; in Cursor a block arrives as
+  a follow-up message and advice is not shown. Other agents get the Stain Map.
+- Claims are read by fixed rules over the agent's words, not by a model, so an
+  agent can word a claim the rules miss.
+- The Glove is the agent's own tools reporting on themselves. The Sentinel sees
+  that bytes changed, never who changed them, and nothing outside the folders it
+  watches.
+- With two agent sessions in one folder, the standalone Sentinel cannot tell
+  their changes apart; the intake's record can.
+- A command's exit 0 means it ran and passed, not that it tested the right thing.
+
+Every limit, and the known defects with their status:
+[What it cannot see](docs/GUIDE.md#what-it-cannot-see) in the guide,
+[`review/ISSUES.md`](review/ISSUES.md) (as of 2026-10-28), and the
+[changelog](CHANGELOG.md) for findings since.
 
 ## How accurate is it?
-
-Every number here comes from `npm run accuracy`, which scores the engine against
-a labelled corpus in `test/cases/`. Reproduce it yourself:
-
-```bash
-npm run accuracy          # the report
-npm run accuracy:gate     # the same, failing under 95% sentinel-ON accuracy
-```
 
 | Measure | Result | Source |
 |---|---|---|
@@ -202,455 +174,39 @@ npm run accuracy:gate     # the same, failing under 95% sentinel-ON accuracy
 | Release gate | publish refused under 95% detection accuracy | `prepublishOnly` in `package.json` |
 
 **Read that honestly: the labelled set is 17 turns and 38 assertions.** That is
-small. "100% on our labelled set" is the claim; "100% accurate" is not, and the
-difference matters.
-
-It matters more than usual here, because of what happened on 2026-10-28. The
-corpus was scoring a clean 100% while **three separate false-green paths were
-live** — a compound claim graded as one unit so a true half verified a false
-half, a double-extension filename matching the wrong file, and a one-word phrase
-target standing in for a named file nothing had touched. A single real captured
-session surfaced all three in minutes. Every fixture in the corpus had been
-written by the same hand that wrote the engine, so it only ever asked the
-questions that hand had thought of.
-
-All three are fixed and locked as corpus cases
-([`review/ISSUES.md`](review/ISSUES.md) P1-6, P1-7, P1-8). The lesson stayed:
-curated fixtures confirm what you already thought of, captured sessions find what
-you didn't. If you use this tool, `orunmila feedback` turns your own sessions
-into cases — that is the most valuable contribution this project can receive.
-
-### Measurements from real sessions, not fixtures
-
-| Finding | Number | Source |
-|---|---|---|
-| Turns judged across real sessions | 111 sessions / 796 claimed turns | `scripts/measure-laws.js`, re-run 2026-10-28 |
-| How often the evidentiary laws fire | 52% of claimed turns (414 / 796) | same |
-| The strictest blocking law | 13 turns (1.6%); of its 14 findings, 12 genuine | same |
-| Agent harness changes a model's score | same model, 47%–76% reliability depending on harness | [`bench-results/README.md`](bench-results/README.md) |
-
-These numbers were re-derived on 2026-10-28 and they replace an earlier set
-(*194 sessions / 1,174 turns, 18% firing rate, 8 blocks every one genuine*).
-Treat them as a different measurement, not a correction: the old run was taken
-from a different repo root, where project-level laws apply on top of the canon,
-over a larger corpus. What is **not** corpus-dependent is why the old precision
-figure can no longer be quoted — until 2026-10-28 the blocking law's receipt
-side was broken ([P0-5](review/ISSUES.md)), so it was judging against a receipt
-set in which 98.4% of all captured commands had been filed as failures.
-
-The full write-up of these measurements, with the methodology and the one run
-that was thrown away for being junk:
+small. "100% on our labelled set" is the claim; "100% accurate" is not. The
+measurements from real sessions, the three false-green defects they found in
+Orunmila itself, and how each figure was made:
+[How accurate is it?](docs/GUIDE.md#how-accurate-is-it) in the guide, and
 [**I measured how often AI coding agents claim work they didn't do**](docs/MEASURING_AGENT_CLAIMS.md).
 
-That last one is the finding most people don't expect: **the measurement
-framework moves the score more than the model does.** Aider's terse
-SEARCH/REPLACE output suppresses free narration and inflates reliability by
-10–20 points; Claude Code's scaffolding inflates pass rates with retries and
-pushes confident "tested and verified" language. 29 benchmarked runs across
-Claude Code, Aider, Gemini CLI and direct API are in `bench-results/`.
-
-## Why this exists
-
-Agents narrate confidently regardless of what actually happened underneath.
-"I added validation and tested it" might mean exactly that, or it might mean
-a stub with a comment and no test ever ran. Tool-call logs (agent hooks,
-Gryph, etc.) tell you *that* a file changed - they don't check whether the
-agent's own description of the change was accurate, whether a claimed test
-run actually happened and passed, or whether something got changed that was
-never mentioned at all.
-
-That gap is what orunmila fills. It's the layer on top of activity logging,
-not a replacement for it.
-
-## The Stain Map: what it catches
-
-Every claim the agent makes gets sorted into one of these, backed by actual
-evidence from the session, not vibes:
-
-| Outcome | Meaning |
-|---|---|
-| `verified` | claimed, and the diff/command backs it up |
-| `partial` | touched, but the diff is scaffolding only (comment/stub, no real logic) |
-| `phantom` | claimed, zero matching tool call anywhere in the turn - **never sent** |
-| `phantom_verification` | claimed "tested/works/verified" with no passing command behind it |
-| `unverifiable` | too hedged to check at all ("added some basic validation") |
-| `undisclosed` | a file changed that no claim and no part of the original ask covers |
-| `silently_dropped` | part of the original ask has no evidence **and** was never mentioned again |
-
-Each mismatch also gets soft, non-authoritative cause-hints
-(`vague-hedge`, `high-specificity-mismatch`, `error-in-context`) - signals a
-human can use to judge whether something looks like a shortcut or a
-confabulation. The tool deliberately never asserts which, because intent
-genuinely isn't observable from the outside. It only ever shows evidence.
-
-Reconciliation runs against **two** sources, not one:
-- the agent's own claim (catches lies/confabulation)
-- the *original user prompt*, independently (catches things the agent just
-  never mentioned again - the more common and harder-to-spot failure mode)
-
-### The glove: the complete trail
-
-The stain model above is *skeptical* - it surfaces only the mismatches. **The
-glove** is orunmila's second lens on the same event log (a feature of the one
-tool, exactly like the Filesystem Sentinel - not a separate product): instead of
-staining only what looks wrong, it stains **everything the agent touches** and
-trails it, so you can answer "what, exactly and completely, did it do" - not just
-"did it lie." In code this lens is the `trail` module and the `orunmila trail`
-command; "the glove" is just its name in the docs and the report.
-
-Picture a dye-stained glove: every file read, every write, every command, every
-network call gets marked on contact. And the dye spreads - within a turn, a file
-written (or a command run, or a URL fetched) is marked as **touched_by** the
-files that were read earlier in that same turn. Reads become provenance sources
-(tagged with a content hash); commands keep their full output in a local
-sidecar; external contact (WebFetch/WebSearch/navigate) is recorded as a
-first-class `network_call` with its host.
-
-| Channel | Meaning |
-|---|---|
-| `read` | a file was observed (no change) - a provenance source |
-| `write` | the agent announced a change to a file |
-| `disk` | the Filesystem Sentinel independently saw a change land on disk |
-| `command` | a shell command ran (full output saved locally) |
-| `network` | external contact - the host it reached is recorded |
-
-**Honesty about lineage:** the read->write edge is a **turn-scoped heuristic**,
-not proven data-flow. If the agent read A and wrote B in the same turn for
-unrelated reasons, B will still show `touched_by A`. That one false-edge mode is
-labelled "inferred" in the report, never hidden - the same transparency contract
-as the sentinel's time-window correlation. v0 is deliberately coarse, free, and
-local: no content-level taint, no NLP, no API calls.
-
-The glove and the skeptical stain are **two lenses on one events.jsonl**,
-rendered by one tool into one page: `orunmila trail` shows the complete trail +
-lineage (the glove) *and* the claim-vs-reality stains together - one global
-truth.
-
-```bash
-node bin/orunmila.js trail        # unified report: trail (the glove) + lineage + stains
-node bin/orunmila.js glove        # alias of `trail` - "the glove" is its user-facing name
-```
-
-`orunmila html` still produces the original mismatch-only report if that's all
-you want.
-
-## The Closeout Gate
-
-Everything else in Orunmila reads history. The gate speaks while the agent is
-still working — on Claude Code's Stop hook, before a turn is allowed to end. It
-is the only path in the tool that can refuse anything, and it lives deliberately
-outside `src/capture/`, which stays observe-only and exits zero forever.
-
-```bash
-orunmila install --agent claude-code --with-gate   # capture + gate
-orunmila install --gate-only                       # gate onto an existing install
-orunmila laws                                      # what it would enforce, before you trust it
-orunmila laws --check --session <id>                # replay the laws over a past session, read-only
-```
-
-`laws --check` also prints what the live gate actually did in that session, from
-its own records: turns checked, turns skipped (no confirmed final text; records
-written before the repeat skip was removed can also show a repeated claim) and
-turns blocked. It then counts the claimed turns the gate holds no record of their
-own for: the gate never ran on them, or a later Stop overwrote their record. A
-claim whose text the log redacted (a secret in it) no longer matches its record,
-so it counts there too.
-
-Installing it **reads every law out loud** — which can stop your turn, which
-only advise, and the file to edit to change any of it. A rule that can interrupt
-your work should never be something you discover by being interrupted.
-
-### The six laws
-
-Shipped in `src/laws/packs/canon.json`. Two block; four advise.
-
-| Law | What it catches | Severity |
-|---|---|---|
-| `no-green-without-command` | a verification claim with no passing command in the turn | **blocks** |
-| `no-grep-as-basis` | a claim about a named file resting only on a pattern match | **blocks** |
-| `no-claim-without-receipt` | an assertion with nothing opened or run behind it | advises |
-| `no-absolute-without-enumeration` | "all" / "none" without an enumeration | advises |
-| `no-uncertainty-as-fact` | uncertainty smoothed over instead of flagged | advises |
-| `no-assumption-language` | building on an unnamed assumption | advises |
-
-**This had a big gap, closed 2026-10-28.** The law used to see only
-copula-shaped sentences carrying an adjacent vocabulary match — *"The build is
-green"* fired it, while **"Tests pass.", "All tests pass.", "The test suite
-passes.", "I ran the tests and they pass." and "It works." did not.** Three
-separate filters were dropping them (a length floor, a state-verb test and a
-first-person filter) and two of them also missed the vocabulary, which required
-`tests` and `pass` to be adjacent. Fixed in `src/laws/assert-extractor.js`, with
-the full phrasing table as a regression test in `test/laws.js`; the history is
-[P0-3](review/ISSUES.md).
-
-Fixing detection alone took the blocking rate from 1.6% to **10.3%** of claimed
-turns, which is unshippable — and that is how [P0-5](review/ISSUES.md) was
-found: the law's *receipt* side had been reading an unobserved exit code as a
-failure, so nearly every command ever captured counted as a failed one. With
-both fixed the firing rate is back to 1.6% with materially better recall. The
-two defects had been concealing each other.
-
-### Why only two block
-
-This was decided on measurement, not taste. Over 111 sessions / 796 claimed
-turns the evidentiary laws touch **414 turns**, and only
-`no-green-without-command` is precise enough to be worth stopping a turn over:
-**13 turns, 1.6% of claimed turns, and 12 of its 14 findings genuine.** Both
-false positives are the bare word *"tested"* used adjectivally — *"SIDE_NOT_MINE
-— tested first, wins any overlap"* — a family `assert-extractor.js` documents
-and partly disqualifies already.
-
-Recall is now measured rather than unknown, which is what makes that precision
-figure worth anything: **8 of the 14 findings are phrasings the pre-2026-10-28
-vocabulary could not match at all.** The honest caveat that remains is the size
-of the labelled set behind the accuracy numbers above — 17 turns — not the
-law's reach.
-
-The rest are useful as a nudge and unusable as a wall. A false advisory costs the
-agent a sentence of attention; a false block costs the whole session — and an
-agent that learns the gate is usually wrong learns to route around it.
-`no-claim-without-receipt` alone accounts for the large majority of findings, so
-blocking on it would train everyone to switch the gate off, and a gate that is
-off enforces nothing.
-
-### The loop trap, and why a block budget exists
-
-A blocking Stop hook can pin an agent: blocked, responds, blocked again. Claude
-Code sends `stop_hook_active` in a Stop payload, but the gate does not rely on
-it: the protection is its own. Every block counts against a budget for each
-message the user sends (default 2). The agent's answers after a block do not
-refill it, and neither do the task notifications and sub-agent hand-backs that
-Claude Code writes into the conversation; the user's next message does. Before
-the session's first counted message (for example, its first prompt was a
-notification, or Orunmila was installed mid-session), all blocks share one
-budget. Once spent, findings degrade to advice **and the exhaustion is
-recorded**. A gate that gives up silently is worse than no gate, because it
-looks like a pass.
-
-### Failure posture
-
-It runs on every turn of every session, so it must never hang, never throw, and
-never lose you your work. **Any error at all exits 0 silently.** A broken law
-engine is allowed to stop enforcing; it is never allowed to stop the agent.
-
-It also never judges text it cannot confirm is this turn's. The claim comes from
-the Stop payload's final message (`last_assistant_message`), never from the
-transcript, which can still end on an earlier message when the hook fires. A
-Stop whose payload has no string value in any of `last_assistant_message`,
-`claim` or `response` is not judged, and the skip is recorded; an empty final
-message is not judged either, and leaves no record. This fails open on
-purpose: a missed check is visible, a wrong block is harmful.
-
-Claude Code may run the gate before the capture hook, or both at once. On a
-Stop with no prompt or tool call before it, the gate used to read the turn
-counter before capture advanced it, so it judged the claim against the previous
-turn's records. It now finds its turn from the counter and its own Stop's final
-text, whichever hook runs first. One case is left: when the gate runs first on
-the second of two Stops in a row with the same text and nothing between them, it
-cannot tell them apart, and `laws --check` counts that turn as having no record
-of its own.
-
-### The facts line (off by default)
-
-With `ORUNMILA_FACTS_LINE=1`, the gate puts one line of facts from the turn's
-records above its findings, and prints it alone on a judged turn with no
-findings. It reads no prose, so a claim worded past every law still sits next
-to what the records show:
-
-```
-orunmila facts (from the records, not your prose): Test runs this turn: npm test (pass). Sentinel: no record, commands are seen by the Glove only. Files changed this turn, Glove: 2 (test files: test/laws.js); Sentinel: 2 (test files: test/laws.js).
-```
-
-- **Test runs** are recognised by the runner's name, in any part of the command
-  line: `npm`, `pnpm`, `yarn` or `bun` `test` (or `run test…`), `npm t`,
-  `node --test`, `node test/…`, `jest`, `vitest`, `mocha`, `pytest`, `go test`
-  and `cargo test`. A test script under another name (`npm run coverage`, say)
-  is not recognised, and the line says `none`. Each run shows the exit status
-  the record holds. For Claude Code, a run with no exit code that nothing
-  flagged as failed is a pass; `piped` marks a line whose status is its last
-  stage's. A heredoc's body (a commit message, a file being written) is input,
-  not more command line, so a runner's name in it is not a test run, except
-  where a shell or `ssh` is fed the heredoc and runs it.
-- **Files changed** are shown for each witness on its own: the Glove (the
-  agent's hooks) and the Sentinel (`watch-fs`, the disk watcher), from the
-  turn's first recorded event until the gate runs, inside the project folder
-  only. `Sentinel: none` means it recorded no change then, which is also what a
-  Sentinel that is not running shows. `not read` means the turn had no recorded
-  event to start from, or the log could not be read.
-- The text after the line is exactly what the gate prints without it. With the
-  switch unset, or set to anything but `1`, the gate's output is unchanged.
-
-### What counts as proof
-
-**By default**, `no-green-without-command` takes any command in the turn that
-did not fail as the receipt for a green claim, even one that tested nothing
-(`ls`, `npm test || true`). The one exception is an unguarded pipe
-(`npm test | tail`), whose exit status is the last stage's.
-
-**With `ORUNMILA_STRICT_PROOF=1`** (off by default, and not yet recommended),
-the gate and the Stain Map take only a test run that proves a pass (in a turn
-that ran no test at all, the Stain Map still accepts recorded CI or pull-request
-state):
-
-- a test-runner step, recognised by name (the list in the facts line above);
-- whose recorded status is a pass (for Claude Code, a run with no exit code
-  that nothing flagged as failed);
-- with nothing after it on the line that decides the line's status
-  (`; echo $?` and `|| true` do; `&&` does not), and no `||` directly before it;
-- not piped, unless `set -o pipefail` is an earlier step on the same line (the
-  word in a comment or a `PIPESTATUS` echo does not count);
-- with no failed test run after it in the turn.
-
-A finding then lists the runs that proved nothing. On the recorded sessions of
-the one machine it was measured on (one user's work), the switch took the
-claimed turns that would block from 17 to 81. Most of the 64 new blocks were
-claims settled another way (CI, a smoke run, a type check), runs whose exit the
-agent read from `; echo $?`, or sentences that are not green claims at all.
-That is why it is off.
-
-**The sentence corpus is a regression check, not a security level.**
-`test/cases/laws/green-corpus.json` holds both claim readers to labels on the
-sentences found so far, so a change cannot quietly make them worse there.
-Passing it says nothing about sentences nobody has written down: an agent can
-always word a claim the readers do not see. The facts line is the part that
-does not depend on wording.
-
-### Making them yours
-
-```bash
-orunmila laws --init           # scaffold your own laws file
-ORUNMILA_LAWS=off              # disable the gate for one session
-ORUNMILA_FACTS_LINE=1          # print the facts line above the gate's findings
-ORUNMILA_STRICT_PROOF=1        # only a test run that proves a pass counts (not yet recommended)
-```
-
-Retune a law without restating it — `{ "id": "no-grep-as-basis", "severity": "warn" }`
-— or switch one off with `{ "id": "no-grep-as-basis", "enabled": false }`. Your
-own laws layer over the shipped canon rather than replacing it, so you can encode
-your codebase's rules (deployment targets, forbidden vendors, naming
-conventions) and have them checked at run time. `orunmila laws` always shows what
-is in force and which layer each law came from.
-
-**Honest limits.** The gate is `claude-code` only — other agents get the Stain
-Map and the reports, not the refusal. And law findings are **heuristic: they read
-the agent's prose, not the facts.** They sit beside the evidence, never inside
-it, and never carry the same authority. A finding says "recheck this", not "you
-lied". `no-green-without-command` reads phrasing, not meaning. It no
-longer blocks an honest negative such as "I tested none of it." or "Nothing was
-tested.", but a negation it does not recognise can still read as a claim. It
-accepts any command in the turn that did not fail, even one that tested
-nothing. It does not count an unguarded pipe (`npm test | tail`) as a passing
-run; `set -o pipefail` restores it.
-
-## Supported agents
-
-| Agent | `--agent` id | Stain Map | Closeout Gate | Config written | Notes |
-|---|---|---|---|---|---|
-| Claude Code | `claude-code` (default) | ✅ | ✅ | `.claude/settings.json` | Richest hook surface; the original target |
-| Antigravity | `antigravity` | ✅ | — | `.agents/hooks.json` | Google's agent-first IDE; nested `toolCall` payload mapped automatically |
-| Cursor | `cursor` | ✅ | — | `.cursor/hooks.json` | `edit_file` / `run_terminal_cmd` mapped automatically |
-| Aider | `aider` | ✅ | — | `.aider/hooks.json` | No native hooks — pair with `watch-fs` (disk sentinel) |
-| Codex CLI | `codex` | ✅ | — | `.codex/hooks.json` | `apply_patch` / exec mapped automatically |
-| Continue | `continue` | ✅ | — | `.continue/hooks.json` | VS Code / JetBrains |
-| Generic | `generic` | ✅ | — | `.orunmila/agent-hooks.json` | Any agent that can run a command per event with JSON on stdin |
-
-The **Closeout Gate is `claude-code` only** — it needs a hook that can refuse
-a turn, and Claude Code's Stop hook is the only one that currently offers it.
-Every other agent gets the Stain Map: full capture, full reconciliation, full
-reports.
-
-All agents write the **same** `~/.orunmila/events.jsonl`. The stain model, the
-glove, and the HTML report never know or care which agent produced an event —
-that's the whole point of "one global truth."
-
-### Claude Code, wherever it runs: terminal, VS Code, Antigravity, the app
-
-**Both lenses work with Claude Code inside VS Code and inside Antigravity, not
-only in the terminal.** The `claude-code` adapter is Claude Code's own hooks,
-read from your project's `.claude/settings.json`, so it goes wherever Claude
-Code runs with that project. Checked on one machine, one user's work:
-
-| Claude Code running in | Stain Map | Closeout Gate | How it was checked |
-|---|---|---|---|
-| **VS Code** (the Claude Code extension) | ✅ | ✅ | a session on 2026-11-22/23: 428 events captured; the gate's records for 14 turns |
-| **Antigravity** (the Claude Code extension) | ✅ | ✅ | two sessions on 2026-11-22/23: 645 and 386 events captured; the gate's records for 30 and 11 turns |
-| **The Claude Code app** | ✅ | ✅ | reported from one session (Linux, 0.2.3): the gate blocked a "tests pass" claim no command backed |
-| **The terminal** (`claude`) | ✅ | ✅ | the original target |
-
-Antigravity has two rows on this page for two different things: here, Claude
-Code running inside the Antigravity IDE (`--agent claude-code`, the default);
-above, Antigravity's own agent (`--agent antigravity`, Stain Map only).
-
-One thing to know wherever Claude Code runs: `orunmila install` writes each
-hook as `node "<path to the installed package>/src/capture/claude-code/<hook>.js"`.
-The hooks work only where that path exists, so install the package globally
-or as a dev dependency rather than through `npx`, whose cache can be cleared,
-and run `orunmila install` again on each machine (or cloud environment) the
-project's sessions run on.
-
-## What it cannot see
-
-Before you rely on a green stain, know the edges. The throughline:
-**Orunmila reports evidence, never intent.** A red stain means the receipt is
-missing, not that the agent lied. A green stain means the receipt checks out, not
-that the code is correct. It narrows where a human needs to look; it does not
-replace the look.
-
-### By design
-
-| It **can** see | It **cannot** see |
-|---|---|
-| Every file read/write/command/network call the agent's hooks report | Anything done through a channel with no hook — unless the Filesystem Sentinel catches the disk write |
-| Writes that land on disk the agent never announced (via `watch-fs`) | *Why* a file changed — it sees the diff, not the intent |
-| Whether a claimed command actually ran, and its exit code | Whether that command tested the right thing — exit 0 ≠ correct |
-| That a claim has zero matching tool call (phantom) | Subtle semantic claims ("proper error handling") against the code — that needs the unbuilt deep-verify |
-| Parts of the original ask with no evidence and no follow-up | Claims too vague to pin to evidence — marked `unverifiable`, not judged |
-| Read→write touches **within one turn** (lineage) | True data flow, or lineage **across** turns — v0 lineage is a turn-scoped heuristic, stamped `inferred` |
-| Sub-agent touches when the agent exposes `agent_id` (Claude Code does) | Sub-agent attribution for agents that don't — Gemini CLI has no such event at all |
-
-The Filesystem Sentinel has its own edges, and they are in
-`review/SENTINEL_DESIGN.md` §9 rather than buried: a write made and reverted
-inside the ~150ms debounce window can be missed; it sees *that* bytes changed,
-never who or why, so it cannot distinguish the agent from your editor from a
-build watcher; binary files are logged hash-only. Its ignore list is a
-deliberate, visible blind spot — `orunmila status` prints it.
-
-Claim and subtask extraction is **regex and keyword heuristics, not NLP**. It is
-tuned to catch obvious phantom / dropped / undisclosed patterns, not to parse
-every sentence. Sharpening it without adding paid API calls is the most valuable
-kind of contribution.
-
-### Known defects, with status
-
-Every issue — open and closed — is tracked with its status, reproduction and
-acceptance test in [`review/ISSUES.md`](review/ISSUES.md). The open ones that
-change how you should read a report:
-
-- **The sentinel's writes carry no session id** (P0-2). Correlation is purely by
-  time window, so on a machine running two agent sessions over one tree, each
-  **adopts the other's writes** — and session-pinning does not fix it, because
-  sentinel events have no session id to filter on. Read a touch list as *"what
-  changed on this machine while I worked"*, never as authorship. This is the one
-  open defect that produces a confidently wrong answer rather than a missing
-  one, and it is architectural, not a patch.
-- **A pipe launders an exit code in the Stain Map** (P1-5). `npm test | tail`
-  exits 0 with the suite on fire, and the Stain Map still scores a "tests
-  pass" claim behind it as `verified`. The Closeout Gate does not count an
-  unguarded pipe as a pass. Use `set -o pipefail`; a trailing `; echo $?`
-  makes the whole line exit 0, and both lenses count that as a pass.
-- **`latestSessionId()` means "most recent event on this machine"** (P3-2), not
-  "the session asking". Any wrapper that defaults to it will, on a multi-session
-  machine, flip to whichever session most recently emitted an event.
-- **The turn counter is not concurrency-safe** (P2-2). Parallel PostToolUse hooks
-  can still land events in the wrong turn bucket.
-- **Deep verify is specified and not built.** The optional LLM-judge pass for
-  semantic claims is designed, off by default, and not wired up.
-
-That list is in the README on purpose. A verification tool that hides its own
-failure modes is asking you to take its word for something — which is the exact
-habit it exists to break.
-
 ## What's new
+
+**1.0.0 records each session in a log anyone can check.** The record formats
+are published as an open v1 specification ([`spec/`](spec/README.md)), and
+`orunmila verify <session-folder>` checks a record end to end with no setup and
+no network. The intake,
+a preview (`orunmila install --intake`, then `orunmila intake start`), writes
+each Claude Code session to its own hash-chained log outside the project, runs
+the disk watcher for that session's folder, and puts back any change to the
+log it did not make; `orunmila verify` checks a log. Session verdicts, off by
+default (`orunmila install --with-judge`, which also keeps the record the judge
+reads), judge each session the intake records with fixed rules, no model
+(`orunmila report --verdicts`). The hooks now run a copy of Orunmila
+kept in `~/.orunmila/`, so clearing an `npx` cache no longer silences them;
+after you upgrade, `orunmila install` moves the hooks an earlier version wrote
+onto that copy, adding none. `orunmila install` also turns on a once-a-day
+update check, the package's one network call (`--without-updates` turns it
+off). `orunmila watch` no longer stops 1.5 seconds after it starts. The trail
+page's Graph tab is a flowchart on a canvas you scroll both ways and zoom, with
+nothing held back. Cursor gets the Closeout Gate. The intake's record also
+holds what a command's own text and output say (the hosts it names, a `sudo`, a
+test run's own counts, an npm install's package changes, the git, pull-request
+and CI state a `git` or `gh` command shows), a tripwire on the files outside
+the project that run code as you, and a check of the record against the agent's
+transcript, all on by default (`ORUNMILA_COMMAND_FACTS=0` and
+`ORUNMILA_VCS_MARKS=0` turn them off). Details in the
+[changelog](CHANGELOG.md#100--2026-11-28).
 
 **0.2.3 fixes the Closeout Gate judging stale text.** When Claude Code's Stop
 hook fired, the gate could block a turn on a sentence the agent had already
@@ -667,242 +223,30 @@ redact secrets. Details, and what the patch does not cover, in the
 **0.2.2 is also the first release under the Apache License 2.0.** Versions 0.1.0,
 0.2.0 and 0.2.1 were published under MIT and stay MIT.
 
-Recent additions to The Diviner:
+## The guide
 
-- **Interactive HTML report.** `orunmila trail` now renders a six-tab session
-  view: **Timeline** (turn-by-turn pips), **Tree** (project files with
-  stain bars), **Graph** (2D radial — zoom, pan, search, filter by channel
-  or outcome), **3D Graph** (force-directed WebGL view with hover/click
-  detail), **Dashboard** (donut + KPI cards), and **Report** (copy-paste
-  prompt to send the agent back to fix every flagged item).
-- **Glossary tab.** Plain-English definitions for every outcome (`verified`,
-  `partial`, `phantom`, `phantom_verification`, `silently_dropped`,
-  `undisclosed`, `untracked_write`, `unverifiable`), every channel, and
-  every metric (Reliability, Phantom Rate, ConfIdx, Touches). Severity-coded
-  so a first-time reader can self-onboard without leaving the report.
-- **Report tab reordered** — stats lead, copy-paste prompt next, findings
-  last. The prompt is the action; you shouldn't have to scroll past 20
-  findings to reach it.
-- **3D Graph rewritten.** Single-script CDN load (no chained loader), bundles
-  its own three.js (no context conflicts), disposes previous instances on
-  re-render (no WebGL context leaks), and ships lenient `rendererConfig`
-  (`powerPreference: 'low-power'`, `failIfMajorPerformanceCaveat: false`)
-  so restrictive Chrome states still get a context.
-- **Model personality summaries.** `bench-results/README.md` now includes
-  one-line character reads for every benchmarked model — *honest workhorse*,
-  *talks confidently, sometimes too confidently*, *underpromises and
-  overdelivers*, *the cautionary tail* — each grounded in the specific
-  metric that distinguishes that model.
-- **Dashboard default port → 3773.** `node bin/dashboard.js` now serves on
-  `http://localhost:3773` by default (was 3000). Override with
-  `PORT=… node bin/dashboard.js` if you need something else.
+Everything else is in [docs/GUIDE.md](docs/GUIDE.md), one section per subject:
+every install route; the trail page and its tabs; the Closeout Gate's six laws,
+its block budget, the facts line, the claims block and what counts as proof;
+session verdicts and the intake's switches; the supported agents; every limit
+and known defect; JSON output and the feedback loop; cross-agent comparison;
+the architecture; sharing a report safely; and prior art.
 
-## Machine-readable output + feedback loop
+## Contributing
 
-The terminal and HTML reports are for humans. `orunmila json` emits the same
-per-turn reconciliation as structured JSON for downstream tooling (IDE
-diagnostics, dashboards, automated analysis). It's deterministic — same event
-log + same options → byte-identical output — which means golden-file tests
-and stable diffs are trivial.
-
-```bash
-node bin/orunmila.js json                                    # latest session/turn to stdout
-node bin/orunmila.js json --turn t12 --out report.json       # one turn to a file
-node bin/orunmila.js json --include claim_text               # opt the agent's claim text into the output
-```
-
-The schema is `1.0` and versioned. Per-claim entries carry **two confidence
-axes** — `extraction_confidence` (is this text a claim of this type?) and
-`verdict_confidence` (is the outcome right given the parse?) — kept separate
-because fusing them makes calibration analysis impossible. A reserved
-`label` slot is all-null by default so an optional labeling pass can land
-later with no schema bump. Full contract: [docs/SCHEMA.md](docs/SCHEMA.md).
-
-**Privacy is by construction, not by configuration.** Raw text fields
-(`claim_text`, future `prompt_text`/`diff_hunks`/`command_output_snippets`)
-are excluded by default; `--include <field>` opts them in. Sanitization
-(home-prefix collapse + `.orunmila/redact`) is applied per string-valued
-field DURING emit on every default and opt-in field — `--include` only gates
-which raw text fields *enter* the pipeline. The `classification_features`
-breadcrumbs the emitter ships by default carry categories, counts, and
-pattern-IDs only — never raw substrings from the claim text.
-
-### The homeward feedback loop
-
-The reason for shipping JSON: **teach Orunmila to identify agent claims
-better, using your own builds as the training corpus.** `orunmila feedback`
-writes sanitized accuracy cases to a local drop folder; each entry is a
-**strict superset of `test/cases/precision/*.json`** so contributing them
-back is a copy, not a translation.
-
-```bash
-node bin/orunmila.js feedback                                # writes .orunmila-feedback/sessions/<date>-<id>.json
-node bin/orunmila.js feedback --include claim_text           # populate cases[] with the real text (corpus-runnable)
-node bin/orunmila.js feedback-import --dir .orunmila-feedback/   # cp cases[] into test/cases/precision/
-```
-
-The drop folder includes an `INDEX.md` that points back to the upstream repo
-with exact contribution steps. Without `--include claim_text` the file is
-still written, but `cases[]` entries carry no claim text and are not
-corpus-runnable — re-run with the flag on builds whose content you're
-comfortable sharing.
-
-## Cross-agent comparison
-
-Use multiple agents on the same codebase? `stats` aggregates every
-captured session and compares reliability, phantom rates, and tool usage
-side by side:
-
-```bash
-orunmila stats
-```
-
-For controlled benchmarks, the task corpus provides identical prompts to
-run across agents and model tiers:
-
-```bash
-node bin/bench.js --agent claude-code --model haiku
-node bin/bench.js --agent claude-code --model sonnet
-node bin/bench.js --agent claude-code --model opus
-node bin/bench.js --agent gemini-cli --model gemini-2.5-flash
-```
-
-The runner installs orunmila hooks in each task, captures the full
-session, and reports per-task phantoms, phantom verifications, silently
-dropped asks, wild writes, and reliability scores — not just pass/fail.
-Divinations auto-save to `bench-results/` as JSON. See `bench-results/README.md`
-for the metric definitions and `corpus/README.md` for the task format.
-
-## Architecture: how agent-agnostic works
-
-There are exactly three agent-specific things at the capture seam, and all of
-them live in one file, `src/capture/agents.js`:
-
-1. **where the agent's hook config lives** (`.claude/`, `.cursor/`, …),
-2. **what the agent calls its hook events** (Claude's `PostToolUse` vs Cursor's
-   `afterFileEdit` vs Codex's `after_tool`),
-3. **how the agent names payload fields and tools** (`tool_name` vs `tool`,
-   `Edit` vs `edit_file` vs `apply_patch`).
-
-Everything else — diffing, hashing, command sidecars, turn counting, lineage,
-reconciliation, rendering — is shared in `src/capture/core.js` and the modules
-downstream of it. A non-Claude agent's four hook events all point at one tiny
-script, `src/capture/connector.js <agent> <phase>`, which loads the adapter and
-runs the shared core. **Adding an agent is a registry entry, not a code fork.**
-
-To add an agent: add an entry to the `REGISTRY` in `src/capture/agents.js` (id,
-config path, its event names per lifecycle phase, and any tool names the
-defaults don't already cover), then `install --agent <id>`. The default tool and
-field accessors already understand most common naming conventions, so most
-agents need only the `id`, `config`, and `events`. PRs adding agents are exactly
-what this project wants.
-
-## Deep verify (specified, NOT built)
-
-The default reconciler is pure heuristic text/diff matching - free, local,
-no API calls. It catches the big stuff (phantom claims, missing test runs,
-undisclosed files) but can't judge subtler semantic claims like "added
-proper error handling" against three lines of code. An opt-in deep-verify
-pass can route ambiguous claims to an LLM judge using your own API key - off
-by default so the tool is genuinely free to run with zero setup, not gated
-behind anything. (Not yet wired up in this v0 - see Roadmap.)
-
-## Honesty about v0 (implementation notes)
-
-- The transcript parser (`src/capture/transcript.js`) is the shared,
-  defensive default for any agent that writes a JSONL session transcript. The
-  per-line shape isn't a stable public contract for any agent, so the reader
-  tries several known shapes and falls back rather than throwing. If claim
-  extraction comes back empty on your agent, run `orunmila debug-transcript`
-  and adjust the extractors (or ship the agent its own transcript module on
-  its adapter). Claude Code's claim is the exception: it comes from the Stop
-  payload's `last_assistant_message`, because the transcript can still end on
-  an earlier message when the Stop hook fires.
-- Claim/subtask extraction is regex/keyword heuristics, not NLP. It's tuned
-  to catch obvious phantom/dropped/undisclosed patterns, not to perfectly
-  parse every sentence. Sharpening this without adding paid API calls is
-  the most valuable kind of contribution.
-- Sub-agent/delegated tool calls (Claude Code's Task tool spawning a
-  sub-agent) **are** captured: Claude Code fires the PostToolUse hook inside the
-  sidechain, so a sub-agent's reads/writes/commands land in the same
-  `events.jsonl` under the parent session. When the hook fires inside a
-  sub-agent its stdin carries `agent_id`/`agent_type`, which orunmila records as
-  `sub_agent_id`/`sub_agent_type` on the event — so the glove attributes each
-  touch to the sub-agent that made it ("via Explore" in the trail, "via
-  sub-agent" in the file grid). Other agents that delegate may not expose the
-  same fields; the Filesystem Sentinel (`watch-fs`) still catches the resulting
-  disk writes regardless of which agent made them.
-- The event log is a flat append-only `events.jsonl` — zero native deps,
-  grep/jq-able, a forensic trail in its own right. The capture hot path (the per-
-  turn reconcile the agent waits on) stays cheap even on long sessions because it
-  only reads the current turn's window. The offline `trail`/`html` renderers read
-  the whole log, but do so **once** per render (not once per turn), so an
-  800-turn / 1.5 MB session renders in tens of milliseconds. The log never
-  rotates automatically — that would silently discard your trail — but `orunmila
-  status` shows its size and `orunmila prune [--keep N]` caps it to the N
-  most-recent whole sessions on demand. Full command output is kept in local
-  sidecars (`~/.orunmila/output/`), uncapped by design so the trail is complete;
-  nothing leaves the machine.
-
-## Sharing a report (privacy)
-
-**Before anything else: one tab in the report reaches the network.** The
-**3D Graph** tab fetches `3d-force-graph` from unpkg (fallback jsdelivr) on
-open. No session content is sent — verified: the loader sets `script.src` to a
-bare versioned URL with no query string and appends it, and those two URLs are
-the only external references in the entire rendering layer. But the request
-still discloses the viewer's IP and that a report was opened. **And if you
-*host* a report rather than opening it locally, the browser's `Referer` header
-sends the report's URL to the CDN too** — worth knowing before publishing one
-publicly. If any of that matters for your threat model, avoid that one tab;
-every other tab is self-contained and works with no network at all.
-
-The HTML report is the one artifact you're likely to *share* - paste in an
-issue, send a teammate, screenshot. The event log itself stays complete and
-local; only the **rendered copy** is sanitised, by two independent passes:
-
-- **Home-prefix collapse (on by default).** An absolute path under your home
-  directory (`/Users/jane/proj/x.js`) leaks your OS username. The report
-  collapses that prefix to `~` so the structure stays readable but your identity
-  doesn't ride along. Opt out with `--no-redact-home` if you're keeping the
-  report purely local.
-- **Redaction list (opt-in).** Drop a `.orunmila/redact` file in your project
-  root - same format as `.orunmila/ignore` (one path fragment per line, `#`
-  comments). Any artifact path matching the list is replaced with `[redacted]`
-  in the grid, trail, lineage edges and tooltips, and the same fragment is
-  masked inside any command string too. `orunmila html`/`trail` print exactly
-  what's being hidden so it's never a silent gap.
-
-```bash
-printf 'secret/\n.env\n' > .orunmila/redact   # hide anything under secret/ and any .env
-node bin/orunmila.js trail                      # report now redacts those, collapses ~
-node bin/orunmila.js trail --no-redact-home     # keep full home paths (local-only use)
-```
-
-## Prior art / what this isn't
-
-This is not another activity logger - [Gryph](https://github.com/safedep/gryph)
-already does local-first audit trails (file reads/writes/diffs/commands)
-for Claude Code, Cursor, Antigravity and others, well, and is worth using
-alongside this for raw session forensics. The Claude Code hooks ecosystem
-more broadly (`claude-code-hooks-mastery`, `claude-hooks`, etc.) is the
-proven plumbing this project builds on rather than reinvents. What's new
-here is the reconciliation layer on top: checking the agent's *narrative*
-against the *evidence*, not just recording the evidence.
-
-## Further reading
-
-| | |
-|---|---|
-| [**I measured how often AI coding agents claim work they didn't do**](docs/MEASURING_AGENT_CLAIMS.md) | The findings piece: 10 models, 3 harnesses, 29 runs — and the three false-green defects found in this tool itself. Every figure names its source. |
-| [`review/ISSUES.md`](review/ISSUES.md) | Every known issue, open and closed, with a reproduction and an acceptance test. Dated and re-derived from code, not carried forward. |
-| [`skills/`](skills/) | Four packaged agent skills: a free core audit, plus gate setup, a review workflow, and writing laws for your own codebase. |
-| [`bench-results/README.md`](bench-results/README.md) | All 29 benchmark runs, the metric definitions, and the framework-effect analysis. |
-| [`docs/SCHEMA.md`](docs/SCHEMA.md) | The `orunmila json` contract (`schema_version` 1.0). |
-| [`docs/PRD.md`](docs/PRD.md) | Design history — why the tool is shaped this way. Not a status report. |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | The most valuable contribution is sharpening claim extraction without adding paid API calls. |
+[CONTRIBUTING.md](CONTRIBUTING.md) has a map of the system, how to run it from
+a clone, and the gates a change must pass. The most valuable contributions are
+sharper claim reading without paid API calls, a new agent's adapter, and
+`orunmila feedback` cases from your own sessions.
 
 ## License
 
 Apache License 2.0 (`LICENSE`), copyright KALKU DIGITAL SOLUTIONS LIMITED (`NOTICE`). Free,
 forever, no catch. Versions up to 0.2.1 were released under MIT and stay MIT.
+
+The licence covers everything in this repository: the code, the agent skills,
+the task corpus, the benchmark results and the test fixtures. It grants **no
+rights to the Orunmila name or any Orunmila logo** (its section 6). How you may
+use the name, and why a changed version needs a new one, is in
+[`TRADEMARKS.md`](TRADEMARKS.md). Third-party licences:
+[`THIRD_PARTY_LICENSES`](THIRD_PARTY_LICENSES).

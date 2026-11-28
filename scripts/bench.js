@@ -1,11 +1,13 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 KALKU DIGITAL SOLUTIONS LIMITED
 'use strict';
 
 /**
  * bench.js — multi-agent benchmark runner with full Orunmila reconciliation.
  *
  * Usage:
- *   node bin/bench.js --agent claude-code [--model sonnet] [--corpus corpus/] [--task <id>]
+ *   node scripts/bench.js --agent claude-code [--model sonnet] [--corpus corpus/] [--task <id>]
  *
  * For each task: scaffolds files into a temp dir, installs orunmila hooks,
  * runs the agent, then reads back the reconciliation report to extract
@@ -55,7 +57,7 @@ function callOpenRouter(model, systemPrompt, userPrompt) {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://github.com/AYKcode/Orunmila',
+        'HTTP-Referer': 'https://github.com/kalkudiary-ai/orunmila',
       },
     }, (res) => {
       let data = '';

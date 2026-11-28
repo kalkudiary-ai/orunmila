@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 KALKU DIGITAL SOLUTIONS LIMITED
 'use strict';
 
 /**
@@ -221,10 +223,11 @@ it('cli: install --agent cursor writes a .cursor/hooks.json pointing at the conn
   const r = run('bin/orunmila.js', { args: ['install', '--agent', 'cursor'], env: { ORUNMILA_HOME: home }, cwd: work });
   assert.strictEqual(r.status, 0);
   const cfg = JSON.parse(fs.readFileSync(path.join(work, '.cursor', 'hooks.json'), 'utf8'));
-  // The connector script path is double-quoted so spaces/backslashes in it stay
-  // intact on every platform; the args follow the closing quote.
-  assert.ok(cfg.hooks.afterFileEdit.includes('connector.js" cursor postTool'), 'maps afterFileEdit → postTool');
-  assert.ok(cfg.hooks.beforeSubmitPrompt.includes('" cursor prompt'));
+  // The starter's path is double-quoted so spaces/backslashes in it stay intact
+  // on every platform; the connector and its args follow the closing quote (PM2b, LD331).
+  // CU1: Cursor's own format, each event a list of commands (test/cursor.js holds the rest).
+  assert.ok(cfg.hooks.postToolUse[0].command.includes('orunmila-start.js" src/capture/connector.js cursor postTool'), 'maps postToolUse → postTool');
+  assert.ok(cfg.hooks.beforeSubmitPrompt[0].command.includes('" src/capture/connector.js cursor prompt'));
   rmrf(home);
   rmrf(work);
 });
@@ -239,7 +242,7 @@ it('cli: install --agent claude-code quotes the hook script path (space/backslas
   const cfg = JSON.parse(fs.readFileSync(path.join(work, '.claude', 'settings.json'), 'utf8'));
   const cmd = cfg.hooks.PostToolUse[0].hooks[0].command;
   assert.ok(/^node "/.test(cmd), 'command opens with: node "');
-  assert.ok(cmd.includes('post-tool-use.js"'), 'script path is closed-quoted');
+  assert.ok(cmd.includes('orunmila-start.js" src/capture/claude-code/post-tool-use.js'), 'the starter\'s path is closed-quoted, its script after it (PM2b, LD331)');
   rmrf(home);
   rmrf(work);
 });
@@ -333,7 +336,7 @@ it('cli: install --agent antigravity writes .agents/hooks.json in Antigravity fo
   assert.ok(cfg.orunmila.PostToolUse, 'has PostToolUse event');
   assert.ok(cfg.orunmila.Stop, 'has Stop event');
   const postCmd = cfg.orunmila.PostToolUse[0].hooks[0].command;
-  assert.ok(postCmd.includes('connector.js" antigravity postTool'), 'PostToolUse → postTool via connector');
+  assert.ok(postCmd.includes('orunmila-start.js" src/capture/connector.js antigravity postTool'), 'PostToolUse → postTool via connector, through the starter (PM2b, LD331)');
   rmrf(home);
   rmrf(work);
 });
@@ -375,6 +378,32 @@ it('cli: install --agent claude-code refuses a second registration pointing at a
   assert.ok(!cfg.hooks.PostToolUse, 'no new event registrations written');
   rmrf(home);
   rmrf(work);
+});
+
+// --- a read's line counts (LD125, the Fable cold verify's line-count check) ---
+// Claude Code's Read counts the empty piece after a file's last newline as a
+// line, in numLines and totalLines alike: on 1,342 of 1,342 results measured,
+// numLines was the content's newline count + 1. Capture keeps both numbers as
+// the tool gave them, so a whole read of a newline-ended file is `full`.
+
+it('agents: a whole Read of a newline-ended file keeps the tool\'s counts and is full (LD125)', () => {
+  const cc = agents.getAdapter('claude-code');
+  const whole = { type: 'text', file: { filePath: '/x/f.txt', content: 'one\ntwo\nthree\n', numLines: 4, startLine: 1, totalLines: 4 } };
+  const ext = cc.fields.readExtent(whole);
+  assert.deepStrictEqual(ext, { start_line: 1, lines: 4, total_lines: 4 }, 'the counts as the tool stated them');
+  assert.strictEqual(agents.readRange({ file_path: '/x/f.txt' }, ext).kind, 'full');
+  const part = { type: 'text', file: { filePath: '/x/f.txt', content: 'one\ntwo\nthree', numLines: 3, startLine: 1, totalLines: 4 } };
+  assert.strictEqual(agents.readRange({ file_path: '/x/f.txt', limit: 3 }, cc.fields.readExtent(part)).kind, 'range');
+});
+
+it('spec: read_range says what its line counts count (LD125)', () => {
+  const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'spec', 'mark.schema.json'), 'utf8'));
+  const props = schema.definitions.detail.properties.read_range.properties;
+  for (const k of ['lines', 'total_lines']) {
+    assert.strictEqual(typeof props[k].description, 'string', `${k} has a description`);
+    assert.strictEqual(typeof props[k].$comment, 'string', `${k} has a $comment`);
+    assert.strictEqual(props[k].$ref, '#/definitions/line_number', `${k} keeps its type`);
+  }
 });
 
 runAll('agents');

@@ -1,6 +1,6 @@
 {
   "name": "orunmila",
-  "version": "0.2.4",
+  "version": "1.0.0",
   "description": "Dye-stains an AI coding agent's session: verifies what it claimed against what it actually did, and shows you the result as a colored map of the codebase.",
   "license": "Apache-2.0",
   "author": "KALKU DIGITAL SOLUTIONS LIMITED <kalkudiary@gmail.com>",
@@ -35,15 +35,24 @@
   "files": [
     "bin/",
     "src/",
+    "spec/",
     "skills/",
     "README.md",
+    "docs/GUIDE.md",
+    "docs/START.md",
     "CHANGELOG.md",
     "SKILL.md",
     "LICENSE",
-    "NOTICE"
+    "NOTICE",
+    "TRADEMARKS.md",
+    "THIRD_PARTY_LICENSES"
   ],
   "engines": {
     "node": ">=18"
+  },
+  "publishConfig": {
+    "provenance": true,
+    "access": "public"
   },
   "dependencies": {},
   "devDependencies": {

@@ -38,7 +38,7 @@ and the ones who want more than one want to switch them on independently.
 | what it does | records + reports | **refuses** | judges each session's record |
 | when | after each turn | before a turn is allowed to end | at each session's closeout |
 | can it stop the agent? | never | yes — 2 of its 6 laws block | never |
-| agents | all supported agents | `claude-code` only | `claude-code`, through the intake (a preview) |
+| agents | all supported agents | `claude-code` and `cursor` | `claude-code`, through the intake (a preview) |
 | install | `orunmila install` | `orunmila install --with-gate` | `orunmila install --intake`, then `orunmila install --with-judge` |
 | add to an existing install | — | `orunmila install --gate-only` | `orunmila install --with-judge` |
 | turn off | — | `ORUNMILA_LAWS=off` (one session) | `orunmila install --without-judge` |
@@ -53,8 +53,9 @@ touched, reconciles each claim against the evidence, and hands you a colour-code
 map of where to look. It never refuses anything. Use it when you want to know
 what your agents are actually doing.
 
-**The Closeout Gate** is the preventive lens: it runs on the Stop hook and can
-refuse to let a turn end on a claim the turn's own evidence doesn't support. Use
+**The Closeout Gate** is the preventive lens: it runs on the Stop hook (Cursor's
+stop hook too) and can refuse to let a turn end on a claim the turn's own evidence
+doesn't support. Use
 it when you want the agent to fix its own story before it hands work back.
 
 **The Babaláwo** is the judge. At each session's closeout it reads the intake's sealed record and gives every
@@ -153,7 +154,7 @@ terminal.
 Pick a different agent with `--agent`:
 
 ```bash
-orunmila install --agent cursor
+orunmila install --agent cursor              # add --with-gate for the Closeout Gate in Cursor
 orunmila install --agent antigravity
 orunmila agents                          # everything supported, and where each config lives
 ```
@@ -413,6 +414,13 @@ orunmila laws                                      # what it would enforce, befo
 orunmila laws --check --session <id>                # replay the laws over a past session, read-only
 ```
 
+**In Cursor**, `orunmila install --agent cursor --with-gate` puts the same laws
+on Cursor's stop hook. That hook can only submit a follow-up message, so a block
+arrives as an automatic message, marked as Orunmila's and not the user's, which
+the agent then answers; advice is not shown in Cursor and stays in the gate's
+record. Cursor fires no prompt hook for that message, so it does not refill the
+block budget, and the hook's own `loop_limit` is 2.
+
 `laws --check` also prints what the live gate actually did in that session, from
 its own records: turns checked, turns skipped (no confirmed final text; records
 written before the repeat skip was removed can also show a repeated claim) and
@@ -628,8 +636,8 @@ your codebase's rules (deployment targets, forbidden vendors, naming
 conventions) and have them checked at run time. `orunmila laws` always shows what
 is in force and which layer each law came from.
 
-**Honest limits.** The gate is `claude-code` only — other agents get the Stain
-Map and the reports, not the refusal. And law findings are **heuristic: they read
+**Honest limits.** The gate runs for `claude-code` and `cursor` — other agents get
+the Stain Map and the reports, not the refusal. And law findings are **heuristic: they read
 the agent's prose, not the facts.** They sit beside the evidence, never inside
 it, and never carry the same authority. A finding says "recheck this", not "you
 lied". `no-green-without-command` reads phrasing, not meaning. It no
@@ -940,13 +948,13 @@ them live in one file, `src/capture/agents.js`:
 
 1. **where the agent's hook config lives** (`.claude/`, `.cursor/`, …),
 2. **what the agent calls its hook events** (Claude's `PostToolUse` vs Cursor's
-   `afterFileEdit` vs Codex's `after_tool`),
+   `postToolUse` and `afterAgentResponse` vs Codex's `after_tool`),
 3. **how the agent names payload fields and tools** (`tool_name` vs `tool`,
-   `Edit` vs `edit_file` vs `apply_patch`).
+   Claude's `Edit` vs Cursor's `Write` vs Codex's `apply_patch`).
 
 Everything else — diffing, hashing, command sidecars, turn counting, lineage,
 reconciliation, rendering — is shared in `src/capture/core.js` and the modules
-downstream of it. A non-Claude agent's four hook events all point at one tiny
+downstream of it. A non-Claude agent's hook events all point at one tiny
 script, `src/capture/connector.js <agent> <phase>`, which loads the adapter and
 runs the shared core. **Adding an agent is a registry entry, not a code fork.**
 
@@ -976,7 +984,8 @@ judges AI here.
   and adjust the extractors (or ship the agent its own transcript module on
   its adapter). Claude Code's claim is the exception: it comes from the Stop
   payload's `last_assistant_message`, because the transcript can still end on
-  an earlier message when the Stop hook fires.
+  an earlier message when the Stop hook fires; Cursor's comes from its
+  `afterAgentResponse` hook's text, for the same reason.
 - Claim/subtask extraction is regex/keyword heuristics, not NLP. It's tuned
   to catch obvious phantom/dropped/undisclosed patterns, not to perfectly
   parse every sentence. Sharpening this without adding paid API calls is

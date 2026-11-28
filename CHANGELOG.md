@@ -31,8 +31,8 @@ new major version, and named in this file first.
   says so when it runs.
 - **`orunmila prune` stays for the old event log**; the intake's per-session logs
   are removed whole, and recorded, by `orunmila retention`.
-- **Cursor is supported for the Stain Map** (test 49, on Cursor's command-line
-  agent). Before, `install --agent cursor` wrote a hooks file Cursor does not read,
+- **Cursor is supported for the Stain Map, and the Closeout Gate with
+  `--with-gate`** (test 49, on Cursor's command-line agent). Before, `install --agent cursor` wrote a hooks file Cursor does not read,
   so nothing was recorded; it now writes Cursor's own format and reads the hooks
   Cursor sends (tool calls with their exit codes, the final message, and a print
   mode session's end). Run `orunmila install --agent cursor` again in each Cursor
@@ -71,8 +71,8 @@ hook scripts by their paths in the package (`src/capture/claude-code/`),
   Orunmila: what it is, a first session in ten minutes, how to read a real
   session report, its words, what it defends against and cannot see, what it
   stores, where and for how long, and which agents are supported. Claude Code
-  is fully supported; Cursor is experimental until it passes the real-session
-  tests; Gemini CLI, Codex, Continue, Antigravity and Generic are experimental
+  is fully supported; Cursor is supported, tested on real sessions of its
+  command-line agent (test 49); Gemini CLI, Codex, Continue, Antigravity and Generic are experimental
   (sample data only); Aider is experimental and sentinel only; no Windsurf
   adapter exists. An experimental adapter's session says so on the first line
   of `orunmila report`.
@@ -363,6 +363,14 @@ hook scripts by their paths in the package (`src/capture/claude-code/`),
   outgoing network call, a CDN or an AI service.
 - **`orunmila html` says that `orunmila report --verdicts --html` replaces it.**
   It still works for this release.
+- **The spec says what Orunmila writes wherever a writer had to choose.** Every
+  field of `spec/` whose content or order its schema leaves open was listed by a
+  script from the schemas and checked against the text; 47 descriptions and
+  three lines of `spec/README.md` now say what Orunmila writes there (the
+  turn's `t1`, `t2` ids, which marks carry `cause_hint` and `agent`, how an
+  excerpt is cut, what a quarantined input's `received` holds, what the quiet
+  window, ceiling and lag grace are, each sorted list's order). No format
+  changed.
 - **The launch agent keeps every intake switch** that was set when it was
   installed (the judge's, the guard's, the extra folders, the off-thread start),
   not only the live flag.

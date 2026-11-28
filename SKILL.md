@@ -23,7 +23,7 @@ before installing anything.**
 | what it does | records + reports | **refuses** | judges the record |
 | when | after each turn | before a turn is allowed to end | at each session's closeout |
 | can it stop the agent? | never | yes - 2 of its 6 laws block | never |
-| agents | all supported agents | `claude-code` only | `claude-code` (through the intake) |
+| agents | all supported agents | `claude-code` and `cursor` | `claude-code` (through the intake) |
 | install | `npx orunmila install` | `npx orunmila install --with-gate` | `npx orunmila install --intake`, then `npx orunmila install --with-judge` |
 
 If the user says *"show me what my agent did"*, *"audit"*, *"stain map"*,
@@ -63,7 +63,8 @@ observable from the outside.
    ```
    Add `--global` to install into `~/.claude/settings.json` instead, covering
    every project. Add `--agent <id>` for a non-Claude agent
-   (`npx orunmila agents` lists them).
+   (`npx orunmila agents` lists them); `--agent cursor --with-gate` gives Cursor
+   both lenses.
 3. **Tell the user to start a new session.** Hooks are read at session start, so
    an already-running session will not pick this up. This step is skipped
    constantly and it is the usual reason someone reports "it isn't working".
@@ -119,7 +120,8 @@ ORUNMILA_LAWS=off                         # disable the gate for one session
 ```
 
 **What a block means.** The gate runs on the Stop hook. If it blocks, the turn
-is not over: the agent must fix what was flagged and respond again. Two laws
+is not over: the agent must fix what was flagged and respond again. In Cursor the
+block arrives as an automatic follow-up message, marked as Orunmila's. Two laws
 block - `no-green-without-command` (a verification claim with no passing
 command) and
 `no-grep-as-basis` (a claim about a named file resting only on a pattern
@@ -161,7 +163,8 @@ engine stops enforcing, it never stops the agent.
 
 ## Honest limits - say these if asked
 
-- The gate is **`claude-code` only**. Other agents get the Stain Map.
+- The gate runs for **`claude-code` and `cursor`**; in Cursor a block arrives as a
+  follow-up message and advice is not shown. Other agents get the Stain Map.
 - **`no-green-without-command` reads phrasing, not meaning.** It catches "Tests
   pass.", "All tests pass." and "It works.". It no longer blocks an honest
   negative such as "I tested none of it." or "Nothing was tested.", but a

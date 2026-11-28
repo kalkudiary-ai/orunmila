@@ -17,8 +17,9 @@ said with what the two witnesses recorded, and everything runs on your machine.
 ## Install, and your first session
 
 You need Node.js 18 or later and an agent (Claude Code is fully supported, and
-Cursor for the Stain Map; see the support table below). In the project you want
-to watch (for Cursor: `orunmila install --agent cursor` in place of the second line):
+Cursor for the Stain Map and the Closeout Gate; see the support table below). In
+the project you want to watch (for Cursor: `orunmila install --agent cursor
+--with-gate` in place of the second line):
 
 ```bash
 npm install -g orunmila
@@ -35,8 +36,8 @@ orunmila trail
 
 For the second witness, run `orunmila watch` in another terminal while you work.
 
-For a record anyone can check, the **intake** (optional): `orunmila install
---intake`, then `orunmila intake start`. Each session then gets its own
+For a record anyone can check, the **intake** (optional; it records Claude Code
+sessions): `orunmila install --intake`, then `orunmila intake start`. Each session then gets its own
 hash-chained log in `~/.orunmila/sessions/<id>/`, and
 
 ```bash
@@ -128,8 +129,9 @@ who", never guessed.
 - Anything outside the folders it watches: your home folder, other projects,
   system files. With `ORUNMILA_COMMAND_FACTS=1`, a tripwire checks the files there
   that run code as you (shell start-up files, git and ssh config, start-up
-  folders) at the session's start and its closeout, and names any that changed. Dependency folders such as `node_modules/` are on the ignore
-  list (`orunmila status` prints it), so what a package install or a package's
+  folders) at the session's start and its closeout, and names any that changed.
+  Dependency folders such as `node_modules/` are on the ignore list (`orunmila
+  status` prints it), so what a package install or a package's
   own scripts change inside them is not watched; the package files you edit
   (`package.json`, the lock file) are. With `ORUNMILA_COMMAND_FACTS=1`, an npm
   install's report names the packages its lock file gained, changed and lost,

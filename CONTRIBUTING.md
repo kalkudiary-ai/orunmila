@@ -57,7 +57,7 @@ flowchart LR
 | Folder | What lives there |
 |---|---|
 | `bin/` | `orunmila.js`, the command line; every command starts here. `dashboard.js`, a local web page over the log |
-| `src/capture/` | The Glove: one adapter per agent (`agents.js`), the shared capture engine (`core.js`), Claude Code's hook scripts, and the Sentinel (`fs-sentinel/`). Observe-only: it never refuses and always exits 0 |
+| `src/capture/` | The Glove: one adapter per agent (`agents.js`), the shared capture engine (`core.js`), Claude Code's hook scripts, the Closeout Gate's Cursor hooks (`cursor/`), and the Sentinel (`fs-sentinel/`). Observe-only: it never refuses and always exits 0 |
 | `src/store/` | The flat event log (`eventlog.js`), secret redaction (`secrets.js`), and the reader for older logs |
 | `src/reconcile/` | Claim and request extraction (fixed rules, no model) and the matcher that gives each claim its outcome |
 | `src/trail/` | The complete trail of a session (the glove) and its read-to-write lineage |
@@ -126,8 +126,8 @@ real improvement lowers a metric, say so in the PR and we'll talk about it.
 
 orunmila is agent-agnostic by design. Supporting a new agent (Zed, Windsurf,
 whatever) is usually a **registry entry, not a code fork**, and testing an
-experimental one (Cursor, Gemini CLI, Codex, Continue) on real sessions is just as
-wanted:
+experimental one (Gemini CLI, Codex, Continue) on real sessions, or Cursor in its
+editor, is just as wanted:
 
 1. Add an entry to the `REGISTRY` in `src/capture/agents.js` — its id, where its
    hook config lives, the event names it uses per lifecycle phase, and any tool

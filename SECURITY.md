@@ -56,7 +56,12 @@ orunmila is designed to minimise its own attack surface:
 The main thing to be aware of: the event log (`~/.orunmila/events.jsonl`) and the
 command-output sidecars (`~/.orunmila/output/`) contain the content of your
 session — file diffs, command output, prompts. Treat that directory as you would
-your shell history.
+your shell history. With `ORUNMILA_COMMAND_FACTS=1`, each session's header also
+names the files outside the project that its tripwire checks (shell start-up
+files, ssh and git config, start-up folders) with a fingerprint keyed by your
+install, never their content, and the closeout reads the agent's own transcript
+to count the tool calls the record lacks. The Closeout Gate in Cursor keeps each
+turn's final text owner-only in `~/.orunmila/laws-state/` until it has judged it.
 
 Since 0.2.2 that directory is readable by your account only (not on Windows; see
 "Known limits"), and known secret

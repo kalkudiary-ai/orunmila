@@ -15,15 +15,18 @@ never refuses (that's the free `orunmila` skill); the Babaláwo judges a whole
 session's record at its end and never refuses either. The gate needs the Stain
 Map underneath it, because it judges the events the Stain Map records.
 
-**Claude Code only.** No other agent currently exposes a hook that can refuse a
-turn. Say this up front — do not install and let them discover it.
+**Claude Code and Cursor.** Claude Code's Stop hook can refuse a turn; Cursor's
+stop hook can only send a follow-up message, so in Cursor a block arrives as an
+automatic message, marked as Orunmila's, that the agent then answers, and advice
+is not shown. No other agent exposes a hook that can answer a turn's end. Say
+this up front — do not install and let them discover it.
 
 ## Steps
 
-1. Check Node >= 18 and that they are on Claude Code.
+1. Check Node >= 18 and that they are on Claude Code or Cursor.
 2. Install both lenses:
    ```bash
-   npx orunmila install --agent claude-code --with-gate
+   npx orunmila install --agent claude-code --with-gate   # or: --agent cursor --with-gate
    ```
    If the Stain Map is already installed, add the gate alone — this leaves the
    existing capture hooks untouched:

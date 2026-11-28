@@ -92,9 +92,9 @@ For the whole picture of a session:
 orunmila trail                   # one offline page: timeline, files, flowchart, 3D map, findings, and a prompt to paste back
 ```
 
-Claude Code is the default agent. `orunmila install --agent cursor` (and the
-others `orunmila agents` lists) gives another agent the Stain Map. How far each
-is supported:
+Claude Code is the default agent. `orunmila install --agent cursor --with-gate`
+gives Cursor the Stain Map and the Closeout Gate; `--agent` with the others
+`orunmila agents` lists gives them the Stain Map. How far each is supported:
 
 | Agent | Support |
 |---|---|
@@ -104,9 +104,8 @@ is supported:
 | Aider | Experimental, sentinel only (Aider has no hooks). |
 | Windsurf | No adapter exists. |
 
-pnpm, a
-project-only install, a git clone, and what an install leaves in
-`~/.orunmila/`: [Quickstart: every route](docs/GUIDE.md#quickstart-every-route).
+Other routes (pnpm, a project-only install, a git clone) and what an install
+leaves in `~/.orunmila/`: [Quickstart: every route](docs/GUIDE.md#quickstart-every-route).
 
 ## The three lenses
 
@@ -115,7 +114,7 @@ project-only install, a git clone, and what an install leaves in
 | what it does | records + reports | **refuses** | judges each session's record |
 | when | after each turn | before a turn is allowed to end | at each session's closeout |
 | can it stop the agent? | never | yes — 2 of its 6 laws block | never |
-| agents | all supported agents | `claude-code` only | `claude-code`, through the intake (a preview) |
+| agents | all supported agents | `claude-code` and `cursor` | `claude-code`, through the intake (a preview) |
 | install | `orunmila install` | `orunmila install --with-gate` | `orunmila install --intake`, then `orunmila install --with-judge` |
 | read it | `orunmila trail` | `orunmila laws` | `orunmila report --verdicts` |
 
@@ -147,7 +146,8 @@ evidence or a fix on each.
 checks out, not that the code is correct. It narrows where you need to look; it
 does not replace the look. The edges to know first:
 
-- The Closeout Gate is Claude Code only. Other agents get the Stain Map.
+- The Closeout Gate runs for Claude Code and Cursor; in Cursor a block arrives as
+  a follow-up message and advice is not shown. Other agents get the Stain Map.
 - Claims are read by fixed rules over the agent's words, not by a model, so an
   agent can word a claim the rules miss.
 - The Glove is the agent's own tools reporting on themselves. The Sentinel sees
@@ -199,7 +199,11 @@ onto that copy, adding none. `orunmila install` also turns on a once-a-day
 update check, the package's one network call (`--without-updates` turns it
 off). `orunmila watch` no longer stops 1.5 seconds after it starts. The trail
 page's Graph tab is a flowchart on a canvas you scroll both ways and zoom, with
-nothing held back. Details in the [changelog](CHANGELOG.md#unreleased).
+nothing held back. Cursor gets the Closeout Gate. Off by default,
+`ORUNMILA_COMMAND_FACTS=1` adds to the intake's record a test run's own counts,
+an npm install's package changes, a tripwire on the files outside the project
+that run code as you, and a check of the record against the agent's
+transcript. Details in the [changelog](CHANGELOG.md#unreleased).
 
 **0.2.3 fixes the Closeout Gate judging stale text.** When Claude Code's Stop
 hook fired, the gate could block a turn on a sentence the agent had already

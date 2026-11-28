@@ -65,9 +65,12 @@ it('BB9: with no verdict log the odù log is judged for this answer only, and it
   }
 });
 
-it('BB9: without the flag the old path answers, unchanged (Ship item 5)', () => {
+it('BB9: without the flag the old path answers, unchanged, for a session the old event log has (Ship item 5)', () => {
   const base = tmpDir();
   try {
+    // F32 (LD381): the old path answers whenever the old log has the session; only a session it has nothing for falls
+    // back to the verdicts' feedback (test/trail-marks.js, F32).
+    fs.writeFileSync(path.join(base, 'events.jsonl'), JSON.stringify({ session_id: 'ses_replay_test', turn_id: 't1', type: 'user_prompt', ts: '2026-11-22T12:00:00.000Z', text: 'go', agent: 'claude-code' }) + '\n');
     const out = json(home(base, { verdictLog: true }));
     assert.notStrictEqual(out.source, 'verdict_log');
     assert.strictEqual(out.verdicts, undefined);

@@ -2589,7 +2589,7 @@ const MUTANTS = [
     from: '  for (const t of payload.turns) for (const c of t.claims) if (latest.has(c.evidence.odu_id)) c.verdict = latest.get(c.evidence.odu_id).verdict;\n', to: '',
     fails: ['BB9: with the flag'] },
   { id: "BB9-2 the verdicts' flag is not read", file: 'bin/orunmila.js', test: 'test/feedback-verdicts.js',
-    from: "const fromVerdicts = process.env.ORUNMILA_FEEDBACK_FROM_VERDICTS === '1';", to: 'const fromVerdicts = false;',
+    from: "const fromVerdicts = process.env.ORUNMILA_FEEDBACK_FROM_VERDICTS === '1' || fallback;", to: 'const fromVerdicts = fallback;',
     fails: ['BB9: with the flag', 'BB9: with no verdict log'] },
   { id: 'BB9-3 a session judged now is not said to be', file: 'src/babalawo/report/feedback.js', test: 'test/feedback-verdicts.js',
     from: '    judged_now: judgedNow,\n', to: '    judged_now: false,\n',
@@ -4374,6 +4374,78 @@ MUTANTS.push({
   to: "step('install-again', true,",
   fails: ['EU2: a hook naming a different copy, planted before the upgrade'],
 });
+
+// PG1 (LD380, F33-F35, F37): one session, one set of words on the trail page and the dashboard.
+MUTANTS.push(
+  {
+    id: "PG1-1 the trail page leaves out the judge's verdict",
+    file: 'src/render/html.js',
+    test: 'test/trail-page.js',
+    from: '  ${renderJudge(judge, sessionId)}\n',
+    to: '\n',
+    fails: ['PG1 (F33): the trail page gives'],
+  },
+  {
+    id: 'PG1-2 the dashboard card keeps its own trust words',
+    file: 'bin/dashboard.js',
+    test: 'test/dashboard.js',
+    from: "  if (!s.sev) return { text: 'Not checked', color: 'var(--text3)' };\n  return { text: s.sev.txt, color: s.sev.c };",
+    to: "  return { text: s.reliability >= 70 ? 'Trustworthy' : 'Low trust', color: s.reliability >= 70 ? 'var(--green)' : 'var(--red)' };",
+    fails: ['PG1 (F33, F34, F37)'],
+  },
+  {
+    id: 'PG1-3 an unflagged thing reads clean again',
+    file: 'src/render/trail-visual.js',
+    test: 'test/trail-page.js',
+    from: "const LABEL = { clean: 'nothing flagged' };",
+    to: 'const LABEL = {};',
+    fails: ['PG1 (F35)'],
+  },
+  {
+    id: 'PG1-4 the score is green whatever its label',
+    file: 'bin/dashboard.js',
+    test: 'test/dashboard.js',
+    from: 'const rColor = v.color;',
+    to: "const rColor = 'var(--green)';",
+    fails: ['PG1 (F33, F34, F37)'],
+  },
+  {
+    id: 'PG1-5 the verdict log is never read for the pages',
+    file: 'src/render/session-facts.js',
+    test: 'test/dashboard.js',
+    from: 'judge: verdicts ? report.verdictLine(verdicts) : null',
+    to: 'judge: null',
+    fails: ['PG1 (F33, F34, F37)'],
+  },
+);
+
+// F32 (LD381, brief v4 line 747): a kept command on a session only in its session log reads it, or names what does.
+MUTANTS.push(
+  {
+    id: 'F32-1 the trail never falls back to the session log',
+    file: 'bin/orunmila.js',
+    test: 'test/trail-marks.js',
+    from: "if (old.totals.touches > 0 || flag('archive', null)) return old;",
+    to: 'return old;',
+    fails: ['F32 (brief v4 line 747)'],
+  },
+  {
+    id: 'F32-2 with no --session, only the old log is asked for a session',
+    file: 'bin/orunmila.js',
+    test: 'test/trail-marks.js',
+    from: "return flag('session', null) || eventlog.latestSessionId() || latestLoggedSession();",
+    to: "return flag('session', null) || eventlog.latestSessionId();",
+    fails: ['F32 (brief v4 line 747)'],
+  },
+  {
+    id: "F32-3 json never falls back to the verdicts' feedback",
+    file: 'bin/orunmila.js',
+    test: 'test/trail-marks.js',
+    from: "const fromVerdicts = process.env.ORUNMILA_FEEDBACK_FROM_VERDICTS === '1' || fallback;",
+    to: "const fromVerdicts = process.env.ORUNMILA_FEEDBACK_FROM_VERDICTS === '1';",
+    fails: ['F32 (brief v4 line 747)'],
+  },
+);
 
 module.exports = { runGate, spawnGroupSync, reach, MUTANTS };
 

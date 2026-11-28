@@ -712,6 +712,9 @@ function cmdStatus() {
   console.log(`Log size: ${logSizeKB()} KB`);
   console.log(`Sessions seen: ${sessions.size}`);
   if (sessions.size) console.log(`Most recent session: ${eventlog.latestSessionId()}`);
+  // F32: the intake's session logs, counted beside the old log, so a home that has only them never reads as empty.
+  const logged = loggedSessions();
+  console.log(`Session logs (the intake's): ${logged.length} in ${path.join(orunmilaHome(), 'sessions')}${logged.length ? `, latest ${latestLoggedSession()}` : ''}`);
   if (sessions.size > 50) {
     console.log(`\nThe log holds ${sessions.size} sessions. To cap it: orunmila prune [--keep N] (default 20).`);
   }
@@ -724,6 +727,43 @@ function cmdStatus() {
   for (const entry of ignore) console.log(`  - ${entry}`);
   console.log('Override in .orunmila/ignore (one path per line; "!entry" un-ignores a default).');
 }
+
+/**
+ * F32 (brief v4 line 747): the kept commands on a home whose session is only in the intake's session log. Before, they
+ * read the old event log alone and showed an empty session with exit 0. sessionLogDir(id): the session's folder in
+ * <home>/sessions/ when its raw log is there, else null. latestLoggedSession(): the session whose raw log was written
+ * last. keptSessionId(): --session, else the old log's latest, else the latest session log.
+ */
+function sessionLogDir(id) {
+  if (!id) return null;
+  try {
+    const dir = path.join(orunmilaHome(), 'sessions', require('../src/opon/intake/paths').sessionFolderName(id));
+    return fs.existsSync(path.join(dir, 'raw.jsonl')) ? dir : null;
+  } catch {
+    return null; // an id unsafe as a folder name has no session log
+  }
+}
+function loggedSessions() {
+  const sessions = path.join(orunmilaHome(), 'sessions');
+  const out = [];
+  for (const name of fs.existsSync(sessions) ? fs.readdirSync(sessions) : []) {
+    try {
+      out.push({ name, m: fs.statSync(path.join(sessions, name, 'raw.jsonl')).mtimeMs });
+    } catch {
+      /* not a session folder */
+    }
+  }
+  return out;
+}
+function latestLoggedSession() {
+  const best = loggedSessions().sort((a, b) => b.m - a.m)[0];
+  return best ? best.name : null;
+}
+function keptSessionId() {
+  return flag('session', null) || eventlog.latestSessionId() || latestLoggedSession();
+}
+/** F32: the one sentence a kept command prints when it read the session log, the old log having nothing for the session. */
+const fromLogNote = (dir) => `Read from the session log in ${dir}: the old event log has no events for this session.`;
 
 // All inspection commands honor --archive <stamp>: when set, they read from the
 // snapshot under <dataDir>/archive/<stamp>/ instead of the live reports. The
@@ -800,7 +840,7 @@ function cmdReportVerdicts() {
 
 function cmdReport() {
   if (args.includes('--verdicts')) return cmdReportVerdicts();
-  const sessionId = flag('session', eventlog.latestSessionId());
+  const sessionId = keptSessionId();
   if (!sessionId) return console.log('No sessions captured yet.');
   // DOC6 (brief line 733): an experimental adapter's session says so first, in its own report.
   const { experimentalNote } = require('../src/capture/support');
@@ -818,7 +858,12 @@ function cmdReport() {
     return;
   }
   const { reports, fromArchive } = loadReportsForRead(sessionId);
-  if (!reports.length) return console.log(`No turns reconciled yet for session ${sessionId}${fromArchive ? ` in archive ${fromArchive}` : ''}.`);
+  if (!reports.length) {
+    console.log(`No turns reconciled yet for session ${sessionId}${fromArchive ? ` in archive ${fromArchive}` : ''}.`);
+    // F32: this command reads the old log's turn reports; the session log's report is another command.
+    if (!fromArchive && sessionLogDir(sessionId)) console.log(`This session has a session log; its report: orunmila report --verdicts --session ${sessionId}`);
+    return;
+  }
   if (fromArchive) console.log(`(archived snapshot: ${fromArchive})\n`);
   for (const r of reports) console.log(renderTurn(r));
 }
@@ -841,9 +886,9 @@ function cmdHtml() {
   // Ship item 5 (LD292): kept for this release; the session report from the verdict log replaces it.
   // EU3 (LD378): and when: removing a command is a breaking change, so no sooner than the next major version.
   console.log('Note: orunmila html is replaced by orunmila report --verdicts --session ID --html FILE (one file, nothing loaded from the network); this command keeps working in 1.x and is removed no sooner than 2.0.0.');
-  const sessionId = flag('session', eventlog.latestSessionId());
+  const sessionId = keptSessionId();
   if (!sessionId) return console.log('No sessions captured yet.');
-  const rawTrail = trailForSession(sessionId);
+  const rawTrail = keptTrail(sessionId, (s) => console.log(s));
   const { reports: rawReports, fromArchive } = loadReportsForRead(sessionId);
   const { reports, trail } = applyRedaction(rawReports, rawTrail);
   const html = renderSessionHtml(sessionId, reports, trail);
@@ -863,15 +908,29 @@ function sessionFactsOf(sessionId) {
   return require('../src/render/session-facts').sessionFacts(orunmilaHome(), sessionId);
 }
 
+/**
+ * F32 (brief v4 line 747): the trail a kept command shows: the old event log's, or, when that has no touch for the
+ * session and the session log is there, the session log's (src/trail/from-marks.js, the same model, both witnesses on
+ * every row), with a notice through `say` (stderr for JSON, so stdout stays JSON).
+ */
+function keptTrail(sessionId, say) {
+  const old = trailForSession(sessionId);
+  if (old.totals.touches > 0 || flag('archive', null)) return old;
+  const dir = sessionLogDir(sessionId);
+  if (!dir) return old;
+  say(fromLogNote(dir));
+  return require('../src/trail/from-marks').trailFromSessionFolder(dir);
+}
+
 function cmdTrail() {
   // --marks (slice B7, LD149): the trail from the intake's session log in
   // <home>/sessions/<id>/, both witnesses on every row. --json only.
   if (args.includes('--marks')) return cmdTrailMarks();
   // The unified report: orunmila's skeptical stain PLUS the glove's complete
   // trail + lineage, both built from the one events.jsonl — one global truth.
-  const sessionId = flag('session', eventlog.latestSessionId());
+  const sessionId = keptSessionId();
   if (!sessionId) return console.log('No sessions captured yet.');
-  const rawTrail = trailForSession(sessionId);
+  const rawTrail = keptTrail(sessionId, args.includes('--json') ? (s) => process.stderr.write(s + '\n') : (s) => console.log(s));
   const { reports: rawReports, fromArchive } = loadReportsForRead(sessionId);
 
   // --json: emit the trail model (the glove) as machine-readable JSON instead of
@@ -1157,6 +1216,16 @@ function cmdLog() {
 function cmdStats() {
   const stats = computeStats();
   console.log(formatStats(stats));
+  // F32: stats counts the old path's turn reports; the session logs with none are named, never left out silently.
+  let reported = [];
+  try {
+    reported = fs.readdirSync(path.join(eventlog.dataDir(), 'reports'));
+  } catch {
+    /* no reports folder: no session has a turn report */
+  }
+  const known = new Set(reported);
+  const only = loggedSessions().filter((s) => !known.has(s.name)).length;
+  if (only) console.log(`\n${only} session ${only === 1 ? 'log is' : 'logs are'} in ${path.join(orunmilaHome(), 'sessions')} with no turn report: not counted here. Each one's report: orunmila report --verdicts --session ID`);
 }
 
 function cmdRescore() {
@@ -1302,9 +1371,15 @@ function cmdLaws() {
   const { evaluateTurn } = require('../src/laws/evaluate');
   // The same switch the live gate reads, so a replay judges as the gate did.
   const strictProof = require('../src/laws/gate').strictProofEnabled();
-  const sessionId = flag('session', eventlog.latestSessionId());
+  const sessionId = keptSessionId();
   if (!sessionId) return console.log('No sessions captured yet.');
   const events = eventlog.readSession(sessionId);
+  // F32: this replays the old event log; a session only in its session log has its law gate's results in the report.
+  if (!events.length && sessionLogDir(sessionId)) {
+    const note = `This session is only in its session log, and this replays the old event log. Its law gate's results: orunmila report --verdicts --session ${sessionId}`;
+    if (args.includes('--json')) process.stderr.write(note + '\n');
+    else console.log(note + '\n');
+  }
   const byTurn = eventlog.groupByTurn(events.filter((e) => e.turn_id));
   const active = activeLaws(laws);
 
@@ -1404,7 +1479,7 @@ function detectAgent() {
 }
 
 function cmdJson() {
-  const sessionId = flag('session', eventlog.latestSessionId());
+  const sessionId = keptSessionId();
   if (!sessionId) {
     console.error('No sessions captured yet.');
     process.exit(1);
@@ -1415,6 +1490,16 @@ function cmdJson() {
   // K6 (LD218): the odù log's feedback with ORUNMILA_FEEDBACK_FROM_ODU=1, or both with --side-by-side; else the old path, unchanged.
   const fromOdu = process.env.ORUNMILA_FEEDBACK_FROM_ODU === '1';
   const both = args.includes('--side-by-side');
+  // F32 (brief v4 line 747): a session the old log has no event or report for, with a session log and an odù log,
+  // gets the verdicts' feedback, the same 1.0 shape (BB9), with a notice on stderr so stdout stays JSON.
+  let fallback = false;
+  if (!both && !fromOdu && process.env.ORUNMILA_FEEDBACK_FROM_VERDICTS !== '1' && !flag('archive', null)) {
+    const dir = sessionLogDir(sessionId);
+    if (dir && fs.existsSync(path.join(dir, 'odu.jsonl')) && !listSessionReports(sessionId).length && !eventlog.readSession(sessionId).length) {
+      fallback = true;
+      process.stderr.write(`${fromLogNote(dir)} This is the verdicts' feedback (ORUNMILA_FEEDBACK_FROM_VERDICTS=1).\n`);
+    }
+  }
   const oldJson = () => {
     const { reports } = loadReportsForRead(sessionId);
     const events = eventlog.readSession(sessionId);
@@ -1434,7 +1519,7 @@ function cmdJson() {
     return feedbackFromOdu({ sessionId, agent: detectAgent(), oduText: fs.readFileSync(file, 'utf8'), turn, include, generatedAt, redactOpts: { home, root: process.cwd() } });
   };
   // BB9 (LD273): the verdicts' feedback with ORUNMILA_FEEDBACK_FROM_VERDICTS=1, in the same 1.0 shape; with --side-by-side, beside the old path's.
-  const fromVerdicts = process.env.ORUNMILA_FEEDBACK_FROM_VERDICTS === '1';
+  const fromVerdicts = process.env.ORUNMILA_FEEDBACK_FROM_VERDICTS === '1' || fallback;
   const verdictJson = () => {
     const { checkLog } = require('../src/verify/session');
     const { sessionFolderName } = require('../src/opon/intake/paths');
@@ -1479,7 +1564,7 @@ function cmdJson() {
 }
 
 function cmdFeedback() {
-  const sessionId = flag('session', eventlog.latestSessionId());
+  const sessionId = keptSessionId();
   if (!sessionId) {
     console.error('No sessions captured yet.');
     process.exit(1);
@@ -1489,6 +1574,8 @@ function cmdFeedback() {
   const dir = flag('dir', path.join(process.cwd(), '.orunmila-feedback'));
   const { reports } = loadReportsForRead(sessionId);
   const events = eventlog.readSession(sessionId);
+  // F32: the drop file comes from the old log; the same cases from a session only in its session log are another command.
+  if (!events.length && sessionLogDir(sessionId)) process.stderr.write(`This session is only in its session log, and feedback reads the old event log, so it has no cases here. The same cases from its verdicts: ORUNMILA_FEEDBACK_FROM_VERDICTS=1 orunmila json --session ${sessionId}\n`);
   const { file, payload } = feedback.writeFeedback({
     sessionId,
     agent: detectAgent(),

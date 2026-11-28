@@ -138,4 +138,54 @@ it('B7 CLI: trail --json --marks --session reads the session folder from the int
   }
 });
 
+it('F32 (brief v4 line 747): on a home with only the session log, the kept commands read it or name what does, never an empty answer', () => {
+  const t = build();
+  try {
+    t.router.stop('written');
+    const dir = path.join(t.home, 'sessions', 'm1');
+    fs.writeFileSync(path.join(dir, 'odu.jsonl'), require('../src/opon/replay').replayFolder(dir).odu);
+    // spawnSync, not run(): run() keeps no stderr when the command exits 0, and the notices on stderr are the point.
+    const cli = (...args) => {
+      const r = require('child_process').spawnSync(process.execPath, [path.join(__dirname, '..', 'bin', 'orunmila.js'), ...args], { cwd: t.root, env: { ...process.env, ORUNMILA_HOME: t.home }, encoding: 'utf8' });
+      return { status: r.status, stdout: r.stdout, stderr: r.stderr };
+    };
+    // trail --json, with and without --session: the session log's rows, and a notice on stderr so stdout stays JSON.
+    for (const args of [['trail', '--json', '--session', 'm1'], ['trail', '--json']]) {
+      const r = cli(...args);
+      assert.strictEqual(r.status, 0, r.stderr);
+      const out = JSON.parse(r.stdout);
+      assert.strictEqual(out.session_id, 'm1', args.join(' '));
+      assert.ok(out.totals.touches > 0, `${args.join(' ')}: ${JSON.stringify(out.totals)}`);
+      assert.ok(/Read from the session log/.test(r.stderr), r.stderr);
+    }
+    // The page and the old page: the session log's trail, with the same notice.
+    for (const cmd of ['trail', 'html']) {
+      const page = path.join(t.root, `${cmd}.html`);
+      const r = cli(cmd, '--session', 'm1', '--out', page);
+      assert.strictEqual(r.status, 0, r.stderr);
+      assert.ok(/Read from the session log/.test(r.stdout), `${cmd}: ${r.stdout}`);
+      assert.ok(fs.readFileSync(page, 'utf8').includes('src/a.js'), `${cmd}: the page shows the session's rows`);
+    }
+    // json: the verdicts' feedback, in the same 1.0 shape.
+    const j = cli('json', '--session', 'm1');
+    assert.strictEqual(j.status, 0, j.stderr);
+    const fb = JSON.parse(j.stdout);
+    assert.strictEqual(fb.schema_version, '1.0');
+    // The old path never carries this source (test/feedback-verdicts.js, BB9); this session is never closed, so its
+    // claims are not judged and its turns stay empty here (on a real closed session, 7d8fe95a, the fallback gave 5).
+    assert.strictEqual(fb.source, 'verdict_log', 'from the verdicts, not the empty old path');
+    assert.ok(/the verdicts' feedback/.test(j.stderr), j.stderr);
+    // status counts the session logs.
+    const s = cli('status');
+    assert.ok(/Session logs \(the intake's\): 1 /.test(s.stdout), s.stdout);
+    // The rest name the command that reads the session log.
+    assert.ok(cli('report', '--session', 'm1').stdout.includes('orunmila report --verdicts --session m1'));
+    assert.ok(cli('laws', '--check', '--session', 'm1').stdout.includes('orunmila report --verdicts --session m1'));
+    assert.ok(/ORUNMILA_FEEDBACK_FROM_VERDICTS=1 orunmila json --session m1/.test(cli('feedback', '--session', 'm1', '--dir', path.join(t.root, 'fb')).stderr));
+    assert.ok(/1 session log .* not counted here/.test(cli('stats').stdout));
+  } finally {
+    t.done();
+  }
+});
+
 runAll('trail-marks');
